@@ -38,8 +38,8 @@
     "db:seed:storefront-states": "bash scripts/seed-storefront-states.sh"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^14.2.4",
-    "astro": "^7.1.6",
+    "@astrojs/cloudflare": "^14.2.5",
+    "astro": "^7.2.7",
     "markdown-it": "^15.0.0",
     "stripe": "^22.5.0",
     "uqr": "^0.1.3"
