@@ -331,8 +331,8 @@ Le dépôt est en phase de cadrage :
 - [x] inventaire de la baseline relevé ;
 - [x] CI initialisée (chaîne d'outils imposée, dry run de déploiement, budgets
   de taille, scan de secrets, build depuis un clone vierge) ;
-- [ ] intégration D1 verte en CI — rouge sur `main` depuis l'import du fork,
-  voir « Défaut de baseline connu » dans le plan ;
+- [ ] intégration D1 fiable en CI — échoue une fois sur deux, sur `main` comme
+  sur les branches, voir « Défaut de baseline connu » dans le plan ;
 - [ ] manifeste client implémenté ;
 - [ ] CLI implémentée ;
 - [ ] boutique pilote déployée ;

@@ -411,27 +411,31 @@ Deux points restent ouverts :
 - [ ] **l'intégration D1 échoue dans GitHub Actions**, sur `main` comme sur les
   branches. Voir « Défaut de baseline connu » ci-dessous.
 
-#### Défaut de baseline connu — intégration D1 rouge en CI
+#### Défaut de baseline connu — intégration D1 instable en CI
 
-`npm run verify` passe en local mais échoue systématiquement dans GitHub
-Actions, au même endroit : la requête qui suit le POST de purge de cache
-(`assert_cache_control /product/sample-tee`) n'atteint jamais le Worker et
-reçoit un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
+`npm run verify` passe en local et échoue une fois sur deux dans GitHub
+Actions, toujours au même endroit : la requête qui suit le POST de purge de
+cache (`assert_cache_control /product/sample-tee`,
+`test/integration/d1-integration.sh:306`) n'atteint jamais le Worker et reçoit
+un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
 l'entry worker de miniflare.
 
-Constaté à l'identique sur `main` (`27334e0`, avant tout travail du jalon 0) et
-sur la branche du jalon 0, sur quatre exécutions. Ce n'est donc ni une
-régression du jalon 0, ni un flake aléatoire.
+Cinq échecs et un passage sur les versions actuellement épinglées, dont un
+échec et un passage sur **deux commits dont le code est identique** (seule la
+documentation change entre eux) : la panne est intermittente, avec un taux
+d'échec élevé. Elle est présente sur `main` (`27334e0`) avant tout travail du
+jalon 0, donc indépendante de celui-ci.
 
-Piste : la seule exécution verte de ce workflow est celle de la pull request
-Dependabot « minor-and-patch » (wrangler 4.118 → 4.125, donc miniflare, et Astro
-7.1 → 7.2). La panne se produisant *dans* miniflare, cette montée de version est
-le premier correctif à tester.
+Un garde-fou existe déjà pour la même classe de panne — `assert_cache_control`
+réessaie lorsque curl n'obtient aucune réponse — mais il ne couvre pas ce cas,
+où miniflare répond : la panne de transport arrive habillée en échange HTTP
+complet. Étendre le retry à ce seul cas prouvable (500 dont le corps est
+l'erreur levée par l'entry worker de miniflare) est la mitigation naturelle ;
+elle ne désactive aucune assertion.
 
-- [ ] Confirmer ou écarter la piste Dependabot, puis rendre l'intégration D1
-  verte en CI. Tant qu'elle est rouge, aucune boutique ne peut être certifiée
-  sur la seule foi de la CI, et le critère de sortie du jalon 0 n'est pas
-  atteint.
+- [ ] Rendre l'intégration D1 fiable en CI. Tant qu'elle échoue une fois sur
+  deux, elle ne peut pas servir de porte de certification pour une boutique, et
+  le critère de sortie du jalon 0 n'est pas atteint.
 
 Le diagnostic complet, les exécutions comparées et la marche à suivre sont
 consignés sur la pull request Dependabot elle-même, où le sujet est suivi :
