@@ -1,0 +1,30 @@
+# Décisions d'architecture
+
+Ce répertoire contient les ADR (Architecture Decision Records) du socle
+`minshop-platform`. Un ADR enregistre une décision structurante, son contexte
+et ses conséquences, afin qu'une boutique créée dans un an puisse être exploitée
+sans reconstituer le raisonnement d'origine.
+
+## Règles
+
+- un ADR est immuable une fois accepté ; une décision qui change fait l'objet
+  d'un nouvel ADR qui remplace le précédent (`Remplace` / `Remplacé par`) ;
+- la numérotation est séquentielle et ne se réutilise jamais ;
+- un ADR décrit une décision, pas une procédure : les procédures vivent dans
+  le plan d'implémentation et les runbooks ;
+- toute modification du cœur qui contredit un ADR accepté doit d'abord
+  proposer l'ADR qui le remplace.
+
+Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
+
+## Index
+
+| ADR | Titre | Statut |
+|---|---|---|
+| [0001](0001-modele-isolation.md) | Modèle d'isolation des boutiques | Accepté |
+| [0002](0002-propriete-des-comptes.md) | Propriété des comptes et des fournisseurs | Accepté |
+| [0003](0003-versionnement-du-socle.md) | Versionnement du socle et stratégie Git | Accepté |
+| [0004](0004-localisation-des-donnees.md) | Localisation des données | Accepté |
+| [0005](0005-strategie-de-sauvegarde.md) | Stratégie de sauvegarde et de restauration | Accepté |
+| [0006](0006-politique-des-migrations.md) | Politique des migrations de schéma | Accepté |
+| [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté |
