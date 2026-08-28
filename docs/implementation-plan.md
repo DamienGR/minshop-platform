@@ -90,7 +90,8 @@ Deux boutiques fictives doivent exister dès le début du développement :
 
 Le plan de contrôle comprend :
 
-- [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé ;
+- [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé,
+  en dépôt privé ;
 - [ ] la CLI `shopctl` ;
 - [ ] les schémas de configuration ;
 - [ ] les templates de boutique ;
@@ -357,42 +358,55 @@ Durée indicative : 2 jours.
 
 #### Livrables
 
-- [ ] fork privé de Minshop (le remote existe, mais sa visibilité reste à confirmer) ;
+- [x] fork privé de Minshop (`DamienGR/minshop-platform`, visibilité privée
+  confirmée le 2026-08-28) ;
 - [x] référence upstream enregistrée ;
-- [ ] versions Node et npm imposées ;
+- [x] versions Node et npm imposées (`engines` racine et `mcp/`,
+  `engine-strict`, `.nvmrc` lu par la CI, `npm run check:toolchain`) ;
 - [x] lockfiles conservés pour l'application et le Worker MCP ;
 - [x] CI minimale héritée de Minshop ;
-- [ ] inventaire des dépendances et fonctionnalités ;
-- [ ] premiers ADR dans `docs/architecture/decisions/`.
+- [x] inventaire des dépendances et fonctionnalités
+  ([`docs/architecture/baseline-inventory.md`](architecture/baseline-inventory.md)) ;
+- [x] premiers ADR dans `docs/architecture/decisions/`.
 
 ADR initiaux :
 
-- [ ] modèle d'isolation ;
-- [ ] propriété des comptes ;
-- [ ] versionnement du socle ;
-- [ ] localisation des données ;
-- [ ] stratégie de sauvegarde ;
-- [ ] politique des migrations ;
-- [ ] périmètre fonctionnel de l'offre.
+- [x] modèle d'isolation ;
+- [x] propriété des comptes ;
+- [x] versionnement du socle ;
+- [x] localisation des données ;
+- [x] stratégie de sauvegarde ;
+- [x] politique des migrations ;
+- [x] périmètre fonctionnel de l'offre.
 
 #### Tests
 
 - [x] `npm ci` avec Node 22 ;
 - [x] contrôles composant `npm run verify` ;
 - [x] `npm run build` ;
-- [ ] `npx wrangler deploy --dry-run` pour le storefront.
+- [x] `npx wrangler deploy --dry-run` pour le storefront
+  (`npm run check:deploy`, inclus dans `npm run verify`).
 
 Ajouter :
 
-- [ ] scan de secrets ;
+- [x] scan de secrets (`npm run check:secrets`) ;
 - [x] audit npm des dépendances racine et MCP sans vulnérabilité connue ;
-- [ ] contrôle de la taille du bundle ;
-- [ ] construction depuis un clone vierge.
+- [x] contrôle de la taille du bundle (budgets Worker et JS client dans
+  `scripts/check-deploy.mjs`) ;
+- [x] construction depuis un clone vierge (`npm run check:clean-clone`, job CI
+  dédié).
 
 #### Critère de sortie
 
 - [ ] Le fork non personnalisé se construit, passe les tests Minshop et peut être
   déployé dans un compte Cloudflare de test.
+
+État : la construction et la déployabilité sont vérifiées automatiquement
+(`npm run verify` et le job « Build from a clean clone » couvrent `npm ci`, le
+build, le dry run de déploiement, les budgets de taille et le scan de secrets).
+Il reste **un déploiement réel dans un compte Cloudflare de test**, opération
+humaine qui suppose des identifiants Cloudflare : c'est le seul point encore
+ouvert du jalon 0.
 
 ### Jalon 1 — Fondations multi-client
 
@@ -757,7 +771,11 @@ Durée indicative : 3 à 4 jours.
 - [ ] `npm run test:cli` ;
 - [x] contrôle équivalent à `npm run theme:check` dans la CI Minshop ;
 - [x] tests de contrat storefront dans la CI Minshop ;
-- [x] build de production dans la CI Minshop.
+- [x] build de production dans la CI Minshop ;
+- [x] contrôle de la chaîne d'outils (`npm run check:toolchain`) ;
+- [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
+- [x] scan de secrets (`npm run check:secrets`) ;
+- [x] construction depuis un clone vierge (job CI dédié).
 
 Objectif : moins de cinq minutes.
 

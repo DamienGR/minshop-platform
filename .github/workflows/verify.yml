@@ -66,8 +66,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          # The script re-clones HEAD locally; a shallow checkout has no objects
-          # to clone from.
+          # The script re-clones HEAD from this checkout's object store, and
+          # git refuses several local-clone modes against a shallow repository.
           fetch-depth: 0
 
       - name: Set up Node.js

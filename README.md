@@ -326,8 +326,11 @@ Le dépôt est en phase de cadrage :
 - [x] architecture cible définie ;
 - [x] périmètre du pilote défini ;
 - [x] jalons et stratégie de tests définis ;
-- [x] fork Minshop importé avec son historique upstream ;
-- [ ] CI initialisée ;
+- [x] fork Minshop importé avec son historique upstream, en dépôt privé ;
+- [x] décisions d'architecture initiales enregistrées ;
+- [x] inventaire de la baseline relevé ;
+- [x] CI initialisée (chaîne d'outils imposée, dry run de déploiement, budgets
+  de taille, scan de secrets, build depuis un clone vierge) ;
 - [ ] manifeste client implémenté ;
 - [ ] CLI implémentée ;
 - [ ] boutique pilote déployée ;
@@ -337,6 +340,8 @@ Le dépôt est en phase de cadrage :
 ## Documentation
 
 - [Plan détaillé d'implémentation](docs/implementation-plan.md)
+- [Décisions d'architecture (ADR)](docs/architecture/decisions/README.md)
+- [Inventaire de la baseline](docs/architecture/baseline-inventory.md)
 - [Documentation Minshop](https://github.com/ddyy/minshop)
 - [Personnalisation d'un storefront Minshop](https://github.com/ddyy/minshop/blob/main/CUSTOMIZING.md)
 - [Localisation des données D1](https://developers.cloudflare.com/d1/configuration/data-location/)
