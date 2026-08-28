@@ -433,6 +433,10 @@ le premier correctif à tester.
   sur la seule foi de la CI, et le critère de sortie du jalon 0 n'est pas
   atteint.
 
+Le diagnostic complet, les exécutions comparées et la marche à suivre sont
+consignés sur la pull request Dependabot elle-même, où le sujet est suivi :
+[PR #1](https://github.com/DamienGR/minshop-platform/pull/1).
+
 ### Jalon 1 — Fondations multi-client
 
 Durée indicative : 3 à 4 jours.
