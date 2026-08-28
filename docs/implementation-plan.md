@@ -420,11 +420,17 @@ cache (`assert_cache_control /product/sample-tee`,
 un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
 l'entry worker de miniflare.
 
-Cinq échecs et un passage sur les versions actuellement épinglées, dont un
-échec et un passage sur **deux commits dont le code est identique** (seule la
-documentation change entre eux) : la panne est intermittente, avec un taux
-d'échec élevé. Elle est présente sur `main` (`27334e0`) avant tout travail du
-jalon 0, donc indépendante de celui-ci.
+Cinq échecs et deux passages sur les versions d'origine, dont un échec et un
+passage sur **deux commits dont le code est identique** (seule la documentation
+change entre eux) : la panne est intermittente, avec un taux d'échec élevé. Elle
+est présente sur `main` (`27334e0`) avant tout travail du jalon 0, donc
+indépendante de celui-ci.
+
+La montée « minor-and-patch » a été fusionnée dans `main` depuis : wrangler
+passe de 4.118 à 4.125, ce qui change le miniflare embarqué de la série 4 à la
+série 5. La branche du jalon 0 l'a intégrée. Si le flake disparaît, c'est cette
+montée qui l'aura corrigé — mais il faudra plusieurs exécutions vertes pour le
+conclure, un passage isolé ne prouvant rien sur une panne intermittente.
 
 Un garde-fou existe déjà pour la même classe de panne — `assert_cache_control`
 réessaie lorsque curl n'obtient aucune réponse — mais il ne couvre pas ce cas,

@@ -8,7 +8,8 @@ Cet inventaire est un **relevé daté**, pas un document vivant : il fixe l'éta
 de référence du jalon 0. Il est refait à chaque montée de version majeure du
 socle, et non à chaque commit.
 
-- **Commit de référence** : `27334e0` ;
+- **Commit de référence** : `78259e9` (jalon 0, après intégration de la montée
+  de versions « minor-and-patch » fusionnée dans `main`) ;
 - **Date du relevé** : 2026-08-28 ;
 - **Amont** : [ddyy/minshop](https://github.com/ddyy/minshop), historique
   conservé dans ce dépôt.
@@ -19,8 +20,8 @@ socle, et non à chaque commit.
 |---|---|---|
 | Node.js | `>=22.12.0 <23` | `engines` (racine et `mcp/`), `.nvmrc` |
 | npm | `>=10.9.0` | `engines` (racine et `mcp/`) |
-| Astro | 7.1.x | `package.json` |
-| Wrangler | 4.118.x | `package.json` (devDependencies) |
+| Astro | 7.2.x (plage `^7.1.6`) | `package.json` |
+| Wrangler | 4.125.x | `package.json` (devDependencies) |
 | TypeScript | 6.0.x | `package.json` (devDependencies) |
 | Vitest | 4.1.x | `package.json` (devDependencies) |
 | Tailwind CSS | 4.3.x | `package.json` (devDependencies) |
@@ -48,9 +49,9 @@ Audit relevé avec `npm audit` et `npm audit --prefix mcp` à la date ci-dessus.
 
 | Paquet | Version | Rôle | Statut pilote |
 |---|---|---|---|
-| `astro` | ^7.1.6 | framework SSR | cœur |
-| `@astrojs/cloudflare` | ^14.1.7 | adaptateur Workers | cœur |
-| `stripe` | ^22.4.0 | SDK Stripe (adaptateur paiement) | cœur |
+| `astro` | ^7.1.6 (7.2.6 installé) | framework SSR | cœur |
+| `@astrojs/cloudflare` | ^14.2.4 | adaptateur Workers | cœur |
+| `stripe` | ^22.5.0 | SDK Stripe (adaptateur paiement) | cœur |
 | `markdown-it` | ^15.0.0 | rendu des pages éditoriales (`html: false`) | cœur |
 | `uqr` | ^0.1.3 | QR code des factures Lightning | hors périmètre, conservé |
 
