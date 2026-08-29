@@ -15,3 +15,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # TypeScript 7 ships the native (Go) compiler, which does not expose the
+      # programmatic API `astro check` drives through @astrojs/language-server;
+      # @astrojs/check also still peers on `^5 || ^6`, so `npm ci` cannot even
+      # resolve. Track https://github.com/withastro/roadmap/discussions/1321 and
+      # drop this entry once Astro supports the native compiler.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
