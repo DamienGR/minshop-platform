@@ -207,6 +207,18 @@ if [[ "$page_body" != *"We ship worldwide."* ]]; then
   exit 1
 fi
 
+# miniflare renders a connection it lost itself as a plain-text 500 from its own
+# entry worker, so curl reports a completed exchange and a transport retry never
+# fires. No route in this app produces that body, so matching it cannot mask an
+# application regression. HEAD responses carry no body to match on, so they stay
+# covered by the transport retry alone.
+miniflare_dropped_connection() {
+  local status="$1" body="$2"
+  [[ "$status" == 500 ]] || return 1
+  grep -qF 'Error: Network connection lost.' "$body" &&
+    grep -qF 'core/entry.worker.js' "$body"
+}
+
 # Workers Caching runs before the Worker and heuristically stores headerless
 # responses. Crawl every GET/HEAD route class so only known public responses can
 # ever leave with a shared directive; redirects, errors, and private routes must
@@ -219,10 +231,13 @@ assert_cache_control() {
   local body="$state_dir/cache-body.txt"
 
   # `wrangler dev` occasionally drops a connection under CI load ("Error: Network
-  # connection lost."), which curl reports as a TRANSPORT failure — no response at
-  # all. Retry only that. A completed exchange is never retried, however bad its
-  # status: retrying a genuine 500 would turn a real regression into a flake in
-  # the other direction, which is the more expensive mistake.
+  # connection lost."). curl surfaces that two different ways: as a TRANSPORT
+  # failure — no response at all — or, when miniflare catches the dropped
+  # connection first, as a completed exchange carrying the plain-text 500 its
+  # entry worker renders. Retry both; in either case the Worker under test was
+  # never reached. A 500 the Worker itself produced is still never retried:
+  # retrying a genuine failure would turn a real regression into a flake in the
+  # other direction, which is the more expensive mistake.
   local status curl_rc attempt
   for attempt in 1 2 3; do
     if [[ "$method" == "HEAD" ]]; then
@@ -235,9 +250,15 @@ assert_cache_control() {
         --write-out '%{http_code}' \
         "http://127.0.0.1:$test_port$path")" && curl_rc=0 || curl_rc=$?
     fi
-    [[ "$curl_rc" == 0 ]] && break
+    if [[ "$curl_rc" == 0 ]] && ! miniflare_dropped_connection "$status" "$body"; then
+      break
+    fi
     if (( attempt < 3 )); then
-      echo "  (retrying $method $path — curl exit $curl_rc, no response)" >&2
+      if [[ "$curl_rc" == 0 ]]; then
+        echo "  (retrying $method $path — miniflare dropped the connection, HTTP $status)" >&2
+      else
+        echo "  (retrying $method $path — curl exit $curl_rc, no response)" >&2
+      fi
       sleep 1
     fi
   done
@@ -245,6 +266,14 @@ assert_cache_control() {
   if [[ "$curl_rc" != 0 ]]; then
     echo "D1 integration failed: $method $path — no response after 3 attempts (curl exit $curl_rc)." >&2
     echo "  A transport failure, not an HTTP status. See the wrangler log below." >&2
+    echo "--- last 80 lines of wrangler dev log ---" >&2
+    tail -n 80 "$worker_log" >&2
+    exit 1
+  fi
+
+  if miniflare_dropped_connection "$status" "$body"; then
+    echo "D1 integration failed: $method $path — miniflare dropped the connection on all 3 attempts." >&2
+    echo "  The Worker under test was never reached. See the wrangler log below." >&2
     echo "--- last 80 lines of wrangler dev log ---" >&2
     tail -n 80 "$worker_log" >&2
     exit 1
