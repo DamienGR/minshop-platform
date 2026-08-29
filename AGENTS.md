@@ -12,10 +12,18 @@ nvm use 22         # REQUIRED — the supported toolchain runs on Node 22
 npm run verify     # complete storefront + D1 + MCP green/red gate
 ```
 
-`npm run verify` is the single signal that a change is sound: it runs unit tests,
-full Astro diagnostics, the production build, the clean-room D1 integration, and
-the MCP typecheck/deployment dry run. If it's green, the change holds together.
-Run it after every meaningful edit, not just at the end.
+`npm run verify` is the single signal that a change is sound: it runs the
+toolchain check, unit tests, full Astro diagnostics, the production build, the
+storefront deploy dry run and its size budgets, the clean-room D1 integration,
+the MCP typecheck/deployment dry run, and the secret scan. If it's green, the
+change holds together. Run it after every meaningful edit, not just at the end.
+
+Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
+`npm run check:deploy` (Wrangler dry run + bundle budgets, needs a build),
+`npm run check:secrets` (tracked-tree credential scan). `npm run check:clean-clone`
+is NOT in `verify` — it re-clones HEAD into a scratch directory and builds there,
+proving the commit stands without any working-tree state. CI runs it as its own
+job; run it locally before tagging a core version.
 
 Other commands: `npm run dev` (astro dev), `npm run preview` (wrangler dev =
 production mode, for testing middleware/auth), `npm run db:migrate` (local D1),

@@ -90,7 +90,8 @@ Deux boutiques fictives doivent exister dès le début du développement :
 
 Le plan de contrôle comprend :
 
-- [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé ;
+- [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé,
+  en dépôt privé ;
 - [ ] la CLI `shopctl` ;
 - [ ] les schémas de configuration ;
 - [ ] les templates de boutique ;
@@ -357,42 +358,94 @@ Durée indicative : 2 jours.
 
 #### Livrables
 
-- [ ] fork privé de Minshop (le remote existe, mais sa visibilité reste à confirmer) ;
+- [x] fork privé de Minshop (`DamienGR/minshop-platform`, visibilité privée
+  confirmée le 2026-08-28) ;
 - [x] référence upstream enregistrée ;
-- [ ] versions Node et npm imposées ;
+- [x] versions Node et npm imposées (`engines` racine et `mcp/`,
+  `engine-strict`, `.nvmrc` lu par la CI, `npm run check:toolchain`) ;
 - [x] lockfiles conservés pour l'application et le Worker MCP ;
 - [x] CI minimale héritée de Minshop ;
-- [ ] inventaire des dépendances et fonctionnalités ;
-- [ ] premiers ADR dans `docs/architecture/decisions/`.
+- [x] inventaire des dépendances et fonctionnalités
+  ([`docs/architecture/baseline-inventory.md`](architecture/baseline-inventory.md)) ;
+- [x] premiers ADR dans `docs/architecture/decisions/`.
 
 ADR initiaux :
 
-- [ ] modèle d'isolation ;
-- [ ] propriété des comptes ;
-- [ ] versionnement du socle ;
-- [ ] localisation des données ;
-- [ ] stratégie de sauvegarde ;
-- [ ] politique des migrations ;
-- [ ] périmètre fonctionnel de l'offre.
+- [x] modèle d'isolation ;
+- [x] propriété des comptes ;
+- [x] versionnement du socle ;
+- [x] localisation des données ;
+- [x] stratégie de sauvegarde ;
+- [x] politique des migrations ;
+- [x] périmètre fonctionnel de l'offre.
 
 #### Tests
 
 - [x] `npm ci` avec Node 22 ;
 - [x] contrôles composant `npm run verify` ;
 - [x] `npm run build` ;
-- [ ] `npx wrangler deploy --dry-run` pour le storefront.
+- [x] `npx wrangler deploy --dry-run` pour le storefront
+  (`npm run check:deploy`, inclus dans `npm run verify`).
 
 Ajouter :
 
-- [ ] scan de secrets ;
+- [x] scan de secrets (`npm run check:secrets`) ;
 - [x] audit npm des dépendances racine et MCP sans vulnérabilité connue ;
-- [ ] contrôle de la taille du bundle ;
-- [ ] construction depuis un clone vierge.
+- [x] contrôle de la taille du bundle (budgets Worker et JS client dans
+  `scripts/check-deploy.mjs`) ;
+- [x] construction depuis un clone vierge (`npm run check:clean-clone`, job CI
+  dédié).
 
 #### Critère de sortie
 
 - [ ] Le fork non personnalisé se construit, passe les tests Minshop et peut être
   déployé dans un compte Cloudflare de test.
+
+État : la construction et la déployabilité sont vérifiées automatiquement
+(`npm run verify` et le job « Build from a clean clone » couvrent `npm ci`, le
+build, le dry run de déploiement, les budgets de taille et le scan de secrets).
+Deux points restent ouverts :
+
+- [ ] **un déploiement réel dans un compte Cloudflare de test**, opération
+  humaine qui suppose des identifiants Cloudflare ;
+- [ ] **l'intégration D1 échoue dans GitHub Actions**, sur `main` comme sur les
+  branches. Voir « Défaut de baseline connu » ci-dessous.
+
+#### Défaut de baseline connu — intégration D1 instable en CI
+
+`npm run verify` passe en local et échoue une fois sur deux dans GitHub
+Actions, toujours au même endroit : la requête qui suit le POST de purge de
+cache (`assert_cache_control /product/sample-tee`,
+`test/integration/d1-integration.sh:306`) n'atteint jamais le Worker et reçoit
+un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
+l'entry worker de miniflare.
+
+Cinq échecs et deux passages sur les versions d'origine, dont un échec et un
+passage sur **deux commits dont le code est identique** (seule la documentation
+change entre eux) : la panne est intermittente, avec un taux d'échec élevé. Elle
+est présente sur `main` (`27334e0`) avant tout travail du jalon 0, donc
+indépendante de celui-ci.
+
+La montée « minor-and-patch » a été fusionnée dans `main` depuis : wrangler
+passe de 4.118 à 4.125, ce qui change le miniflare embarqué de la série 4 à la
+série 5. La branche du jalon 0 l'a intégrée. Si le flake disparaît, c'est cette
+montée qui l'aura corrigé — mais il faudra plusieurs exécutions vertes pour le
+conclure, un passage isolé ne prouvant rien sur une panne intermittente.
+
+Un garde-fou existe déjà pour la même classe de panne — `assert_cache_control`
+réessaie lorsque curl n'obtient aucune réponse — mais il ne couvre pas ce cas,
+où miniflare répond : la panne de transport arrive habillée en échange HTTP
+complet. Étendre le retry à ce seul cas prouvable (500 dont le corps est
+l'erreur levée par l'entry worker de miniflare) est la mitigation naturelle ;
+elle ne désactive aucune assertion.
+
+- [ ] Rendre l'intégration D1 fiable en CI. Tant qu'elle échoue une fois sur
+  deux, elle ne peut pas servir de porte de certification pour une boutique, et
+  le critère de sortie du jalon 0 n'est pas atteint.
+
+Le diagnostic complet, les exécutions comparées et la marche à suivre sont
+consignés sur la pull request Dependabot elle-même, où le sujet est suivi :
+[PR #1](https://github.com/DamienGR/minshop-platform/pull/1).
 
 ### Jalon 1 — Fondations multi-client
 
@@ -757,7 +810,11 @@ Durée indicative : 3 à 4 jours.
 - [ ] `npm run test:cli` ;
 - [x] contrôle équivalent à `npm run theme:check` dans la CI Minshop ;
 - [x] tests de contrat storefront dans la CI Minshop ;
-- [x] build de production dans la CI Minshop.
+- [x] build de production dans la CI Minshop ;
+- [x] contrôle de la chaîne d'outils (`npm run check:toolchain`) ;
+- [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
+- [x] scan de secrets (`npm run check:secrets`) ;
+- [x] construction depuis un clone vierge (job CI dédié).
 
 Objectif : moins de cinq minutes.
 
