@@ -404,13 +404,49 @@ Ajouter :
 État : la construction et la déployabilité sont vérifiées automatiquement
 (`npm run verify` et le job « Build from a clean clone » couvrent `npm ci`, le
 build, le dry run de déploiement, les budgets de taille et le scan de secrets).
-Deux points restent ouverts :
+Des deux points qui restaient ouverts, un seul subsiste :
 
-- [ ] **un déploiement réel dans un compte Cloudflare de test**, opération
-  humaine qui suppose des identifiants Cloudflare ;
+- [x] **un déploiement réel dans un compte Cloudflare de test**, effectué le
+  2026-08-29 sur l'instance `minshop-test`, vérifié puis détruit. Voir
+  « Déploiement de validation » ci-dessous ;
 - [ ] **la fiabilité de l'intégration D1 en CI n'est pas encore établie**. La
   mitigation est appliquée ; il reste à l'observer sur la durée. Voir « Défaut de
   baseline connu » ci-dessous.
+
+#### Déploiement de validation sur l'instance `minshop-test`
+
+`scripts/provision-cf.sh minshop-test` a produit une instance complète sur un
+compte Cloudflare personnel, en plan gratuit, sans intervention manuelle :
+
+| Ressource | Vérification |
+| --- | --- |
+| Worker `minshop-test` | déployé ; `/` redirige vers `/admin/setup`, qui répond 200 |
+| D1 `minshop-test-db` | 40 migrations sur 40 appliquées, région WEUR |
+| R2 | `minshop-test-images` et `minshop-test-files` créés |
+| KV | `minshop-test-session` auto-provisionné par l'adaptateur, sous le nom qu'attend `destroy-cf.sh` |
+| Secrets | `AUTH_SECRET` et `SECRETS_KEK` posés |
+| Bindings déployés | `DB`, `BUCKET`, `FILES`, `SESSION`, les trois rate limiters, `ASSETS` |
+| Cron | `*/5 * * * *` enregistré |
+| Observabilité | logs et traces actifs, échantillonnage à 100 % |
+
+`scripts/destroy-cf.sh minshop-test` a ensuite tout retiré du compte : Worker,
+base D1, les deux buckets et le namespace KV. Le fichier de métadonnées de
+l'instance a été supprimé, ce que le script ne fait que si le bucket de fichiers
+privés a bien pu être détruit.
+
+Un défaut du script a été trouvé à cette occasion. `wrangler d1 create` et
+`wrangler r2 bucket create` proposent désormais d'inscrire eux-mêmes le binding
+créé dans le fichier de configuration, avec « oui » par défaut dès qu'un
+terminal répond. La sauvegarde de `wrangler.jsonc` était prise à l'étape [3/5],
+donc après les créations : elle capturait une configuration déjà modifiée, que
+le `trap` de sortie restaurait ensuite fidèlement. Le `wrangler.jsonc` committé,
+celui que lisent le bouton « Deploy to Cloudflare » et `astro dev`, s'est
+retrouvé avec deux buckets d'instance en trop. Le déploiement, lui, n'a jamais
+été affecté : l'étape [5/5] part de la configuration rendue depuis
+`wrangler.template.jsonc`, et le Worker a bien reçu les seuls bindings attendus.
+Corrigé par [PR #10](https://github.com/DamienGR/minshop-platform/pull/10) :
+sauvegarde déplacée avant le premier appel distant, et `--update-config=false`
+sur les trois créations pour refuser la proposition à la source.
 
 #### Défaut de baseline connu — intégration D1 instable en CI
 
@@ -461,6 +497,25 @@ Exécutions de `verify` sur `main` :
 | `deaf9de` | vert |
 | `01e992f` | annulé |
 | `e7c1526` | vert — première exécution avec la mitigation |
+| `40ab093` | vert |
+
+La panne n'a pas disparu pour autant. Le 2026-08-29, la branche de la
+[PR #9](https://github.com/DamienGR/minshop-platform/pull/9) a échoué au même
+endroit ([run 33270596059](https://github.com/DamienGR/minshop-platform/actions/runs/33270596059)),
+mitigation comprise :
+
+```
+(retrying GET /product/sample-tee — miniflare dropped the connection, HTTP 500)
+(retrying GET /product/sample-tee — curl exit 7, no response)
+D1 integration failed: GET /product/sample-tee — no response after 3 attempts (curl exit 7).
+```
+
+Le retry est bien parti sur la 500 de miniflare, puis les deux tentatives
+suivantes n'ont rien obtenu du tout : le serveur de développement était mort. La
+mitigation a donc fait exactement ce qu'on attendait d'elle, nommer la coupure
+plutôt que la déguiser en `cache-control` vide, sans supprimer la panne. Cette
+exécution n'étant pas sur `main`, elle ne remet pas le compteur à zéro, mais
+elle interdit de considérer le sujet comme réglé.
 
 - [ ] Rendre l'intégration D1 fiable en CI. **Critère de clôture : dix
   exécutions vertes consécutives de `verify` sur `main`**, mitigation comprise.
