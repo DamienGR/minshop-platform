@@ -498,11 +498,18 @@ Exécutions de `verify` sur `main` :
 | `01e992f` | annulé |
 | `e7c1526` | vert — première exécution avec la mitigation |
 | `40ab093` | vert |
+| `c1a066d` | vert |
+| `10e53b2` | annulé (push suivant arrivé pendant l'exécution) |
+| `ea1d870` | vert |
+| `0d2bc65` | échec (même panne, mitigation comprise) |
 
-La panne n'a pas disparu pour autant. Le 2026-08-29, la branche de la
-[PR #9](https://github.com/DamienGR/minshop-platform/pull/9) a échoué au même
-endroit ([run 33270596059](https://github.com/DamienGR/minshop-platform/actions/runs/33270596059)),
-mitigation comprise :
+La panne n'a pas disparu. Le 2026-08-29 elle s'est reproduite deux fois au même
+endroit, mitigation comprise : d'abord sur la branche de la
+[PR #9](https://github.com/DamienGR/minshop-platform/pull/9)
+([run 33270596059](https://github.com/DamienGR/minshop-platform/actions/runs/33270596059)),
+puis sur `main` lui-même en `0d2bc65`
+([run 33275634908](https://github.com/DamienGR/minshop-platform/actions/runs/33275634908)),
+avec la même sortie :
 
 ```
 (retrying GET /product/sample-tee — miniflare dropped the connection, HTTP 500)
@@ -510,12 +517,27 @@ mitigation comprise :
 D1 integration failed: GET /product/sample-tee — no response after 3 attempts (curl exit 7).
 ```
 
-Le retry est bien parti sur la 500 de miniflare, puis les deux tentatives
-suivantes n'ont rien obtenu du tout : le serveur de développement était mort. La
-mitigation a donc fait exactement ce qu'on attendait d'elle, nommer la coupure
-plutôt que la déguiser en `cache-control` vide, sans supprimer la panne. Cette
-exécution n'étant pas sur `main`, elle ne remet pas le compteur à zéro, mais
-elle interdit de considérer le sujet comme réglé.
+Le retry part bien sur la 500 de miniflare, puis les deux tentatives suivantes
+n'obtiennent rien du tout : le serveur de développement est mort. La mitigation
+fait donc exactement ce qu'on attendait d'elle, nommer la coupure plutôt que la
+déguiser en `cache-control` vide, sans supprimer la panne.
+
+L'échec de `0d2bc65` remet le compteur à zéro, après quatre exécutions vertes
+accumulées depuis la mitigation. Un échec sur cinq exécutions abouties reste
+bien meilleur que le un sur deux d'avant, mais sur un échantillon de cette
+taille l'écart ne se distingue pas du hasard : c'est précisément ce que le seuil
+des dix passages est là pour trancher.
+
+##### Piste ouverte : la version de miniflare
+
+La panne se produit sous le plancher du dépôt. Rien ici ne peut réparer l'entry
+worker de miniflare ; le seul levier disponible est la version qu'on en exécute.
+Le log de l'échec signale lui-même une version plus récente de wrangler que
+celle du verrou. La montée de wrangler à 4.127.1 fait passer miniflare de
+`5.20260825.0-alpha` à `5.20260828.0-alpha` et workerd de `1.20260825.1` à
+`1.20260828.1` : voir
+[PR #12](https://github.com/DamienGR/minshop-platform/pull/12). Comme la montée
+précédente, elle ne prouvera rien seule ; c'est le compteur qui tranchera.
 
 - [ ] Rendre l'intégration D1 fiable en CI. **Critère de clôture : dix
   exécutions vertes consécutives de `verify` sur `main`**, mitigation comprise.
