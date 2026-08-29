@@ -15,6 +15,9 @@
 #
 # ⚠  Creates REAL Cloudflare resources on your account and may incur usage. Review
 #    before running. Requires: wrangler (logged in: `npx wrangler login`), openssl.
+#    Under WSL2 with a Windows browser, use `node scripts/wrangler-login-wsl.mjs`
+#    instead — plain `wrangler login` gets the token but never returns, so no
+#    credentials are written and this script fails asking for CLOUDFLARE_API_TOKEN.
 set -euo pipefail
 
 SLUG="${1:-}"
