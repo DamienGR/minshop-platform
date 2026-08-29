@@ -32,6 +32,11 @@ npx wrangler login
 npm run provision:cf my-store
 ```
 
+On WSL2 with the browser on Windows, log in with `node scripts/wrangler-login-wsl.mjs`
+instead: Chrome opens a second, idle connection to wrangler's callback server, which
+keeps `server.close()` from ever completing, so `wrangler login` gets its token but
+hangs and writes no credentials.
+
 ## Publishing
 
 The first release must be published interactively so the package exists on npm:
