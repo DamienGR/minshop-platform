@@ -66,7 +66,9 @@ développement.
 
 ### 2.3 Politique de mise à jour
 
-- Dependabot est actif (`.github/dependabot.yml`) ;
+- Dependabot est actif (`.github/dependabot.yml`), avec un blocage explicite :
+  TypeScript reste sur la série 6, TypeScript 7 livrant le compilateur natif (Go)
+  dont `astro check` ne peut pas piloter l'API programmatique ;
 - les lockfiles racine et `mcp/` sont versionnés et jamais régénérés à la main ;
 - aucune dépendance n'est ajoutée sans décision explicite : chaque paquet est
   du code à supporter sur toute la flotte, pendant toute la durée des contrats ;
