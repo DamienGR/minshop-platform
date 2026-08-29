@@ -408,15 +408,16 @@ Deux points restent ouverts :
 
 - [ ] **un déploiement réel dans un compte Cloudflare de test**, opération
   humaine qui suppose des identifiants Cloudflare ;
-- [ ] **l'intégration D1 échoue dans GitHub Actions**, sur `main` comme sur les
-  branches. Voir « Défaut de baseline connu » ci-dessous.
+- [ ] **la fiabilité de l'intégration D1 en CI n'est pas encore établie**. La
+  mitigation est appliquée ; il reste à l'observer sur la durée. Voir « Défaut de
+  baseline connu » ci-dessous.
 
 #### Défaut de baseline connu — intégration D1 instable en CI
 
-`npm run verify` passe en local et échoue une fois sur deux dans GitHub
+`npm run verify` passe en local et échouait une fois sur deux dans GitHub
 Actions, toujours au même endroit : la requête qui suit le POST de purge de
 cache (`assert_cache_control /product/sample-tee`,
-`test/integration/d1-integration.sh:306`) n'atteint jamais le Worker et reçoit
+`test/integration/d1-integration.sh:335`) n'atteint jamais le Worker et reçoit
 un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
 l'entry worker de miniflare.
 
@@ -426,26 +427,53 @@ change entre eux) : la panne est intermittente, avec un taux d'échec élevé. E
 est présente sur `main` (`27334e0`) avant tout travail du jalon 0, donc
 indépendante de celui-ci.
 
-La montée « minor-and-patch » a été fusionnée dans `main` depuis : wrangler
-passe de 4.118 à 4.125, ce qui change le miniflare embarqué de la série 4 à la
-série 5. La branche du jalon 0 l'a intégrée. Si le flake disparaît, c'est cette
-montée qui l'aura corrigé — mais il faudra plusieurs exécutions vertes pour le
-conclure, un passage isolé ne prouvant rien sur une panne intermittente.
+##### Mitigation appliquée
 
-Un garde-fou existe déjà pour la même classe de panne — `assert_cache_control`
-réessaie lorsque curl n'obtient aucune réponse — mais il ne couvre pas ce cas,
+Un garde-fou existait déjà pour la même classe de panne — `assert_cache_control`
+réessaie lorsque curl n'obtient aucune réponse — mais il ne couvrait pas ce cas,
 où miniflare répond : la panne de transport arrive habillée en échange HTTP
-complet. Étendre le retry à ce seul cas prouvable (500 dont le corps est
-l'erreur levée par l'entry worker de miniflare) est la mitigation naturelle ;
-elle ne désactive aucune assertion.
+complet, `curl_rc` reste à 0 et le retry ne partait jamais.
 
-- [ ] Rendre l'intégration D1 fiable en CI. Tant qu'elle échoue une fois sur
-  deux, elle ne peut pas servir de porte de certification pour une boutique, et
-  le critère de sortie du jalon 0 n'est pas atteint.
+Le retry couvre désormais ce cas, reconnu à sa signature exacte : HTTP 500 dont
+le corps porte à la fois `Error: Network connection lost.` et
+`core/entry.worker.js`. Une 500 produite par le Worker lui-même ne correspond à
+aucun des deux marqueurs et échoue toujours au premier essai — aucune assertion
+n'est désactivée, et le compromis retenu en `c964bf7` (ne jamais réessayer un
+échange complété) est conservé partout ailleurs. Après trois tentatives, l'échec
+nomme la coupure au lieu d'un `cache-control` vide.
 
-Le diagnostic complet, les exécutions comparées et la marche à suivre sont
-consignés sur la pull request Dependabot elle-même, où le sujet est suivi :
-[PR #1](https://github.com/DamienGR/minshop-platform/pull/1).
+##### Deux causes possibles, non départagées
+
+La montée « minor-and-patch » (#1) avait fait passer wrangler de 4.118 à 4.125,
+donc le miniflare embarqué de la série 4 à la série 5. Les deux exécutions
+vertes qui ont suivi sont **antérieures** à la mitigation : elles peuvent
+s'expliquer par cette montée, ou par le hasard sur une panne intermittente. La
+mitigation supprime une classe de panne prouvée ; elle ne prouve pas à elle
+seule que la panne a disparu.
+
+Exécutions de `verify` sur `main` :
+
+| Commit | Résultat |
+| --- | --- |
+| `b169b03` | échec |
+| `27334e0` | échec |
+| `a3e1c1f` | vert — wrangler 4.125 / miniflare 5 |
+| `deaf9de` | vert |
+| `01e992f` | annulé |
+| `e7c1526` | vert — première exécution avec la mitigation |
+
+- [ ] Rendre l'intégration D1 fiable en CI. **Critère de clôture : dix
+  exécutions vertes consécutives de `verify` sur `main`**, mitigation comprise.
+  Avec un taux d'échec historique proche d'une fois sur deux, dix passages
+  consécutifs ramènent sous 0,1 % la probabilité de conclure à tort ; sans seuil
+  chiffré, la case ne peut pas être fermée objectivement. Tant que l'intégration
+  échoue par intermittence, elle ne peut pas servir de porte de certification
+  pour une boutique, et le critère de sortie du jalon 0 n'est pas atteint.
+
+Le diagnostic initial et les exécutions comparées sont consignés sur
+[PR #1](https://github.com/DamienGR/minshop-platform/pull/1) ; le correctif et
+son raisonnement sur
+[PR #7](https://github.com/DamienGR/minshop-platform/pull/7).
 
 ### Jalon 1 — Fondations multi-client
 
