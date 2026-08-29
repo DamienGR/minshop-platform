@@ -32,7 +32,15 @@ FILES_BUCKET="${SLUG}-files"
 META=".instances/${SLUG}.env"
 mkdir -p .instances
 
-# Restore the canonical wrangler.jsonc no matter how we exit.
+# Back up the canonical wrangler.jsonc BEFORE touching the account, and restore it
+# no matter how we exit. The backup has to precede resource creation: `wrangler d1
+# create` / `r2 bucket create` offer to add the new binding to the config file for
+# you (default yes when a TTY answers), so a backup taken after them would capture —
+# and then restore — a committed config polluted with instance-specific bindings.
+# The --update-config=false flags below decline that offer; this is the safety net.
+# wrangler.jsonc is committed, so it normally exists; guard the copy anyway so a
+# fresh clone that deleted it doesn't abort under `set -e`.
+[ -f wrangler.jsonc ] && cp wrangler.jsonc wrangler.jsonc.bak
 restore() { [ -f wrangler.jsonc.bak ] && mv -f wrangler.jsonc.bak wrangler.jsonc || true; }
 trap restore EXIT
 
@@ -47,25 +55,22 @@ node --input-type=module -e "
 "
 
 echo "▸ [1/5] Creating D1 database '$DB_NAME'…"
-DB_OUT="$($W d1 create "$DB_NAME")"
+DB_OUT="$($W d1 create "$DB_NAME" --update-config=false)"
 DB_ID="$(printf '%s' "$DB_OUT" | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 [ -n "$DB_ID" ] || { echo "✗ could not parse database_id from output:"; echo "$DB_OUT"; exit 1; }
 echo "    database_id=$DB_ID"
 
 echo "▸ [2/5] Creating R2 bucket '$BUCKET'…"
-$W r2 bucket create "$BUCKET"
+$W r2 bucket create "$BUCKET" --update-config=false
 echo "    Creating private digital-file bucket '$FILES_BUCKET'…"
-$W r2 bucket create "$FILES_BUCKET"
+$W r2 bucket create "$FILES_BUCKET" --update-config=false
 echo "    Keep this bucket private: do not enable r2.dev or attach a custom domain."
 
 # FREE-PLAN DEFAULT: D1 + R2 only. Semantic search (Workers AI + Vectorize) is
 # opt-in: create the index and add its bindings to wrangler.template.jsonc (see
 # the comments there), then re-run/redeploy.
 
-echo "▸ [3/5] Rendering instance config → wrangler.jsonc (original backed up)…"
-# wrangler.jsonc is committed (placeholder config), so it normally exists; guard the
-# backup anyway so a fresh clone that deleted it doesn't abort under `set -e`.
-[ -f wrangler.jsonc ] && cp wrangler.jsonc wrangler.jsonc.bak
+echo "▸ [3/5] Rendering instance config → wrangler.jsonc (backed up at startup)…"
 sed -e "s/__NAME__/$SLUG/g" \
     -e "s/__DB_NAME__/$DB_NAME/g" \
     -e "s/__DB_ID__/$DB_ID/g" \
