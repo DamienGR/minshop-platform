@@ -179,7 +179,7 @@ Le fichier `client/client.yaml` est la source de vérité non sensible.
 
 ```yaml
 schemaVersion: 1
-coreVersion: 1.0.0
+coreVersion: 0.1.0
 
 client:
   slug: pilot-fr
@@ -209,11 +209,19 @@ cloudflare:
 
 email:
   provider: resend
-  from: commandes@example.fr
+  from: commandes@pilote.example.fr
 
 theme:
-  id: pilot-fr
+  # `pilot-fr` au jalon 5, quand la boutique aura son propre thème.
+  id: studio
 ```
+
+Ce bloc est la copie lisible d'un fichier qui existe :
+`test/fixtures/clients/pilot-fr/client.yaml`. En cas de désaccord entre les deux,
+c'est la fixture qui a raison — elle est validée à chaque `npm run verify`, ce
+bloc ne l'est pas. `coreVersion` y suit la version du socle, donc la valeur
+montrée ici vieillit ; c'est le seul champ dont il ne faut pas recopier la
+valeur.
 
 Un JSON Schema versionné contrôle :
 
@@ -267,6 +275,14 @@ shopctl new <slug>
 shopctl doctor
 shopctl config validate
 ```
+
+`config validate` existe déjà sous la forme de `npm run config:validate`
+(`scripts/check-manifest.mjs`), livré au jalon 1 et exécuté par `verify` : il
+valide les manifestes, refuse deux boutiques sur un même identifiant de
+ressource, contrôle la dérive du schéma publié et vérifie qu'aucune valeur
+client n'est écrite dans le cœur. La commande doit l'**envelopper**, pas le
+réimplémenter — sans quoi la CI et la CLI finiraient par répondre différemment à
+la même question, et c'est la CLI que l'exploitant croit.
 
 `shopctl new` doit :
 
