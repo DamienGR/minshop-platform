@@ -11,6 +11,12 @@ name: D1 flake probe
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'raw = measure the fault; wrapped = prove the re-run absorbs it'
+        type: choice
+        options: [raw, wrapped]
+        default: raw
   push:
     branches: ['flake-probe/**']
 
@@ -53,18 +59,30 @@ jobs:
       - name: Build the Worker under test
         run: npx astro build
 
-      # The raw suite, not the wrapper: this measures how often the dev session
-      # dies, which the wrapper is designed to hide. Exit 75 is that death and
-      # nothing else, so the three outcomes stay legible in the run summary.
+      # Two things worth measuring, and they are not the same thing.
+      #
+      # raw     runs the suite directly, so exit 75 surfaces and the death rate
+      #         is what you read off the run summary. The wrapper is built to
+      #         hide exactly that.
+      # wrapped runs what CI actually runs. Deaths are absorbed, so a green
+      #         sweep here is the proof that the re-run holds — including
+      #         against deaths that repeat on the same runner, which the
+      #         per-run rate alone cannot tell you.
       - name: Run the D1 integration gate once
+        env:
+          TARGET: ${{ github.event.inputs.target || 'raw' }}
         run: |
           set +e
-          bash test/integration/d1-integration.sh
+          if [ "$TARGET" = "wrapped" ]; then
+            bash test/integration/run-d1-integration.sh
+          else
+            bash test/integration/d1-integration.sh
+          fi
           status=$?
           set -e
           case "$status" in
-            0)  echo "PROBE run ${{ matrix.run }}: PASS" ;;
-            75) echo "PROBE run ${{ matrix.run }}: DEV SESSION DIED" ;;
-            *)  echo "PROBE run ${{ matrix.run }}: FAILED an assertion (exit $status)" ;;
+            0)  echo "PROBE run ${{ matrix.run }} ($TARGET): PASS" ;;
+            75) echo "PROBE run ${{ matrix.run }} ($TARGET): DEV SESSION DIED" ;;
+            *)  echo "PROBE run ${{ matrix.run }} ($TARGET): FAILED (exit $status)" ;;
           esac
           exit "$status"
