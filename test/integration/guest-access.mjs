@@ -40,7 +40,7 @@ try {
        created_at TEXT NOT NULL DEFAULT (datetime('now')), sent_at TEXT,
        PRIMARY KEY (order_id, kind))`,
     `CREATE TABLE pending_payments (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'pending', expires_at TEXT)`,
-    `CREATE TABLE checkout_reservations (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active', terminal_at TEXT, terms_version TEXT, terms_accepted_at TEXT)`,
+    `CREATE TABLE checkout_reservations (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active', terminal_at TEXT, terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER)`,
   ]) {
     await db.exec(sql.replace(/\n\s*/g, ' '));
   }

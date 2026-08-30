@@ -30,3 +30,5 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté |
 | [0008](0008-format-du-manifeste-client.md) | Format et autorité du manifeste client | Accepté |
 | [0009](0009-forme-de-la-cli-shopctl.md) | Forme, langage et livraison de la CLI `shopctl` | Accepté |
+| [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve |
+| [0011](0011-langue-de-l-administration.md) | Langue de l'administration | Accepté |

@@ -6,7 +6,7 @@ import {
   type ImageDelivery,
 } from '../products/image';
 import { carrierName, trackingUrl } from '../orders/tracking';
-import { t } from '../i18n/index.ts';
+import { t, formatNumber } from '../i18n/index.ts';
 import type { EmailMessage } from './provider';
 import {
   PALETTE,
@@ -48,6 +48,17 @@ function totalRows(order: Order, money: (cents: number) => string): TotalRow[] {
       ? [{ label: t('email.total.tax'), amount: money(order.tax_cents) }]
       : []),
     { label: t('email.total.total'), amount: money(order.amount_total_cents), strong: true },
+    // Prices are TTC, so this is a BREAKDOWN of the line above, never an
+    // addition to it — hence its place under the total rather than beside the
+    // shipping and discount rows.
+    ...(order.vat_amount_cents != null && order.vat_rate_bps
+      ? [
+          {
+            label: t('email.total.vatIncluded', { taux: formatNumber(order.vat_rate_bps / 100) }),
+            amount: money(order.vat_amount_cents),
+          },
+        ]
+      : []),
   ];
 }
 

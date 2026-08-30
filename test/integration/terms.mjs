@@ -39,7 +39,7 @@ try {
        payment_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
        expires_at TEXT NOT NULL, terminal_at TEXT,
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-       terms_version TEXT, terms_accepted_at TEXT)`,
+       terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER)`,
     `CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_session_id TEXT UNIQUE,
        public_id TEXT UNIQUE, email TEXT, amount_total_cents INTEGER NOT NULL,
        shipping_cents INTEGER NOT NULL DEFAULT 0, shipping_label TEXT,
@@ -48,6 +48,7 @@ try {
        currency TEXT NOT NULL, ship_address TEXT, status TEXT NOT NULL,
        payment_method TEXT, settlement_token TEXT, provider_payment_id TEXT,
        terms_version TEXT, terms_accepted_at TEXT,
+       vat_rate_bps INTEGER, vat_amount_cents INTEGER,
        created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     `CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL,
        product_id INTEGER, variant_id INTEGER, public_id TEXT, name TEXT NOT NULL,
@@ -100,7 +101,7 @@ try {
   assert.ok(consent, 'a ticked box produces a consent record');
   const items = [{ productId: 1, variantId: null, quantity: 2, name: 'Article', priceCents: 1000 }];
   assert.ok(
-    await reserveInventory(db, 'ord_termsaccept', items, 900, 'demo', undefined, undefined, consent),
+    await reserveInventory(db, 'ord_termsaccept', items, 900, 'demo', undefined, undefined, consent, 2000),
     'reservation succeeds',
   );
   const reservation = await db
@@ -124,12 +125,16 @@ try {
   const paid = await getOrderByPublicId(db, 'ord_termsaccept');
   assert.equal(paid.terms_version, '3', 'the order records which wording was agreed');
   assert.equal(paid.terms_accepted_at, reservation.terms_accepted_at);
+  // The VAT split rides the same carrier and is taken on the total actually
+  // paid: 20,00 € TTC at 20 % contains 3,33 €.
+  assert.equal(paid.vat_rate_bps, 2000, 'the rate in force at purchase is kept');
+  assert.equal(paid.vat_amount_cents, 333, 'the split is computed on the order total');
 
   // An order placed while the gate was open records no consent rather than a
   // fabricated one. Null is the honest answer to "what did they accept?".
   assert.equal(consentFor(draftGate, false), null);
   assert.ok(
-    await reserveInventory(db, 'ord_noconsent', items, 900, 'demo', undefined, undefined, null),
+    await reserveInventory(db, 'ord_noconsent', items, 900, 'demo', undefined, undefined, null, 0),
     'reservation succeeds without consent when the gate is open',
   );
   await recordPaidOrder(db, {
@@ -145,8 +150,11 @@ try {
   const openGateOrder = await getOrderByPublicId(db, 'ord_noconsent');
   assert.equal(openGateOrder.terms_version, null);
   assert.equal(openGateOrder.terms_accepted_at, null);
+  // A shop with no configured rate records no split rather than a made-up one.
+  assert.equal(openGateOrder.vat_rate_bps, null);
+  assert.equal(openGateOrder.vat_amount_cents, null);
 
-  console.log('✓ terms consent: draft gate open, published gate closed, version recorded on the order');
+  console.log('✓ terms consent + VAT split: draft gate open, published gate closed, version and rate recorded on the order');
 } finally {
   await mf.dispose();
 }

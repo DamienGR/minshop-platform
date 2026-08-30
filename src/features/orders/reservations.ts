@@ -297,6 +297,15 @@ export async function reserveInventory(
    * in the same statement that checks the reservation exists.
    */
   consent: TermsConsent | null = null,
+  /**
+   * VAT rate in force when the buyer agreed to the price, in basis points.
+   *
+   * Captured here, not re-derived at settlement: a rate change between the
+   * checkout and the webhook would otherwise rewrite the split of an order
+   * placed under the old rate. 0 or null records no split at all, which is the
+   * honest answer for a shop that has not configured one.
+   */
+  vatRateBps: number | null = null,
 ): Promise<boolean> {
   if (items.length === 0 || !Number.isInteger(ttlSeconds) || ttlSeconds < 60) return false;
   await releaseExpiredReservations(db, 50, purger);
@@ -334,8 +343,8 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
@@ -347,6 +356,7 @@ export async function reserveInventory(
         `+${ttlSeconds} seconds`,
         consent?.version ?? null,
         consent?.acceptedAt ?? null,
+        vatRateBps && vatRateBps > 0 ? vatRateBps : null,
         ...checkValues,
       );
     // Release 1 writes no claims, so the decrement results sit at a different

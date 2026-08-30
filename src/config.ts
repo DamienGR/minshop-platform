@@ -54,6 +54,20 @@ export interface SiteConfig {
   legal: {
     termsSlug: string;
     termsVersion: string;
+    /**
+     * Store-wide VAT rate in BASIS POINTS (2000 = 20 %). France's reduced rates
+     * are 5,5 % and 2,1 %, which an integer percent cannot hold.
+     *
+     * One rate for the whole catalogue, not one per product — see ADR 0010.
+     * The agency's record of it is `commerce.defaultVatRate` in the client
+     * manifest; this is the value the running store computes with, and the two
+     * must agree.
+     *
+     * Prices are TTC, so this describes the tax ALREADY INSIDE a price, never a
+     * surcharge. 0 disables the split (an order then records no VAT rather than
+     * a fabricated one).
+     */
+    vatRateBps: number;
   };
   /**
    * Downscale + recompress uploaded product images to WebP on upload via the
@@ -218,6 +232,7 @@ function defaultConfig(): SiteConfig {
     legal: {
       termsSlug: 'conditions-generales-de-vente',
       termsVersion: '1', // bump on every change a customer would have to re-accept
+      vatRateBps: 2000, // 20 % — the French standard rate
     },
     images: {
       optimizeOnUpload: false, // set true after enabling Transformations (free ≤5k/mo)

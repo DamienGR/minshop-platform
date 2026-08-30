@@ -33,6 +33,8 @@ const order = (overrides: Partial<Order> = {}): Order =>
     ship_address: null,
     terms_version: null,
     terms_accepted_at: null,
+    vat_rate_bps: null,
+    vat_amount_cents: null,
     created_at: '2026-07-28 00:00:00',
     ...overrides,
   });

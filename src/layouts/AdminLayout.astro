@@ -61,6 +61,11 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? 'Menu';
 ---
 
 <!doctype html>
+{/* Deliberately NOT the storefront's lang. The admin is operator-facing and
+    stays in English for the pilot (ADR 0011); a `lang` that lies about the
+    content is worse than a foreign one — it mispronounces the page in a screen
+    reader and invites machine translation of words that do not want it. Money
+    and dates still format in the store's locale, through the same helpers. */}
 <html lang="en">
   <head>
     <meta charset="utf-8" />

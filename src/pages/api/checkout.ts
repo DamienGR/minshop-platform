@@ -386,6 +386,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     purgeStockProductCache,
     undefined,
     consentFor(terms, accepted),
+    cfg.legal.vatRateBps,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -811,6 +812,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       purgeStockProductCache,
       undefined,
       consentFor(jsonTerms, jsonAccepted),
+      cfg.legal.vatRateBps,
     );
     if (!lnReserved) {
       await deleteGuestAccessIfUnsettled(env.DB, lnPublicId);
@@ -905,6 +907,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     purgeStockProductCache,
     undefined,
     consentFor(jsonTerms, jsonAccepted),
+    cfg.legal.vatRateBps,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);

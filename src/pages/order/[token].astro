@@ -10,7 +10,7 @@ import { resolveAccessToken } from '../../features/orders/guestAccess.ts';
 import { clearCart } from '../../features/cart/cart';
 import { catalogPath } from '../../features/settings/home';
 import { paymentMethodName } from '../../features/payments/labels';
-import { t } from '../../features/i18n';
+import { formatNumber, t } from '../../features/i18n';
 
 // Guest access: new orders are addressed ONLY by their otk_ access token
 // (resolved through the registry); legacy orders keep their pre-cutover
@@ -88,6 +88,16 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
         <p class="mt-4 text-lg font-semibold">
           {t('order.total', { montant: formatPrice(order.amount_total_cents, order.currency) })}
         </p>
+        {
+          order.vat_amount_cents != null && order.vat_rate_bps && (
+            <p class="text-sm text-muted">
+              {t('order.vatIncluded', {
+                taux: formatNumber(order.vat_rate_bps / 100),
+                montant: formatPrice(order.vat_amount_cents, order.currency),
+              })}
+            </p>
+          )
+        }
         {items.some((item) => item.file_key) && isAccessToken(token) && (
           <section class="mt-8 rounded-lg border border-line bg-surface p-5">
             <h2 class="font-serif text-2xl">{t('order.downloads')}</h2>
