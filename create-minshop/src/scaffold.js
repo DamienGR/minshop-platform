@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
