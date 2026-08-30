@@ -66,18 +66,29 @@ function checkCodeowners() {
   return { ok: true };
 }
 
-/** Changed paths between `base` and the working tree, deletions included: a
- *  deleted core file is as much a core change as an edited one. */
-function changedPaths() {
-  const merge = git('merge-base', 'HEAD', base);
+/** The commit this change forked from. Resolved once and reported clearly when
+ *  the ref is absent: a shallow clone is the usual cause, and a stack trace
+ *  from `git merge-base` names neither the ref nor the fix. */
+function mergeBase() {
+  try {
+    return git('merge-base', 'HEAD', base);
+  } catch {
+    console.error(`✗ cannot compare against "${base}": no such ref in this clone.`);
+    console.error('    Fetch it first (`git fetch origin <branch>`), or pass --base <ref>. In CI, check out with fetch-depth: 0.');
+    process.exit(2);
+  }
+}
+
+/** Changed paths between the merge base and the working tree, deletions
+ *  included: a deleted core file is as much a core change as an edited one. */
+function changedPaths(merge) {
   return git('diff', '--name-only', merge, '--')
     .split('\n')
     .filter(Boolean);
 }
 
-function approval() {
+function approval(merge) {
   if (process.env.MINSHOP_CORE_CHANGE === 'approved') return { by: 'MINSHOP_CORE_CHANGE=approved' };
-  const merge = git('merge-base', 'HEAD', base);
   const trailer = git('log', '--format=%(trailers:key=Approves-core-change,valueonly)', `${merge}..HEAD`)
     .split('\n')
     .map((line) => line.trim())
@@ -92,9 +103,9 @@ const shop = isShopRepository(root);
 
 let gate = null;
 if (changed) {
-  const paths = changedPaths();
-  const approved = approval();
-  gate = { base, approved, ...coreChangeGate({ paths, isShop: shop, approval: approved }) };
+  const merge = mergeBase();
+  const approved = approval(merge);
+  gate = { base, approved, ...coreChangeGate({ paths: changedPaths(merge), isShop: shop, approval: approved }) };
 }
 
 const ok = map.unclassified.length === 0 && codeowners.ok && (gate === null || gate.ok);
