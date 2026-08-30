@@ -1,0 +1,70 @@
+# Measures the D1 integration flake instead of waiting for it.
+#
+# The fault (cloudflare/workers-sdk#15317) shows up in roughly one CI run in
+# five, so a single green `verify` proves nothing and the closing criterion in
+# docs/implementation-plan.md asks for ten consecutive green runs on `main`.
+# Accumulating those one merge at a time takes weeks. This runs the gate N times
+# in parallel instead, and reports how many sessions died, in a few minutes.
+#
+# Never runs on its own. Dispatch it, or push a `flake-probe/**` branch.
+name: D1 flake probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['flake-probe/**']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install storefront dependencies
+        run: npm ci
+
+      - name: Create isolated Wrangler configuration
+        run: |
+          sed \
+            -e 's/__NAME__/minshop-check/g' \
+            -e 's/__DB_NAME__/minshop-check-db/g' \
+            -e 's/__DB_ID__/00000000-0000-0000-0000-000000000000/g' \
+            -e 's/__BUCKET__/minshop-check-images/g' \
+            -e 's/__FILES_BUCKET__/minshop-check-files/g' \
+            wrangler.template.jsonc > wrangler.jsonc
+
+      - name: Build the Worker under test
+        run: npx astro build
+
+      # The raw suite, not the wrapper: this measures how often the dev session
+      # dies, which the wrapper is designed to hide. Exit 75 is that death and
+      # nothing else, so the three outcomes stay legible in the run summary.
+      - name: Run the D1 integration gate once
+        run: |
+          set +e
+          bash test/integration/d1-integration.sh
+          status=$?
+          set -e
+          case "$status" in
+            0)  echo "PROBE run ${{ matrix.run }}: PASS" ;;
+            75) echo "PROBE run ${{ matrix.run }}: DEV SESSION DIED" ;;
+            *)  echo "PROBE run ${{ matrix.run }}: FAILED an assertion (exit $status)" ;;
+          esac
+          exit "$status"
