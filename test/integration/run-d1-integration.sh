@@ -16,16 +16,29 @@
 # proxy loses a connection mid-response, wrangler raises it as a fatal
 # "Error inside ProxyWorker" with an empty message, and the session dies. Remove
 # this wrapper once that is fixed upstream.
-# Three attempts, from measurement rather than taste. A ten-run probe of the raw
-# suite put the death rate at 2 in 10. One re-run would leave 4% of gate runs
-# failing on it, and a third of ten-run streaks broken — not enough to certify
-# anything against. Three attempts put it near 0.8%, so nine streaks in ten
-# survive. Raise this only with a fresh probe, never on a hunch.
+# Eight attempts, and the number is measured rather than chosen.
+#
+# Thirty probe runs of this wrapper (three sweeps of ten, see the flake probe
+# workflow) put the numbers at: 20% of runs meet the fault at all, and among
+# those, the attempts are NOT independent — a runner that killed one session
+# tends to kill the next. Recoveries landed on attempt 2, 3 and 3; three runs
+# were still dying at attempt 3. So the naive p^n arithmetic is wrong, and three
+# attempts left one run in ten failing, which is no better than a coin flip for
+# a ten-green criterion.
+#
+# What the same data does show is a per-attempt recovery rate around 0.3 among
+# affected runs, which is the model this number comes from: eight attempts put
+# the residual near 2%, so five ten-run streaks in six survive. Beyond that the
+# curve flattens and the job clock starts to matter — each attempt costs about
+# 50 seconds, and only affected runs pay it.
+#
+# The honest fix is upstream: cloudflare/workers-sdk#15317. This buys a usable
+# gate until it lands.
 set -uo pipefail
 
 suite="$(dirname "$0")/d1-integration.sh"
 WORKER_DIED_EXIT=75
-ATTEMPTS=3
+ATTEMPTS=8
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
   if (( attempt > 1 )); then
