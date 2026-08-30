@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 // .mjs for the same reason as its neighbours: tsconfig pins `types` to the
 // Cloudflare types, so node builtins have no declarations in a .ts file here.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   CORE_OWNERS,
@@ -205,7 +206,9 @@ describe('check:paths', () => {
     const out = execFileSync('node', ['scripts/check-paths.mjs', '--json'], { cwd: root, encoding: 'utf8' });
     const report = JSON.parse(out);
     expect(report.ok).toBe(true);
-    expect(report.repository).toBe('core');
+    // Core-owned, therefore shipped into every generated shop and run there.
+    // The gate's reading of the tree must match the tree, not a constant.
+    expect(report.repository).toBe(existsSync(join(root, 'client/client.yaml')) ? 'shop' : 'core');
     expect(report.unclassified).toEqual([]);
     expect(report.codeowners.ok).toBe(true);
   });

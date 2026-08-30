@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 // Deliberately .mjs, not .ts, for the same reason as the other tests in this
 // directory: tsconfig's `types` is pinned to the Cloudflare types, so node
 // builtins have no declarations and a .ts file here fails `astro check`.
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -22,6 +22,7 @@ import {
   coreVersion,
   detectFleetCollisions,
   discoverManifests,
+  isShopRepository,
   loadManifest,
   resourceNames,
   wranglerSubstitutions,
@@ -368,13 +369,44 @@ describe('theme id agreement', () => {
   });
 });
 
+// Reason one of RESERVED_SLUGS: the storefront's own URL space. Derived from
+// src/pages/ rather than maintained by hand, because a hand-kept copy of a
+// directory listing is a copy that falls behind the day a route is added — and
+// the shop that took the freed name would only find out in production.
+describe('reserved slugs', () => {
+  const routePrefixes = () =>
+    readdirSync(new URL('../../src/pages/', import.meta.url), { withFileTypes: true })
+      .filter((entry) => !entry.name.startsWith('.') && !entry.name.includes('.test.'))
+      // `cart.astro`, `llms.txt.ts` and `sitemap.xml.ts` all serve a path named
+      // by the part before the first dot; a directory names itself.
+      .map((entry) => entry.name.split('.')[0])
+      // `404` is not a slug shape, so no shop can collide with it.
+      .filter((name) => /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name));
+
+  it('covers every public route prefix', () => {
+    const unreserved = routePrefixes().filter((name) => !RESERVED_SLUGS.includes(name));
+    expect(unreserved).toEqual([]);
+  });
+
+  it('is sorted, so a reader can find a name in it', () => {
+    expect(RESERVED_SLUGS).toEqual([...RESERVED_SLUGS].sort());
+  });
+});
+
 describe('config:validate', () => {
-  it('passes over this tree and reports both shops', () => {
+  // This suite is core-owned, so it is SHIPPED into every generated shop and
+  // runs there unchanged (`shopctl new` … `npm run verify`). A shop's tree
+  // describes one manifest more than the core's — its own — so the property is
+  // that the witnesses are still there and still pass, never that they are the
+  // only shops in the tree. A test that pinned the count would fail in every
+  // shop the platform ever creates, and the failure would look like the shop's
+  // fault.
+  it('passes over this tree and reports the witness shops', () => {
     const out = execFileSync('node', ['scripts/check-manifest.mjs', '--json'], { cwd: root, encoding: 'utf8' });
     const report = JSON.parse(out);
     expect(report.ok).toBe(true);
-    expect(report.repository).toBe('core');
-    expect(report.manifests.map((m) => m.slug).sort()).toEqual(['canary-minimal', 'pilot-fr']);
+    expect(report.repository).toBe(isShopRepository(root) ? 'shop' : 'core');
+    expect(report.manifests.map((m) => m.slug)).toEqual(expect.arrayContaining(['canary-minimal', 'pilot-fr']));
     expect(report.collisions).toEqual([]);
   });
 });

@@ -1,0 +1,634 @@
+import { describe, expect, it, vi } from 'vitest';
+
+// .mjs for the same reason as its neighbours: tsconfig pins `types` to the
+// Cloudflare types, so node builtins have no declarations in a .ts file here.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative, resolve } from 'node:path';
+
+import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
+import { parseArguments } from '../../shopctl/src/cli.mjs';
+import { NEW_OPTIONS, displayNameFromSlug, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
+import { buildManifest, renderManifest, yamlScalar } from '../../shopctl/src/manifest-template.mjs';
+import { assertNoCredentialsInArgv, classifyCredential, redact } from '../../shopctl/src/secrets.mjs';
+import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
+import { parseManifestYaml } from '../../scripts/manifest-yaml.mjs';
+import { CREDENTIAL_PATTERNS, RESERVED_SLUGS, validateManifest } from '../../scripts/manifest-schema.mjs';
+import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
+
+const CORE = new URL('../../', import.meta.url).pathname;
+const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
+const CORE_TAG = 'v0.1.0';
+
+// Every test in this file spawns real processes — a git clone of the whole
+// tree, the gates the shop carries, `wrangler --version`. Vitest's five-second
+// default is a budget for pure functions; here it only measures how loaded the
+// machine is, and a suite that fails on a busy laptop is a suite people learn
+// to re-run instead of read.
+vi.setConfig({ testTimeout: 60_000 });
+
+/** Git needs an identity to commit, and a test must not depend on the one the
+ *  developer happens to have configured. */
+const GIT_ENV = {
+  ...process.env,
+  GIT_AUTHOR_NAME: 'Minshop Tests',
+  GIT_AUTHOR_EMAIL: 'tests@example.com',
+  GIT_COMMITTER_NAME: 'Minshop Tests',
+  GIT_COMMITTER_EMAIL: 'tests@example.com',
+};
+
+function git(args, cwd) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: GIT_ENV });
+  if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+/**
+ * A core repository, tagged, built from the files THIS tree tracks.
+ *
+ * Copied from the index rather than mocked, because the properties under test
+ * are about the real tree: that the shop `shopctl new` produces passes the real
+ * gates, carries the real themes, and adds exactly the files it claims to. A
+ * stand-in template would pass while the real one broke.
+ */
+function createCoreRepository(root, { tag = CORE_TAG } = {}) {
+  const core = join(root, 'core');
+  mkdirSync(core, { recursive: true });
+  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
+  for (const file of tracked) {
+    mkdirSync(dirname(join(core, file)), { recursive: true });
+    cpSync(join(CORE, file), join(core, file));
+  }
+  git(['init', '--quiet', '--initial-branch=main'], core);
+  git(['add', '-A'], core);
+  git(['commit', '--quiet', '-m', `Core ${tag}`], core);
+  git(['tag', tag], core);
+  return core;
+}
+
+function shopctl(args, cwd) {
+  return spawnSync('node', [BIN, ...args], { cwd, encoding: 'utf8', env: GIT_ENV });
+}
+
+/** Every file under `dir`, repository-relative, sorted, `.git` excluded. */
+function treeFiles(dir, base = dir) {
+  const found = [];
+  for (const name of readdirSync(dir).sort()) {
+    if (name === '.git' || name === 'node_modules') continue;
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) found.push(...treeFiles(path, base));
+    else found.push(relative(base, path).split('\\').join('/'));
+  }
+  return found;
+}
+
+let sharedRoot;
+let sharedCore;
+/** One core repository for the read-only assertions; the tests that mutate a
+ *  target directory make their own. Cloning 500-odd files per assertion would
+ *  make the suite slow enough that someone would stop running it. */
+function core() {
+  if (!sharedCore) {
+    sharedRoot = mkdtempSync(join(tmpdir(), 'shopctl-core-'));
+    sharedCore = createCoreRepository(sharedRoot);
+  }
+  return sharedCore;
+}
+
+function workspace() {
+  return mkdtempSync(join(tmpdir(), 'shopctl-work-'));
+}
+
+// ---------------------------------------------------------------------------
+// Argument parsing. The reason it is hand-written: an unknown flag must be a
+// hard error, or a caller's typo silently asks a different question.
+
+describe('the command line', () => {
+  const spec = { values: NEW_OPTIONS, flags: ['--no-install', '--no-verify'] };
+
+  it('separates positionals from values', () => {
+    expect(parseArguments(['acme-shop', '--core', 'v1.2.3', '--no-install'], spec)).toEqual({
+      positionals: ['acme-shop'],
+      values: { '--core': 'v1.2.3', '--no-install': true },
+    });
+  });
+
+  it('accepts --flag=value', () => {
+    expect(parseArguments(['--name=Boutique Témoin'], spec).values).toEqual({ '--name': 'Boutique Témoin' });
+  });
+
+  it('refuses an unknown option instead of ignoring it', () => {
+    expect(() => parseArguments(['--jsno'], spec)).toThrow(/unknown option/);
+  });
+
+  // The classic way a CLI creates a shop named "--no-install".
+  it('refuses a value flag that swallows the next flag', () => {
+    expect(() => parseArguments(['--name', '--no-install'], spec)).toThrow(/requires a value/);
+  });
+
+  it('refuses a value on a boolean flag', () => {
+    expect(() => parseArguments(['--no-install=yes'], spec)).toThrow(/takes no value/);
+  });
+});
+
+describe('exit codes', () => {
+  // Pinned, because they are a contract with CI and fleet scripts: a caller
+  // decides whether to retry from the number, not from the prose.
+  it('are stable', () => {
+    expect(EXIT_CODES).toEqual({ ok: 0, usage: 2, input: 3, precondition: 4, external: 5, verification: 6 });
+  });
+
+  it('reports an unknown command as a usage error', () => {
+    const result = shopctl(['nope'], CORE);
+    expect(result.status).toBe(EXIT_CODES.usage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The values a shop is generated from.
+
+describe('derived values', () => {
+  it('title-cases a slug', () => {
+    expect(displayNameFromSlug('boutique-du-port')).toBe('Boutique Du Port');
+  });
+
+  it('gives the shop a theme of its own, never a shipped one', () => {
+    expect(resolveThemeId(null, 'boutique-du-port')).toBe('boutique-du-port');
+    for (const reserved of RESERVED_THEME_IDS) {
+      expect(resolveThemeId(null, reserved)).toBe(`${reserved}-shop`);
+      expect(() => resolveThemeId(reserved, 'whatever')).toThrow(/theme the core ships/);
+    }
+  });
+
+  it('refuses a ref that is not an immutable core tag', () => {
+    expect(versionFromTag('v1.2.3')).toBe('1.2.3');
+    for (const ref of ['main', '1.2.3', 'v1.2', 'v1.2.3-rc.1', 'HEAD']) {
+      expect(() => versionFromTag(ref)).toThrow(/not a core version tag/);
+    }
+  });
+});
+
+describe('the generated manifest', () => {
+  const values = {
+    slug: 'boutique-du-port',
+    displayName: 'Boutique du Port',
+    domain: 'boutique-du-port.example.com',
+    email: 'commandes@boutique-du-port.example.com',
+    theme: 'boutique-du-port',
+    coreVersion: '0.1.0',
+  };
+
+  it('passes the same validator the CI gate runs', () => {
+    expect(validateManifest(buildManifest(values), { coreVersion: '0.1.0' }).errors).toEqual([]);
+  });
+
+  // A generator and a parser that disagree about quoting produce a shop whose
+  // display name quietly lost a character, and nothing downstream can tell that
+  // from a merchant's own typo.
+  it('reads back as the values it was built from', () => {
+    const manifest = buildManifest(values);
+    expect(parseManifestYaml(renderManifest(manifest), { file: 'client/client.yaml' })).toEqual(manifest);
+  });
+
+  it('round-trips a display name that YAML would otherwise reinterpret', () => {
+    for (const displayName of ['NO', 'true', '12.5', "L'Atelier: Paris", 'Maison #1', 'Café — Brûlerie', '  espaces  ']) {
+      const manifest = buildManifest({ ...values, displayName });
+      const back = parseManifestYaml(renderManifest(manifest), { file: 'client/client.yaml' });
+      expect(back.client.displayName).toBe(displayName);
+    }
+  });
+
+  it('quotes only what would otherwise change meaning', () => {
+    expect(yamlScalar('Boutique du Port')).toBe('Boutique du Port');
+    expect(yamlScalar('NO')).toBe('"NO"');
+    expect(yamlScalar(true)).toBe('true');
+    expect(yamlScalar(20)).toBe('20');
+  });
+
+  it('leaves the invoicing strategy pending rather than choosing one', () => {
+    // The accounting review is jalon 3. A strategy picked by a generator is the
+    // kind of decision discovered at the first audit.
+    expect(buildManifest(values).commerce.invoiceStrategy).toBe('pending-validation');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Secrets. Two halves of one promise: never accepted, never printed.
+
+describe('credentials', () => {
+  it('refuses a credential passed as an argument', () => {
+    for (const argument of ['sk_live_51ABCdefGHI', '--token=whsec_ABCdefGHIjkl', 're_ABCdefGHIjklmnop123']) {
+      expect(() => assertNoCredentialsInArgv(['new', 'shop', argument])).toThrow(/shell history|looks like/);
+    }
+  });
+
+  it('lets ordinary arguments through', () => {
+    expect(() => assertNoCredentialsInArgv(['new', 'boutique-du-port', '--domain', 'port.example.com'])).not.toThrow();
+  });
+
+  it('redacts a relayed line', () => {
+    expect(redact('git failed: token sk_live_51ABCdefGHI rejected')).not.toContain('sk_live');
+  });
+
+  it('uses the manifest\'s own patterns rather than a second list', () => {
+    expect(classifyCredential('sk_live_51ABCdefGHI')).toBe(CREDENTIAL_PATTERNS[0].what);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `shopctl new`, against the real core tree.
+
+describe('shopctl new', () => {
+  it('refuses a slug the platform already uses', () => {
+    const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/reserved by the platform/);
+  });
+
+  // The reserved list can never be complete: the neutrality gate also trips on
+  // ordinary English the core happens to use, and `clean-clone` — a word this
+  // core writes into its own tooling — is deliberately NOT reserved so this
+  // path stays exercised. What must not happen is the CLI blaming the core: the
+  // fix is another slug, not a bug report.
+  it('reports a slug the core already uses as a bad name, not a core bug', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'clean-clone', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/is a word this core already uses/);
+    expect(result.stderr).toMatch(/Choose another slug/);
+    expect(result.stderr).not.toMatch(/core bug/);
+    // Files are named so the operator can see WHY, and nothing survives.
+    expect(result.stderr).toMatch(/scripts\/check-clean-clone\.sh|package\.json|AGENTS\.md/);
+    expect(existsSync(join(work, 'shop-clean-clone'))).toBe(false);
+  });
+
+  it('still calls a genuine gate failure a core bug', () => {
+    // Everything shopctl writes is validated first, so a gate that refuses the
+    // result is the core's problem — and the tree stays put to be read.
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install', '--json'], work);
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).checks.every((check) => check.ok)).toBe(true);
+  });
+
+  it('refuses a malformed slug before touching the disk', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'Boutique Du Port', '--from', core(), '--core', CORE_TAG], work);
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  // A tag that does not exist must cost a message, not a half-clone the
+  // operator then has to reason about.
+  it('refuses a core tag that does not exist, and creates nothing', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', 'v9.9.9'], work);
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/has no tag "v9\.9\.9"/);
+    expect(result.stderr).toMatch(new RegExp(CORE_TAG.replace('.', '\\.')));
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  it('refuses a ref that is a branch rather than a tag', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', 'main'], work);
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/immutable/);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  // The first CI run of the "Generated shop" job died here: the workflow set
+  // `git config user.name` LOCALLY in the checkout, so the shop — a different
+  // repository — had no author, and the failure surfaced as a bare "git commit
+  // exited with status 128" after a 540-file clone. Both halves are fixed: the
+  // check happens before the clone, and it asks git rather than guessing.
+  it('refuses to clone when git has no identity to commit as', () => {
+    const work = workspace();
+    const home = mkdtempSync(join(tmpdir(), 'shopctl-home-'));
+    const result = spawnSync('node', [BIN, 'new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], {
+      cwd: work,
+      encoding: 'utf8',
+      // No config, and none of the GIT_AUTHOR_* variables GIT_ENV supplies.
+      env: { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: join(home, '.gitconfig'), GIT_AUTHOR_NAME: '', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: '', GIT_COMMITTER_EMAIL: '' },
+    });
+
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/no identity/);
+    expect(result.stderr).toMatch(/shopctl doctor/);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  it('refuses a target directory that already holds something', () => {
+    const work = workspace();
+    mkdirSync(join(work, 'shop-boutique-du-port'), { recursive: true });
+    writeFileSync(join(work, 'shop-boutique-du-port', 'notes.txt'), 'occupied\n');
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/not empty/);
+    expect(treeFiles(join(work, 'shop-boutique-du-port'))).toEqual(['notes.txt']);
+  });
+
+  it('works when the target path contains spaces', () => {
+    const work = workspace();
+    const target = 'mes boutiques/boutique du port';
+    const result = shopctl(
+      ['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--dir', target, '--no-install'],
+      work,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(work, target, 'client/client.yaml'))).toBe(true);
+    expect(git(['status', '--porcelain'], join(work, target))).toBe('');
+  });
+
+  it('adds exactly the shop-owned files, and modifies only generated ones', () => {
+    const work = workspace();
+    const result = shopctl(
+      ['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'],
+      work,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const shop = join(work, 'shop-boutique-du-port');
+
+    // The skeleton, as a snapshot of what one command is allowed to change.
+    // Growing this list is a decision; growing it by accident is how a shop
+    // ends up diverging from the core in a file nobody meant to touch.
+    //
+    // Added or modified is derived rather than pinned, because this suite ships
+    // into generated shops and runs there: the fixture core built from a SHOP's
+    // tree already carries a client manifest, so the same command modifies what
+    // it would otherwise add. The paths do not move; only the letter does.
+    const expected = [
+      'client/client.yaml',
+      'imports/README.md',
+      'src/themes/boutique-du-port/Catalog.astro',
+      'src/themes/boutique-du-port/ContentPage.astro',
+      'src/themes/boutique-du-port/Footer.astro',
+      'src/themes/boutique-du-port/Header.astro',
+      'src/themes/boutique-du-port/ProductCard.astro',
+      'src/themes/boutique-du-port/ProductDetail.astro',
+      'src/themes/boutique-du-port/tokens.css',
+      'theme.config.json',
+      'wrangler.jsonc',
+    ].map((path) => [existsSync(join(core(), path)) ? 'M' : 'A', path]);
+
+    const changed = git(['diff', '--name-status', CORE_TAG, 'HEAD'], shop)
+      .split('\n')
+      .map((line) => line.split('\t'));
+    expect(changed).toEqual(expected);
+
+    expect(readFileSync(join(shop, 'client/client.yaml'), 'utf8')).toBe(
+      `# Manifeste de la boutique Boutique Du Port.
+# Généré par \`shopctl new boutique-du-port\` depuis le socle v0.1.0.
+# Source de vérité non sensible : aucune clé, aucun secret, jamais.
+schemaVersion: 1
+# Version du socle clonée. Mise à jour par \`shopctl core upgrade\`.
+coreVersion: 0.1.0
+
+# Qui est la boutique.
+client:
+  slug: boutique-du-port
+  displayName: Boutique Du Port
+  # Fixés par le périmètre certifié (plan §2.1) : une seule valeur possible.
+  locale: fr-FR
+  timezone: Europe/Paris
+  currency: EUR
+
+# Comment elle vend.
+commerce:
+  market: FR
+  pricesIncludeTax: true
+  checkoutMode: guest
+  defaultVatRate: 20
+  # La validation comptable du jalon 3 n'a pas eu lieu pour cette boutique :
+  # la stratégie de facturation reste en attente plutôt que par défaut.
+  invoiceStrategy: pending-validation
+
+# Interrupteurs décidés à la construction. Les réglages d'exploitation vivent dans Admin → Réglages.
+features:
+  customerAccounts: false
+  semanticSearch: false
+  digitalProducts: false
+  promoCodes: true
+  shipping: true
+
+# Où elle tourne. Tous ces noms sont visibles dans le compte Cloudflare.
+cloudflare:
+  jurisdiction: eu
+  workerName: minshop-boutique-du-port
+  # PLACEHOLDER : domaine réservé à la documentation (RFC 2606).
+  # À remplacer par le domaine du commerçant avant tout provisioning.
+  productionDomain: boutique-du-port.example.com
+
+# E-mails transactionnels. Aucune clé d'API ici, jamais.
+email:
+  provider: resend
+  # PLACEHOLDER : suit le domaine ci-dessus.
+  from: commandes@boutique-du-port.example.com
+
+# Quel design elle compile.
+theme:
+  # Thème propre à la boutique. Le socle ne le modifie jamais.
+  id: boutique-du-port
+`,
+    );
+  });
+
+  // ADR 0003: the history is what makes the next upgrade an ordinary merge, and
+  // `core` is the remote the tag is fetched from.
+  it('keeps the core history and names its remote core', () => {
+    const work = workspace();
+    const result = shopctl(
+      ['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--origin', 'git@example.com:agency/shop.git', '--no-install'],
+      work,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const shop = join(work, 'shop-boutique-du-port');
+
+    expect(git(['remote'], shop).split('\n').sort()).toEqual(['core', 'origin']);
+    expect(git(['remote', 'get-url', 'core'], shop)).toBe(core());
+    expect(git(['remote', 'get-url', 'origin'], shop)).toBe('git@example.com:agency/shop.git');
+    expect(git(['rev-parse', '--abbrev-ref', 'HEAD'], shop)).toBe('main');
+    // The tag is an ancestor: the shop is a descendant of the core, not a copy.
+    expect(git(['merge-base', '--is-ancestor', CORE_TAG, 'HEAD'], shop)).toBe('');
+    expect(git(['log', '--format=%s'], shop).split('\n')).toEqual([
+      'Initialiser la boutique boutique-du-port depuis le socle v0.1.0',
+      `Core ${CORE_TAG}`,
+    ]);
+    expect(git(['status', '--porcelain'], shop)).toBe('');
+  });
+
+  it('leaves no dependencies installed with --no-install', () => {
+    const work = workspace();
+    shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+    expect(existsSync(join(work, 'shop-boutique-du-port', 'node_modules'))).toBe(false);
+  });
+
+  // The shop is a committed, published tree. Anything the core kept out of git
+  // must stay out, and no value in it may look like a credential.
+  it('copies no secret and no local instance state', () => {
+    const work = workspace();
+    shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+    const shop = join(work, 'shop-boutique-du-port');
+
+    for (const forbidden of ['.dev.vars', '.instances', 'wrangler.jsonc.bak', '.env', '.wrangler']) {
+      expect(existsSync(join(shop, forbidden)), forbidden).toBe(false);
+    }
+
+    // The scan itself is the shop's own gate rather than a second regex sweep
+    // here: this tree legitimately contains credential-SHAPED strings (crypto
+    // fixtures, the manifest rule that defines the patterns), and a duplicate
+    // scanner with its own allowlist would disagree with the one the shop's CI
+    // actually runs — on whichever side was reviewed less.
+    const scan = spawnSync('node', ['scripts/check-secrets.mjs'], { cwd: shop, encoding: 'utf8' });
+    expect(scan.status, scan.stdout + scan.stderr).toBe(0);
+  });
+
+  // "Deterministic" cannot mean identical commit hashes — those carry a clock.
+  // It means the tree: same options, same bytes, so a generated shop is
+  // reviewable as a diff against another.
+  it('produces the same tree twice', () => {
+    const first = workspace();
+    const second = workspace();
+    for (const work of [first, second]) {
+      const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+      expect(result.status, result.stderr).toBe(0);
+    }
+    const read = (work) => {
+      const shop = join(work, 'shop-boutique-du-port');
+      return Object.fromEntries(
+        git(['ls-files'], shop)
+          .split('\n')
+          .filter(Boolean)
+          .map((file) => [file, readFileSync(join(shop, file)).toString('base64')]),
+      );
+    };
+    expect(read(first)).toEqual(read(second));
+  });
+
+  // The exit criterion of jalon 2, minus the parts that need a network and an
+  // npm install: the shop passes ITS OWN gates, with no manual step in between.
+  it('passes the gates it carries, immediately', () => {
+    const work = workspace();
+    const result = shopctl(
+      ['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install', '--json'],
+      work,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const shop = join(work, 'shop-boutique-du-port');
+
+    const report = JSON.parse(result.stdout);
+    expect(report.ok).toBe(true);
+    expect(report.checks).toEqual([
+      { check: 'manifeste', ok: true, status: 0 },
+      { check: 'propriété des chemins', ok: true, status: 0 },
+    ]);
+    expect(report.resources).toEqual({
+      worker: 'minshop-boutique-du-port',
+      database: 'minshop-boutique-du-port-db',
+      images: 'minshop-boutique-du-port-images',
+      files: 'minshop-boutique-du-port-files',
+      sessions: 'minshop-boutique-du-port-session',
+    });
+
+    // Re-run them here rather than trusting the report: the report is what the
+    // CLI believes, and the gates are what the shop's CI will actually run.
+    for (const script of ['scripts/check-manifest.mjs', 'scripts/check-paths.mjs']) {
+      const gate = spawnSync('node', [script], { cwd: shop, encoding: 'utf8' });
+      expect(gate.status, `${script}: ${gate.stderr}`).toBe(0);
+    }
+    expect(JSON.parse(readFileSync(join(shop, 'theme.config.json'), 'utf8'))).toEqual({ theme: 'boutique-du-port' });
+    expect(readFileSync(join(shop, 'wrangler.jsonc'), 'utf8')).toContain('"minshop-boutique-du-port"');
+  });
+
+  it('emits one JSON document on stdout and nothing else', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install', '--json'], work);
+    expect(() => JSON.parse(result.stdout)).not.toThrow();
+  });
+
+  it('reports a failure as JSON too', () => {
+    const result = shopctl(['new', 'v', '--from', core(), '--core', CORE_TAG, '--json'], workspace());
+    const report = JSON.parse(result.stdout);
+    expect(report.ok).toBe(false);
+    expect(report.error.kind).toBe('input');
+    expect(report.error.code).toBe(EXIT_CODES.input);
+  });
+});
+
+// The same mistake has now been made three times in one milestone: an example
+// slug written into a core-owned file. `config:validate` fails on any file the
+// neutrality gate scans that contains a shop's slug, so a plausible example is a
+// landmine for whoever later picks that name — they see a file they never
+// touched refuse their shop. The documentation's example names are reserved
+// instead (RESERVED_SLUGS), and this is the check that says so out loud.
+describe('example slugs in core documentation', () => {
+  // Exactly the files the neutrality gate reads: core-owned, minus the trees it
+  // exempts. docs/ and test/ are exempt there, so they are exempt here too —
+  // one rule, not two.
+  const scanned = () =>
+    execFileSync('git', ['ls-files'], { cwd: CORE, encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+      .filter((path) => !path.startsWith('docs/') && !path.startsWith('test/'));
+
+  it('only uses reserved example slugs', () => {
+    const offenders = [];
+    for (const path of scanned()) {
+      const buffer = readFileSync(join(CORE, path));
+      if (buffer.includes(0)) continue;
+      // The lookahead is what separates a command line from prose: an example
+      // ends the line, continues it with a backslash, or is followed by an
+      // option. "shopctl new needs a slug" is a sentence, not a shop.
+      const examples = buffer.toString('utf8').matchAll(/shopctl\s+new\s+([a-z][a-z0-9-]*)(?=\s*$|\s+\\|\s+--)/gm);
+      for (const [, slug] of examples) {
+        if (!RESERVED_SLUGS.includes(slug)) offenders.push(`${path}: ${slug}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('shopctl doctor', () => {
+  it('reports on the tree it runs in, with nothing failing', () => {
+    const result = shopctl(['doctor', '--offline', '--json'], CORE);
+    const report = JSON.parse(result.stdout);
+    expect(report.tree).toBe(existsSync(join(CORE, 'client/client.yaml')) ? 'shop' : 'core');
+    expect(report.checks.filter((entry) => entry.status === 'fail')).toEqual([]);
+  });
+
+  it('names what stays human rather than pretending to verify it', () => {
+    const result = shopctl(['doctor', '--offline', '--json'], CORE);
+    const report = JSON.parse(result.stdout);
+    expect(report.checklist).toHaveLength(HUMAN_CHECKLIST.length);
+    expect(report.checklist.every((entry) => entry.hint)).toBe(true);
+  });
+
+  it('recognises a generated shop and its remotes', () => {
+    const work = workspace();
+    shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+    const result = shopctl(['doctor', '--offline', '--json'], join(work, 'shop-boutique-du-port'));
+    const report = JSON.parse(result.stdout);
+    expect(report.tree).toBe('shop');
+    expect(report.checks.some((entry) => /remote "core"/.test(entry.message) && entry.status === 'ok')).toBe(true);
+    // No origin was given, and that is a warning rather than a failure: the
+    // shop exists before its repository does.
+    expect(report.checks.some((entry) => /remote "origin"/.test(entry.message) && entry.status === 'warn')).toBe(true);
+  });
+});
+
+describe('shopctl config validate', () => {
+  // A wrapper, not a second implementation: the CLI and the CI gate must never
+  // be able to answer the same question differently.
+  it('relays the gate\'s own report', () => {
+    const cli = shopctl(['config', 'validate', '--json'], CORE);
+    const gate = spawnSync('node', ['scripts/check-manifest.mjs', '--json'], { cwd: CORE, encoding: 'utf8' });
+    expect(cli.status).toBe(gate.status);
+    expect(JSON.parse(cli.stdout)).toEqual(JSON.parse(gate.stdout));
+  });
+
+  it('refuses a subcommand it does not have', () => {
+    expect(shopctl(['config', 'write'], CORE).status).toBe(EXIT_CODES.usage);
+  });
+});

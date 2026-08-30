@@ -96,7 +96,9 @@ Le plan de contrôle comprend :
 
 - [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé,
   en dépôt privé ;
-- [ ] la CLI `shopctl` ;
+- [x] la CLI `shopctl` — `new`, `doctor` et `config validate` au jalon 2
+  (`shopctl/`, [ADR 0009](architecture/decisions/0009-forme-de-la-cli-shopctl.md)) ;
+  provisioning, catalogue, déploiement, sauvegarde et flotte aux jalons suivants ;
 - [x] les schémas de configuration ;
 - [ ] les templates de boutique ;
 - [ ] le registre privé de flotte ;
@@ -264,14 +266,27 @@ Les clés API et secrets sont interdits dans le manifeste.
 
 ### 5.1 Technologie
 
-- [ ] Node.js 22 ;
-- [ ] TypeScript ;
-- [ ] dépendances minimales ;
-- [ ] appels à Wrangler encapsulés ;
-- [ ] sortie humaine par défaut ;
-- [ ] sortie machine avec `--json` ;
-- [ ] codes d'erreur stables ;
-- [ ] journalisation structurée sans secret.
+- [x] Node.js 22 ;
+- [x] JavaScript ESM annoté JSDoc, sans étape de build ;
+- [x] dépendances minimales — aucune ;
+- [x] appels à Wrangler encapsulés ;
+- [x] sortie humaine par défaut ;
+- [x] sortie machine avec `--json` ;
+- [x] codes d'erreur stables ;
+- [x] journalisation structurée sans secret.
+
+Ce plan annonçait « TypeScript ». Le jalon 2 a mis l'annonce à l'épreuve et
+l'a corrigée : le `tsconfig.json` du dépôt cible le storefront — il inclut tout
+l'arbre, épingle `types` aux types Cloudflare Workers et n'embarque pas
+`@types/node` —, si bien qu'un fichier `.ts` d'outillage échoue à `astro check`
+faute de déclarations pour `node:fs`. C'est déjà pourquoi `scripts/` et
+`test/scripts/` sont en `.mjs`. Passer la CLI en TypeScript demanderait un
+second `tsconfig`, une dépendance de types et soit une étape de build, soit
+`--experimental-strip-types` à chaque invocation — pour un outil qui doit
+tourner **avant** qu'il n'existe un `node_modules` quelque part. La contrainte
+réelle est le `tsconfig` unique du storefront, pas le langage ; le motif complet
+et les alternatives sont dans
+l'[ADR 0009](architecture/decisions/0009-forme-de-la-cli-shopctl.md).
 
 ### 5.2 Commandes de création
 
@@ -285,23 +300,30 @@ shopctl config validate
 (`scripts/check-manifest.mjs`), livré au jalon 1 et exécuté par `verify` : il
 valide les manifestes, refuse deux boutiques sur un même identifiant de
 ressource, contrôle la dérive du schéma publié et vérifie qu'aucune valeur
-client n'est écrite dans le cœur. La commande doit l'**envelopper**, pas le
-réimplémenter — sans quoi la CI et la CLI finiraient par répondre différemment à
-la même question, et c'est la CLI que l'exploitant croit.
+client n'est écrite dans le cœur. La commande l'**enveloppe**, elle ne le
+réimplémente pas — sans quoi la CI et la CLI finiraient par répondre
+différemment à la même question, et c'est la CLI que l'exploitant croit. Sous
+`--json`, elle relaie le document de la porte tel quel, et un test compare les
+deux sorties : la divergence est impossible, pas seulement improbable.
 
 `shopctl new` doit :
 
-1. [ ] valider le slug et les options ;
-2. [ ] sélectionner un tag précis du socle ;
-3. [ ] cloner ce tag avec son historique ;
-4. [ ] renommer le remote du socle en `core` ;
-5. [ ] configurer le futur remote `origin` si fourni ;
-6. [ ] créer le manifeste ;
-7. [ ] générer un thème client à partir de la référence choisie ;
-8. [ ] générer les fixtures et exemples d'import ;
-9. [ ] installer les dépendances sauf option contraire ;
-10. [ ] exécuter une vérification minimale ;
-11. [ ] présenter les prochaines actions.
+1. [x] valider le slug et les options ;
+2. [x] sélectionner un tag précis du socle ;
+3. [x] cloner ce tag avec son historique ;
+4. [x] renommer le remote du socle en `core` ;
+5. [x] configurer le futur remote `origin` si fourni ;
+6. [x] créer le manifeste ;
+7. [x] générer un thème client à partir de la référence choisie ;
+8. [x] générer le répertoire `imports/` — sans exemple de catalogue : le format
+   CSV contractuel est un livrable du jalon 4, et un gabarit inventé avant lui
+   serait recopié dans chaque boutique générée d'ici là, puis rempli par le
+   commerçant ;
+9. [x] installer les dépendances sauf option contraire ;
+10. [x] exécuter une vérification minimale — les portes que la **boutique**
+    transporte (`check-manifest.mjs`, `check-paths.mjs`), pas celles du socle
+    hôte, et sans `node_modules` ;
+11. [x] présenter les prochaines actions.
 
 ### 5.3 Provisioning
 
@@ -337,7 +359,12 @@ Il doit :
 La création de comptes, l'invitation des utilisateurs et l'activation de Stripe
 restent des opérations humaines dans la première version.
 
-- [ ] Faire détecter ces prérequis par `shopctl doctor` et fournir une checklist.
+- [x] Faire détecter ces prérequis par `shopctl doctor` et fournir une checklist.
+  `doctor` sépare trois niveaux : ce qui bloque maintenant (toolchain, `git`,
+  identité Git), ce qui bloquera le provisioning (`wrangler` absent ou non
+  authentifié) et ce qui reste humain — propriété du compte, activation de R2,
+  invitations, activation Stripe, domaines. Prétendre vérifier la dernière
+  catégorie serait pire que la nommer.
 
 ### 5.4 Catalogue
 
@@ -760,28 +787,113 @@ Durée indicative : 3 à 5 jours.
 
 #### Livrables
 
-- [ ] package CLI ;
-- [ ] `shopctl new` ;
-- [ ] `shopctl doctor` ;
-- [ ] initialisation Git et remotes ;
-- [ ] génération du manifeste et du thème ;
-- [ ] rapport de création.
+- [x] package CLI (`shopctl/`, livré par le socle et versionné avec lui) ;
+- [x] `shopctl new` ;
+- [x] `shopctl doctor` ;
+- [x] `shopctl config validate` ;
+- [x] initialisation Git et remotes ;
+- [x] génération du manifeste et du thème ;
+- [x] rapport de création, humain et `--json`.
 
 #### Tests
 
-- [ ] snapshots du squelette ;
-- [ ] chemin contenant des espaces ;
-- [ ] répertoire non vide refusé ;
-- [ ] tag de socle inexistant ;
-- [ ] fonctionnement sans installation avec `--no-install` ;
-- [ ] aucun secret ou identifiant de test copié ;
-- [ ] résultat déterministe ;
-- [ ] boutique générée immédiatement constructible.
+- [x] snapshots du squelette ;
+- [x] chemin contenant des espaces ;
+- [x] répertoire non vide refusé ;
+- [x] tag de socle inexistant ;
+- [x] ref qui n'est pas un tag refusé ;
+- [x] fonctionnement sans installation avec `--no-install` ;
+- [x] aucun secret ou identifiant de test copié ;
+- [x] résultat déterministe ;
+- [x] boutique générée immédiatement constructible.
 
 #### Critère de sortie
 
-- [ ] `shopctl new test-client`, suivi de `npm ci` et `npm run verify` dans
+- [x] `shopctl new test-client`, suivi de `npm ci` et `npm run verify` dans
   `shop-test-client`, réussit sans modification manuelle.
+
+#### État
+
+Deux propriétés portent le reste.
+
+**Le manifeste est validé avant le clone.** Toutes les valeurs qu'une boutique
+choisit tiennent sur la ligne de commande, et elles passent le validateur du
+jalon 1 — le même que la CI — avant qu'un seul octet ne soit écrit. Une valeur
+inutilisable coûte un message ; elle ne laisse pas derrière elle un répertoire,
+un historique Git et une porte rouge à comprendre.
+
+**Un ref qui n'est pas un tag `v<semver>` est refusé, avant le clone.** C'est le
+contrôle qui applique l'ADR 0003 au seul endroit où il peut encore l'être : une
+branche se clone parfaitement, et une boutique installée sur `main` ne le
+découvrirait qu'à la première mise à niveau, sans version de référence à
+laquelle revenir.
+
+Rien n'est supprimé du clone, contrairement à `create-minshop` qui retire
+l'historique amont et son propre paquet. Ce sont deux outils pour deux
+finalités : le générateur public produit une boutique autonome, `shopctl new`
+produit une boutique qui recevra des tags du socle par merge pendant toute la
+durée du contrat. Chaque fichier retiré à la création serait un conflit à
+re-résoudre à chaque mise à niveau qui y touche.
+
+La CLI **enveloppe** les portes plutôt que de les réimplémenter, et la
+vérification minimale de `new` appelle les scripts que la **boutique**
+transporte, pas ceux du socle hôte : une boutique doit passer la porte que sa
+propre version du socle définit, sinon une mise à niveau serait validée par la
+version qu'elle n'a pas encore fusionnée. Le test
+« relays the gate's own report » compare la sortie de
+`shopctl config validate --json` à celle de `scripts/check-manifest.mjs --json`,
+ce qui rend la divergence impossible plutôt qu'improbable.
+
+Le critère de sortie a trouvé un défaut que rien d'autre n'aurait trouvé. La
+suite de tests est de propriété `core` : elle est donc **livrée dans chaque
+boutique** et s'y exécute telle quelle. Quatre de ses assertions supposaient que
+l'arbre courant est le socle — « exactement deux boutiques », « `repository`
+vaut `core` », « le premier manifeste découvert est une fixture ». Toutes
+passaient ici et échouaient dans la première boutique générée, c'est-à-dire chez
+le client, sur un `npm run verify` qui aurait eu l'air d'être de sa faute. Elles
+affirment désormais ce qu'elles voulaient dire — les deux témoins sont présents
+et passent — et non le décompte de l'arbre.
+
+Le contrôle de neutralité du cœur en a trouvé un second, du même genre : ce
+plan et le read-me écrivent `shopctl new acme`, et la porte échoue sur tout
+fichier du cœur contenant le slug d'une boutique. Le premier client nommé `acme`
+aurait vu échouer un fichier auquel il n'a jamais touché. Les noms que la
+documentation emploie — `acme`, `example` — sont donc réservés comme la RFC 2606
+réserve `example.com`, et le cœur n'écrit plus d'exemple de slug plausible.
+
+La mesure a montré que le piège dépassait les exemples de documentation. Un nom
+de commerçant ordinaire passe sans une seule fuite ; ce qui restait pris, c'est
+le **vocabulaire du socle** — `check`, `mcp`, `products`, `clean-clone` — que le
+cœur écrit dans ses propres workflows et sa propre prose. `RESERVED_SLUGS`
+couvre désormais les préfixes de routes publiques, **dérivés de `src/pages/` par
+un test** plutôt que recopiés à la main : une route ajoutée sans réserver son
+nom fait échouer la suite, au lieu de libérer le nom en silence.
+
+Cette liste ne pourra jamais être complète — la porte se déclenche aussi sur de
+l'anglais ordinaire que le cœur emploie —, et c'est ce qui rend le second
+correctif plus important que le premier. `shopctl new` lisait un échec de porte
+et concluait « c'est un bug du cœur, pas une mauvaise option ». Pour une
+collision de neutralité sur le slug de la boutique elle-même, c'est exactement
+l'inverse : le cœur a raison, le nom est mauvais. La commande lit maintenant le
+rapport JSON de la porte, distingue les deux cas, nomme les fichiers en cause,
+dit de choisir un autre slug et **ne garde rien**. Réserver les noms connus ne
+fait qu'avancer l'échec avant le clone.
+
+La première exécution du job CI a trouvé le troisième cas de la même famille,
+cette fois dans `new` lui-même : le workflow posait l'identité Git en local dans
+le checkout, la boutique est un autre dépôt, et l'échec sortait sous la forme
+d'un `git commit exited with status 128` après un clone de 540 fichiers. Les
+deux moitiés sont corrigées — le contrôle a lieu **avant** le clone, et il
+interroge `git var GIT_AUTHOR_IDENT`, c'est-à-dire la résolution de git
+elle-même (config, variables `GIT_AUTHOR_*`, auto-détection). Relire `user.name`
+aurait déclaré cassé un runner qui marche, et l'inverse.
+
+Vérification locale : `shopctl new test-client --core v0.1.0`, puis `npm ci`,
+`npm ci --prefix mcp` et `npm run verify` dans `shop-test-client`, sans aucune
+modification manuelle. En CI, le job « Generated shop » refait la création et
+rejoue les portes déterministes de la boutique ; l'intégration D1 et le
+`mcp:check` n'y sont pas rejoués, parce qu'ils portent sur un cœur identique à
+l'octet près et que le job `verify` les couvre déjà.
 
 ### Jalon 3 — Socle français
 

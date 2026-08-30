@@ -3,12 +3,16 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "shopctl": "shopctl/bin/shopctl.mjs"
+  },
   "engines": {
     "node": ">=22.12.0 <23",
     "npm": ">=10.9.0"
   },
   "scripts": {
     "dev": "astro dev",
+    "shopctl": "node shopctl/bin/shopctl.mjs",
     "build": "astro build",
     "preview": "wrangler dev -c dist/server/wrangler.json --persist-to .wrangler/state",
     "deploy": "node --experimental-strip-types scripts/deploy.mjs",

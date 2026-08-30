@@ -10,6 +10,8 @@
 /.github/ @DamienGR
 # core: Architecture decisions and the implementation plan.
 /docs/ @DamienGR
+# core: The agency CLI. A shop keeps it: that is what operates the shop.
+/shopctl/ @DamienGR
 # core: The upstream scaffolder package.
 /create-minshop/ @DamienGR
 # core: The MCP worker, a separate deployable of the core.
@@ -30,6 +32,8 @@
 /src/themes/studio/ @DamienGR
 # core: Shipped design "default". A shop customizes its own theme, never this one, or the next upgrade conflicts.
 /src/themes/default/ @DamienGR
+# client: Catalogue sources: the shop's CSV and the media it references. Created by `shopctl new`, never read at runtime.
+/imports/
 # client: Favicon and static brand assets.
 /public/
 # client: The post-theme override layer, normally empty upstream.

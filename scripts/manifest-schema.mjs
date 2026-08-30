@@ -37,17 +37,44 @@ const THEME_ID = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 /**
  * Slugs a shop may not take.
  *
- * Three reasons, all of them "the name is already load-bearing somewhere":
- * storefront and admin route prefixes, the resource names the fleet tooling
- * greps for, and the environment words its reports print. A shop that took one
- * would work until the day an operator read `minshop-staging-db` as an
- * environment rather than a customer.
+ * Four reasons, all of them "the name is already load-bearing somewhere".
+ *
+ * PUBLIC ROUTES. `/products/`, `/cart`, `/pay/` and their neighbours are the
+ * storefront's own URL space. This group is not maintained by hand — the test
+ * "every public route prefix is a reserved slug" derives it from `src/pages/`
+ * and fails when a route is added without reserving its name.
+ *
+ * PLATFORM RESOURCES AND ENVIRONMENTS. The names the fleet tooling greps for
+ * and the words its reports print. A shop that took one would work until the
+ * day an operator read `minshop-staging-db` as an environment rather than a
+ * customer.
+ *
+ * CORE TOOLING VOCABULARY — `check`, `mcp`. The core writes these into its own
+ * workflows and scripts (`minshop-check`, `minshop-mcp`), and the
+ * core-neutrality gate fails on any core file containing a shop's slug or
+ * worker name. `db` belongs to the same group and is deliberately absent: the
+ * three-character minimum already refuses it, and a second rule saying the same
+ * thing only makes the first one look optional.
+ *
+ * DOCUMENTATION NAMES — `acme`, `example`. Same mechanism: the read-me writes
+ * `shopctl new acme` to show what the command looks like. Whoever picked it for
+ * a real customer would get a baffling failure in a file they never touched, so
+ * the documentation's names are reserved the way RFC 2606 reserves example.com.
+ *
+ * The list can never be complete — the gate also trips on ordinary English the
+ * core happens to use — so `shopctl new` reads the gate's report and tells the
+ * operator to choose another slug rather than blaming the core. Reserving the
+ * known names only makes that failure arrive earlier, before anything is
+ * cloned.
  */
 export const RESERVED_SLUGS = [
-  'admin', 'agency', 'api', 'assets', 'cdn', 'core', 'default', 'dev', 'files',
-  'fleet', 'images', 'internal', 'local', 'mail', 'minshop', 'platform',
-  'preview', 'prod', 'production', 'shop', 'staging', 'store', 'support',
-  'test', 'www',
+  'account', 'acme', 'admin', 'agency', 'api', 'assets', 'cart', 'categories',
+  'category', 'cdn', 'check', 'checkout', 'core', 'default', 'dev',
+  'example', 'express', 'files', 'fleet', 'images', 'index', 'internal', 'llms',
+  'local', 'mail', 'mcp', 'minshop', 'order', 'pages', 'partials', 'pay',
+  'payment-setup', 'platform', 'preview', 'prod', 'product', 'production',
+  'products', 'robots', 'search', 'shop', 'sitemap', 'staging', 'store',
+  'support', 'test', 'www',
 ];
 
 /**
@@ -148,6 +175,27 @@ export const MANIFEST_SPEC = {
 };
 
 /**
+ * What a credential looks like, and what to call it.
+ *
+ * Shared rather than private to the `no-credentials` rule below, because the
+ * same question is asked in two places: of a manifest value about to be
+ * committed, and of a CLI argument about to be logged (shopctl/src/secrets.mjs).
+ * Two lists would drift, and the one that drifted would be whichever is read
+ * less often — which is the one guarding the value nobody reviewed.
+ *
+ * Anchored where a whole value is the only meaningful match: an unanchored
+ * 40-hex-character rule would fire on any long identifier inside a sentence.
+ */
+export const CREDENTIAL_PATTERNS = [
+  { pattern: /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]+/, what: 'a Stripe API key' },
+  { pattern: /\bwhsec_[A-Za-z0-9]+/, what: 'a Stripe webhook secret' },
+  { pattern: /\bre_[A-Za-z0-9]{16,}/, what: 'a Resend API key' },
+  { pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/, what: 'a private key' },
+  { pattern: /\bghp_[A-Za-z0-9]{20,}/, what: 'a GitHub token' },
+  { pattern: /^[A-Fa-f0-9]{40,}$/, what: 'what looks like a hex-encoded secret' },
+];
+
+/**
  * Rules a JSON Schema cannot express, because they relate two fields.
  *
  * Each one is a named function so a failure says WHICH invariant broke rather
@@ -244,16 +292,8 @@ export const CROSS_FIELD_RULES = [
       // this catches the other shape: a credential pasted into a field that IS
       // allowed. Manifests are committed; a value that reaches this file is
       // published to every clone of the repository.
-      const patterns = [
-        [/\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]+/, 'a Stripe API key'],
-        [/\bwhsec_[A-Za-z0-9]+/, 'a Stripe webhook secret'],
-        [/\bre_[A-Za-z0-9]{16,}/, 'a Resend API key'],
-        [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'a private key'],
-        [/\bghp_[A-Za-z0-9]{20,}/, 'a GitHub token'],
-        [/^[A-Fa-f0-9]{40,}$/, 'what looks like a hex-encoded secret'],
-      ];
       for (const [path, value] of walkStrings(m)) {
-        for (const [pattern, what] of patterns) {
+        for (const { pattern, what } of CREDENTIAL_PATTERNS) {
           if (pattern.test(value)) {
             return {
               path,

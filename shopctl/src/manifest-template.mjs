@@ -1,0 +1,156 @@
+/**
+ * The manifest `shopctl new` writes, and the YAML it writes it as.
+ *
+ * Two properties matter more than the formatting.
+ *
+ * The values are validated BEFORE the file exists. `buildManifest()` returns a
+ * plain object that goes through the same `validateManifest()` the CI gate runs,
+ * so a shop is never created around a manifest that `config validate` will then
+ * refuse — which would leave the operator with a directory, a git history, and
+ * a red gate.
+ *
+ * And the file is read back. `renderManifest()` is checked against
+ * `parseManifestYaml()` by the caller: a generator and a parser that disagree
+ * about quoting would produce a shop whose display name silently lost a
+ * character, and the manifest is the file nothing else can correct.
+ *
+ * Everything the pilot fixes by scope (locale, currency, market, jurisdiction,
+ * checkout mode) is written as the single value its enumeration allows. Those
+ * are not options: widening one is a schema version with migration notes
+ * (ADR 0008), not a flag.
+ */
+import { RESOURCE_PREFIX } from '../../scripts/manifest-schema.mjs';
+
+/**
+ * A scalar as the manifest reader will read it back.
+ *
+ * Quoted only when a bare word would be read as something else — a number, a
+ * boolean, a nested mapping, one of the words YAML 1.1 turns into a boolean.
+ * Quoting everything would be simpler and would make the generated file read
+ * like machine output; the merchant edits this file by hand, so it should look
+ * like the fixtures they will be shown next to it.
+ */
+export function yamlScalar(value) {
+  if (typeof value === 'boolean' || typeof value === 'number') return String(value);
+  const text = String(value);
+  const bare =
+    /^[A-Za-z0-9][A-Za-z0-9._@/+-]*(?: [A-Za-z0-9._@/+-]+)*$/.test(text) &&
+    !/^(?:true|false|y|Y|yes|Yes|YES|n|N|no|No|NO|on|On|ON|off|Off|OFF|null|Null|NULL|~)$/.test(text) &&
+    !/^-?\d+(?:\.\d+)?$/.test(text);
+  return bare ? text : JSON.stringify(text);
+}
+
+/** The Worker name a slug implies. Derived, never asked for: every other
+ *  resource name follows it (scripts/manifest.mjs). */
+export const workerNameFor = (slug) => `${RESOURCE_PREFIX}-${slug}`;
+
+/**
+ * The manifest object for a new shop.
+ *
+ * @param {{ slug: string, displayName: string, domain: string, email: string, theme: string, coreVersion: string }} values
+ */
+export function buildManifest({ slug, displayName, domain, email, theme, coreVersion }) {
+  return {
+    schemaVersion: 1,
+    coreVersion,
+    client: {
+      slug,
+      displayName,
+      locale: 'fr-FR',
+      timezone: 'Europe/Paris',
+      currency: 'EUR',
+    },
+    commerce: {
+      market: 'FR',
+      pricesIncludeTax: true,
+      checkoutMode: 'guest',
+      defaultVatRate: 20,
+      // Not a default so much as an admission: the accounting review of jalon 3
+      // has not happened for this shop, and a strategy chosen by a generator is
+      // exactly the kind of decision that is discovered at the first audit.
+      invoiceStrategy: 'pending-validation',
+    },
+    features: {
+      customerAccounts: false,
+      semanticSearch: false,
+      digitalProducts: false,
+      promoCodes: true,
+      shipping: true,
+    },
+    cloudflare: {
+      jurisdiction: 'eu',
+      workerName: workerNameFor(slug),
+      productionDomain: domain,
+    },
+    email: {
+      provider: 'resend',
+      from: email,
+    },
+    theme: {
+      id: theme,
+    },
+  };
+}
+
+/**
+ * Comments carried into the generated file, by dotted path.
+ *
+ * They are the ones a merchant needs while editing and cannot recover from the
+ * schema: which values are placeholders the shop must replace before it is
+ * provisioned, and which are fixed by the certified scope rather than by taste.
+ */
+const NOTES = {
+  coreVersion: ['Version du socle clonée. Mise à jour par `shopctl core upgrade`.'],
+  'client.locale': ['Fixés par le périmètre certifié (plan §2.1) : une seule valeur possible.'],
+  'commerce.invoiceStrategy': [
+    'La validation comptable du jalon 3 n\'a pas eu lieu pour cette boutique :',
+    'la stratégie de facturation reste en attente plutôt que par défaut.',
+  ],
+  'cloudflare.productionDomain': [
+    'PLACEHOLDER : domaine réservé à la documentation (RFC 2606).',
+    'À remplacer par le domaine du commerçant avant tout provisioning.',
+  ],
+  'email.from': ['PLACEHOLDER : suit le domaine ci-dessus.'],
+  'theme.id': ['Thème propre à la boutique. Le socle ne le modifie jamais.'],
+};
+
+/** Section-level headings, in the order buildManifest() emits them. */
+const SECTION_NOTES = {
+  client: 'Qui est la boutique.',
+  commerce: 'Comment elle vend.',
+  features: 'Interrupteurs décidés à la construction. Les réglages d\'exploitation vivent dans Admin → Réglages.',
+  cloudflare: 'Où elle tourne. Tous ces noms sont visibles dans le compte Cloudflare.',
+  email: 'E-mails transactionnels. Aucune clé d\'API ici, jamais.',
+  theme: 'Quel design elle compile.',
+};
+
+/**
+ * Render the manifest as the file the shop commits.
+ *
+ * Deterministic by construction: field order comes from the object, every value
+ * from `values`, and nothing from the clock or the environment. Two runs with
+ * the same options produce the same bytes, which is what makes the generated
+ * shop reviewable as a diff.
+ */
+export function renderManifest(manifest, { header } = {}) {
+  const lines = [];
+  if (header) for (const line of header) lines.push(`# ${line}`);
+
+  for (const [key, value] of Object.entries(manifest)) {
+    const isSection = value !== null && typeof value === 'object';
+    if (isSection) {
+      lines.push('');
+      if (SECTION_NOTES[key]) lines.push(`# ${SECTION_NOTES[key]}`);
+      lines.push(`${key}:`);
+      for (const [field, fieldValue] of Object.entries(value)) {
+        for (const note of NOTES[`${key}.${field}`] ?? []) lines.push(`  # ${note}`);
+        lines.push(`  ${field}: ${yamlScalar(fieldValue)}`);
+      }
+      continue;
+    }
+    for (const note of NOTES[key] ?? []) lines.push(`# ${note}`);
+    lines.push(`${key}: ${yamlScalar(value)}`);
+  }
+
+  return `${lines.join('\n')}\n`;
+}

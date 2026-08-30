@@ -94,6 +94,12 @@ export const OWNERSHIP_RULES = [
     why: 'Favicon and static brand assets.',
     codeowners: '/public/',
   },
+  {
+    pattern: 'imports/**',
+    owner: 'client',
+    why: 'Catalogue sources: the shop\'s CSV and the media it references. Created by `shopctl new`, never read at runtime.',
+    codeowners: '/imports/',
+  },
   // Ordering note: the reserved themes below are listed AFTER this rule in
   // CODEOWNERS (last match wins there) and BEFORE it here (first match wins),
   // which renderCodeowners() gets right by emitting the list in reverse.
@@ -121,6 +127,7 @@ export const OWNERSHIP_RULES = [
   { pattern: 'test/**', owner: 'core', why: 'The certification suite, including the witness fixtures.', codeowners: '/test/' },
   { pattern: 'mcp/**', owner: 'core', why: 'The MCP worker, a separate deployable of the core.', codeowners: '/mcp/' },
   { pattern: 'create-minshop/**', owner: 'core', why: 'The upstream scaffolder package.', codeowners: '/create-minshop/' },
+  { pattern: 'shopctl/**', owner: 'core', why: 'The agency CLI. A shop keeps it: that is what operates the shop.', codeowners: '/shopctl/' },
   { pattern: 'docs/**', owner: 'core', why: 'Architecture decisions and the implementation plan.', codeowners: '/docs/' },
   { pattern: '.github/**', owner: 'core', why: 'CI, and therefore every gate a release passes.', codeowners: '/.github/' },
   {
