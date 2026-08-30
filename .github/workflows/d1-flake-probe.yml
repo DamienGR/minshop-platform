@@ -1,0 +1,88 @@
+# Measures the D1 integration flake instead of waiting for it.
+#
+# The fault (cloudflare/workers-sdk#15317) shows up in roughly one CI run in
+# five, so a single green `verify` proves nothing and the closing criterion in
+# docs/implementation-plan.md asks for ten consecutive green runs on `main`.
+# Accumulating those one merge at a time takes weeks. This runs the gate N times
+# in parallel instead, and reports how many sessions died, in a few minutes.
+#
+# Never runs on its own. Dispatch it, or push a `flake-probe/**` branch.
+name: D1 flake probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'raw = measure the fault; wrapped = prove the re-run absorbs it'
+        type: choice
+        options: [raw, wrapped]
+        default: raw
+  push:
+    branches: ['flake-probe/**']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install storefront dependencies
+        run: npm ci
+
+      - name: Create isolated Wrangler configuration
+        run: |
+          sed \
+            -e 's/__NAME__/minshop-check/g' \
+            -e 's/__DB_NAME__/minshop-check-db/g' \
+            -e 's/__DB_ID__/00000000-0000-0000-0000-000000000000/g' \
+            -e 's/__BUCKET__/minshop-check-images/g' \
+            -e 's/__FILES_BUCKET__/minshop-check-files/g' \
+            wrangler.template.jsonc > wrangler.jsonc
+
+      - name: Build the Worker under test
+        run: npx astro build
+
+      # Two things worth measuring, and they are not the same thing.
+      #
+      # raw     runs the suite directly, so exit 75 surfaces and the death rate
+      #         is what you read off the run summary. The wrapper is built to
+      #         hide exactly that.
+      # wrapped runs what CI actually runs. Deaths are absorbed, so a green
+      #         sweep here is the proof that the re-run holds — including
+      #         against deaths that repeat on the same runner, which the
+      #         per-run rate alone cannot tell you.
+      - name: Run the D1 integration gate once
+        env:
+          TARGET: ${{ github.event.inputs.target || 'raw' }}
+        run: |
+          set +e
+          if [ "$TARGET" = "wrapped" ]; then
+            bash test/integration/run-d1-integration.sh
+          else
+            bash test/integration/d1-integration.sh
+          fi
+          status=$?
+          set -e
+          case "$status" in
+            0)  echo "PROBE run ${{ matrix.run }} ($TARGET): PASS" ;;
+            75) echo "PROBE run ${{ matrix.run }} ($TARGET): DEV SESSION DIED" ;;
+            *)  echo "PROBE run ${{ matrix.run }} ($TARGET): FAILED (exit $status)" ;;
+          esac
+          exit "$status"

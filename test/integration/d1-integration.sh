@@ -5,15 +5,46 @@ set -euo pipefail
 # neither a developer's normal local database nor production can be touched.
 state_dir="$(mktemp -d "${TMPDIR:-/tmp}/minshop-d1-integration.XXXXXX")"
 worker_log="$state_dir/worker.log"
+wrangler_debug_log="$state_dir/wrangler-debug.log"
 worker_pid=""
 test_port="${D1_TEST_PORT:-8791}"
 
+# Reserved for one condition only: `wrangler dev` exited while the suite was
+# still running. Nothing the Worker does can cause that, and no assertion was
+# answered wrongly — the dev session is simply gone, so every later request hits
+# a closed port. Reporting it apart from a genuine failure is what lets
+# run-d1-integration.sh re-run the suite without ever re-running a real failure.
+WORKER_DIED_EXIT=75
+
+# `kill -0` is not a liveness test here. A background child that has exited but
+# has not been waited for stays a zombie, and signalling a zombie succeeds — so
+# the dev server would still look alive long after it died. Ask for its process
+# state instead and treat Z, or no row at all, as gone.
+worker_running() {
+  [[ -n "$worker_pid" ]] || return 1
+  local state
+  state="$(ps -o state= -p "$worker_pid" 2>/dev/null | tr -d '[:space:]')"
+  [[ -n "$state" && "$state" != Z* ]]
+}
+
 cleanup() {
-  if [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null; then
+  local status=$?
+  if worker_running; then
     kill "$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
+  elif [[ -n "$worker_pid" && "$status" != 0 ]]; then
+    status="$WORKER_DIED_EXIT"
+    echo "D1 integration aborted: the wrangler dev process exited under the suite." >&2
+    echo "  A dropped connection inside the dev proxy is raised as a fatal" >&2
+    echo "  'Error inside ProxyWorker' whose message is empty, and it tears the" >&2
+    echo "  whole dev session down: cloudflare/workers-sdk#15317." >&2
+    if [[ -s "$wrangler_debug_log" ]]; then
+      echo "--- last 60 lines of the wrangler debug log ---" >&2
+      tail -n 60 "$wrangler_debug_log" >&2
+    fi
   fi
   rm -rf "$state_dir"
+  exit "$status"
 }
 trap cleanup EXIT INT TERM
 
@@ -65,6 +96,16 @@ done
 # services to the dev proxy; with it on, the proxy intermittently answered a
 # request with its own bare 500 without ever invoking the Worker.
 export X_LOCAL_OBSERVABILITY=false
+# The local explorer is the same shape of thing: an interactive-development
+# service (bindings browser, workflow inspector) attached to the same dev proxy,
+# on by default, and of no use to a headless gate. One less service to contend
+# with on a two-core runner.
+export X_LOCAL_EXPLORER=false
+# Wrangler's own debug log, where the ProxyWorker stack actually lands. Its
+# default home is ~/.config/.wrangler/logs, which no CI job uploads, so the only
+# thing a crash leaves behind today is the empty `✘ [ERROR]` it prints. A path
+# ending in .log is used verbatim rather than as a directory.
+export WRANGLER_LOG_PATH="$wrangler_debug_log"
 npx wrangler dev \
   --config dist/server/wrangler.json \
   --persist-to "$state_dir" \
@@ -85,7 +126,7 @@ for _ in {1..40}; do
   if catalog="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/api/products?limit=1" 2>/dev/null)"; then
     break
   fi
-  if ! kill -0 "$worker_pid" 2>/dev/null; then
+  if ! worker_running; then
     sed -n '1,160p' "$worker_log" >&2
     exit 1
   fi
