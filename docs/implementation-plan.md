@@ -1057,6 +1057,17 @@ le stock plutôt que sur la route : une commande qui ne peut pas aboutir
 légalement ne doit pas retirer d'inventaire de l'étagère, quel que soit
 l'endroit où le contrôle finira par vivre.
 
+Le balayage de fin de jalon a trouvé ce que la traduction page par page ne
+pouvait pas trouver : les messages qui ne vivent dans aucun gabarit. Huit
+erreurs partent en redirection depuis `/api/cart` et `/api/checkout` vers
+`/cart` ou vers la fiche produit, qui les rendent telles quelles — « Please
+choose a option. » restait donc affiché en français au moment le plus coûteux du
+parcours. Les noms de pays étaient dans le même cas : `Intl.DisplayNames` était
+appelé en anglais alors que ses libellés atteignent l'acheteur, dans le
+sélecteur de destination et dans le message qui nomme le pays non desservi. La
+leçon vaut au-delà de ce jalon : une chaîne visible n'est pas forcément dans un
+fichier de vue.
+
 Deux limites, nommées plutôt qu'implicites.
 
 Les rails qui passent par `/checkout` avant de payer — Lightning, OpenNode et
