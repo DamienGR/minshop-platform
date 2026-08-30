@@ -86,6 +86,20 @@ const inputClass =
   </div>
 
   <div>
+    <label class="block text-sm font-medium" for="sku">
+      SKU <span class="text-faint">(your own reference — the key a catalogue import matches on)</span>
+    </label>
+    <input
+      id="sku"
+      name="sku"
+      type="text"
+      value={product?.sku ?? ''}
+      placeholder="none"
+      class={inputClass}
+    />
+  </div>
+
+  <div>
     <label class="block text-sm font-medium" for="description">Description</label>
     <textarea id="description" name="description" rows="3" class={inputClass}
       >{product?.description ?? ''}</textarea>

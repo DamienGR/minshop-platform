@@ -31,6 +31,8 @@ import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { capture, run } from '../process.mjs';
 import { buildManifest, renderManifest } from '../manifest-template.mjs';
+import { COLUMNS } from '../catalog/contract.mjs';
+import { DELIVERY_MAX_WIDTH } from '../catalog/media.mjs';
 import { parseManifestYaml } from '../../../scripts/manifest-yaml.mjs';
 
 /** ADR 0003: a core version is an immutable `v<semver>` tag. */
@@ -478,7 +480,16 @@ function describeGateFailure(gate) {
   return (gate.stderr || gate.stdout).trim().split('\n').slice(0, 6).join('\n    ');
 }
 
-function importsReadme(slug) {
+/** The README `shopctl new` drops in a shop's imports/ directory.
+ *  Exported so a gate can check it still names every column of the contract:
+ *  a column the merchant's documentation does not mention is a column filled by
+ *  guesswork. */
+export function importsReadme(slug) {
+  // A `|` inside a cell ends the cell, and the separator this contract uses for
+  // multi-value columns is exactly that character.
+  const cell = (value) => value.replaceAll('|', '\\|');
+  const columns = COLUMNS.map((column) =>
+    `| \`${column.name}\` | ${column.scope === 'product' ? 'produit' : 'unité'} | ${cell(column.description)} |`).join('\n');
   return `# Imports de ${slug}
 
 Les sources du catalogue de cette boutique : le CSV produit et les médias qu'il
@@ -489,10 +500,44 @@ c'est la boutique déployée qui sert le résultat.
     shopctl catalog import ./imports/catalog.csv --dry-run
     shopctl catalog import ./imports/catalog.csv
 
-Le **format CSV contractuel** est livré au jalon 4 du plan d'implémentation,
-avec son validateur et son upsert idempotent par SKU. \`shopctl new\` crée ce
-répertoire mais n'y dépose pas d'exemple : un gabarit inventé avant que le
-format ne soit décidé serait recopié dans chaque boutique générée d'ici là,
-et c'est le gabarit que le commerçant remplirait.
+## Une ligne, une unité vendue
+
+Un produit simple tient sur une ligne : sa référence est dans \`sku\`, la colonne
+\`variant\` reste vide. Un produit à variantes occupe une ligne par variante :
+chacune a sa propre référence dans \`sku\`, toutes portent la référence du produit
+parent dans \`product\`, et les colonnes de portée « produit » ne se renseignent
+qu'une fois — les répéter à l'identique est toléré, les contredire est refusé.
+
+| Colonne | Portée | Rôle |
+| --- | --- | --- |
+${columns}
+
+Le séparateur est déduit de la ligne d'en-tête : un tableur français exporte en
+\`;\`, ce qui évite d'avoir à guillemeter chaque prix.
+
+## Ce que l'import garantit
+
+- **rien n'est écrit tant que tout n'est pas jugé.** Une image illisible ou une
+  catégorie inconnue arrête la totalité de l'import ;
+- **idempotent par référence.** Relancer le même fichier ne produit aucune
+  écriture, et une exécution interrompue reprend là où elle en était : l'import
+  recalcule ce qui reste depuis l'état de la boutique ;
+- **rien n'est supprimé.** Une variante qui quitte le fichier est désactivée, pas
+  effacée — une commande passée la référence. Les produits absents du fichier ne
+  sont pas touchés ;
+- **les pertes se demandent.** Déplacer une URL (\`--allow-slug-change\`), retirer
+  une unité vendue (\`--allow-remove-variants\`) et créer une catégorie
+  (\`--create-categories\`) ont chacune leur option.
+
+## Les images
+
+Les chemins sont relatifs à ce dossier et ne peuvent pas en sortir. Le type est
+lu dans les octets, pas dans l'extension : un fichier dont le nom ment sur son
+contenu est refusé, et le SVG n'est jamais accepté. La clé de stockage est
+dérivée du contenu, donc deux produits qui partagent une photo partagent un seul
+objet, et un réimport n'en renvoie aucun.
+
+La boutique sert ses images redimensionnées à la demande, en quatre largeurs :
+une source plus grande que ${DELIVERY_MAX_WIDTH} px est signalée mais acceptée telle quelle.
 `;
 }

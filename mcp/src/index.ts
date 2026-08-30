@@ -424,6 +424,10 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         const input: ProductInput = {
           name,
           slug,
+          // The merchant's own reference, deliberately not an agent's to invent:
+          // it is the identity a catalogue import matches on (ADR 0012), and a
+          // guessed one would silently claim a row the CSV means to own.
+          sku: null,
           description: description ?? null,
           price_cents,
           currency,
@@ -465,6 +469,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         const input: ProductInput = {
           name: name ?? cur.name,
           slug: cur.slug,
+          sku: cur.sku,
           description: description !== undefined ? description : cur.description,
           price_cents: price_cents ?? cur.price_cents,
           currency: currency ?? cur.currency,

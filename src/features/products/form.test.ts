@@ -120,4 +120,17 @@ describe('validateVariantWeights', () => {
     expect(toGrams('', 'g')).toEqual({ status: 'blank' });
     expect(toGrams('0', 'g')).toEqual({ status: 'ok', grams: 0 });
   });
+
+  it('keeps a SKU as typed, and empties to null', () => {
+    const set = parseProductForm(form({ name: 'X', price: '5', stock: '1', sku: '  RÉF 12/A  ' }));
+    // Whatever the supplier prints on the box: trimmed, never reshaped. The
+    // uniqueness invariant is the partial index from migration 0042.
+    expect('data' in set && set.data.sku).toBe('RÉF 12/A');
+
+    const blank = parseProductForm(form({ name: 'X', price: '5', stock: '1', sku: '   ' }));
+    expect('data' in blank && blank.data.sku).toBe(null);
+
+    const absent = parseProductForm(form({ name: 'X', price: '5', stock: '1' }));
+    expect('data' in absent && absent.data.sku).toBe(null);
+  });
 });

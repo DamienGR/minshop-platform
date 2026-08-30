@@ -17,6 +17,7 @@ import { assertNoCredentialsInArgv } from './secrets.mjs';
 import { NEW_OPTIONS, newUsage, runNew } from './commands/new.mjs';
 import { doctorUsage, runDoctor } from './commands/doctor.mjs';
 import { configUsage, runConfig } from './commands/config.mjs';
+import { CATALOG_OPTIONS, catalogUsage, runCatalog } from './commands/catalog.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -25,14 +26,15 @@ Usage: shopctl <commande> [options]
   new <slug>          Créer le dépôt d'une boutique depuis un tag du socle
   doctor              Vérifier outils, arbre courant et prérequis
   config validate     Valider les manifestes de l'arbre courant
+  catalog             Valider et importer le catalogue produit (CSV)
 
 Options globales:
   --json              Sortie machine sur stdout (la progression passe sur stderr)
   -h, --help          Cette aide, ou celle d'une commande
   -v, --version       Version du socle qui livre cette CLI
 
-Les commandes de provisioning, de catalogue, de déploiement, de sauvegarde et de
-flotte sont décrites au plan §5 et arrivent aux jalons suivants.
+Les commandes de provisioning, de déploiement, de sauvegarde et de flotte sont
+décrites au plan §5 et arrivent aux jalons suivants.
 `;
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
@@ -40,6 +42,12 @@ export const COMMANDS = {
   new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify'] },
   doctor: { run: runDoctor, usage: doctorUsage, values: {}, flags: ['--offline'] },
   config: { run: runConfig, usage: configUsage, values: {}, flags: [] },
+  catalog: {
+    run: runCatalog,
+    usage: catalogUsage,
+    values: CATALOG_OPTIONS,
+    flags: ['--dry-run', '--remote', '--create-categories', '--allow-slug-change', '--allow-remove-variants'],
+  },
 };
 
 /** Flags every command accepts. */

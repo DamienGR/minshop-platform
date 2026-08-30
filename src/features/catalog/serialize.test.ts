@@ -7,6 +7,7 @@ const base: Product = {
   public_id: 'prod_k7m2qx8vn6',
   name: 'Canvas Tote Bag',
   slug: 'canvas-tote-bag',
+  sku: null,
   description: 'Heavyweight cotton canvas tote.',
   price_cents: 2400,
   currency: 'usd',

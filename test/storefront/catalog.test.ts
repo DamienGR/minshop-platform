@@ -12,6 +12,7 @@ const product = (n: number, overrides: Partial<Product> = {}): Product => ({
   public_id: `prod_k7m2qx8vn${n}`,
   name: `Item ${n}`,
   slug: `item-${n}`,
+  sku: null,
   description: null,
   price_cents: 1000 + n,
   currency: 'eur',
