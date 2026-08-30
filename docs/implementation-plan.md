@@ -879,6 +879,15 @@ rapport JSON de la porte, distingue les deux cas, nomme les fichiers en cause,
 dit de choisir un autre slug et **ne garde rien**. Réserver les noms connus ne
 fait qu'avancer l'échec avant le clone.
 
+La première exécution du job CI a trouvé le troisième cas de la même famille,
+cette fois dans `new` lui-même : le workflow posait l'identité Git en local dans
+le checkout, la boutique est un autre dépôt, et l'échec sortait sous la forme
+d'un `git commit exited with status 128` après un clone de 540 fichiers. Les
+deux moitiés sont corrigées — le contrôle a lieu **avant** le clone, et il
+interroge `git var GIT_AUTHOR_IDENT`, c'est-à-dire la résolution de git
+elle-même (config, variables `GIT_AUTHOR_*`, auto-détection). Relire `user.name`
+aurait déclaré cassé un runner qui marche, et l'inverse.
+
 Vérification locale : `shopctl new test-client --core v0.1.0`, puis `npm ci`,
 `npm ci --prefix mcp` et `npm run verify` dans `shop-test-client`, sans aucune
 modification manuelle. En CI, le job « Generated shop » refait la création et

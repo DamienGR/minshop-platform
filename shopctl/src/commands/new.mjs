@@ -22,6 +22,7 @@
  * every upgrade that touches it.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { relative, resolve } from 'node:path';
 import { RESERVED_SLUGS, validateManifest } from '../../../scripts/manifest-schema.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
@@ -132,6 +133,28 @@ export function versionFromTag(tag) {
     );
   }
   return tag.slice(1);
+}
+
+/**
+ * Refuse to clone when git has no author to commit as.
+ *
+ * `git var GIT_AUTHOR_IDENT` rather than reading `user.name`: it is git's OWN
+ * resolution — config, GIT_AUTHOR_* environment variables, and the auto-detect
+ * it may refuse — so this cannot disagree with the `git commit` further down.
+ * A reimplementation of those rules would eventually pass where the commit
+ * fails, which is how the first CI run of this job died 540 files into a clone.
+ *
+ * Asked from a directory OUTSIDE any repository, because the shop about to be
+ * created is a fresh clone with no local config: a `user.email` set locally in
+ * whatever tree the operator happens to stand in would be a false pass.
+ */
+function assertGitIdentity() {
+  const result = capture('git', ['var', 'GIT_AUTHOR_IDENT'], { cwd: tmpdir(), allowFailure: true });
+  if (result.status === 0 && result.stdout.trim()) return result.stdout.trim();
+  throw preconditionError(
+    'git has no identity to author the shop\'s first commit with.',
+    'git config --global user.name "…" && git config --global user.email "…" — or set GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL in CI. `shopctl doctor` reports this as a blocking prerequisite.',
+  );
 }
 
 /** Refuse a target that already holds anything. An existing EMPTY directory is
@@ -253,6 +276,9 @@ export function runNew(args, reporter) {
   const createdTarget = !existsSync(target);
 
   // ------------------------------------------------------- 2..5. the git side
+  // Both preconditions before the clone: 540 files are a long way to travel to
+  // discover that git cannot sign the commit at the end of it.
+  assertGitIdentity();
   reporter.step(`Socle ${repository} @ ${tag}`);
   assertTagExists(repository, tag);
   reporter.ok(`tag ${tag} trouvé (socle ${coreVersion})`);

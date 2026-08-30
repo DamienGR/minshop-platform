@@ -17,6 +17,7 @@
  * to one question, and it is the CLI the operator believes.
  */
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { CORE_ROOT } from '../paths.mjs';
 import { ShopctlError } from '../errors.mjs';
@@ -78,15 +79,18 @@ export function runDoctor(args, reporter) {
   }
 
   // An identity is not cosmetic here: `shopctl new` commits the shop's first
-  // state, and a commit without one fails after the clone, leaving a directory
-  // the operator then has to reason about.
-  const name = capture('git', ['config', '--get', 'user.name'], { allowFailure: true }).stdout.trim();
-  const emailConfigured = capture('git', ['config', '--get', 'user.email'], { allowFailure: true }).stdout.trim() !== '';
-  if (name && emailConfigured) reporter.ok(`identité Git configurée (${name})`);
-  else {
+  // state. `git var GIT_AUTHOR_IDENT` is git's own resolution — config,
+  // GIT_AUTHOR_* environment variables, auto-detect — which is what makes this
+  // report agree with what `git commit` will actually do. Reading `user.name`
+  // instead would call a working CI runner broken, and a broken one working.
+  const identity = capture('git', ['var', 'GIT_AUTHOR_IDENT'], { cwd: tmpdir(), allowFailure: true });
+  if (identity.status === 0 && identity.stdout.trim()) {
+    // "Name <email> 1712345678 +0200" — the timestamp is noise in a report.
+    reporter.ok(`identité Git résolue (${identity.stdout.trim().replace(/>\s+\S+\s+\S+$/, '>')})`);
+  } else {
     reporter.fail(
-      'aucune identité Git configurée.',
-      'git config --global user.name "…" && git config --global user.email "…" — sans quoi le premier commit de la boutique échoue après le clone.',
+      'git n\'a aucune identité pour signer un commit.',
+      'git config --global user.name "…" && git config --global user.email "…" — ou GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL en CI. Sans elle, le premier commit de la boutique échoue après le clone.',
     );
   }
 

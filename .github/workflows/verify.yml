@@ -171,11 +171,16 @@ jobs:
       # The shop's first commit needs an author, exactly as it would on an
       # operator's machine. `shopctl doctor` reports a missing identity as a
       # blocking prerequisite for this reason.
+      #
+      # --global, not the repository-local default: the identity has to apply to
+      # the SHOP, which is a different repository created later in this job. A
+      # local config here would sit in the checkout and leave the shop's first
+      # commit without an author.
       - name: Publish this commit as a core version tag
         id: core
         run: |
-          git config user.name "Minshop CI"
-          git config user.email "ci@example.com"
+          git config --global user.name "Minshop CI"
+          git config --global user.email "ci@example.com"
           version="$(node -p "require('./package.json').version")"
           git tag -f "v${version}"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"

@@ -299,6 +299,27 @@ describe('shopctl new', () => {
     expect(treeFiles(work)).toEqual([]);
   });
 
+  // The first CI run of the "Generated shop" job died here: the workflow set
+  // `git config user.name` LOCALLY in the checkout, so the shop — a different
+  // repository — had no author, and the failure surfaced as a bare "git commit
+  // exited with status 128" after a 540-file clone. Both halves are fixed: the
+  // check happens before the clone, and it asks git rather than guessing.
+  it('refuses to clone when git has no identity to commit as', () => {
+    const work = workspace();
+    const home = mkdtempSync(join(tmpdir(), 'shopctl-home-'));
+    const result = spawnSync('node', [BIN, 'new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], {
+      cwd: work,
+      encoding: 'utf8',
+      // No config, and none of the GIT_AUTHOR_* variables GIT_ENV supplies.
+      env: { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: join(home, '.gitconfig'), GIT_AUTHOR_NAME: '', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: '', GIT_COMMITTER_EMAIL: '' },
+    });
+
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/no identity/);
+    expect(result.stderr).toMatch(/shopctl doctor/);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
   it('refuses a target directory that already holds something', () => {
     const work = workspace();
     mkdirSync(join(work, 'shop-boutique-du-port'), { recursive: true });
