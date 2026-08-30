@@ -65,6 +65,44 @@ jobs:
         if: needs.verify-first-runner.outputs.outcome != 'success'
         uses: ./.github/actions/run-verify
 
+  # File ownership (plan §3.3). Two questions, one script: is every tracked path
+  # still classified core / client / generated, and does this pull request touch
+  # the core without saying so.
+  #
+  # The second only has teeth in a SHOP repository — a tree with
+  # client/client.yaml — because here every pull request touches the core, and a
+  # gate that fires on all of them teaches people to wave it through. It runs
+  # here anyway, reporting what it would have decided, so the shops that inherit
+  # this workflow inherit a step that has actually executed.
+  #
+  # A shop approves a deliberate core edit by labelling the pull request
+  # `core-change`; the label is a reviewed act, which is the property the gate
+  # is really asking for.
+  paths:
+    name: File ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          # The gate diffs against the merge base, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Classify the tree and gate the change
+        env:
+          MINSHOP_CORE_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'core-change') && 'approved' || '' }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          node scripts/check-paths.mjs --changed --base "origin/${{ github.base_ref }}"
+
   # A store is created by cloning a tag of this repository (plan §3.4), so the
   # baseline that matters is what a FRESH CLONE builds — not what an incrementally
   # updated checkout builds. `verify` above runs in a tree that already carries a
@@ -90,6 +128,73 @@ jobs:
 
       - name: Install, build and dry-run deploy from a scratch clone
         run: npm run check:clean-clone
+
+  # Which shops exist is a property of the TREE, for the same reason the theme
+  # list below is: a generated shop carries its own manifest, and a hardcoded
+  # list here would stop covering it.
+  discover-shops:
+    name: Discover shops
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shops: ${{ steps.discover.outputs.shops }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: List the shops this tree describes
+        id: discover
+        run: |
+          shops=$(node scripts/prepare-client.mjs --list)
+          echo "discovered: $shops"
+          echo "shops=$shops" >> "$GITHUB_OUTPUT"
+
+  # The exit criterion of jalon 1: two different shops build from one core.
+  #
+  # Everything per-shop comes from the manifest — the Wrangler configuration is
+  # rendered from it, the theme is selected by it — so a value the core needed
+  # to hardcode would fail here rather than on the third customer.
+  #
+  # It overlaps the theme matrix below today, because the two witness shops
+  # happen to select the two shipped designs the main job does not build. That
+  # stops being true the moment a shop takes a design of its own (jalon 5), and
+  # the questions were never the same one: this job asks whether a MANIFEST
+  # builds, that one whether a DESIGN holds the contract.
+  shops:
+    name: Build shop (${{ matrix.shop }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: discover-shops
+    if: needs.discover-shops.outputs.shops != '[]'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shop: ${{ fromJSON(needs.discover-shops.outputs.shops) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install storefront dependencies
+        run: npm ci
+
+      # Writes wrangler.jsonc from the manifest and exports THEME for the steps
+      # below. No sed of a hardcoded name: if the manifest cannot fill the
+      # template, the shop does not build.
+      - name: Derive the build inputs from the manifest
+        run: node scripts/prepare-client.mjs "${{ matrix.shop }}"
+
+      - name: Verify the shop builds and honours the contract
+        run: npm run verify:theme
 
   # Which themes exist is a property of the TREE, not of this file: a generated
   # store carries its merchant-owned theme plus whatever shipped themes it kept,

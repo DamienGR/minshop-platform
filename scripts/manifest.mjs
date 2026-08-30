@@ -1,0 +1,235 @@
+/**
+ * Reading client manifests off disk, and the checks that need more than the
+ * file itself: does the theme exist in this tree, and does the fleet agree that
+ * every resource name belongs to exactly one shop.
+ *
+ * manifest-schema.mjs decides whether ONE manifest is well-formed.
+ * This module decides whether it fits the tree and the fleet around it.
+ */
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { parseManifestYaml } from './manifest-yaml.mjs';
+import { RESOURCE_PREFIX, validateManifest } from './manifest-schema.mjs';
+import { THEMES_DIR } from './themes.mjs';
+
+/** Where a real shop keeps its manifest. Absent in the core repository —
+ *  which is precisely how the tooling tells a shop clone from the core. */
+export const CLIENT_MANIFEST = 'client/client.yaml';
+
+/** The witness shops (plan §2.3). They live under test/ because in the core
+ *  repository they are fixtures, not deployments: nothing provisions them. */
+export const WITNESS_CLIENTS_DIR = 'test/fixtures/clients';
+
+/** True when this tree is a generated shop rather than the core itself. */
+export function isShopRepository(root = process.cwd()) {
+  return existsSync(resolve(root, CLIENT_MANIFEST));
+}
+
+/** The core's own version, from package.json — the value a manifest's
+ *  `coreVersion` is checked against. */
+export function coreVersion(root = process.cwd()) {
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  return pkg.version;
+}
+
+/**
+ * Every Cloudflare resource of a shop, derived from one name.
+ *
+ * Derivation, not configuration. Letting a manifest name its D1 database
+ * independently of its Worker buys nothing and costs the property the operator
+ * relies on: that `<workerName>*` is the complete footprint of one shop,
+ * and that destroy-cf.sh removes all of it (scripts/destroy-cf.sh keys on the
+ * same suffixes).
+ */
+export function resourceNames(manifest) {
+  const worker = manifest.cloudflare.workerName;
+  return {
+    worker,
+    database: `${worker}-db`,
+    images: `${worker}-images`,
+    files: `${worker}-files`,
+    sessions: `${worker}-session`,
+  };
+}
+
+/** Every manifest in this tree: the shop's own, plus the witness fixtures. */
+export function discoverManifests(root = process.cwd()) {
+  const files = [];
+  if (isShopRepository(root)) files.push(CLIENT_MANIFEST);
+
+  const dir = resolve(root, WITNESS_CLIENTS_DIR);
+  if (existsSync(dir)) {
+    for (const name of readdirSync(dir).sort()) {
+      if (name.startsWith('.')) continue;
+      const candidate = join(dir, name, 'client.yaml');
+      if (statSync(join(dir, name)).isDirectory() && existsSync(candidate)) {
+        files.push(relative(root, candidate).split('\\').join('/'));
+      }
+    }
+  }
+  return files;
+}
+
+/**
+ * Read and fully check one manifest.
+ *
+ * Never throws for a bad file: a syntax error is an error entry like any
+ * other, so `config validate` can report every manifest in one pass instead of
+ * dying on the first one.
+ *
+ * @returns {{ file: string, manifest: object|null, errors: Array<{ path: string, message: string, rule?: string }> }}
+ */
+export function loadManifest(file, { root = process.cwd(), core = coreVersion(root), checkTheme = true } = {}) {
+  const path = resolve(root, file);
+  let manifest;
+  try {
+    manifest = parseManifestYaml(readFileSync(path, 'utf8'), { file });
+  } catch (error) {
+    return { file, manifest: null, errors: [{ path: '(file)', message: error.message }] };
+  }
+
+  const { errors } = validateManifest(manifest, { coreVersion: core });
+  if (errors.length === 0 && checkTheme) {
+    const themeDir = resolve(root, THEMES_DIR, manifest.theme.id);
+    if (!existsSync(themeDir)) {
+      errors.push({
+        path: 'theme.id',
+        rule: 'theme-exists',
+        message: `names "${manifest.theme.id}", which has no directory at ${THEMES_DIR}/${manifest.theme.id}. A shop whose theme is missing builds the wrong design or nothing at all.`,
+      });
+    }
+  }
+
+  // The parsed object is returned even when invalid: a report that can name
+  // the shop is more useful than one that can only name the file.
+  return { file, manifest, errors };
+}
+
+/**
+ * Names two shops must never share.
+ *
+ * Isolation is a provisioning property (ADR 0001): nothing at runtime prevents
+ * two manifests from pointing at the same D1 database, and if they ever did,
+ * one shop's orders would land in another's. There is no query-level guard to
+ * fall back on, so the guard has to be here, on the names, before provisioning
+ * reads them.
+ */
+export function fleetIdentifiers(manifest) {
+  const names = resourceNames(manifest);
+  return [
+    { kind: 'slug', value: manifest.client.slug },
+    { kind: 'worker', value: names.worker },
+    { kind: 'D1 database', value: names.database },
+    { kind: 'images bucket', value: names.images },
+    { kind: 'files bucket', value: names.files },
+    { kind: 'sessions KV', value: names.sessions },
+    { kind: 'production domain', value: manifest.cloudflare.productionDomain },
+  ];
+}
+
+/**
+ * Identifiers claimed by more than one manifest.
+ *
+ * @param {Array<{ file: string, manifest: object }>} entries valid manifests only
+ * @returns {Array<{ kind: string, value: string, files: string[] }>}
+ */
+export function detectFleetCollisions(entries) {
+  const claims = new Map();
+  for (const { file, manifest } of entries) {
+    for (const { kind, value } of fleetIdentifiers(manifest)) {
+      const key = `${kind}\u0000${value}`;
+      if (!claims.has(key)) claims.set(key, { kind, value, files: [] });
+      claims.get(key).files.push(file);
+    }
+  }
+  return [...claims.values()].filter((claim) => claim.files.length > 1);
+}
+
+/** Slugs of every shop this tree describes, in manifest order. */
+export function clientSlugs(cwd = process.cwd()) {
+  return discoverManifests(cwd)
+    .map((file) => loadManifest(file, { root: cwd }).manifest?.client?.slug)
+    .filter(Boolean);
+}
+
+/** Substitute the template's `__…__` placeholders. Fails on a leftover: a
+ *  placeholder the manifest cannot fill would otherwise reach Wrangler as a
+ *  literal resource name. */
+export function renderWrangler(template, substitutions) {
+  let out = template;
+  for (const [token, value] of Object.entries(substitutions)) out = out.split(token).join(value);
+  const leftover = out.match(/__[A-Z_]+__/g);
+  if (leftover) {
+    throw new Error(`wrangler.template.jsonc has placeholders no manifest value fills: ${[...new Set(leftover)].join(', ')}`);
+  }
+  return out;
+}
+
+/** The `__…__` substitutions wrangler.template.jsonc expects for a shop.
+ *  The database id is not a manifest value — provisioning learns it from
+ *  Cloudflare — so callers pass the id they have, or the all-zero placeholder
+ *  for a build that never talks to an account. */
+export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-0000-0000-000000000000' } = {}) {
+  const names = resourceNames(manifest);
+  return {
+    __NAME__: names.worker,
+    __DB_NAME__: names.database,
+    __DB_ID__: databaseId,
+    __BUCKET__: names.images,
+    __FILES_BUCKET__: names.files,
+  };
+}
+
+/** Resolve a shop by slug among the manifests of this tree. */
+export function findManifestBySlug(slug, { root = process.cwd() } = {}) {
+  for (const file of discoverManifests(root)) {
+    const loaded = loadManifest(file, { root });
+    if (loaded.manifest?.client?.slug === slug) return loaded;
+  }
+  return null;
+}
+
+/**
+ * The values that identify one shop, and that a core file therefore must not
+ * contain.
+ *
+ * Only values a shop is free to choose. `cloudflare.jurisdiction` or
+ * `client.currency` would match half the tree and mean nothing: the core is
+ * allowed — required, even — to know that EU exists.
+ */
+export function clientNeedles(manifest) {
+  return [
+    manifest.client.slug,
+    manifest.client.displayName,
+    manifest.cloudflare.workerName,
+    manifest.cloudflare.productionDomain,
+    manifest.email.from,
+  ];
+}
+
+/**
+ * Client values found in core files, as a pure function of the text.
+ *
+ * The exit criterion of jalon 1 is that two shops build from one core with no
+ * client condition in it. Two shops building proves nothing on its own if the
+ * core happens to name one of them: the build stays green and the condition
+ * surfaces on the third shop, in production, months later.
+ *
+ * @param {Array<{ file: string, manifest: object }>} shops valid manifests
+ * @param {Array<{ path: string, text: string }>} files core-owned files only
+ * @returns {Array<{ path: string, slug: string, value: string }>}
+ */
+export function findClientLeaks(shops, files) {
+  const needles = shops.flatMap(({ manifest }) =>
+    clientNeedles(manifest).map((value) => ({ value, slug: manifest.client.slug })),
+  );
+  const findings = [];
+  for (const { path, text } of files) {
+    for (const needle of needles) {
+      if (text.includes(needle.value)) findings.push({ path, slug: needle.slug, value: needle.value });
+    }
+  }
+  return findings;
+}
+
+export { RESOURCE_PREFIX };
