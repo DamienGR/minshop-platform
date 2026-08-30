@@ -8,6 +8,8 @@ import { shipmentWeightFor } from '../features/shipping/lines';
 import { stripeDestination } from '../features/shipping/destination';
 import ProductImage from '../features/products/ProductImage.astro';
 import { enabledMethods, isMethodAvailable } from '../features/payments';
+import { paymentMethodCopy } from '../features/payments/labels';
+import { t, tn } from '../features/i18n';
 import { catalogPath } from '../features/settings/home';
 
 // Cart switched off in Settings → browse-only catalog, no cart page.
@@ -22,13 +24,12 @@ const settings = Astro.locals.settings;
 const methods = settings ? enabledMethods(settings) : [];
 const ready = (m: string) => m === "demo" || (!!settings && isMethodAvailable(m as never, settings));
 const firstReady = methods.find(ready);
-const methodRows = methods.map((m) => ({ m, ready: ready(m), primary: m === firstReady }));
-const METHOD: Record<string, { label: string; hint: string; setupHint: string }> = {
-  stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more', setupHint: 'Set up card payments' },
-  lightning: { label: 'Pay with Lightning ⚡', hint: 'Instant — from any Lightning wallet', setupHint: 'Set up Lightning' },
-  opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)', setupHint: 'Set up OpenNode' },
-  demo: { label: 'Demo checkout', hint: 'Simulated — places a real test order, no charge', setupHint: '' },
-};
+const methodRows = methods.map((m) => ({
+  m,
+  ready: ready(m),
+  primary: m === firstReady,
+  copy: paymentMethodCopy(m),
+}));
 
 const cart = readCart(Astro.cookies);
 const { lines, subtotalCents } = await resolveCart(env.DB, cart);
@@ -53,8 +54,8 @@ const destination = stripeDestination(
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
 ---
 
-<Layout title="Cart">
-  <h1 class="mb-10 font-serif text-4xl tracking-tight">Your cart</h1>
+<Layout title={t('cart.title')}>
+  <h1 class="mb-10 font-serif text-4xl tracking-tight">{t('cart.title')}</h1>
 
   {
     error && (
@@ -67,9 +68,9 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
   {
     lines.length === 0 ? (
       <p class="text-muted">
-        Your cart is empty.{' '}
+        {t('cart.empty')}{' '}
         <a href={shopHref} class="border-b border-brand text-brand">
-          Continue shopping
+          {t('cart.continueShopping')}
         </a>
         .
       </p>
@@ -101,15 +102,15 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                     </span>
                   )}
                   <span class="block text-xs tabular-nums text-muted">
-                    {formatPrice(l.unitPriceCents)} each
+                    {formatPrice(l.unitPriceCents)} {t('cart.unitPrice')}
                   </span>
                   {l.availableStock <= 0 ? (
                     <span class="mt-1 block text-xs uppercase tracking-widest text-red-600">
-                      Out of stock
+                      {t('cart.outOfStock')}
                     </span>
                   ) : l.qty > l.availableStock ? (
                     <span class="mt-1 block text-xs text-amber-700">
-                      Only {l.availableStock} available
+                      {tn('cart.onlyLeft.one', 'cart.onlyLeft.other', l.availableStock)}
                     </span>
                   ) : null}
                 </span>
@@ -125,14 +126,14 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                     min="0"
                     max="99"
                     value={l.qty}
-                    aria-label="Quantity"
+                    aria-label={t('cart.quantity')}
                     class="w-14 border-b border-line bg-transparent py-1 text-center tabular-nums focus:border-brand focus:outline-none"
                   />
                   <button
                     type="submit"
                     class="text-xs uppercase tracking-widest text-faint hover:text-brand"
                   >
-                    Update
+                    {t('cart.update')}
                   </button>
                 </form>
                 <span class="w-20 text-right tabular-nums">{formatPrice(l.lineTotalCents)}</span>
@@ -141,10 +142,10 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                   <input type="hidden" name="key" value={l.key} />
                   <button
                     type="submit"
-                    aria-label="Remove"
+                    aria-label={t('cart.remove')}
                     class="text-xs uppercase tracking-widest text-faint hover:text-red-600"
                   >
-                    Remove
+                    {t('cart.remove')}
                   </button>
                 </form>
               </div>
@@ -157,20 +158,20 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
         <div class="mt-10 flex justify-end">
           <div class="w-full sm:max-w-sm">
             <div class="flex items-center justify-between">
-              <span class="text-xs uppercase tracking-widest text-muted">Subtotal</span>
+              <span class="text-xs uppercase tracking-widest text-muted">{t('cart.subtotal')}</span>
               <span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span>
             </div>
 
             {methods.length === 0 ? (
               <p class="mt-4 rounded-lg border border-dashed border-line px-5 py-4 text-center text-sm text-muted">
-                Checkout is currently unavailable.
+                {t('cart.unavailable')}
               </p>
             ) : (
             <form method="POST" action="/api/checkout" class="mt-4 space-y-2">
               <input type="hidden" name="source" value="cart" />
               {destination.showSelect && (
                 <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">
-                  Ship to
+                  {t('cart.shipTo')}
                   <select
                     name="country"
                     class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink"
@@ -193,7 +194,7 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
               {/* One control per offered method. Ready (configured/demo) → a submit
                   whose name/value sends method=<rail>. Unconfigured real rails → a
                   link to setup instructions (a dashed, muted "set this up" tile). */}
-              {methodRows.map(({ m, ready, primary }) =>
+              {methodRows.map(({ m, ready, primary, copy }) =>
                 ready ? (
                   <button
                     type="submit"
@@ -206,9 +207,9 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                     }`}
                   >
                     <span>
-                      <span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span>
+                      <span class="block text-sm font-medium">{copy.label}</span>
                       <span class={`block text-xs ${primary ? 'text-on-brand/70' : 'text-muted'}`}>
-                        {METHOD[m]?.hint ?? ''}
+                        {copy.hint}
                       </span>
                     </span>
                     <span aria-hidden="true" class={primary ? 'text-on-brand/80' : 'text-faint'}>
@@ -221,8 +222,8 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                     class="flex w-full items-center justify-between gap-3 rounded-lg border border-dashed border-line px-5 py-3 text-left text-faint transition hover:border-brand hover:text-brand"
                   >
                     <span>
-                      <span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span>
-                      <span class="block text-xs">{METHOD[m]?.setupHint ?? 'Set up'}</span>
+                      <span class="block text-sm font-medium">{copy.label}</span>
+                      <span class="block text-xs">{copy.setupHint}</span>
                     </span>
                     <span aria-hidden="true">&rarr;</span>
                   </a>

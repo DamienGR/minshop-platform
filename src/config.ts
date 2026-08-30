@@ -1,5 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { storeOverrides } from './store.config';
+import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from './features/i18n/locale';
+import { formatDateTime } from './features/i18n/format';
 import type { ShippingConfig } from './features/shipping/calculator';
 
 /**
@@ -188,8 +190,8 @@ function deepMerge<T>(base: T, override: DeepPartial<T>): T {
 function defaultConfig(): SiteConfig {
   return {
     storeName: env.STORE_NAME ?? 'My Shop',
-    currency: 'usd', // store-wide currency (ISO 4217, lowercase)
-    timeZone: env.TIME_ZONE ?? 'UTC', // setup/admin settings can override this at runtime
+    currency: DEFAULT_CURRENCY, // store-wide currency (ISO 4217, lowercase)
+    timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
       accounts: false, // magic-link customer login; needs AUTH_SECRET + email
     },
@@ -207,15 +209,15 @@ function defaultConfig(): SiteConfig {
       enabled: true,
       zones: [
         {
-          countries: ['US'],
+          countries: ['FR'],
           rates: [
-            { label: 'Standard', amountCents: 500 },
-            { label: 'Express', amountCents: 1500 },
+            { label: 'Colissimo', amountCents: 590 },
+            { label: 'Livraison express', amountCents: 1290 },
           ],
-          freeOverCents: 5000, // free shipping at $50+ (null to disable)
+          freeOverCents: 6000, // franco de port à 60 € (null pour désactiver)
         },
-        // Add more zones as needed, e.g. an international catch-all (matched last):
-        // { countries: ['*'], rates: [{ label: 'International', amountCents: 3000 }], freeOverCents: null },
+        // Add more zones as needed, e.g. an EU catch-all (matched last):
+        // { countries: ['*'], rates: [{ label: 'Union européenne', amountCents: 1490 }], freeOverCents: null },
       ],
     },
     discounts: {
@@ -304,10 +306,7 @@ export function formatDate(
   const iso = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return value;
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone, ...opts }).format(d);
-  } catch {
-    // A bad deployment override should never break an order/admin page.
-    return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...opts }).format(d);
-  }
+  // Locale and the UTC fallback for a bad deployment override both live in the
+  // i18n formatter, so a date reads the same here and in a pure builder.
+  return formatDateTime(d, opts, timeZone);
 }

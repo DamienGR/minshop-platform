@@ -29,7 +29,12 @@ export default getViteConfig(
   {
     test: {
       environment: 'node',
-      include: ['src/**/*.test.ts', 'test/storefront/**/*.test.{ts,mjs}', 'test/scripts/**/*.test.mjs'],
+      include: [
+        'src/**/*.test.ts',
+        'test/storefront/**/*.test.{ts,mjs}',
+        'test/scripts/**/*.test.mjs',
+        'test/i18n/**/*.test.mjs',
+      ],
       alias: {
         '#theme': theme.dir,
         // Mirrors astro.config.mjs: if a test ever renders something that

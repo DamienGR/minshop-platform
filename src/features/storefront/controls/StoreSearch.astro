@@ -1,4 +1,5 @@
 ---
+import { t } from '../../i18n';
 /**
  * The storefront search form. Owns the GET method, the `q` field name, the
  * search landmark role, and the accessible label — the parts that make search
@@ -34,8 +35,8 @@ const {
     type="search"
     name="q"
     value={query}
-    placeholder="Search"
-    aria-label="Search products"
+    placeholder={t('shell.search.placeholder')}
+    aria-label={t('shell.search.label')}
     class={inputClass}
   />
 </form>

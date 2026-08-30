@@ -23,12 +23,15 @@ import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import { buildSortModel } from '../../features/storefront/catalog';
 import { catalogPath } from '../../features/settings/home';
 import { addCacheTags, productCacheTags } from '../../features/cache/tags';
+import { t } from '../../features/i18n';
 
 const { slug } = Astro.params;
 const category = slug ? await getCategoryBySlug(env.DB, slug) : null;
 
 if (!category) {
-  return new Response('Not found', { status: 404 });
+  // `t` reads as unused to astro check, which stops analysing frontmatter at the
+  // first top-level return. It is used — keep the import.
+  return new Response(t('http.notFound'), { status: 404 });
 }
 
 const { sort, dir } = parseStoreSortQuery(

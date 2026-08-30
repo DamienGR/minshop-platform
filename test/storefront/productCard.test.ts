@@ -15,7 +15,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
   slug: 'sample-tee',
   description: null,
   price_cents: 2400,
-  currency: 'usd',
+  currency: 'eur',
   image_key: 'media/sample-tee.jpg',
   file_key: null,
   file_name: null,
@@ -34,7 +34,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
 /** Currency is a required option: the builder is pure, so it cannot read the
  *  store config to guess one. Tests state it once here. */
 const cardFor = (p: Product, options: Partial<ProductCardOptions> = {}) =>
-  buildProductCard(p, { currency: 'usd', ...options });
+  buildProductCard(p, { currency: 'eur', ...options });
 
 const render = async (component: unknown, model: unknown) => {
   const container = await AstroContainer.create();
@@ -110,7 +110,7 @@ describe('the store-owned product card', () => {
 
     expect(html).toContain('href="/products/sample-tee"');
     expect(html).toContain('Sample Tee');
-    expect(html).toContain('$24.00');
+    expect(html).toContain('24,00\u00a0\u20ac');
   });
 
   it('never publishes a stock count, in or out of stock', async () => {

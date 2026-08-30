@@ -1,5 +1,6 @@
 ---
 import type { StorefrontPaginationModel } from '../models';
+import { t } from '../../i18n';
 
 /**
  * Page links. Owns the navigation landmark, `aria-current="page"`, and the
@@ -17,10 +18,10 @@ const linkCls = 'px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:
 
 {
   model.totalPages > 1 && (
-    <nav class={className} aria-label="Pagination">
+    <nav class={className} aria-label={t('catalog.pagination.label')}>
       {model.prevHref && (
         <a href={model.prevHref} class={linkCls} rel="prev">
-          Prev
+          {t('catalog.pagination.prev')}
         </a>
       )}
       {model.items.map((item) =>
@@ -38,7 +39,7 @@ const linkCls = 'px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:
       )}
       {model.nextHref && (
         <a href={model.nextHref} class={linkCls} rel="next">
-          Next
+          {t('catalog.pagination.next')}
         </a>
       )}
     </nav>

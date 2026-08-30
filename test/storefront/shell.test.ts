@@ -158,7 +158,7 @@ describe('the store-owned header', () => {
     expect(html).toContain('name="q"');
     expect(html).toContain('value="tee"');
     expect(html).toContain('role="search"');
-    expect(html).toContain('aria-label="Search products"');
+    expect(html).toContain('aria-label="Rechercher un produit"');
   });
 
   it('renders the announcement link only when one is set', async () => {

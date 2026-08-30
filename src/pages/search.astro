@@ -10,6 +10,7 @@ import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../paginati
 import Pagination from '../components/Pagination.astro';
 import { normalizeSearchQuery } from '../features/search/query';
 import { addCacheTags, productCacheTags } from '../features/cache/tags';
+import { t, tn } from '../features/i18n';
 
 const q = normalizeSearchQuery(Astro.url.searchParams.get('q') ?? '');
 const PAGE_SIZE = 24;
@@ -63,11 +64,11 @@ const cards = products.map((product, i) =>
 const fillerCards = fillers.map((product) => buildProductCard(product, cardOptions));
 ---
 
-<Layout title={q ? `Search: ${q}` : 'Search'}>
+<Layout title={q ? t('search.titleWithQuery', { requete: q }) : t('search.title')}>
   <div class="mb-8">
-    <p class="text-xs uppercase tracking-[0.25em] text-muted">Search</p>
+    <p class="text-xs uppercase tracking-[0.25em] text-muted">{t('search.title')}</p>
     <h1 class="mt-2 font-serif text-4xl tracking-tight sm:text-5xl">
-      {q ? q : 'Find something'}
+      {q ? q : t('search.prompt')}
     </h1>
   </div>
 
@@ -76,8 +77,8 @@ const fillerCards = fillers.map((product) => buildProductCard(product, cardOptio
       type="search"
       name="q"
       value={q}
-      placeholder="Search products…"
-      aria-label="Search products"
+      placeholder={t('search.placeholder')}
+      aria-label={t('shell.search.label')}
       autofocus={!q}
       class="w-full border-0 border-b border-line bg-transparent px-1 py-2 text-base transition-colors focus:border-brand focus:outline-none"
     />
@@ -87,12 +88,12 @@ const fillerCards = fillers.map((product) => buildProductCard(product, cardOptio
     q &&
       (autoCorrected ? (
         <p class="mb-8 text-sm text-muted">
-          No matches for “{q}” — showing results for{' '}
+          {t('search.autoCorrected', { requete: q })}{' '}
           <strong class="font-medium text-ink">{suggestion}</strong>.
         </p>
       ) : products.length > 0 ? (
         <p class="mb-8 text-xs uppercase tracking-widest text-muted">
-          {total} result{total === 1 ? '' : 's'} for “{q}”
+          {tn('search.results.one', 'search.results.other', total, { requete: q })}
         </p>
       ) : null)
   }
@@ -111,7 +112,7 @@ const fillerCards = fillers.map((product) => buildProductCard(product, cardOptio
     fillers.length > 0 && (
       <>
         <p class="mb-8 mt-16 text-xs uppercase tracking-widest text-muted">
-          More from these categories
+          {t('search.moreFromCategories')}
         </p>
         <ul class="grid grid-cols-2 gap-x-6 gap-y-12 lg:grid-cols-3">
           {fillerCards.map((card, i) => (
@@ -124,7 +125,7 @@ const fillerCards = fillers.map((product) => buildProductCard(product, cardOptio
 
   {
     q && products.length === 0 && (
-      <p class="text-muted">No products match “{q}”. Try a different word.</p>
+      <p class="text-muted">{t('search.noResults', { requete: q })}</p>
     )
   }
 

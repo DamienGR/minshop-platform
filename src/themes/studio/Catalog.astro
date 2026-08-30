@@ -3,6 +3,7 @@ import type { CatalogPageModel } from '../../features/storefront/models';
 import ProductCard from './ProductCard.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import CatalogPagination from '../../features/storefront/controls/CatalogPagination.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Studio — a hung wall, not a grid.
@@ -33,7 +34,7 @@ const { model } = Astro.props;
 {
   model.categories.length > 0 && (
     <nav
-      aria-label="Categories"
+      aria-label={t('catalog.categories.label')}
       class="flex flex-wrap gap-x-8 gap-y-3 pb-7 text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--studio-muted)]"
     >
       {model.categories.map((category) => (
@@ -53,7 +54,7 @@ const { model } = Astro.props;
 {
   model.products.length === 0 && (
     <p role="status" class="py-24 text-center font-serif text-3xl text-[color:var(--studio-muted)]">
-      Nothing on the wall yet.
+      {t('catalog.empty.studio')}
     </p>
   )
 }

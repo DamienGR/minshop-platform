@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import Layout from '../layouts/Layout.astro';
+import { t } from '../features/i18n';
 
 // Reached from the cart when a buyer taps a payment method that isn't configured
 // yet. It's owner-facing setup help — how to turn that rail on — so the store can
@@ -15,41 +16,41 @@ interface Guide {
 }
 const GUIDES: Record<string, Guide> = {
   stripe: {
-    title: 'Set up card payments (Stripe)',
-    intro: 'Accept Visa, Mastercard, Apple Pay and more via Stripe Checkout.',
+    title: t('paymentSetup.stripe.title'),
+    intro: t('paymentSetup.stripe.intro'),
     steps: [
-      'Create a Stripe account and grab your Secret key from dashboard.stripe.com/apikeys.',
-      'Paste it in Admin → Settings → Payment keys (Stripe secret key). It’s stored encrypted in your database.',
-      `Add a webhook endpoint in Stripe pointing at ${origin}/api/webhook/stripe (events: checkout.session.completed, checkout.session.async_payment_succeeded, and charge.refunded — the last one syncs refunds you make in the Stripe Dashboard back to your orders).`,
-      'Paste the signing secret it gives you into Payment keys (Stripe webhook signing secret). The card button goes live automatically.',
+      t('paymentSetup.stripe.step1'),
+      t('paymentSetup.stripe.step2'),
+      t('paymentSetup.stripe.step3', { url: `${origin}/api/webhook/stripe` }),
+      t('paymentSetup.stripe.step4'),
     ],
   },
   lightning: {
-    title: 'Set up Lightning payments',
-    intro: 'Take instant Bitcoin Lightning payments from any wallet.',
+    title: t('paymentSetup.lightning.title'),
+    intro: t('paymentSetup.lightning.intro'),
     steps: [
-      'Stand up an LNbits instance (or a phoenixd node).',
-      'In Admin → Settings → Payments, set the default rail to Lightning and pick the node (LNbits or phoenixd).',
-      'Enter the node URL in Payment config, and the key (LNbits invoice/read key, or phoenixd password) in Payment keys. The Lightning button goes live automatically.',
+      t('paymentSetup.lightning.step1'),
+      t('paymentSetup.lightning.step2'),
+      t('paymentSetup.lightning.step3'),
     ],
   },
   opennode: {
-    title: 'Set up Bitcoin payments (OpenNode)',
-    intro: 'Hosted on-chain + Lightning checkout via OpenNode.',
+    title: t('paymentSetup.opennode.title'),
+    intro: t('paymentSetup.opennode.intro'),
     steps: [
-      'Create an OpenNode account and an API key.',
-      'Paste it in Admin → Settings → Payment keys (OpenNode API key).',
-      `Point its webhook at ${origin}/api/webhook/opennode, and set the default rail to OpenNode in Settings → Payments.`,
+      t('paymentSetup.opennode.step1'),
+      t('paymentSetup.opennode.step2'),
+      t('paymentSetup.opennode.step3', { url: `${origin}/api/webhook/opennode` }),
     ],
   },
 };
 const guide = GUIDES[method] ?? null;
 ---
 
-<Layout title="Set up payments" description="How to enable a payment method.">
+<Layout title={t('paymentSetup.title')} description={t('paymentSetup.description')}>
   <div class="mx-auto max-w-xl py-8">
     <a href="/cart" class="text-xs uppercase tracking-widest text-faint hover:text-brand">
-      &larr; Back to cart
+      &larr; {t('paymentSetup.backToCart')}
     </a>
 
     {
@@ -70,18 +71,16 @@ const guide = GUIDES[method] ?? null;
         </>
       ) : (
         <>
-          <h1 class="mt-4 font-serif text-3xl tracking-tight">Set up payments</h1>
-          <p class="mt-3 text-muted">
-            This payment method isn't configured yet. Add a real rail (card or Lightning)
-            in Admin → Settings → Payments, or keep using the Demo checkout to try the store.
-          </p>
+          <h1 class="mt-4 font-serif text-3xl tracking-tight">{t('paymentSetup.title')}</h1>
+          <p class="mt-3 text-muted">{t('paymentSetup.unconfigured')}</p>
         </>
       )
     }
 
     <div class="mt-8 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-      In the meantime, <strong class="font-semibold">Demo checkout</strong> works right now — it
-      places a real, demo-tagged order so you can see the full flow without charging anyone.
+      {t('paymentSetup.demoNotice.before')}{' '}
+      <strong class="font-semibold">{t('paymentSetup.demoNotice.strong')}</strong>{' '}
+      {t('paymentSetup.demoNotice.after')}
     </div>
   </div>
 </Layout>

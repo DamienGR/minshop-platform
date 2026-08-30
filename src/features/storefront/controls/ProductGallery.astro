@@ -1,6 +1,7 @@
 ---
 import type { StorefrontGalleryImage, StorefrontImage } from '../models';
 import StoreImage from './StoreImage.astro';
+import { t } from '../../i18n';
 
 /**
  * The product hero: a snap-scrolling gallery when there is more than one image,
@@ -27,7 +28,7 @@ const {
   images,
   hero,
   soldOut,
-  soldOutLabel = 'Sold out',
+  soldOutLabel = t('product.soldOut'),
   class: className = '',
 } = Astro.props;
 const hasGallery = images.length > 1;

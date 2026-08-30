@@ -35,6 +35,21 @@ const CONTROLS_DIR = 'src/features/storefront/controls';
 const MODELS_MODULE = 'src/features/storefront/models.ts';
 
 /**
+ * The message catalog, allowed as a VALUE import in a template.
+ *
+ * The allowlist exists to keep bindings, D1 and request state out of
+ * presentation, and `t()` is none of those: it is a lookup in a frozen object
+ * whose whole dependency graph is two constant modules. The transitive denied
+ * dependency walk still applies to it, so the day something in i18n reaches a
+ * binding, every template that imports it fails.
+ *
+ * The alternative was routing every label through a presentation model, which
+ * would put "Ajouter au panier" in a loader — a translation change becoming a
+ * model change, in a file a shop's designer is not supposed to touch.
+ */
+const MESSAGES_DIR = 'src/features/i18n';
+
+/**
  * Every theme is its own root, whether it is the selected one or not.
  *
  * This deliberately does NOT call resolveTheme(): if the checker
@@ -230,11 +245,12 @@ function checkTemplateImport({ specifier, typeOnly }, resolved, file, rootDir) {
     return;
   }
   if (resolved && resolved.startsWith(`${CONTROLS_DIR}/`)) return;
+  if (resolved && (resolved === `${MESSAGES_DIR}.ts` || resolved.startsWith(`${MESSAGES_DIR}/`))) return;
 
   problems.push(
     `${file}\n    imports "${specifier}". Store-owned templates may import only storefront\n` +
-      `    models (as types), documented controls from ${CONTROLS_DIR}/, and files\n` +
-      `    inside ${rootDir}/.`,
+      `    models (as types), documented controls from ${CONTROLS_DIR}/, the message\n` +
+      `    catalog from ${MESSAGES_DIR}/, and files inside ${rootDir}/.`,
   );
 }
 

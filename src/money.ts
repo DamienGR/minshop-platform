@@ -1,5 +1,8 @@
+import { LOCALE } from './features/i18n/locale';
+
 /**
- * Pure currency-scaling math — NO imports, so it's safe to use from unit-tested
+ * Pure currency-scaling math. Its only import is the locale constant, which is
+ * itself a leaf with no imports — so this stays safe to use from unit-tested
  * code (e.g. parseProductForm) without pulling in the Cloudflare runtime.
  *
  * Money is stored as integer MINOR units (what Stripe uses): cents for USD/EUR,
@@ -53,7 +56,7 @@ export function formatMoney(cents: number, currency: string): string {
   const code = currency.toUpperCase();
   let formatter = priceFormatters.get(code);
   if (!formatter) {
-    formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: code });
+    formatter = new Intl.NumberFormat(LOCALE, { style: 'currency', currency: code });
     priceFormatters.set(code, formatter);
   }
   return formatter.format(toMajorUnits(cents, currency));

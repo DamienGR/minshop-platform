@@ -1,6 +1,7 @@
 ---
 import type { ProductCardModel } from '../../features/storefront/models';
 import StoreImage from '../../features/storefront/controls/StoreImage.astro';
+import { t } from '../../features/i18n';
 
 /**
  * STORE-OWNED. Edit freely — this file belongs to your store, and upstream will
@@ -40,7 +41,7 @@ const Heading = headingLevel;
       {
         !card.inStock && (
           <span class="absolute left-3 top-3 rounded-full bg-surface/90 px-2.5 py-0.5 text-xs uppercase tracking-widest text-muted ring-1 ring-line">
-            Sold out
+            {t('product.soldOut')}
           </span>
         )
       }

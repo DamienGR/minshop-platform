@@ -1,5 +1,6 @@
 ---
 import type { StorefrontSortModel } from '../models';
+import { t } from '../../i18n';
 
 /**
  * Sort controls. The hrefs arrive already built — including the direction flip
@@ -20,7 +21,7 @@ const {
 ---
 
 <div class={className}>
-  <span>Sort</span>
+  <span>{t('catalog.sort.label')}</span>
   {
     model.options.map((option) => (
       <a

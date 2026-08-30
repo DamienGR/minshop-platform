@@ -14,6 +14,7 @@ import {
   settleDemoCheckout,
   settleLightningOnLoad,
 } from '../../features/payments/checkout/settle';
+import { t } from '../../features/i18n';
 
 // Single "complete your payment" entry point for the self-rendered rails. The
 // URL carries the guest access token for new checkouts (resolved through the
@@ -29,7 +30,7 @@ if (guestParam && isAccessToken(guestParam)) {
 } else if (guestParam && isLegacyPublicId(guestParam)) {
   orderPublicId = guestParam;
 }
-if (!orderPublicId) return new Response('Not found', { status: 404 });
+if (!orderPublicId) return new Response(t('http.notFound'), { status: 404 });
 
 // Capability URL: never cache, never leak in referrers.
 Astro.response.headers.set('cache-control', 'private, no-store');
@@ -43,7 +44,7 @@ if (await getOrderByPublicId(env.DB, orderPublicId)) {
 }
 
 const pending = await getPendingByPublicId(env.DB, orderPublicId);
-if (!pending) return new Response('Not found', { status: 404 });
+if (!pending) return new Response(t('http.notFound'), { status: 404 });
 
 const isDemo = pending.backend === 'demo';
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
@@ -92,17 +93,17 @@ if (
 const lightningExpired = isLightning && payExpired;
 
 const { storeName } = getConfig();
-const title = isDemo ? 'Demo checkout' : 'Pay with Lightning';
+const title = isDemo ? t('pay.demo.title') : t('pay.lightning.title');
 const description = isDemo
-  ? `Simulated checkout for ${storeName}.`
-  : `Pay ${storeName} with Bitcoin Lightning.`;
+  ? t('pay.demo.description', { boutique: storeName })
+  : t('pay.lightning.description', { boutique: storeName });
 ---
 
 <Layout title={title} description={description}>
   {isDemo && payExpired && (
     <Fragment>
-      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">Checkout expired</h1>
-      <p class="text-muted">This demo checkout has expired. Please start a new one.</p>
+      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.demo.expired.title')}</h1>
+      <p class="text-muted">{t('pay.demo.expired.body')}</p>
     </Fragment>
   )}
   {isDemo && !payExpired && <DemoCheckout pending={pending} declined={declined} />}
