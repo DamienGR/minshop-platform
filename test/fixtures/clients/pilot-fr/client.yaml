@@ -1,0 +1,39 @@
+# Boutique témoin du pilote (plan §2.3). Fixture, pas un déploiement.
+schemaVersion: 1
+coreVersion: 0.1.0
+
+client:
+  slug: pilot-fr
+  displayName: Boutique Pilote
+  locale: fr-FR
+  timezone: Europe/Paris
+  currency: EUR
+
+commerce:
+  market: FR
+  pricesIncludeTax: true
+  checkoutMode: guest
+  defaultVatRate: 20
+  # La validation comptable du jalon 3 n'a pas eu lieu : la stratégie de
+  # facturation reste explicitement en attente plutôt que par défaut.
+  invoiceStrategy: pending-validation
+
+features:
+  customerAccounts: false
+  semanticSearch: false
+  digitalProducts: false
+  promoCodes: true
+  shipping: true
+
+cloudflare:
+  jurisdiction: eu
+  workerName: minshop-pilot-fr
+  productionDomain: pilote.example.fr
+
+email:
+  provider: resend
+  from: commandes@pilote.example.fr
+
+theme:
+  # Thème livré par le socle jusqu'au jalon 5, qui donnera au pilote le sien.
+  id: studio
