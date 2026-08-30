@@ -192,6 +192,8 @@ src/
     shipping/  calculator (zones + ShippingCalculator port)
     storage/   provider (port) · r2 · index (factory)
     email/     provider (port) · resend · cloudflare · index (factory) · orderConfirmation
+    i18n/      locale (leaf constants) · messages (fr catalog) · index (t/tn) · format
+    legal/     terms (consent gate) · vat (TTC split)
     auth/      access (CF Access JWT) · session (admin login cookie) · turnstile · Turnstile.astro
     catalog/   serialize · http  (public API shapes for /api/products)
     cart/ categories/ customers/ media/ pages/
@@ -221,6 +223,48 @@ To swap/add a provider, write one adapter file + wire the factory:
 (typed by `Cloudflare.Env` in `env.d.ts`). Never `Astro.locals.runtime.env`
 (removed in Astro v6). D1 = `env.DB`, R2 = `env.BUCKET`.
 
+## The French core
+
+The storefront is French, and single-locale on purpose: `client.locale` in the
+manifest is an enum with one value, and widening it is a schema-version decision
+(ADR 0008). `src/features/i18n/` is where that lives.
+
+```ts
+import { t, tn } from '../features/i18n';
+t('product.addToCart');                        // "Ajouter au panier"
+t('order.total', { montant: formatPrice(x) }); // named {placeholders}, never positional
+tn('cart.items.one', 'cart.items.other', n);   // fr puts 0 in the singular
+```
+
+`messages.ts` is the catalog AND the type: `MessageKey` is derived from it, so a
+key that isn't there doesn't compile, and a second locale declared
+`LocaleCatalog` can't omit one. `test/i18n/` compiles two deliberately-broken
+fixtures to prove it still fails. What the compiler can't see —
+typographic apostrophes, the narrow no-break space (U+202F) before `? ! ; :`,
+accents — `messages.test.ts` asserts.
+
+`locale.ts` is a LEAF with no imports, which is what lets `money.ts` (documented
+as import-free so pure code can use it) format in `fr-FR`. Store-owned templates
+may import the catalog directly — it's the fourth entry on the storefront
+boundary allowlist, beside models and controls.
+
+The **admin stays in English** (ADR 0011) and `AdminLayout` keeps `lang="en"` on
+purpose; money and dates still format in the store's locale everywhere.
+
+**Terms of sale.** `features/legal/terms.ts` holds ONE predicate: the checkout
+checkbox renders and the server refuses exactly when the terms page is
+published. A shop is created with its four legal pages as drafts (migration
+0040), so the gate is open until the merchant finishes writing them. The
+acceptance and the VAT rate ride on the reservation — the only row spanning the
+checkout request and the settlement webhook — and `recordPaidOrder` copies both
+onto the order. Refusal happens BEFORE the stock hold.
+
+**VAT** (ADR 0010): prices are TTC, so `features/legal/vat.ts` splits tax OUT of
+a total. `tax_cents` keeps its own meaning (tax added on top, Stripe Tax); a TTC
+store leaves it 0 and reads `vat_amount_cents`. Rates are basis points — 5.5 %
+and 2.1 % are ordinary French rates. The rounding is taken once, on the order
+total, never per line.
+
 ## Invariants — do not break these
 
 1. **Storefront is near-zero client JS.** Server-render everything; progressive
@@ -244,7 +288,10 @@ To swap/add a provider, write one adapter file + wire the factory:
    `DROP` destructively.
 7. **Money is integer minor units** (cents) end to end; format only at the edge
    via `formatPrice()`. Use `toMajorUnits()` / `minorUnitsPerMajor()` for
-   currency math (handles JPY/BHD, not just 2-decimal).
+   currency math (handles JPY/BHD, not just 2-decimal). Never build a
+   `Intl.NumberFormat` / `Intl.DateTimeFormat` at a call site — `formatPrice()`,
+   `formatDate()` and `features/i18n/format.ts` are the only places that name a
+   locale, which is why the admin reads `1 234,56 €` while staying in English.
 8. **Tests stay pure.** A `*.test.ts` must NOT import `cloudflare:workers` (vitest
    can't load it). Keep DB/env logic out of unit-tested modules — pass `db` and
    secrets as params (see `lightning/rate.ts`, `auth/session.ts`).
@@ -281,6 +328,11 @@ To swap/add a provider, write one adapter file + wire the factory:
   that needs more than those two axes can also target
   `[data-page-layout="<key>"]` in `global.css`. Unknown/removed presets fall
   back to `standard` at render time, so old rows never break.
+- **A customer-facing string:** add a key to `src/features/i18n/messages.ts` and
+  call `t('…')`. Never a literal in a template — the storefront is French, and a
+  literal is the one thing the catalog's type can't catch. Client scripts take
+  the string through `define:vars`, never by importing `t` (that would ship the
+  whole catalog to the browser).
 - **A config setting:** build-time → add to the `SiteConfig` interface AND
   `defaultConfig()` in `config.ts`; read via `getConfig()`; document the override
   in `store.config.example.ts` (per-env overrides can read an env var, see

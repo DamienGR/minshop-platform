@@ -19,8 +19,13 @@ import { DEFAULT_CURRENCY, LANG } from '../i18n/locale.ts';
 const STRIPE_LOCALES: Record<string, Stripe.Checkout.SessionCreateParams.Locale> = {
   fr: 'fr',
 };
-const STRIPE_LOCALE: Stripe.Checkout.SessionCreateParams.Locale =
-  STRIPE_LOCALES[LANG] ?? 'auto';
+
+/** Exported so the mapping is testable without standing up a Stripe client. */
+export function stripeLocale(lang: string): Stripe.Checkout.SessionCreateParams.Locale {
+  return STRIPE_LOCALES[lang] ?? 'auto';
+}
+
+const STRIPE_LOCALE = stripeLocale(LANG);
 
 /**
  * The delivery mode a chosen Stripe rate encodes. Session creation stamps every

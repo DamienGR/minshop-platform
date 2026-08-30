@@ -32,6 +32,13 @@ export const GET: APIRoute = async ({ url }) => {
     // stayed, and is the figure the dashboard's revenue agrees with.
     'Provider refunded', 'Externally refunded', 'Total refunded', 'Net',
     'Refund state', 'Refund review',
+    // The French accounting columns (ADR 0010). `VAT included` is a BREAKDOWN of
+    // Total, not a component of it — unlike `Tax`, which is added on top by
+    // Stripe Tax on a tax-exclusive store. Adding them here rather than in a
+    // second, accounting-only export: two exports of the same rows diverge at
+    // the first schema change, and the bookkeeper reads whichever is stale.
+    'VAT rate', 'VAT included', 'Net of VAT',
+    'Terms version', 'Terms accepted at',
     'Carrier', 'Tracking',
   ];
   const rows = orders.map((o) => [
@@ -57,6 +64,15 @@ export const GET: APIRoute = async ({ url }) => {
         ? 'full'
         : 'partial',
     o.refund_review_reason && !o.refund_reviewed_at ? o.refund_review_reason : '',
+    // Empty, not 0: an order placed before a rate was configured did not have a
+    // zero rate, it has no recorded split at all.
+    o.vat_rate_bps == null ? '' : `${o.vat_rate_bps / 100}`,
+    o.vat_amount_cents == null ? '' : money(o.vat_amount_cents, o.currency),
+    o.vat_amount_cents == null
+      ? ''
+      : money(o.amount_total_cents - o.vat_amount_cents, o.currency),
+    o.terms_version ?? '',
+    o.terms_accepted_at ?? '',
     o.tracking_carrier ?? '',
     o.tracking_number ?? '',
   ]);
