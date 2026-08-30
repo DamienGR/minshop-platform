@@ -562,9 +562,12 @@ morte en échec de certification :
 
 - `d1-integration.sh` distingue désormais cette mort du reste et sort en **75**,
   code réservé à ce seul cas ; une assertion en échec sort toujours en 1 ;
-- `run-d1-integration.sh` relance la suite **une fois**, et uniquement sur 75.
-  Une assertion en échec n'est jamais rejouée : une porte qui rejoue les vraies
-  régressions n'est plus une porte ;
+- `run-d1-integration.sh` relance la suite jusqu'à **quatre fois**, et
+  uniquement sur 75. Une assertion en échec n'est jamais rejouée : une porte qui
+  rejoue les vraies régressions n'est plus une porte ;
+- la CI exécute `verify` sur un **second runner** quand le premier n'a pas
+  abouti, parce que la panne se répète sur une même machine et pas sur une
+  autre ;
 - le journal de débogage de wrangler est écrit dans le répertoire d'état et
   affiché à la mort, au lieu de rester dans `~/.config/.wrangler/logs` que
   personne n'archive. C'est là que se trouve la trace que le `✘ [ERROR]` vide
@@ -578,9 +581,26 @@ morte en échec de certification :
 Accumuler dix exécutions vertes une fusion à la fois prend des semaines.
 `.github/workflows/d1-flake-probe.yml` exécute la porte dix fois en parallèle,
 sur demande ou sur une branche `flake-probe/**`, et distingue les trois issues :
-succès, session morte, assertion en échec. Une sonde donne en quelques minutes
-ce que le compteur donne en semaines, et reste le seul moyen d'établir que la
-mitigation transforme bien les morts en passages.
+succès, session morte, assertion en échec. Le mode `raw` mesure la panne, le
+mode `wrapped` exécute ce que la CI exécute. Une sonde donne en quelques minutes
+ce que le compteur donne en semaines.
+
+Ce que les sondes ont établi, et qui a dicté toutes les décisions ci-dessus :
+
+| Mesure | Résultat |
+| --- | --- |
+| suite brute, 20 exécutions | 5 sessions mortes, aucune assertion en échec |
+| wrapper à 3 tentatives, 30 exécutions | 3 échecs, soit 10 % |
+| wrapper à 8 tentatives, 20 exécutions | 1 échec, soit 5 % |
+
+Deux enseignements. D'abord les tentatives ne sont pas indépendantes : un runner
+se range dans l'une de deux catégories, celui qui récupère et le fait toujours
+tôt (toutes les récupérations observées sont tombées aux tentatives 2, 3 ou 4),
+et celui qui meurt à chaque essai, y compris huit fois de suite. L'arithmétique
+en p^n ne s'applique pas. Ensuite, relancer sur place plafonne à 5 % : aucun
+nombre de tentatives sur une machine qui ne récupère jamais ne fabrique un
+passage. D'où le second runner, seul tirage réellement neuf, qui ramène le
+résidu attendu autour d'une exécution sur quatre cents.
 
 - [ ] Rendre l'intégration D1 fiable en CI. **Critère de clôture : dix
   exécutions vertes consécutives de `verify` sur `main`**, mitigation comprise.
