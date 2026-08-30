@@ -1,3 +1,4 @@
+import { LOCALE } from '../i18n/locale.ts';
 /**
  * The Stripe destination pre-selector, shared by /cart and /express so the two
  * cannot drift: Stripe's hosted page takes a static rate list before it knows the
@@ -47,7 +48,7 @@ export function stripeDestination(
       ? stripeAllowedCountries(
           anywhere ? [...COUNTRY_CODES] : allowedCountries(effectiveShipping),
           false,
-        ).sort((a, b) => countryName(a).localeCompare(countryName(b)))
+        ).sort((a, b) => countryName(a).localeCompare(countryName(b), LOCALE))
       : [];
   // GeoIP is a guess: it only seeds the selection, never restricts it.
   const geo = String(geoCountry ?? '').toUpperCase();

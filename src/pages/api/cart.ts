@@ -6,6 +6,7 @@ import { getProductByPublicId } from '../../features/products/db';
 import { listVariants, getExtrasByPublicIds } from '../../features/products/variants';
 import { parsePublicId } from '../../features/ids/publicId.ts';
 import { getStoreSettings } from '../../features/settings/db';
+import { t } from '../../features/i18n/index.ts';
 
 export const prerender = false;
 
@@ -54,9 +55,11 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     const chosen = wanted ? variants.find((v) => v.public_id === wanted) : undefined;
     if (!chosen) {
       if (partial) return new Response(null, { status: 204 });
-      const label = product.variant_label || 'option';
+      const label = product.variant_label || t('product.option');
       return redirect(
-        `/products/${product.slug}?error=${encodeURIComponent(`Please choose a ${label}.`)}`,
+        `/products/${product.slug}?error=${encodeURIComponent(
+          t('product.error.chooseOption', { option: label }),
+        )}`,
         303,
       );
     }

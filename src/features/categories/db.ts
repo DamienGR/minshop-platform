@@ -1,3 +1,4 @@
+import { LOCALE } from '../i18n/locale.ts';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Product } from '../products/db';
 import { withPublicId } from '../ids/publicId.ts';
@@ -305,7 +306,7 @@ export async function countProductsInCategory(
 export function childrenOf(cats: Category[], parentId: number | null): Category[] {
   return cats
     .filter((c) => c.parent_id === parentId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, LOCALE));
 }
 
 /** Build a nested tree from the flat list. */
@@ -321,7 +322,7 @@ export function buildTree(cats: Category[]): CategoryNode[] {
     }
   }
   const sortRec = (nodes: CategoryNode[], depth: number) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    nodes.sort((a, b) => a.name.localeCompare(b.name, LOCALE));
     for (const n of nodes) {
       n.depth = depth;
       sortRec(n.children, depth + 1);

@@ -21,6 +21,7 @@ import {
 import { CATCH_ALL, countryName, isCountryCode } from './countries.ts';
 import { toGrams, type WeightUnit } from './weight.ts';
 import { toMinorUnits } from '../../money.ts';
+import { currencyDecimals } from '../../money.ts';
 
 export const SHIPPING_CONFIG_KEY = 'shipping_config';
 
@@ -683,12 +684,12 @@ function amountToValue(minor: number, currency: string): string {
   return String(major);
 }
 
+// The scale of a currency is ISO 4217 data, and `money.ts` already reads it.
+// A second copy here was a second answer to one question — the kind that only
+// disagrees once a store sells in yen.
 function decimalsFor(currency: string): number {
   try {
-    return (
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() })
-        .resolvedOptions().maximumFractionDigits ?? 2
-    );
+    return currencyDecimals(currency);
   } catch {
     return 2;
   }

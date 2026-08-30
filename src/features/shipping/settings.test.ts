@@ -37,7 +37,7 @@ const doc = (over: Partial<RuntimeShippingConfig> = {}): RuntimeShippingConfig =
   packageWeightGrams: 0,
   zones: [
     {
-      name: 'United States',
+      name: '\u00c9tats-Unis',
       countries: ['US'],
       rates: [{ label: 'Standard', pricing: { type: 'flat', amountCents: 600 } }],
       freeOverCents: null,
@@ -94,7 +94,7 @@ describe('parseRuntimeShippingConfig', () => {
       enabled: true,
       zones: [
         {
-          name: 'United States',
+          name: '\u00c9tats-Unis',
           countries: ['US'],
           rates: [{ label: 'Standard', amountCents: 500 }],
           freeOverCents: null,
@@ -128,7 +128,7 @@ describe('effectiveShippingConfig', () => {
     // The document owns `enabled`; the legacy override must not leak back in.
     expect(effective.config.enabled).toBe(true);
     expect(effective.config.packageWeightGrams).toBe(40);
-    expect(effective.config.zones[0]!.name).toBe('United States');
+    expect(effective.config.zones[0]!.name).toBe('\u00c9tats-Unis');
   });
   it('fails closed on an invalid document instead of restoring build-time rates', () => {
     const effective = effectiveShippingConfig(
@@ -354,14 +354,14 @@ describe('validateShippingDocument', () => {
 
 describe('legacy migration', () => {
   it('names zones deterministically', () => {
-    expect(legacyZoneName(['US'], 0)).toBe('United States');
+    expect(legacyZoneName(['US'], 0)).toBe('\u00c9tats-Unis');
     expect(legacyZoneName(['*'], 1)).toBe('Rest of world');
     expect(legacyZoneName(['US', 'CA'], 2)).toBe('Zone 3');
   });
   it('builds an editable candidate from raw build-time values', () => {
     const model = migrationCandidate(buildTime, null, 'usd');
     expect(model.revision).toBe(0);
-    expect(model.zones[0]!.name).toBe('United States');
+    expect(model.zones[0]!.name).toBe('\u00c9tats-Unis');
     expect(model.zones[0]!.rates.map((r) => r.amountValue)).toEqual(['5', '15']);
     expect(model.zones[0]!.freeOverValue).toBe('50');
   });
@@ -383,7 +383,7 @@ describe('documentToForm', () => {
         packageWeightGrams: 40,
         zones: [
           {
-            name: 'United States',
+            name: '\u00c9tats-Unis',
             countries: ['US'],
             rates: [
               {
@@ -434,7 +434,7 @@ describe('parseShippingForm', () => {
       .set('revision', '3')
       .set('package_weight', '40')
       .set('zone_order', 'z_a,z_b')
-      .set('zone[z_a][name]', 'United States')
+      .set('zone[z_a][name]', '\u00c9tats-Unis')
       .set('zone[z_a][countries][]', 'us')
       .set('zone[z_a][rate_order]', 'r_1,r_2')
       .set('zone[z_a][rate][r_1][label]', 'Standard')
@@ -478,7 +478,7 @@ describe('parseShippingForm', () => {
   it('preserves order and ignores unreferenced rows', () => {
     const form = submitted().set('zone[z_ghost][name]', 'Nowhere');
     const { document } = parseShippingForm(form, { currency: 'usd', unit: 'g' });
-    expect(document.zones.map((z) => z.name)).toEqual(['United States', 'Rest of world']);
+    expect(document.zones.map((z) => z.name)).toEqual(['\u00c9tats-Unis', 'Rest of world']);
   });
   it('parses a pickup rate from the editor', () => {
     const form = new TestForm()

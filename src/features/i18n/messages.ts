@@ -66,6 +66,7 @@ export const fr = {
   'product.share.copied': 'Lien copié',
   'product.details': 'Détails',
   'product.related': 'Vous aimerez aussi',
+  'product.error.chooseOption': 'Choisissez : {option}.',
 
   // ─── Panier ────────────────────────────────────────────────────────────────────
   'cart.title': 'Votre panier',
@@ -148,6 +149,12 @@ export const fr = {
   'checkout.error.noShippingOption': 'Choisissez un mode de livraison.',
   'checkout.error.stockGone': 'Certains articles viennent d’être épuisés : vérifiez votre panier.',
   'checkout.error.terms': 'Vous devez accepter les conditions générales de vente pour commander.',
+  'checkout.error.soldOut': '{produit} est épuisé.',
+  'checkout.error.onlyLeft': 'Il ne reste que {count} × {produit} — ajustez votre panier.',
+  'checkout.error.noStripeDestination': 'Les destinations de livraison configurées ne sont pas prises en charge par le paiement par carte. Contactez-nous pour finaliser cette commande.',
+  'checkout.error.missingWeight': 'Nous ne pouvons pas calculer les frais de livraison pour l’un de ces articles pour le moment. Contactez-nous pour finaliser cette commande.',
+  'checkout.error.noShippingToCountry': 'Nous ne livrons pas encore vers {pays}.',
+  'checkout.error.noCardShippingToCountry': 'Le paiement par carte ne permet pas la livraison vers {pays}.',
   'checkout.error.unavailable': 'Le paiement est momentanément indisponible. Réessayez dans un instant.',
 
   // ─── Conditions générales de vente ─────────────────────────────────────────────
