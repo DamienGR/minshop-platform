@@ -198,19 +198,33 @@ describe('private deliverable provisioning', () => {
     expect(template).toMatch(/never enable r2\.dev or attach a custom domain/i);
   });
 
-  // wrangler rejects an unsubstituted placeholder as a bucket name, and the
-  // theme jobs render the template themselves — so a placeholder added here but
-  // not to the workflow only fails in CI, after a push. Pin the two together.
-  it('substitutes every template placeholder in CI', () => {
+  // wrangler rejects an unsubstituted placeholder as a bucket name, and CI
+  // renders the template in more than one place — so a placeholder added here
+  // but not to one of them only fails after a push. Pin them together.
+  //
+  // Named sites rather than a count: the verification steps moved into a
+  // composite action so two runners could share them, and a count of two in one
+  // file could not tell that apart from a placeholder going missing.
+  it('substitutes every template placeholder at every CI render site', () => {
     const placeholders = [
       ...new Set(readFileSync('wrangler.template.jsonc', 'utf8').match(/__[A-Z_]+__/g) ?? []),
     ];
-    const workflow = readFileSync('.github/workflows/verify.yml', 'utf8');
+    const renderSites = [
+      '.github/actions/run-verify/action.yml',
+      '.github/workflows/verify.yml',
+    ];
     expect(placeholders.length).toBeGreaterThan(0);
-    for (const placeholder of placeholders) {
-      // Both render sites must cover it: the verify job and the theme matrix.
-      const substitutions = workflow.split(`s/${placeholder}/`).length - 1;
-      expect(substitutions, `${placeholder} is not substituted at both render sites`).toBe(2);
+    for (const site of renderSites) {
+      const source = readFileSync(site, 'utf8');
+      expect(source, `${site} no longer renders the template`).toContain(
+        'wrangler.template.jsonc',
+      );
+      for (const placeholder of placeholders) {
+        expect(
+          source.includes(`s/${placeholder}/`),
+          `${placeholder} is not substituted in ${site}`,
+        ).toBe(true);
+      }
     }
   });
 
