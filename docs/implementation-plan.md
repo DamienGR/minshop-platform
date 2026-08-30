@@ -666,6 +666,41 @@ morte en échec de certification :
   interactif de moins attaché au proxy de développement, inutile dans une porte
   sans opérateur.
 
+##### Une cause voisine, longtemps comptée comme la même
+
+La porte se liait à un port fixe (`8791`). Deux exécutions sur une même machine
+entraient donc en collision : la seconde ne pouvait pas se lier, `wrangler dev`
+mourait au démarrage, et la mort d'une session est précisément ce que le
+wrapper rejoue — quatre fois, sur un port toujours occupé, avant de conclure
+« la session est morte aux quatre tentatives ». Le diagnostic affiché nommait
+`cloudflare/workers-sdk#15317`, qui n'y était pour rien.
+
+Le cas est devenu ordinaire au jalon 2 : vérifier le socle et une boutique
+générée, c'est exécuter la même porte deux fois côte à côte.
+
+Le correctif a demandé deux essais, et les deux méritent d'être notés parce que
+le premier avait l'air suffisant. Chercher un port libre puis le passer à
+wrangler **ne suffit pas** : la sonde doit refermer la socket avant que wrangler
+puisse s'y lier, et deux exécutions lancées ensemble reçoivent le même port.
+Ce n'est pas théorique — c'est arrivé au premier essai en parallèle. Seule une
+liaison unique, dans le processus qui garde la socket, ferme la fenêtre : d'où
+`--port 0`, le noyau attribuant à la liaison, et la suite relit le port dans la
+ligne « Ready on » de wrangler.
+
+Le même problème s'est présenté une seconde fois à trois exécutions
+simultanées : wrangler ouvre **aussi** un port de devtools, fixe par défaut, qui
+collisionnait à son tour une fois le port applicatif réglé. `--inspector-port 0`
+le règle, et une porte sans opérateur n'a de toute façon pas de devtools à
+attacher.
+
+Enfin, un échec de liaison est reconnu à sa signature, cite ce que wrangler a
+écrit, et **n'est pas rejoué** — une seconde tentative se heurterait au même
+occupant. Cela compte pour le critère de clôture ci-dessous : une collision de
+port comptée comme une session morte fausse la mesure qu'il demande.
+
+Vérification : trois exécutions concurrentes de la porte passent toutes les
+trois ; avant le correctif, la première collision arrivait dès deux.
+
 ##### Mesurer au lieu d'attendre
 
 Accumuler dix exécutions vertes une fusion à la fois prend des semaines.

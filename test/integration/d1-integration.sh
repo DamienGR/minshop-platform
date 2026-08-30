@@ -7,7 +7,37 @@ state_dir="$(mktemp -d "${TMPDIR:-/tmp}/minshop-d1-integration.XXXXXX")"
 worker_log="$state_dir/worker.log"
 wrangler_debug_log="$state_dir/wrangler-debug.log"
 worker_pid=""
-test_port="${D1_TEST_PORT:-8791}"
+
+# Port 0: the KERNEL assigns one, at bind time, and the suite reads back which.
+#
+# A fixed port made two runs of this gate on one machine collide — the second
+# `wrangler dev` could not bind, died at startup, and the failure arrived
+# disguised as the ProxyWorker flake below, which the wrapper then "retried"
+# four times into four more collisions. Running the core's suite beside a
+# generated shop's is an ordinary thing to do (plan §6, jalon 2).
+#
+# Probing for a free port first and passing it along does NOT fix that: the
+# probe has to close the socket before wrangler can bind it, and two runs
+# starting together get handed the same port. That is not theoretical — it
+# happened on the first concurrent attempt. Only binding once, in the process
+# that keeps the socket, closes the window.
+#
+# `--inspector-port 0` below is the same problem a second time: wrangler opens a
+# devtools port as well, fixed by default, and three concurrent runs collided on
+# THAT once the app port stopped colliding. A headless gate has no devtools to
+# attach anyway.
+requested_port="${D1_TEST_PORT:-0}"
+if [[ ! "$requested_port" =~ ^[0-9]+$ ]]; then
+  echo "D1 integration failed: D1_TEST_PORT is not a port number (got \"$requested_port\")." >&2
+  exit 1
+fi
+# Discovered from wrangler's own "Ready on" line once it is listening.
+test_port=""
+
+# Set when the dev server never came up, as distinct from dying mid-suite. The
+# cleanup trap reads it: a session that never started is not the flake that
+# WORKER_DIED_EXIT exists to re-run.
+startup_failed=""
 
 # Reserved for one condition only: `wrangler dev` exited while the suite was
 # still running. Nothing the Worker does can cause that, and no assertion was
@@ -27,12 +57,29 @@ worker_running() {
   [[ -n "$state" && "$state" != Z* ]]
 }
 
+# `wrangler dev` refuses to start when something already holds the port and says
+# so in its own log. That is not the ProxyWorker flake, and re-running it is
+# four more collisions rather than a fresh draw.
+port_in_use() {
+  grep -qi "Address already in use" "$worker_log" 2>/dev/null
+}
+
+report_port_in_use() {
+  startup_failed=1
+  echo "D1 integration failed: wrangler dev could not bind a port it needs." >&2
+  grep -i "address already in use" "$worker_log" | head -3 | sed 's/^/  /' >&2
+  echo "  Both ports it opens are asked of the kernel, so this means something" >&2
+  echo "  outside this gate holds one, or a pinned D1_TEST_PORT is taken. Not" >&2
+  echo "  cloudflare/workers-sdk#15317, so it is not re-run: another attempt" >&2
+  echo "  would meet the same occupant." >&2
+}
+
 cleanup() {
   local status=$?
   if worker_running; then
     kill "$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
-  elif [[ -n "$worker_pid" && "$status" != 0 ]]; then
+  elif [[ -n "$worker_pid" && "$status" != 0 && -z "$startup_failed" ]]; then
     status="$WORKER_DIED_EXIT"
     echo "D1 integration aborted: the wrangler dev process exited under the suite." >&2
     echo "  A dropped connection inside the dev proxy is raised as a fatal" >&2
@@ -112,8 +159,31 @@ npx wrangler dev \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
   --ip 127.0.0.1 \
-  --port "$test_port" >"$worker_log" 2>&1 &
+  --port "$requested_port" \
+  --inspector-port 0 >"$worker_log" 2>&1 &
 worker_pid="$!"
+
+# Which port did it actually get? Everything below addresses the Worker by it.
+for _ in {1..80}; do
+  test_port="$(sed -n 's|.*Ready on http://127\.0\.0\.1:\([0-9][0-9]*\).*|\1|p' "$worker_log" | head -1)"
+  [[ -n "$test_port" ]] && break
+  if ! worker_running; then
+    if port_in_use; then
+      report_port_in_use
+      exit 1
+    fi
+    sed -n '1,160p' "$worker_log" >&2
+    exit 1
+  fi
+  sleep 0.25
+done
+
+if [[ -z "$test_port" ]]; then
+  startup_failed=1
+  sed -n '1,160p' "$worker_log" >&2
+  echo "D1 integration failed: wrangler dev never reported a listening port." >&2
+  exit 1
+fi
 
 # Every curl is bounded with --max-time. The readiness loop below bounds RETRIES,
 # not individual requests: if wrangler accepts the connection and then never
@@ -127,6 +197,10 @@ for _ in {1..40}; do
     break
   fi
   if ! worker_running; then
+    if port_in_use; then
+      report_port_in_use
+      exit 1
+    fi
     sed -n '1,160p' "$worker_log" >&2
     exit 1
   fi
@@ -134,6 +208,10 @@ for _ in {1..40}; do
 done
 
 if [[ -z "$catalog" ]]; then
+  if port_in_use; then
+    report_port_in_use
+    exit 1
+  fi
   sed -n '1,160p' "$worker_log" >&2
   echo "D1 integration failed: Worker did not become ready" >&2
   exit 1
