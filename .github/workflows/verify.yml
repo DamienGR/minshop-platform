@@ -14,43 +14,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  # Two runners, because the flake we cannot fix is per-runner.
+  #
+  # `wrangler dev` dies under the D1 gate on cloudflare/workers-sdk#15317, and
+  # thirty probe runs showed the deaths are not independent: a runner that kills
+  # one session usually kills the next. run-d1-integration.sh re-runs the suite
+  # in place, which clears the runners that recover, and twenty more runs put
+  # what is left at 5% — a hard core of runners that die on every attempt.
+  #
+  # Nothing inside the job reaches that. A second runner is a fresh draw, so the
+  # residual goes to roughly one run in four hundred. This first attempt is
+  # therefore tolerated and reports nothing but its outcome; `verify` below is
+  # the verdict, and a real failure fails both.
+  verify-first-runner:
+    name: verify (first runner, tolerated)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      outcome: ${{ steps.suite.outcome }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          # The supported line is declared once, in .nvmrc; `engines` and
-          # scripts/check-toolchain.mjs hold CI and every workstation to it.
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            mcp/package-lock.json
+      - name: Run the verification suite
+        id: suite
+        continue-on-error: true
+        uses: ./.github/actions/run-verify
 
-      - name: Install storefront dependencies
-        run: npm ci
+  verify:
+    name: verify
+    needs: verify-first-runner
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Install MCP dependencies
-        run: npm ci --prefix mcp
+    steps:
+      - name: Accept the first runner's pass
+        if: needs.verify-first-runner.outputs.outcome == 'success'
+        run: echo "The suite passed on the first runner; nothing to re-run."
 
-      - name: Create isolated Wrangler configuration
-        run: |
-          sed \
-            -e 's/__NAME__/minshop-check/g' \
-            -e 's/__DB_NAME__/minshop-check-db/g' \
-            -e 's/__DB_ID__/00000000-0000-0000-0000-000000000000/g' \
-            -e 's/__BUCKET__/minshop-check-images/g' \
-            -e 's/__FILES_BUCKET__/minshop-check-files/g' \
-            wrangler.template.jsonc > wrangler.jsonc
+      # Anything other than a pass lands here, an empty outcome included: a
+      # first attempt that was cancelled or never reported must not be read as
+      # a pass.
+      - name: Check out repository
+        if: needs.verify-first-runner.outputs.outcome != 'success'
+        uses: actions/checkout@v6
 
-      - name: Run complete verification
-        run: npm run verify
+      - name: Run the verification suite on a fresh runner
+        if: needs.verify-first-runner.outputs.outcome != 'success'
+        uses: ./.github/actions/run-verify
 
   # A store is created by cloning a tag of this repository (plan §3.4), so the
   # baseline that matters is what a FRESH CLONE builds — not what an incrementally
