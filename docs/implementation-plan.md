@@ -498,11 +498,20 @@ Exécutions de `verify` sur `main` :
 | `01e992f` | annulé |
 | `e7c1526` | vert — première exécution avec la mitigation |
 | `40ab093` | vert |
+| `c1a066d` | vert |
+| `10e53b2` | annulé (poussée suivante arrivée par-dessus) |
+| `ea1d870` | vert |
+| `0d2bc65` | échec |
 
-La panne n'a pas disparu pour autant. Le 2026-08-29, la branche de la
-[PR #9](https://github.com/DamienGR/minshop-platform/pull/9) a échoué au même
-endroit ([run 33270596059](https://github.com/DamienGR/minshop-platform/actions/runs/33270596059)),
-mitigation comprise :
+La panne n'a pas disparu pour autant. Le 2026-08-29 elle s'est reproduite trois
+fois au même endroit, mitigation comprise : sur la branche de la
+[PR #9](https://github.com/DamienGR/minshop-platform/pull/9)
+([run 33270596059](https://github.com/DamienGR/minshop-platform/actions/runs/33270596059)),
+sur `main` en `0d2bc65`
+([run 33275634908](https://github.com/DamienGR/minshop-platform/actions/runs/33275634908)),
+puis sur la branche de la [PR #12](https://github.com/DamienGR/minshop-platform/pull/12)
+([run 33276600401](https://github.com/DamienGR/minshop-platform/actions/runs/33276600401)),
+avec la même sortie :
 
 ```
 (retrying GET /product/sample-tee — miniflare dropped the connection, HTTP 500)
@@ -510,12 +519,68 @@ mitigation comprise :
 D1 integration failed: GET /product/sample-tee — no response after 3 attempts (curl exit 7).
 ```
 
-Le retry est bien parti sur la 500 de miniflare, puis les deux tentatives
-suivantes n'ont rien obtenu du tout : le serveur de développement était mort. La
-mitigation a donc fait exactement ce qu'on attendait d'elle, nommer la coupure
-plutôt que la déguiser en `cache-control` vide, sans supprimer la panne. Cette
-exécution n'étant pas sur `main`, elle ne remet pas le compteur à zéro, mais
-elle interdit de considérer le sujet comme réglé.
+L'échec de `0d2bc65` remet le compteur à zéro, après quatre exécutions vertes
+accumulées depuis la mitigation.
+
+##### Cause identifiée
+
+Le retry part bien sur la 500 de miniflare, puis les deux tentatives suivantes
+n'obtiennent rien : `curl exit 7`, le port n'écoute plus. Ce n'est donc pas une
+connexion qui tombe, c'est `wrangler dev` qui meurt. Les trois journaux se
+terminent à l'identique, juste après le POST de purge signé invalide :
+
+```
+[wrangler:info] POST /api/internal/cache-purge 401 Unauthorized (3ms)
+
+✘ [ERROR]
+
+If you think this is a bug then please create an issue at .../workers-sdk/issues/new/choose
+🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-….log"
+```
+
+C'est
+[cloudflare/workers-sdk#15317](https://github.com/cloudflare/workers-sdk/issues/15317),
+régression de [#4562](https://github.com/cloudflare/workers-sdk/issues/4562)
+apparue avec wrangler 4.125 : sous contention, le proxy de développement perd
+une connexion en cours de réponse ; wrangler remonte l'incident en
+« Error inside ProxyWorker » **fatal**, et le message affiché est vide parce que
+l'erreur sérialisée à travers la frontière du worker ne peut pas être
+reconstruite en `Error`. La session entière tombe.
+
+Cela explique la chronologie complète. Avant 4.125, l'incident se manifestait en
+500 rendue par l'entry worker, serveur toujours debout : le retry de `e7c1526`
+aurait suffi. Depuis 4.125, le même incident tue la session, et aucun retry sur
+la requête ne peut plus rien puisqu'il n'y a plus rien en face. La montée à
+4.127.1 ne change pas ce comportement, ce que l'échec de la
+[PR #12](https://github.com/DamienGR/minshop-platform/pull/12) a confirmé.
+
+##### Mitigation retenue
+
+La panne est sous le plancher du dépôt et le correctif appartient à l'amont. Ce
+qui est à notre portée est de ne pas transformer une session de développement
+morte en échec de certification :
+
+- `d1-integration.sh` distingue désormais cette mort du reste et sort en **75**,
+  code réservé à ce seul cas ; une assertion en échec sort toujours en 1 ;
+- `run-d1-integration.sh` relance la suite **une fois**, et uniquement sur 75.
+  Une assertion en échec n'est jamais rejouée : une porte qui rejoue les vraies
+  régressions n'est plus une porte ;
+- le journal de débogage de wrangler est écrit dans le répertoire d'état et
+  affiché à la mort, au lieu de rester dans `~/.config/.wrangler/logs` que
+  personne n'archive. C'est là que se trouve la trace que le `✘ [ERROR]` vide
+  ne montre pas ;
+- `X_LOCAL_EXPLORER=false` rejoint `X_LOCAL_OBSERVABILITY=false` : un service
+  interactif de moins attaché au proxy de développement, inutile dans une porte
+  sans opérateur.
+
+##### Mesurer au lieu d'attendre
+
+Accumuler dix exécutions vertes une fusion à la fois prend des semaines.
+`.github/workflows/d1-flake-probe.yml` exécute la porte dix fois en parallèle,
+sur demande ou sur une branche `flake-probe/**`, et distingue les trois issues :
+succès, session morte, assertion en échec. Une sonde donne en quelques minutes
+ce que le compteur donne en semaines, et reste le seul moyen d'établir que la
+mitigation transforme bien les morts en passages.
 
 - [ ] Rendre l'intégration D1 fiable en CI. **Critère de clôture : dix
   exécutions vertes consécutives de `verify` sur `main`**, mitigation comprise.
