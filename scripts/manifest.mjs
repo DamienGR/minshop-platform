@@ -37,7 +37,7 @@ export function coreVersion(root = process.cwd()) {
  *
  * Derivation, not configuration. Letting a manifest name its D1 database
  * independently of its Worker buys nothing and costs the property the operator
- * relies on: that `minshop-pilot-fr*` is the complete footprint of one shop,
+ * relies on: that `<workerName>*` is the complete footprint of one shop,
  * and that destroy-cf.sh removes all of it (scripts/destroy-cf.sh keys on the
  * same suffixes).
  */
@@ -145,6 +145,26 @@ export function detectFleetCollisions(entries) {
   return [...claims.values()].filter((claim) => claim.files.length > 1);
 }
 
+/** Slugs of every shop this tree describes, in manifest order. */
+export function clientSlugs(cwd = process.cwd()) {
+  return discoverManifests(cwd)
+    .map((file) => loadManifest(file, { root: cwd }).manifest?.client?.slug)
+    .filter(Boolean);
+}
+
+/** Substitute the template's `__…__` placeholders. Fails on a leftover: a
+ *  placeholder the manifest cannot fill would otherwise reach Wrangler as a
+ *  literal resource name. */
+export function renderWrangler(template, substitutions) {
+  let out = template;
+  for (const [token, value] of Object.entries(substitutions)) out = out.split(token).join(value);
+  const leftover = out.match(/__[A-Z_]+__/g);
+  if (leftover) {
+    throw new Error(`wrangler.template.jsonc has placeholders no manifest value fills: ${[...new Set(leftover)].join(', ')}`);
+  }
+  return out;
+}
+
 /** The `__…__` substitutions wrangler.template.jsonc expects for a shop.
  *  The database id is not a manifest value — provisioning learns it from
  *  Cloudflare — so callers pass the id they have, or the all-zero placeholder
@@ -167,6 +187,49 @@ export function findManifestBySlug(slug, { root = process.cwd() } = {}) {
     if (loaded.manifest?.client?.slug === slug) return loaded;
   }
   return null;
+}
+
+/**
+ * The values that identify one shop, and that a core file therefore must not
+ * contain.
+ *
+ * Only values a shop is free to choose. `cloudflare.jurisdiction` or
+ * `client.currency` would match half the tree and mean nothing: the core is
+ * allowed — required, even — to know that EU exists.
+ */
+export function clientNeedles(manifest) {
+  return [
+    manifest.client.slug,
+    manifest.client.displayName,
+    manifest.cloudflare.workerName,
+    manifest.cloudflare.productionDomain,
+    manifest.email.from,
+  ];
+}
+
+/**
+ * Client values found in core files, as a pure function of the text.
+ *
+ * The exit criterion of jalon 1 is that two shops build from one core with no
+ * client condition in it. Two shops building proves nothing on its own if the
+ * core happens to name one of them: the build stays green and the condition
+ * surfaces on the third shop, in production, months later.
+ *
+ * @param {Array<{ file: string, manifest: object }>} shops valid manifests
+ * @param {Array<{ path: string, text: string }>} files core-owned files only
+ * @returns {Array<{ path: string, slug: string, value: string }>}
+ */
+export function findClientLeaks(shops, files) {
+  const needles = shops.flatMap(({ manifest }) =>
+    clientNeedles(manifest).map((value) => ({ value, slug: manifest.client.slug })),
+  );
+  const findings = [];
+  for (const { path, text } of files) {
+    for (const needle of needles) {
+      if (text.includes(needle.value)) findings.push({ path, slug: needle.slug, value: needle.value });
+    }
+  }
+  return findings;
 }
 
 export { RESOURCE_PREFIX };
