@@ -20,7 +20,10 @@ change holds together. Run it after every meaningful edit, not just at the end.
 
 Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
 `npm run check:deploy` (Wrangler dry run + bundle budgets, needs a build),
-`npm run check:secrets` (tracked-tree credential scan). `npm run check:clean-clone`
+`npm run check:secrets` (tracked-tree credential scan),
+`npm run config:validate` (client manifests, fleet identifiers, core
+neutrality), `npm run check:paths` (file-ownership map + CODEOWNERS drift).
+`npm run check:clean-clone`
 is NOT in `verify` — it re-clones HEAD into a scratch directory and builds there,
 proving the commit stands without any working-tree state. CI runs it as its own
 job; run it locally before tagging a core version.
@@ -83,6 +86,52 @@ local environment files in the repository.
 Before handing off a customized shop, run `npm run verify` and review
 `git diff --check` plus `git status --short`. Add a new numbered migration for
 schema changes; never rewrite a migration that may already have run.
+
+## Who owns which file
+
+A shop is a clone of a core tag that keeps receiving core updates by merge, so
+every file belongs to exactly one of three owners. `scripts/path-ownership.mjs`
+is the list; `npm run check:paths` fails on a path no rule covers, and
+`.github/CODEOWNERS` is generated from it — edit the rules, not the file.
+
+- **core** — the agency's. Payment, stock, auth, migrations, tooling. A shop may
+  edit one, but never as an unremarked customization: each core edit is a
+  divergence to re-resolve at the next upgrade.
+- **client** — the merchant's. `client/`, `src/store.config.ts`,
+  `src/styles/overrides.css`, `theme.config.json`, `public/`, and the shop's own
+  theme under `src/themes/`. The core never edits these, which is what keeps an
+  upgrade merge clean.
+- **generated** — a tool's. `wrangler.jsonc`, `schemas/*.schema.json`,
+  `.github/CODEOWNERS`. An unexpected diff means a generator ran.
+
+In a shop repository (one with `client/client.yaml`), a pull request touching a
+core file needs a `core-change` label or an `Approves-core-change:` trailer. In
+this repository the gate reports but does not block — every change here is a
+core change.
+
+## The client manifest
+
+`client/client.yaml` is a shop's non-sensitive source of truth: identity,
+market, feature switches, Cloudflare names, theme. `scripts/manifest-schema.mjs`
+is the authority on its shape; `schemas/client-1.schema.json` is generated from
+it for editors. Never hand-edit the generated schema — run
+`npm run config:validate -- --write`.
+
+Every Cloudflare resource name is DERIVED from `cloudflare.workerName`
+(`<name>-db`, `-images`, `-files`, `-session`), so one shop is one name family
+and `destroy-cf.sh` removes all of it. Two manifests may never claim the same
+identifier: nothing at runtime separates two shops' data (ADR 0001).
+
+No credential ever goes in the manifest — the schema is closed and a
+`no-credentials` rule scans the values that are allowed.
+
+`node scripts/prepare-client.mjs <slug>` renders `wrangler.jsonc` and the theme
+selection for one shop; `--list` names the shops in the tree, `--out` writes
+elsewhere. The witness shops live in `test/fixtures/clients/` and CI builds
+both. The core must not name any of them: `config:validate` scans core-owned
+files for a shop's slug, display name, worker name, domain or sender, because a
+core that knows one customer is a condition the third one discovers in
+production.
 
 ## Architecture in one screen
 

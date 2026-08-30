@@ -80,9 +80,13 @@ Deux boutiques fictives doivent exister dès le début du développement :
 #### `canary-minimal`
 
 - [ ] cinq produits ;
-- [ ] thème différent ;
-- [ ] fonctionnalités minimales ;
-- [ ] utilisée pour vérifier l'absence de configuration codée en dur pour le pilote.
+- [x] thème différent ;
+- [x] fonctionnalités minimales ;
+- [x] utilisée pour vérifier l'absence de configuration codée en dur pour le pilote.
+
+Les manifestes des deux boutiques existent depuis le jalon 1
+(`test/fixtures/clients/`) et la CI construit les deux. Ce qui manque tient au
+catalogue (jalon 4) et au thème propre du pilote (jalon 5).
 
 ## 3. Architecture multi-client
 
@@ -93,7 +97,7 @@ Le plan de contrôle comprend :
 - [x] le fork du socle `minshop-platform`, avec l'historique Minshop conservé,
   en dépôt privé ;
 - [ ] la CLI `shopctl` ;
-- [ ] les schémas de configuration ;
+- [x] les schémas de configuration ;
 - [ ] les templates de boutique ;
 - [ ] le registre privé de flotte ;
 - [ ] les workflows de mise à jour ;
@@ -132,7 +136,18 @@ Les fichiers doivent être divisés en trois catégories :
 La CI doit refuser qu'une modification présentée comme une simple
 personnalisation client touche un fichier du cœur sans approbation explicite.
 
-- [ ] Implémenter ce contrôle de propriété des chemins dans la CI.
+- [x] Implémenter ce contrôle de propriété des chemins dans la CI.
+  `scripts/path-ownership.mjs` porte la liste des règles ; `.github/CODEOWNERS`
+  en est **généré**, parce que deux copies écrites à la main divergent et que
+  cette divergence est invisible — CODEOWNERS n'est lu que par GitHub, au moment
+  de la revue, sur la pull request de quelqu'un d'autre. Le job « File
+  ownership » exécute la porte à chaque pull request. Elle n'a de dents que dans
+  une boutique — un arbre qui contient `client/client.yaml` — car ici toute pull
+  request touche le cœur ; une porte qui se déclenche à chaque fois n'apprend
+  qu'à passer outre. Une boutique lève la porte par le label `core-change` ou un
+  trailer `Approves-core-change:`, deux actes délibérés qui restent dans
+  l'historique : ce qui est refusé n'est pas la modification du cœur, c'est la
+  modification tue.
 
 ### 3.4 Stratégie Git
 
@@ -202,16 +217,35 @@ theme:
 
 Un JSON Schema versionné contrôle :
 
-- [ ] les champs obligatoires ;
-- [ ] les valeurs autorisées ;
-- [ ] les combinaisons incompatibles ;
-- [ ] la forme du slug ;
-- [ ] la convention des noms de ressources ;
-- [ ] la compatibilité entre la version du manifeste et celle du socle.
+- [x] les champs obligatoires ;
+- [x] les valeurs autorisées ;
+- [x] les combinaisons incompatibles ;
+- [x] la forme du slug ;
+- [x] la convention des noms de ressources ;
+- [x] la compatibilité entre la version du manifeste et celle du socle.
+
+La spécification est `scripts/manifest-schema.mjs` ; `schemas/client-1.schema.json`
+en est généré et contrôlé contre la dérive. Un seul point d'autorité : deux
+documents écrits à la main finissent par annoncer à l'éditeur un champ que le
+validateur refuse, et c'est l'éditeur que le commerçant croit. Les règles qu'un
+JSON Schema ne peut pas exprimer — le nom du Worker suit le slug, un checkout
+invité n'affiche pas de comptes client, la France vend TTC, le domaine de
+production est celui du commerçant — sont nommées et vérifiées par
+`validateManifest()`, et listées dans le schéma publié sous `x-crossFieldRules`
+pour qu'un validateur générique ne soit pas pris pour la porte.
+
+Les énumérations n'acceptent aujourd'hui qu'une valeur pour `locale`,
+`currency`, `market` et `jurisdiction`. C'est délibéré : élargir l'une d'elles
+est une décision de version de schéma avec des notes de migration, ce qui est
+exactement la différence entre un marché supporté et un marché non testé.
 
 Les clés API et secrets sont interdits dans le manifeste.
 
-- [ ] Faire appliquer cette interdiction par le schéma et les contrôles de CI.
+- [x] Faire appliquer cette interdiction par le schéma et les contrôles de CI.
+  Le schéma est fermé (`additionalProperties: false` à tous les niveaux), donc un
+  champ `stripeKey:` inventé est refusé d'office ; la règle `no-credentials`
+  couvre l'autre forme, un secret collé dans un champ autorisé. Le manifeste
+  étant committé, une valeur qui arrive là est publiée à tous les clones.
 
 ## 5. CLI `shopctl`
 
@@ -629,28 +663,75 @@ Durée indicative : 3 à 4 jours.
 
 #### Livrables
 
-- [ ] schéma de manifeste ;
-- [ ] conventions de nommage ;
-- [ ] séparation des fichiers cœur/client/générés ;
-- [ ] fixtures `pilot-fr` et `canary-minimal` ;
-- [ ] règles `CODEOWNERS` ;
-- [ ] test de politique des chemins.
+- [x] schéma de manifeste (`scripts/manifest-schema.mjs`, publié en
+  `schemas/client-1.schema.json`) ;
+- [x] conventions de nommage ;
+- [x] séparation des fichiers cœur/client/générés
+  (`scripts/path-ownership.mjs`) ;
+- [x] fixtures `pilot-fr` et `canary-minimal` — au niveau du manifeste ; leur
+  catalogue arrive au jalon 4 et le thème du pilote au jalon 5 (§2.3) ;
+- [x] règles `CODEOWNERS` ;
+- [x] test de politique des chemins.
 
 #### Tests
 
-- [ ] manifeste valide ;
-- [ ] champ inconnu refusé ;
-- [ ] slug dangereux refusé ;
-- [ ] nom réservé refusé ;
-- [ ] doublon de ressource détecté ;
-- [ ] matrice de build pour les deux boutiques ;
-- [ ] thème A jamais chargé par B ;
-- [ ] aucun identifiant de ressource partagé.
+- [x] manifeste valide ;
+- [x] champ inconnu refusé ;
+- [x] slug dangereux refusé ;
+- [x] nom réservé refusé ;
+- [x] doublon de ressource détecté ;
+- [x] matrice de build pour les deux boutiques ;
+- [x] thème A jamais chargé par B ;
+- [x] aucun identifiant de ressource partagé.
 
 #### Critère de sortie
 
-- [ ] Deux boutiques différentes se construisent depuis le même socle sans
+- [x] Deux boutiques différentes se construisent depuis le même socle sans
   condition client codée en dur dans le cœur métier.
+
+#### État
+
+Tout ce qu'une boutique a de particulier vient de son manifeste. Le lecteur
+(`scripts/manifest-yaml.mjs`) est écrit à la main et sans dépendance, non par
+goût de l'exercice mais parce qu'il doit **refuser** ce qu'il ne comprend pas :
+un lecteur YAML complet résout `market: NO` en booléen faux et déplie des
+ancres en valeurs que personne n'a tapées. Sur un fichier dont les valeurs
+deviennent des noms de ressources dans un compte Cloudflare, « l'analyseur a
+été malin » est le mode de défaillance à supprimer par construction.
+
+Les noms de ressources sont **dérivés** du nom du Worker, jamais configurés
+séparément. C'est ce qui garantit que `<workerName>*` est l'empreinte complète
+d'une boutique, donc que `destroy-cf.sh` la retire entièrement. Et
+`detectFleetCollisions` refuse que deux manifestes revendiquent le même
+identifiant : rien à l'exécution ne sépare les données de deux boutiques
+(ADR 0001), donc un nom de base D1 dupliqué est à un provisioning près de faire
+atterrir les commandes d'une boutique chez une autre. Il n'y a pas de garde-fou
+applicatif derrière ; ce sont les noms qu'il faut tenir.
+
+Les deux boutiques témoins diffèrent là où le cœur est censé commuter — thème,
+promotions, livraison, facturation. Deux fixtures d'accord sur tout auraient
+passé tous les contrôles ci-dessus sans rien prouver. La matrice CI « Build
+shop » découvre les boutiques dans l'arbre plutôt que dans une liste, comme la
+matrice des thèmes, et rend la configuration Wrangler depuis
+`wrangler.template.jsonc` — le même gabarit que `provision-cf.sh` — pour qu'une
+construction témoin et un provisionnement réel ne puissent pas diverger sur les
+bindings.
+
+Le critère de sortie a deux moitiés, et une construction verte ne dit rien de
+la seconde : deux boutiques peuvent se construire parfaitement pendant que le
+cœur nomme l'une d'elles, et la condition ne se révèle alors qu'à la troisième
+boutique, en production. `npm run config:validate` inspecte donc les fichiers du
+cœur à la recherche des valeurs qu'une boutique choisit librement — slug, nom
+affiché, nom de Worker, domaine, expéditeur — et échoue sur une occurrence ; pas
+sur celles qu'il doit connaître (`EUR`, `eu`), qui apparaîtraient partout sans
+rien signifier. Le contrôle a trouvé une fuite dès sa première exécution, dans
+un commentaire de son propre module.
+
+Vérification locale : `node scripts/prepare-client.mjs <slug>` puis
+`THEME=<thème> npm run verify:theme` passe pour les deux boutiques, et
+`check-built-css` confirme à chaque fois que les deux thèmes inactifs sont
+absents de la feuille construite — c'est la forme exécutable de « thème A jamais
+chargé par B ».
 
 ### Jalon 2 — Générateur de boutique
 
@@ -990,6 +1071,11 @@ Durée indicative : 3 à 4 jours.
 - [x] contrôle de la chaîne d'outils (`npm run check:toolchain`) ;
 - [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
 - [x] scan de secrets (`npm run check:secrets`) ;
+- [x] validation des manifestes, des identifiants de flotte et de la neutralité
+  du cœur (`npm run config:validate`) ;
+- [x] carte de propriété des chemins et dérive de `CODEOWNERS`
+  (`npm run check:paths`) ;
+- [x] construction des boutiques témoins (job CI « Build shop ») ;
 - [x] construction depuis un clone vierge (job CI dédié).
 
 Objectif : moins de cinq minutes.
