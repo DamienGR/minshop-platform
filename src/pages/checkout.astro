@@ -31,6 +31,7 @@ import { reservationItems } from '../features/orders/reservationItems.ts';
 import { purgeStockProductCache } from '../features/cache/purge';
 import { paymentRailAction } from '../features/payments/labels';
 import { t, tn } from '../features/i18n';
+import { consentFor, isAcceptance, readTermsGate } from '../features/legal/terms';
 
 const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
@@ -191,6 +192,12 @@ const addr = {
   country: (fld('country') || prefill?.country || geoDefault || knownCountries[0] || 'US').toUpperCase(),
 };
 
+// One predicate for the checkbox and for the refusal below — see
+// features/legal/terms.ts. Open (no consent asked, none required) until the
+// merchant publishes the terms page.
+const terms = await readTermsGate(env.DB, cfg.legal);
+const termsAccepted = isAcceptance(fld('accept_terms'));
+
 let stage: 'address' | 'shipping' = 'address';
 let options: { label: string; amountCents: number; pickup?: boolean }[] = [];
 const errors: string[] = [];
@@ -241,7 +248,11 @@ if (submitted) {
       stage = 'shipping';
       // Demo auto-picks the first rate — the rate step is also skipped.
       const chosenLabel = fld('shipping_label') || (rail === 'demo' ? (options[0]?.label ?? '') : '');
-      if (chosenLabel) {
+      if (chosenLabel && terms.required && !termsAccepted) {
+        // Refused BEFORE the identity claim and the stock hold: a checkout that
+        // cannot legally complete must not take inventory off the shelf.
+        errors.push(t('checkout.error.terms'));
+      } else if (chosenLabel) {
         const chosen = options.find((o) => o.label === chosenLabel);
         if (!chosen) {
           errors.push(t('checkout.error.noShippingOption'));
@@ -264,6 +275,8 @@ if (submitted) {
             reservationTtl,
             rail,
             purgeStockProductCache,
+            undefined,
+            consentFor(terms, termsAccepted),
           );
           if (!reserved) {
             await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -434,6 +447,27 @@ const hasErrors = errors.length > 0;
             ))}
           </fieldset>
 
+          {
+            terms.required && (
+              <label class="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="accept_terms"
+                  value="on"
+                  required
+                  checked={termsAccepted}
+                  class="mt-1 accent-brand"
+                />
+                <span>
+                  {t('terms.accept')}{' '}
+                  <a href={terms.href} class="underline hover:text-brand">
+                    {t('terms.linkLabel')}
+                  </a>{' '}
+                  ({t('terms.version', { version: terms.version })}).
+                </span>
+              </label>
+            )
+          }
           <button
             type="submit"
             class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover"

@@ -621,7 +621,7 @@ stock_before_demo="$(npx wrangler d1 execute DB --local --persist-to "$state_dir
 checkout="$(curl --max-time 30 --fail --silent --show-error \
   -H 'content-type: application/json' \
   -H "origin: http://127.0.0.1:$test_port" \
-  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Testville","postal":"12345","country":"US"}}' \
+  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Villeneuve","postal":"75000","country":"FR"}}' \
   "http://127.0.0.1:$test_port/api/checkout")"
 status_path="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.order_status_url) process.exit(1); process.stdout.write(new URL(b.order_status_url).pathname)' "$checkout")"
 confirming="$(curl --max-time 30 --fail --silent --show-error -H 'Accept:' "http://127.0.0.1:$test_port$status_path")"

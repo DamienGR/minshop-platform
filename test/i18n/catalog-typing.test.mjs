@@ -27,6 +27,9 @@ async function typecheck(file) {
       '--module', 'esnext',
       '--moduleResolution', 'bundler',
       '--skipLibCheck',
+      // The repo imports with explicit .ts specifiers so the same modules load
+      // under `node --experimental-strip-types` in the integration gate.
+      '--allowImportingTsExtensions',
       // Named files on the command line make tsc refuse to run while a
       // tsconfig.json is in reach (TS5112) rather than silently half-applying it.
       '--ignoreConfig',

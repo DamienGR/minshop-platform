@@ -1,7 +1,8 @@
 ---
 import { env } from 'cloudflare:workers';
 import Layout from '../layouts/Layout.astro';
-import { formatPrice } from '../config';
+import { formatPrice, getConfig } from '../config';
+import { readTermsGate } from '../features/legal/terms';
 import { readCart, resolveCart } from '../features/cart/cart';
 import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
@@ -52,6 +53,9 @@ const destination = stripeDestination(
 );
 // The catalog is at / until the home page is pointed elsewhere.
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
+// Same predicate the server enforces (features/legal/terms.ts): the box appears
+// exactly when a checkout without it would be refused.
+const terms = await readTermsGate(env.DB, getConfig().legal);
 ---
 
 <Layout title={t('cart.title')}>
@@ -190,6 +194,27 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
               {destination.hiddenOnly && (
                 <input type="hidden" name="country" value={destination.countries[0]} />
               )}
+
+              {
+                terms.required && (
+                  <label class="mb-3 flex items-start gap-2 text-left text-xs normal-case tracking-normal text-muted">
+                    <input
+                      type="checkbox"
+                      name="accept_terms"
+                      value="on"
+                      required
+                      class="mt-0.5 accent-brand"
+                    />
+                    <span>
+                      {t('terms.accept')}{' '}
+                      <a href={terms.href} class="underline hover:text-brand">
+                        {t('terms.linkLabel')}
+                      </a>{' '}
+                      ({t('terms.version', { version: terms.version })}).
+                    </span>
+                  </label>
+                )
+              }
 
               {/* One control per offered method. Ready (configured/demo) → a submit
                   whose name/value sends method=<rail>. Unconfigured real rails → a

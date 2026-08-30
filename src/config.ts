@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { storeOverrides } from './store.config';
-import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from './features/i18n/locale';
-import { formatDateTime } from './features/i18n/format';
+import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from './features/i18n/locale.ts';
+import { formatDateTime } from './features/i18n/format.ts';
 import type { ShippingConfig } from './features/shipping/calculator';
 
 /**
@@ -34,6 +34,26 @@ export interface SiteConfig {
      * + session cookie) AND email configured (to send the link). See README → Accounts.
      */
     accounts: boolean;
+  };
+  /**
+   * Terms of sale, and the consent an order records.
+   *
+   * `termsSlug` names the page that holds them; the storefront asks for an
+   * explicit acceptance, and the server refuses a checkout without one, exactly
+   * WHEN that page is published. A shop ships with the terms as a draft (see
+   * migration 0040), so a fresh clone is not blocked from taking a test order by
+   * a document nobody has written yet — and the day the merchant publishes,
+   * both halves switch on together.
+   *
+   * `termsVersion` is stamped on every order that accepted them. Bump it
+   * whenever the text changes in a way a customer would have to re-accept: it is
+   * what a dispute two years from now reads to know which wording was agreed.
+   * Deliberately a value the merchant writes rather than the page's
+   * `updated_at`, which a typo fix would move.
+   */
+  legal: {
+    termsSlug: string;
+    termsVersion: string;
   };
   /**
    * Downscale + recompress uploaded product images to WebP on upload via the
@@ -194,6 +214,10 @@ function defaultConfig(): SiteConfig {
     timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
       accounts: false, // magic-link customer login; needs AUTH_SECRET + email
+    },
+    legal: {
+      termsSlug: 'conditions-generales-de-vente',
+      termsVersion: '1', // bump on every change a customer would have to re-accept
     },
     images: {
       optimizeOnUpload: false, // set true after enabling Transformations (free ≤5k/mo)

@@ -7,7 +7,7 @@ import type {
 } from './provider';
 import { STRIPE_CHECKOUT_TTL_SECONDS } from './provider';
 import { stripeAllowedCountries } from './stripeCountries.ts';
-import { DEFAULT_CURRENCY, LANG } from '../i18n/locale';
+import { DEFAULT_CURRENCY, LANG } from '../i18n/locale.ts';
 
 /**
  * Stripe's locale enum is language-level ('fr'), not a BCP 47 tag with a

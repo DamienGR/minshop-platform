@@ -32,6 +32,8 @@ import { shippingFor } from '../../features/shipping/effective';
 import { shipmentWeightFor } from '../../features/shipping/lines';
 import { stripeAllowedCountries, stripeSessionDestination } from '../../features/payments/stripeCountries.ts';
 import { getConfig } from '../../config';
+import { consentFor, isAcceptance, readTermsGate } from '../../features/legal/terms';
+import { t } from '../../features/i18n';
 import {
   reserveInventory,
   releaseInventoryReservation,
@@ -74,6 +76,9 @@ function parseShipTo(raw: unknown): ShipTo | null {
 
 const MAX_CHECKOUT_LINES = 50;
 const MAX_JSON_BYTES = 64 * 1024;
+
+/** One wording for the refusal, whether it comes back as a redirect or JSON. */
+const TERMS_REFUSAL = t('checkout.error.terms');
 
 function reservationTtlSeconds(method: PaymentMethod): number {
   if (method === 'demo') return DEMO_CHECKOUT_TTL_SECONDS;
@@ -360,6 +365,16 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // handoff: the ord_ id ties reservation → pending payment → settled order,
   // and the access token is the only thing guest URLs carry. success_url points
   // at /order/<token>; the webhook stores the ord_ id on the order.
+  // Refused BEFORE the identity claim and the stock hold: a checkout that
+  // cannot legally complete must not take inventory off the shelf. The rails
+  // that route through /checkout first were redirected above, so they are
+  // asked for the acceptance there, on the form that actually places the order.
+  const terms = await readTermsGate(env.DB, cfg.legal);
+  const accepted = isAcceptance(form.get('accept_terms'));
+  if (terms.required && !accepted) {
+    return redirect(`${errorPath}?error=${encodeURIComponent(TERMS_REFUSAL)}`, 303);
+  }
+
   const { publicId, accessToken } = await claimOrderIdentity(env.DB);
   const items = reservationItems(lines);
   const reserved = await reserveInventory(
@@ -369,6 +384,8 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     reservationTtlSeconds(selected),
     selected,
     purgeStockProductCache,
+    undefined,
+    consentFor(terms, accepted),
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -484,6 +501,23 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   const method: PaymentMethod = requested ?? available[0] ?? defaultMethod(jsonSettings);
 
   const cfg = getConfig();
+
+  // Same gate as the browser form, refused with a machine-readable body rather
+  // than a redirect. An agent placing an order is a buyer like any other: it
+  // has to say it accepts the terms, and the order records which version.
+  const jsonTerms = await readTermsGate(env.DB, cfg.legal);
+  const jsonAccepted = isAcceptance((body as { accept_terms?: unknown }).accept_terms);
+  if (jsonTerms.required && !jsonAccepted) {
+    return cjson(
+      {
+        error: TERMS_REFUSAL,
+        terms_url: new URL(jsonTerms.href, origin).href,
+        terms_version: jsonTerms.version,
+      },
+      400,
+    );
+  }
+
   const effectiveShipping = shippingFor(jsonSettings).config;
 
   // Resolve each { product_id | slug, quantity, variant_id?, extra_ids? } → a
@@ -775,6 +809,8 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       reservationTtlSeconds('lightning'),
       'lightning',
       purgeStockProductCache,
+      undefined,
+      consentFor(jsonTerms, jsonAccepted),
     );
     if (!lnReserved) {
       await deleteGuestAccessIfUnsettled(env.DB, lnPublicId);
@@ -867,6 +903,8 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     reservationTtlSeconds(method),
     method,
     purgeStockProductCache,
+    undefined,
+    consentFor(jsonTerms, jsonAccepted),
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);

@@ -1,4 +1,4 @@
-import { fr } from './messages';
+import { fr } from './messages.ts';
 
 /**
  * The storefront's string lookup.
@@ -57,5 +57,5 @@ export function tn(
   return t(form, { count, ...params });
 }
 
-export { LOCALE, LANG, DEFAULT_TIME_ZONE, DEFAULT_CURRENCY } from './locale';
-export { formatNumber, formatDateTime, NARROW_NBSP } from './format';
+export { LOCALE, LANG, DEFAULT_TIME_ZONE, DEFAULT_CURRENCY } from './locale.ts';
+export { formatNumber, formatDateTime, NARROW_NBSP } from './format.ts';

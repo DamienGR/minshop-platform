@@ -45,6 +45,10 @@ export interface Order {
   /** 'pickup' | 'shipping' | NULL (pre-0035 or no shipping). Unknown = shipping. */
   delivery_method: string | null;
   ship_address: string | null; // JSON snapshot (ShippingAddress) or null
+  /** Terms version the buyer accepted, or null when the gate was open. */
+  terms_version: string | null;
+  /** When they accepted, UTC "YYYY-MM-DD HH:MM:SS". Null with terms_version. */
+  terms_accepted_at: string | null;
   created_at: string;
 }
 
@@ -489,23 +493,28 @@ export async function recordPaidOrder(
     o.providerPaymentId ?? null,
   ] as const;
   const settlementStatuses = "('active', 'payment_pending', 'expired', 'failed')";
+  // The terms acceptance is READ OFF the reservation rather than passed in.
+  // Settlement runs in a webhook that never saw the shopper, and every rail
+  // would otherwise have to carry the consent through its own provider
+  // metadata — four chances to drop the one field a dispute turns on. The row
+  // the insert already checks for is the row that holds it.
+  const orderColumns =
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at';
   const insertOrder = o.reservationId
     ? db
         .prepare(
-          `INSERT INTO orders (provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?
-            WHERE EXISTS (
-              SELECT 1 FROM checkout_reservations
-               WHERE public_id = ? AND status IN ${settlementStatuses}
-            )
+          `INSERT INTO orders (${orderColumns})
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, r.terms_version, r.terms_accepted_at
+             FROM checkout_reservations r
+            WHERE r.public_id = ? AND r.status IN ${settlementStatuses}
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )
         .bind(...orderValues, o.reservationId)
     : db
         .prepare(
-          `INSERT INTO orders (provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?)
+          `INSERT INTO orders (${orderColumns})
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

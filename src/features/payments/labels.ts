@@ -1,4 +1,4 @@
-import { t, type MessageKey } from '../i18n';
+import { t, type MessageKey } from '../i18n/index.ts';
 
 /**
  * Customer-facing names for the payment rails.

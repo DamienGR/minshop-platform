@@ -1,4 +1,4 @@
-import { LOCALE } from './features/i18n/locale';
+import { LOCALE } from './features/i18n/locale.ts';
 
 /**
  * Pure currency-scaling math. Its only import is the locale constant, which is

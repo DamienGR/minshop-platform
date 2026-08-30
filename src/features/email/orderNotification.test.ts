@@ -31,6 +31,8 @@ const order = (overrides: Partial<Order> = {}): Order =>
     label_url: null,
     delivery_method: null,
     ship_address: null,
+    terms_version: null,
+    terms_accepted_at: null,
     created_at: '2026-07-28 00:00:00',
     ...overrides,
   });

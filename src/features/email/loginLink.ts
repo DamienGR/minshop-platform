@@ -1,6 +1,6 @@
 import type { EmailMessage } from './provider';
 import { PALETTE, emailShell, emailButton, escapeHtml } from './layout';
-import { t } from '../i18n';
+import { t } from '../i18n/index.ts';
 
 /** Passwordless sign-in email — a single-use, short-lived magic link. */
 export function loginLinkEmail(to: string, link: string, storeName: string): EmailMessage {

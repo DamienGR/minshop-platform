@@ -3,7 +3,7 @@ import type { Order } from '../orders/db';
 import { orderReference } from '../orders/number';
 import type { EmailMessage } from './provider';
 import { PALETTE, emailShell, emailButton, escapeHtml } from './layout';
-import { t } from '../i18n';
+import { t } from '../i18n/index.ts';
 
 /**
  * Build the guest-link reissue email. Sent when support rotates an order's

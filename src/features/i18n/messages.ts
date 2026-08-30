@@ -1,4 +1,4 @@
-import type { Catalog } from './catalog';
+import type { Catalog } from './catalog.ts';
 
 /**
  * Every customer-facing string the core renders, in French.

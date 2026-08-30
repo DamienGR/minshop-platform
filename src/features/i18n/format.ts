@@ -1,4 +1,4 @@
-import { LOCALE, DEFAULT_TIME_ZONE } from './locale';
+import { LOCALE, DEFAULT_TIME_ZONE } from './locale.ts';
 
 /**
  * Locale-aware number and date formatting.

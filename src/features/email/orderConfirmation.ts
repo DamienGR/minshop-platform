@@ -6,7 +6,7 @@ import {
   type ImageDelivery,
 } from '../products/image';
 import { carrierName, trackingUrl } from '../orders/tracking';
-import { t } from '../i18n';
+import { t } from '../i18n/index.ts';
 import type { EmailMessage } from './provider';
 import {
   PALETTE,

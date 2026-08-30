@@ -5,6 +5,7 @@ import {
 } from '../products/stock.ts';
 import type { OrderItemInput } from './db';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
+import type { TermsConsent } from '../legal/terms';
 import {
   DIGITAL_DELIVERY_RELEASE,
   lifecycleActive,
@@ -286,6 +287,16 @@ export async function reserveInventory(
   paymentMethod: 'stripe' | 'opennode' | 'lightning' | 'demo',
   purger?: StockTransitionPurger,
   release: DigitalDeliveryRelease = DIGITAL_DELIVERY_RELEASE,
+  /**
+   * The terms acceptance given at checkout, if the gate asked for one.
+   *
+   * It rides on the reservation because the reservation is the only row that
+   * spans both halves of a purchase: the consent is given in the checkout
+   * request, and the order is written minutes later from the settlement
+   * request, which never sees the shopper. `recordPaidOrder` copies it across
+   * in the same statement that checks the reservation exists.
+   */
+  consent: TermsConsent | null = null,
 ): Promise<boolean> {
   if (items.length === 0 || !Number.isInteger(ttlSeconds) || ttlSeconds < 60) return false;
   await releaseExpiredReservations(db, 50, purger);
@@ -323,13 +334,21 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at)
-         SELECT ?, ?, ?, datetime('now', ?)
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
       )
-      .bind(publicId, JSON.stringify(claimedItems), paymentMethod, `+${ttlSeconds} seconds`, ...checkValues);
+      .bind(
+        publicId,
+        JSON.stringify(claimedItems),
+        paymentMethod,
+        `+${ttlSeconds} seconds`,
+        consent?.version ?? null,
+        consent?.acceptedAt ?? null,
+        ...checkValues,
+      );
     // Release 1 writes no claims, so the decrement results sit at a different
     // offset there. Index off the statements actually batched, never off the
     // item count — getting this wrong silently skips every stock purge.

@@ -2,7 +2,8 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import Layout from '../layouts/Layout.astro';
-import { formatPrice } from '../config';
+import { formatPrice, getConfig } from '../config';
+import { readTermsGate } from '../features/legal/terms';
 import { getProductByPublicId } from '../features/products/db';
 import { listVariants, getExtrasByPublicIds } from '../features/products/variants';
 import { parsePublicId } from '../features/ids/publicId.ts';
@@ -135,6 +136,8 @@ const destination = stripeDestination(
 );
 
 const heading = isBuyNow ? t('checkout.express.buyNow') : t('checkout.title');
+// Same predicate the server enforces — see features/legal/terms.ts.
+const terms = await readTermsGate(env.DB, getConfig().legal);
 // Labels come from the shared table, not a local copy: /cart offers the same
 // buttons, and a rail renamed in one place reads as two payment methods.
 const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMethodCopy(m) }));
@@ -203,6 +206,26 @@ const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMe
             {m === 'stripe' && destination.hiddenOnly && (
               <input type="hidden" name="country" value={destination.countries[0]} />
             )}
+            {
+              terms.required && (
+                <label class="mb-2 flex items-start gap-2 text-left text-xs normal-case tracking-normal text-muted">
+                  <input
+                    type="checkbox"
+                    name="accept_terms"
+                    value="on"
+                    required
+                    class="mt-0.5 accent-brand"
+                  />
+                  <span>
+                    {t('terms.accept')}{' '}
+                    <a href={terms.href} class="underline hover:text-brand">
+                      {t('terms.linkLabel')}
+                    </a>{' '}
+                    ({t('terms.version', { version: terms.version })}).
+                  </span>
+                </label>
+              )
+              }
             <button
               type="submit"
               class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${
