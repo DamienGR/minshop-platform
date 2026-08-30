@@ -1,3 +1,4 @@
+import { LOCALE } from '../i18n/locale.ts';
 /**
  * The one country catalogue: Admin's zone selector, the cart destination selector,
  * and catch-all expansion at the provider boundary all read it, so a code can never
@@ -5,7 +6,9 @@
  *
  * Codes are ISO 3166-1 alpha-2. Names come from `Intl.DisplayNames` (Workers ship a
  * full ICU) rather than a hand-maintained table that would drift and only ever be
- * English — the code is the stored value, the name is presentation.
+ * English — the code is the stored value, the name is presentation. Presentation
+ * means the STORE's locale: these names reach a shopper, in the destination
+ * selector and in "nous ne livrons pas encore vers …".
  */
 
 const CODES =
@@ -36,7 +39,7 @@ export function countryName(code: string): string {
   const cc = code.toUpperCase();
   if (displayNames === undefined) {
     try {
-      displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+      displayNames = new Intl.DisplayNames([LOCALE], { type: 'region' });
     } catch {
       displayNames = null;
     }
@@ -46,7 +49,10 @@ export function countryName(code: string): string {
 
 /** Codes with names, sorted for a picker. Built on demand; callers may cache. */
 export function countryOptions(): Array<{ code: string; name: string }> {
+  // Sorted IN the store's locale: a bare localeCompare() follows the runtime's
+  // default, which on a Worker is not French, and puts "Émirats arabes unis"
+  // after "Zimbabwe" instead of beside "Équateur".
   return COUNTRY_CODES.map((code) => ({ code, name: countryName(code) })).sort((a, b) =>
-    a.name.localeCompare(b.name),
+    a.name.localeCompare(b.name, LOCALE),
   );
 }

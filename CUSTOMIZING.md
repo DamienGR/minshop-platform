@@ -255,6 +255,33 @@ upstream, not a test to relax in your theme.
    `Astro.response` are unavailable by policy. If you need a value, it belongs
    in the model — open an issue rather than reaching around it.
 5. **Availability is a boolean.** Exact stock counts stay private.
+6. **Text comes from the catalog, not from the template.** The storefront is
+   French; a hardcoded string is the one thing no test can catch for you.
+
+## Text in a theme
+
+Your theme may import the message catalog — it is the fourth thing the
+storefront boundary allows, beside models, controls, and your own files:
+
+```astro
+---
+import { t } from '../../features/i18n';
+---
+<button>{t('product.addToCart')}</button>
+```
+
+A key that is not in `src/features/i18n/messages.ts` does not compile, so a
+typo is a build error rather than an empty button. Wording that belongs to
+*your shop* rather than to the core — a tagline, an empty-state sentence — can
+stay inline in your theme; anything the core already says has a key, and reusing
+it means an upstream rewording reaches your theme by merge.
+
+Two things not to do. Don't import `t` inside a client `<script>`: that ships
+the whole catalog to every visitor. Pass the string in with `define:vars`
+instead, the way the product page passes its "Lien copié" label. And don't
+build an `Intl` formatter — `formattedPrice` and the other model fields are
+already formatted in the store's locale, which is what makes `1 234,56 €` read
+the same everywhere.
 
 ## Styling
 

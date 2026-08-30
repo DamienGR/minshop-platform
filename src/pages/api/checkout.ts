@@ -34,6 +34,7 @@ import { stripeAllowedCountries, stripeSessionDestination } from '../../features
 import { getConfig } from '../../config';
 import { consentFor, isAcceptance, readTermsGate } from '../../features/legal/terms';
 import { t } from '../../features/i18n';
+import { countryName } from '../../features/shipping/countries';
 import {
   reserveInventory,
   releaseInventoryReservation,
@@ -151,9 +152,11 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
       const wantedVariant = parsePublicId(form.get('variant_id'), 'variant');
       variant = wantedVariant ? (variants.find((v) => v.public_id === wantedVariant) ?? null) : null;
       if (!variant) {
-        const label = product.variant_label || 'option';
+        const label = product.variant_label || t('product.option');
         return redirect(
-          `/products/${product.slug}?error=${encodeURIComponent(`Please choose a ${label}.`)}`,
+          `/products/${product.slug}?error=${encodeURIComponent(
+            t('product.error.chooseOption', { option: label }),
+          )}`,
           303,
         );
       }
@@ -204,8 +207,8 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if (short) {
     const msg =
       short.availableStock <= 0
-        ? `${short.name} is sold out.`
-        : `Only ${short.availableStock} of ${short.name} left — please adjust your cart.`;
+        ? t('checkout.error.soldOut', { produit: short.name })
+        : t('checkout.error.onlyLeft', { count: short.availableStock, produit: short.name });
     return redirect(`${errorPath}?error=${encodeURIComponent(msg)}`, 303);
   }
 
@@ -294,9 +297,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const shipCountry = selectedCountry ? selectedCountry : stripeFallbackCountry;
   if (shippingApplies && shipCountry == null) {
     return redirect(
-      `${errorPath}?error=${encodeURIComponent(
-        'The configured shipping destinations are not supported by card checkout. Please contact us to complete this order.',
-      )}`,
+      `${errorPath}?error=${encodeURIComponent(t('checkout.error.noStripeDestination'))}`,
       303,
     );
   }
@@ -327,10 +328,10 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     return redirect(
       `${errorPath}?error=${encodeURIComponent(
         missing
-          ? "We can't calculate shipping for one of these items right now. Please contact us to complete this order."
+          ? t('checkout.error.missingWeight')
           : quote.omitted.some((o) => o.reason === 'overweight')
-            ? 'This order is too heavy for the available shipping services.'
-            : `Sorry, we don't ship to ${shipCountry} yet.`,
+            ? t('checkout.error.overweight')
+            : t('checkout.error.noShippingToCountry', { pays: countryName(shipCountry) }),
       )}`,
       303,
     );
@@ -346,7 +347,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if (quote && !sessionCountries) {
     return redirect(
       `${errorPath}?error=${encodeURIComponent(
-        `Sorry, card checkout can't ship to ${shipCountry}.`,
+        t('checkout.error.noCardShippingToCountry', { pays: countryName(shipCountry) }),
       )}`,
       303,
     );
@@ -391,7 +392,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
     return redirect(
-      `${errorPath}?error=${encodeURIComponent('Some inventory just sold out — please review your cart.')}`,
+      `${errorPath}?error=${encodeURIComponent(t('checkout.error.stockGone'))}`,
       303,
     );
   }
