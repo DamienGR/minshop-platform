@@ -97,7 +97,7 @@ is the list; `npm run check:paths` fails on a path no rule covers, and
 - **core** — the agency's. Payment, stock, auth, migrations, tooling. A shop may
   edit one, but never as an unremarked customization: each core edit is a
   divergence to re-resolve at the next upgrade.
-- **client** — the merchant's. `client/`, `src/store.config.ts`,
+- **client** — the merchant's. `client/`, `imports/`, `src/store.config.ts`,
   `src/styles/overrides.css`, `theme.config.json`, `public/`, and the shop's own
   theme under `src/themes/`. The core never edits these, which is what keeps an
   upgrade merge clean.
@@ -132,6 +132,44 @@ both. The core must not name any of them: `config:validate` scans core-owned
 files for a shop's slug, display name, worker name, domain or sender, because a
 core that knows one customer is a condition the third one discovers in
 production.
+
+## The `shopctl` CLI
+
+`shopctl/` is the agency tool: create a shop's repository from a core tag, then
+operate it. It ships WITH the core and is versioned BY it, so the CLI that
+creates a shop from `v1.2.0` is the one that tag carries (ADR 0009). No
+dependencies, no build step — `shopctl new` has to run before a `node_modules`
+exists anywhere.
+
+```sh
+npm run shopctl -- new <slug> --core v<x.y.z> --origin <url>
+npm run shopctl -- doctor            # tools, tree, provisioning prerequisites
+npm run shopctl -- config validate   # the manifest gate, through the CLI
+```
+
+Three rules hold for every command, present and future:
+
+- **wrap, never reimplement.** `config validate` calls
+  `scripts/check-manifest.mjs`, `doctor` calls `scripts/check-toolchain.mjs`, and
+  `new`'s minimal verification calls the scripts the SHOP carries, not the host
+  core's. Two implementations of one gate eventually disagree, and the operator
+  believes the CLI.
+- **exit codes are the contract** (0 ok, 2 usage, 3 bad value, 4 missing
+  prerequisite, 5 external command, 6 produced-then-refused). A code never
+  changes meaning; a new failure mode takes a new code.
+- **no secret on the command line.** A credential-shaped argument is refused —
+  it is already in the shell history and the CI log — and every relayed line
+  goes through `redact()` using the manifest's own patterns.
+
+`shopctl new` clones a TAG with its history, renames the core remote to `core`,
+and DELETES NOTHING: a shop keeps receiving core tags by merge, so every file
+removed at creation is a conflict to re-resolve at each upgrade that touches it.
+(`create-minshop/` is the public upstream scaffolder and does the opposite; the
+two share a verb, not a purpose.)
+
+Tests: `test/scripts/shopctl.test.mjs`, run by `npm test` and `npm run verify`.
+It builds a real core from this repository's index, tags it, and runs the real
+binary against it.
 
 ## Architecture in one screen
 

@@ -118,60 +118,91 @@ Cloudflare `eu`, et pas seulement avec un hint de localisation `weur`.
 Ces besoins pourront être proposés sur devis, mais ne doivent pas faire dériver
 le socle de l'offre standard.
 
-## Modèle de dépôts prévu
+## Modèle de dépôts
 
 Le présent dépôt a vocation à devenir le dépôt `agency-minshop-core` :
 
 ```text
 .
-├── docs/                         Documentation et runbooks
-├── packages/
-│   ├── create-shop/              Générateur d'une boutique
-│   └── shopctl/                  CLI d'exploitation
-├── schemas/                      Schémas des manifestes et imports
-├── templates/                    Squelettes client et contenus
+├── docs/                         Plan d'implémentation et décisions (ADR)
+├── shopctl/                      CLI d'agence : création et exploitation
+├── create-minshop/               Générateur public amont (paquet npm)
+├── schemas/                      Schémas générés des manifestes et imports
+├── scripts/                      Portes de CI, provisioning, thèmes
 ├── src/                          Fork et extensions Minshop
+├── mcp/                          Worker MCP, déployable séparé
 └── test/                         Tests cœur, CLI, flotte et E2E
 ```
 
-Un dépôt client généré contiendra notamment :
+Une boutique est un **clone d'un tag du socle**, avec son historique
+([ADR 0003](docs/architecture/decisions/0003-versionnement-du-socle.md)) : elle
+conserve donc l'arbre entier ci-dessus, `shopctl/` compris, et y ajoute ce qui
+lui appartient :
 
 ```text
 shop-acme/
-├── client/
-│   ├── client.yaml
-│   ├── shipping.yaml
-│   ├── legal-content/
-│   └── fixtures/
-├── imports/
-├── public/client/
-├── src/themes/acme/
-├── tests/client/
-└── core-version.json
+├── client/client.yaml            Manifeste : identité, marché, ressources, thème
+├── imports/                      Sources du catalogue (CSV et médias)
+├── public/                       Favicon et assets de marque
+├── src/themes/acme/              Le design de la boutique
+├── src/store.config.ts           Réglages de construction
+├── theme.config.json             Le thème compilé
+└── wrangler.jsonc                Généré depuis le manifeste
 ```
 
-Les personnalisations client restent dans des chemins réservés. Une modification
-fonctionnelle générique doit être apportée au socle, publiée dans une version,
-puis propagée aux boutiques par une pull request de mise à niveau.
+`shopctl new` crée `client/client.yaml`, `imports/` et le thème ; le reste
+existe déjà dans le socle. La version du socle consommée est déclarée par le
+manifeste (`coreVersion`), pas par un fichier séparé.
 
-## CLI prévue
+Les personnalisations client restent dans des chemins réservés — la liste est
+`scripts/path-ownership.mjs`, et `npm run check:paths` échoue sur un chemin
+qu'aucune règle ne couvre. Une modification fonctionnelle générique doit être
+apportée au socle, publiée dans une version, puis propagée aux boutiques par
+une pull request de mise à niveau.
 
-Les commandes ci-dessous représentent le contrat fonctionnel cible. Elles ne
-sont pas encore implémentées.
+## CLI
+
+`shopctl` est livrée **par** le socle et versionnée **avec** lui : la CLI qui
+crée une boutique depuis le tag `v1.2.0` est celle que ce tag transporte
+([ADR 0009](docs/architecture/decisions/0009-forme-de-la-cli-shopctl.md)). Elle
+n'a aucune dépendance et aucune étape de build, parce qu'elle doit tourner avant
+qu'il n'existe un `node_modules` quelque part. Détail dans
+[shopctl/README.md](shopctl/README.md).
 
 ```bash
-# Créer le dépôt d'une boutique
+npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
+```
+
+### Livré (jalon 2)
+
+```bash
+# Créer le dépôt d'une boutique depuis un tag du socle
 shopctl new acme \
+  --core v1.0.0 \
+  --origin git@github.com:agence/shop-acme.git \
   --name "Boutique Acme" \
-  --locale fr-FR \
-  --currency EUR \
-  --jurisdiction eu
+  --domain acme.fr
 
 cd shop-acme
 
-# Vérifier les outils, comptes et prérequis
+# Vérifier les outils, l'arbre courant et les prérequis
 shopctl doctor
 
+# Valider les manifestes de l'arbre courant
+shopctl config validate
+```
+
+La locale, la devise, le marché et la juridiction n'ont pas d'option : chaque
+énumération n'accepte aujourd'hui qu'une valeur, et l'élargir est une décision
+de version de schéma
+([ADR 0008](docs/architecture/decisions/0008-format-du-manifeste-client.md)),
+pas un drapeau.
+
+### Contrat cible des jalons suivants
+
+Les commandes ci-dessous ne sont pas encore implémentées.
+
+```bash
 # Provisionner des ressources isolées
 shopctl provision --env staging --dry-run
 shopctl provision --env staging
@@ -304,9 +335,9 @@ restauration vers la production nécessitera une confirmation explicite.
 
 | Jalon | Résultat principal |
 |---|---|
-| 0 | Fork Minshop reproductible et CI de base |
-| 1 | Manifestes et isolation multi-client |
-| 2 | Générateur `shopctl new` |
+| 0 | Fork Minshop reproductible et CI de base — livré |
+| 1 | Manifestes et isolation multi-client — livré |
+| 2 | Générateur `shopctl new` — livré |
 | 3 | Socle français, TVA et facturation cadrées |
 | 4 | Import de catalogue idempotent |
 | 5 | Thème sur mesure du pilote |

@@ -22,6 +22,7 @@ import {
   coreVersion,
   detectFleetCollisions,
   discoverManifests,
+  isShopRepository,
   loadManifest,
   resourceNames,
   wranglerSubstitutions,
@@ -369,12 +370,19 @@ describe('theme id agreement', () => {
 });
 
 describe('config:validate', () => {
-  it('passes over this tree and reports both shops', () => {
+  // This suite is core-owned, so it is SHIPPED into every generated shop and
+  // runs there unchanged (`shopctl new` … `npm run verify`). A shop's tree
+  // describes one manifest more than the core's — its own — so the property is
+  // that the witnesses are still there and still pass, never that they are the
+  // only shops in the tree. A test that pinned the count would fail in every
+  // shop the platform ever creates, and the failure would look like the shop's
+  // fault.
+  it('passes over this tree and reports the witness shops', () => {
     const out = execFileSync('node', ['scripts/check-manifest.mjs', '--json'], { cwd: root, encoding: 'utf8' });
     const report = JSON.parse(out);
     expect(report.ok).toBe(true);
-    expect(report.repository).toBe('core');
-    expect(report.manifests.map((m) => m.slug).sort()).toEqual(['canary-minimal', 'pilot-fr']);
+    expect(report.repository).toBe(isShopRepository(root) ? 'shop' : 'core');
+    expect(report.manifests.map((m) => m.slug)).toEqual(expect.arrayContaining(['canary-minimal', 'pilot-fr']));
     expect(report.collisions).toEqual([]);
   });
 });

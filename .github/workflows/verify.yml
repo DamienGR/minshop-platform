@@ -129,6 +129,87 @@ jobs:
       - name: Install, build and dry-run deploy from a scratch clone
         run: npm run check:clean-clone
 
+  # The exit criterion of jalon 2: `shopctl new` produces a shop that passes its
+  # own gates with no manual step in between.
+  #
+  # It re-runs the deterministic half of the shop's `verify`. The parts it omits
+  # — the D1 integration, the MCP dry run, the scaffolder package, the Stripe
+  # country data — are properties of a core that is identical here byte for
+  # byte, already proven by the `verify` job above, and the D1 gate is the one
+  # with a known per-runner flake (see the two-runner comment at the top).
+  #
+  # What it DOES cover is the half nothing else can: this repository's own test
+  # suite is core-owned, therefore shipped into every shop and executed there.
+  # Four of its assertions used to assume the tree was the core; they passed
+  # here and failed in the first generated shop, which is the worst possible
+  # place to discover them.
+  #
+  # The slug comes from the run id rather than a literal, and that is not
+  # cosmetic: `config:validate` fails on any CORE file containing a shop's slug,
+  # and this workflow file is core-owned. A hardcoded name would leak into the
+  # very gate the job exists to run.
+  generated-shop:
+    name: Generated shop
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          # `shopctl new` clones a TAG with its history; a shallow checkout has
+          # neither to offer.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # The shop's first commit needs an author, exactly as it would on an
+      # operator's machine. `shopctl doctor` reports a missing identity as a
+      # blocking prerequisite for this reason.
+      - name: Publish this commit as a core version tag
+        id: core
+        run: |
+          git config user.name "Minshop CI"
+          git config user.email "ci@example.com"
+          version="$(node -p "require('./package.json').version")"
+          git tag -f "v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "slug=witness-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Create a shop from that tag
+        run: |
+          node shopctl/bin/shopctl.mjs new "${{ steps.core.outputs.slug }}" \
+            --from "$PWD" \
+            --core "${{ steps.core.outputs.tag }}" \
+            --dir "$RUNNER_TEMP/generated-shop" \
+            --no-install \
+            --json > "$RUNNER_TEMP/report.json"
+          cat "$RUNNER_TEMP/report.json"
+
+      # Everything below runs in the SHOP, with the tooling the shop carries.
+      - name: Install the shop's dependencies
+        working-directory: ${{ runner.temp }}/generated-shop
+        run: npm ci
+
+      - name: Run the shop's deterministic gates
+        working-directory: ${{ runner.temp }}/generated-shop
+        run: |
+          npm run check:toolchain
+          npm run check:secrets
+          npm run config:validate
+          npm run check:paths
+          npm test
+          npx astro check
+          npm run theme:check
+          npx astro build
+          node scripts/check-built-css.mjs
+          npm run check:deploy
+
   # Which shops exist is a property of the TREE, for the same reason the theme
   # list below is: a generated shop carries its own manifest, and a hardcoded
   # list here would stop covering it.

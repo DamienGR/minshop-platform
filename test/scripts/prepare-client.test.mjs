@@ -69,10 +69,16 @@ describe('preparing a shop', () => {
     }
   });
 
+  // Core-owned, so this runs unchanged inside every generated shop, whose tree
+  // describes its own manifest on top of the witnesses. The property is that
+  // the CI matrix and the library agree on the list and that the witnesses are
+  // in it — not that the list has exactly two entries, which is true of the
+  // core repository alone.
   it('lists the shops this tree describes', () => {
-    expect(clientSlugs(root).sort()).toEqual(['canary-minimal', 'pilot-fr']);
+    const slugs = clientSlugs(root).sort();
+    expect(slugs).toEqual(expect.arrayContaining(['canary-minimal', 'pilot-fr']));
     const listed = JSON.parse(execFileSync('node', ['scripts/prepare-client.mjs', '--list'], { cwd: root, encoding: 'utf8' }));
-    expect(listed.sort()).toEqual(['canary-minimal', 'pilot-fr']);
+    expect(listed.sort()).toEqual(slugs);
   });
 
   it('refuses a slug no manifest declares', () => {
@@ -81,7 +87,11 @@ describe('preparing a shop', () => {
 });
 
 describe('client neutrality', () => {
-  const needles = clientNeedles(shops()[0].manifest);
+  // The witness explicitly, not "whichever manifest comes first": a generated
+  // shop's own manifest is discovered ahead of the fixtures, and this suite
+  // ships into every generated shop.
+  const witness = () => loadManifest('test/fixtures/clients/canary-minimal/client.yaml', { root }).manifest;
+  const needles = clientNeedles(witness());
 
   it('names the values a shop is free to choose, and nothing the core may know', () => {
     // `EUR` or `eu` would match half the tree and mean nothing: the core is
