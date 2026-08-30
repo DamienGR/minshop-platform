@@ -223,7 +223,7 @@ function deepMerge<T>(base: T, override: DeepPartial<T>): T {
 /** Upstream defaults. Don't edit these per-store — override in `store.config.ts`. */
 function defaultConfig(): SiteConfig {
   return {
-    storeName: env.STORE_NAME ?? 'My Shop',
+    storeName: env.STORE_NAME ?? 'Ma boutique',
     currency: DEFAULT_CURRENCY, // store-wide currency (ISO 4217, lowercase)
     timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
@@ -291,7 +291,7 @@ function defaultConfig(): SiteConfig {
       enabled: true, // sends once a provider key is configured (else no-op)
       provider: 'resend', // 'resend' (free-plan friendly) | 'cloudflare' (paid plan)
       from: 'onboarding@resend.dev', // Resend test sender; set a verified domain in admin for real customers
-      fromName: env.STORE_NAME ?? 'My Shop',
+      fromName: env.STORE_NAME ?? 'Ma boutique',
       notifyTo: '', // owner "new order" notification — set yours in store.config.ts ('' = off)
     },
   };

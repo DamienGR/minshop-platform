@@ -5,24 +5,24 @@ cache-control: public, max-age=0, s-maxage=600
 cache-tag: catalog,shell
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<title>Search: zzzznomatch — My Shop</title>
-<meta name="description" content="Shop My Shop.">
+<title>Recherche : zzzznomatch — Ma boutique</title>
+<meta name="description" content="Découvrez la boutique Ma boutique.">
 <link rel="canonical" href="https://canonical.example/search">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="My Shop">
-<meta property="og:title" content="Search: zzzznomatch — My Shop">
-<meta property="og:description" content="Shop My Shop.">
+<meta property="og:site_name" content="Ma boutique">
+<meta property="og:title" content="Recherche : zzzznomatch — Ma boutique">
+<meta property="og:description" content="Découvrez la boutique Ma boutique.">
 <meta property="og:url" content="https://canonical.example/search">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Search: zzzznomatch — My Shop">
-<meta name="twitter:description" content="Shop My Shop.">
+<meta name="twitter:title" content="Recherche : zzzznomatch — Ma boutique">
+<meta name="twitter:description" content="Découvrez la boutique Ma boutique.">
 <script>
       document.documentElement.classList.add('image-fade-enabled');
       const finishImageFade = (event) => {
@@ -39,13 +39,13 @@ cache-tag: catalog,shell
 <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
 <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-<a href="/" aria-label="My Shop" class="font-serif text-2xl tracking-tight">
-<span>My Shop</span>
+<a href="/" aria-label="Ma boutique" class="font-serif text-2xl tracking-tight">
+<span>Ma boutique</span>
 </a>
 <form method="GET" action="/search" class="ml-auto hidden flex-1 justify-end sm:flex" role="search">
-<input type="search" name="q" value="zzzznomatch" placeholder="Search" aria-label="Search products" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
+<input type="search" name="q" value="zzzznomatch" placeholder="Rechercher" aria-label="Rechercher un produit" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
 </form>
-<nav aria-label="Primary" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
+<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
 <div class="hidden min-w-0 items-center gap-4 xl:flex xl:gap-6">
 <a href="/" title="Shop" class="min-w-0 truncate hover:text-brand">Shop</a>
 <a href="/categories/apparel" title="Apparel" class="min-w-0 truncate hover:text-brand">Apparel</a>
@@ -66,8 +66,8 @@ cache-tag: catalog,shell
 <a href="/products/sample-tee" class="hover:text-brand">Featured: Sample Tee</a>
 </div>
 </details>
-<a href="/search" class="hover:text-brand sm:hidden">Search</a>
-<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Cart<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
+<a href="/search" class="hover:text-brand sm:hidden">Rechercher</a>
+<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Panier<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
 </span>
 </a>
 </nav>
@@ -75,26 +75,26 @@ cache-tag: catalog,shell
 </header>
 <main class="page-shell">
 <div class="mb-8">
-<p class="text-xs uppercase tracking-[0.25em] text-muted">Search</p>
+<p class="text-xs uppercase tracking-[0.25em] text-muted">Recherche</p>
 <h1 class="mt-2 font-serif text-4xl tracking-tight sm:text-5xl">zzzznomatch</h1>
 </div>
 <form method="GET" action="/search" class="mb-10 max-w-md" role="search">
-<input type="search" name="q" value="zzzznomatch" placeholder="Search products…" aria-label="Search products" class="w-full border-0 border-b border-line bg-transparent px-1 py-2 text-base transition-colors focus:border-brand focus:outline-none">
+<input type="search" name="q" value="zzzznomatch" placeholder="Rechercher un produit…" aria-label="Rechercher un produit" class="w-full border-0 border-b border-line bg-transparent px-1 py-2 text-base transition-colors focus:border-brand focus:outline-none">
 </form>
-<p class="text-muted">No products match “zzzznomatch”. Try a different word.</p>
+<p class="text-muted">Aucun produit ne correspond à « zzzznomatch ». Essayez un autre mot.</p>
 </main>
 <footer class="border-t border-line">
 <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-10 text-xs uppercase tracking-widest text-muted">
-<span>&copy; My Shop</span>
+<span>&copy; Ma boutique</span>
 </div>
 </footer>
-<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Cart">
+<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Panier">
 <div data-cart-backdrop class="absolute inset-0 bg-black/30 opacity-0 transition-opacity duration-300">
 </div>
 <aside data-cart-panel class="absolute right-0 top-0 flex h-full w-full max-w-md translate-x-full flex-col bg-paper shadow-xl transition-transform duration-300">
 <div class="flex items-center justify-between border-b border-line px-6 py-5">
 <h2 class="font-serif text-2xl tracking-tight">Your cart</h2>
-<button type="button" data-cart-close aria-label="Close cart" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
+<button type="button" data-cart-close aria-label="Fermer le panier" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
 </div>
 <div data-cart-body class="flex-1 overflow-y-auto px-6 py-5">
 </div>
