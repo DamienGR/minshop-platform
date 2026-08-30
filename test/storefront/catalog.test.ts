@@ -14,7 +14,7 @@ const product = (n: number, overrides: Partial<Product> = {}): Product => ({
   slug: `item-${n}`,
   description: null,
   price_cents: 1000 + n,
-  currency: 'usd',
+  currency: 'eur',
   image_key: null,
   file_key: null,
   file_name: null,
@@ -35,7 +35,7 @@ const model = (overrides: Partial<CatalogPageModel> = {}): CatalogPageModel => (
   heading: 'All products',
   categories: [{ text: 'Apparel', href: '/categories/apparel' }],
   // Mirrors the loader: only the first card is the page's likely LCP image.
-  products: [product(1), product(2)].map((p, i) => buildProductCard(p, { currency: 'usd', priority: i === 0 })),
+  products: [product(1), product(2)].map((p, i) => buildProductCard(p, { currency: 'eur', priority: i === 0 })),
   sort: buildSortModel('/products', 'newest', 'desc'),
   pagination: buildPaginationModel('/products', 1, 3, 'newest', 'desc'),
   ...overrides,
@@ -129,7 +129,7 @@ describe('the store-owned catalog', () => {
     expect(html).toContain('All products');
     expect(html).toContain('href="/categories/apparel"');
     expect(html).toContain('href="/products/item-1"');
-    expect(html).toContain('$10.01');
+    expect(html).toContain('10,01\u00a0\u20ac');
   });
 
   it('announces an empty catalog instead of rendering a blank grid', async () => {

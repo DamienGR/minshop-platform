@@ -3,6 +3,7 @@ import type { Order } from '../orders/db';
 import { orderReference } from '../orders/number';
 import type { EmailMessage } from './provider';
 import { PALETTE, emailShell, emailButton, escapeHtml } from './layout';
+import { t } from '../i18n/index.ts';
 
 /**
  * Build the guest-link reissue email. Sent when support rotates an order's
@@ -20,29 +21,29 @@ export function guestLinkReissueEmail(
   const num = orderReference(order.public_id, order.id, getConfig().orderNumber);
 
   const text = [
-    `Here is a fresh link to your ${storeName} order #${num}.`,
+    t('email.reissue.text', { boutique: storeName, numero: num }),
     ``,
-    `Any links from earlier emails no longer work — use this one from now on:`,
+    t('email.reissue.previousDeadLine'),
     guestOrderUrl,
     ``,
-    `If you didn't ask for a new link, you can ignore this email; the new link`,
-    `still shows your order as usual.`,
+    t('email.reissue.ignore1'),
+    t('email.reissue.ignore2'),
   ].join('\n');
 
   const html = emailShell({
     storeName,
-    heading: 'Your new order link',
-    subheading: `A fresh link for order #${escapeHtml(num)}.`,
+    heading: t('email.reissue.heading'),
+    subheading: escapeHtml(t('email.reissue.subheading', { numero: num })),
     body:
       `<p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:${PALETTE.muted};">` +
-      `Any links from earlier emails no longer work — use this one from now on.</p>` +
-      emailButton(guestOrderUrl, 'View your order'),
-    footer: `If you didn't ask for a new link, you can ignore this email.`,
+      `${escapeHtml(t('email.reissue.previousDead'))}</p>` +
+      emailButton(guestOrderUrl, t('email.order.viewOrder')),
+    footer: t('email.reissue.footer'),
   });
 
   return {
     to: order.email!,
-    subject: `Your new ${storeName} order link (#${num})`,
+    subject: t('email.reissue.subject', { boutique: storeName, numero: num }),
     html,
     text,
   };

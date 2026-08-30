@@ -1,6 +1,7 @@
 ---
 import { getConfig, formatPrice } from '../../../config';
 import type { PendingPayment } from '../lightning/pending';
+import { t } from '../../i18n';
 
 // Simulated checkout view. Rendered by /pay/[publicId] for demo-backed payments.
 // The form posts back to that same route, which calls settleDemoCheckout().
@@ -11,9 +12,9 @@ interface Props {
 const { pending, declined = null } = Astro.props;
 
 const OUTCOMES: Record<string, string> = {
-  approve: 'Approve payment',
-  decline: 'Decline — card declined',
-  insufficient: 'Decline — insufficient funds',
+  approve: t('pay.demo.outcome.approve'),
+  decline: t('pay.demo.outcome.decline'),
+  insufficient: t('pay.demo.outcome.insufficient'),
 };
 const { storeName } = getConfig();
 const total = formatPrice(pending.amount_total_cents, pending.currency);
@@ -33,14 +34,14 @@ try {
 
 <div class="mx-auto max-w-md">
   <div class="mb-6 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-4 text-center text-amber-900">
-    <p class="text-base font-bold uppercase tracking-wide">⚠️ Demo checkout — not a real payment</p>
+    <p class="text-base font-bold uppercase tracking-wide">{t('pay.demo.banner')}</p>
     <p class="mt-1 text-sm">
-      No card is charged. Submitting places a real order tagged
-      <code class="rounded bg-amber-100 px-1">demo</code> so you can see the full flow.
+      {t('pay.demo.explain')}
+      <code class="rounded bg-amber-100 px-1">demo</code> {t('pay.demo.explainAfter')}
     </p>
   </div>
 
-  <h1 class="mb-1 font-serif text-3xl tracking-tight sm:text-4xl">Checkout</h1>
+  <h1 class="mb-1 font-serif text-3xl tracking-tight sm:text-4xl">{t('checkout.title')}</h1>
   <p class="mb-6 text-sm text-muted">{storeName}</p>
 
   {/* Order summary */}
@@ -57,12 +58,12 @@ try {
     </ul>
     {shipping && (
       <div class="flex items-center justify-between border-t border-line pt-2 text-sm text-muted">
-        <span>Shipping</span>
+        <span>{t('pay.demo.shipping')}</span>
         <span class="tabular-nums">{shipping}</span>
       </div>
     )}
     <div class="mt-2 flex items-center justify-between border-t border-line pt-2 text-base font-medium">
-      <span>Total</span>
+      <span>{t('pay.demo.total')}</span>
       <span class="tabular-nums">{total}</span>
     </div>
   </div>
@@ -81,7 +82,7 @@ try {
         (resolveRequiredOrderEmail). */}
     <div>
       <label class="mb-1 block text-xs font-medium text-muted" for="email">
-        Email for the order confirmation
+        {t('pay.demo.email')}
       </label>
       <input
         id="email"
@@ -97,25 +98,25 @@ try {
     {/* Decorative test-card fields — prefilled and ignored; they exist so the
         flow looks like a real card form. */}
     <fieldset class="rounded-lg border border-line p-3">
-      <legend class="px-1 text-xs font-medium text-muted">Card (test — input ignored)</legend>
+      <legend class="px-1 text-xs font-medium text-muted">{t('pay.demo.cardLegend')}</legend>
       <input
         type="text"
         value="4242 4242 4242 4242"
         inputmode="numeric"
-        aria-label="Card number"
+        aria-label={t('pay.demo.cardNumber')}
         class="mb-2 w-full rounded-md border border-line px-3 py-2 font-mono text-sm text-muted"
       />
       <div class="flex gap-2">
         <input
           type="text"
           value="12 / 34"
-          aria-label="Expiry"
+          aria-label={t('pay.demo.cardExpiry')}
           class="w-1/2 rounded-md border border-line px-3 py-2 font-mono text-sm text-muted"
         />
         <input
           type="text"
           value="123"
-          aria-label="CVC"
+          aria-label={t('pay.demo.cardCvc')}
           class="w-1/2 rounded-md border border-line px-3 py-2 font-mono text-sm text-muted"
         />
       </div>
@@ -123,7 +124,7 @@ try {
 
     <div>
       <label class="mb-1 block text-xs font-medium text-muted" for="outcome">
-        Simulate outcome
+        {t('pay.demo.outcome')}
       </label>
       <select
         id="outcome"
@@ -140,10 +141,10 @@ try {
       type="submit"
       class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium uppercase tracking-wider text-on-brand hover:bg-brand-hover"
     >
-      Pay {total}
+      {t('pay.demo.submit', { montant: total })}
     </button>
     <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">
-      Cancel
+      {t('pay.demo.cancel')}
     </a>
   </form>
 </div>

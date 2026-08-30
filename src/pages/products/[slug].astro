@@ -6,6 +6,7 @@ import { loadProductDetail } from '../../features/storefront/productDetail';
 import { getConfig } from '../../config';
 import { publicOrigin } from '../../features/http/origin';
 import { addCacheTags, productCacheTags } from '../../features/cache/tags';
+import { t } from '../../features/i18n';
 
 const loaded = await loadProductDetail(env.DB, {
   slug: Astro.params.slug,
@@ -79,7 +80,12 @@ if (loaded.backfillRelated) {
     }
   </script>
 
-  <script>
+  {/* `define:vars` keeps the copied-confirmation string on the SERVER side of
+      the boundary: the script is inlined with the value already substituted,
+      so the message catalog never reaches the browser bundle. Importing `t`
+      inside a client script would ship every storefront string to every
+      visitor, which is the opposite of what near-zero client JS means. */}
+  <script is:inline define:vars={{ copiedLabel: t('product.share.copied') }}>
     // @ts-nocheck -- plain-JS client script (annotations would ship to the browser)
     const btn = document.querySelector('[data-share]');
     if (btn instanceof HTMLElement) {
@@ -104,7 +110,7 @@ if (loaded.backfillRelated) {
           await navigator.clipboard.writeText(url);
           if (label) {
             const prev = label.textContent;
-            label.textContent = 'Link copied';
+            label.textContent = copiedLabel;
             setTimeout(() => {
               label.textContent = prev;
             }, 1500);

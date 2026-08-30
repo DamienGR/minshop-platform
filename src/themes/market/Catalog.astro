@@ -3,6 +3,7 @@ import type { CatalogPageModel } from '../../features/storefront/models';
 import ProductCard from './ProductCard.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import CatalogPagination from '../../features/storefront/controls/CatalogPagination.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Market — the catalogue as a working surface.
@@ -48,7 +49,7 @@ const chip =
      announce itself rather than rendering a blank grid. */
   model.products.length === 0 && (
     <p role="status" class="border border-line bg-[color:var(--market-surface)] p-6 text-sm">
-      Nothing here yet. Check back shortly.
+      {t('catalog.empty.market')}
     </p>
   )
 }

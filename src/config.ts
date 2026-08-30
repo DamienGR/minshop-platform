@@ -1,5 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { storeOverrides } from './store.config';
+import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from './features/i18n/locale.ts';
+import { formatDateTime } from './features/i18n/format.ts';
 import type { ShippingConfig } from './features/shipping/calculator';
 
 /**
@@ -32,6 +34,40 @@ export interface SiteConfig {
      * + session cookie) AND email configured (to send the link). See README → Accounts.
      */
     accounts: boolean;
+  };
+  /**
+   * Terms of sale, and the consent an order records.
+   *
+   * `termsSlug` names the page that holds them; the storefront asks for an
+   * explicit acceptance, and the server refuses a checkout without one, exactly
+   * WHEN that page is published. A shop ships with the terms as a draft (see
+   * migration 0040), so a fresh clone is not blocked from taking a test order by
+   * a document nobody has written yet — and the day the merchant publishes,
+   * both halves switch on together.
+   *
+   * `termsVersion` is stamped on every order that accepted them. Bump it
+   * whenever the text changes in a way a customer would have to re-accept: it is
+   * what a dispute two years from now reads to know which wording was agreed.
+   * Deliberately a value the merchant writes rather than the page's
+   * `updated_at`, which a typo fix would move.
+   */
+  legal: {
+    termsSlug: string;
+    termsVersion: string;
+    /**
+     * Store-wide VAT rate in BASIS POINTS (2000 = 20 %). France's reduced rates
+     * are 5,5 % and 2,1 %, which an integer percent cannot hold.
+     *
+     * One rate for the whole catalogue, not one per product — see ADR 0010.
+     * The agency's record of it is `commerce.defaultVatRate` in the client
+     * manifest; this is the value the running store computes with, and the two
+     * must agree.
+     *
+     * Prices are TTC, so this describes the tax ALREADY INSIDE a price, never a
+     * surcharge. 0 disables the split (an order then records no VAT rather than
+     * a fabricated one).
+     */
+    vatRateBps: number;
   };
   /**
    * Downscale + recompress uploaded product images to WebP on upload via the
@@ -187,11 +223,16 @@ function deepMerge<T>(base: T, override: DeepPartial<T>): T {
 /** Upstream defaults. Don't edit these per-store — override in `store.config.ts`. */
 function defaultConfig(): SiteConfig {
   return {
-    storeName: env.STORE_NAME ?? 'My Shop',
-    currency: 'usd', // store-wide currency (ISO 4217, lowercase)
-    timeZone: env.TIME_ZONE ?? 'UTC', // setup/admin settings can override this at runtime
+    storeName: env.STORE_NAME ?? 'Ma boutique',
+    currency: DEFAULT_CURRENCY, // store-wide currency (ISO 4217, lowercase)
+    timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
       accounts: false, // magic-link customer login; needs AUTH_SECRET + email
+    },
+    legal: {
+      termsSlug: 'conditions-generales-de-vente',
+      termsVersion: '1', // bump on every change a customer would have to re-accept
+      vatRateBps: 2000, // 20 % — the French standard rate
     },
     images: {
       optimizeOnUpload: false, // set true after enabling Transformations (free ≤5k/mo)
@@ -207,15 +248,15 @@ function defaultConfig(): SiteConfig {
       enabled: true,
       zones: [
         {
-          countries: ['US'],
+          countries: ['FR'],
           rates: [
-            { label: 'Standard', amountCents: 500 },
-            { label: 'Express', amountCents: 1500 },
+            { label: 'Colissimo', amountCents: 590 },
+            { label: 'Livraison express', amountCents: 1290 },
           ],
-          freeOverCents: 5000, // free shipping at $50+ (null to disable)
+          freeOverCents: 6000, // franco de port à 60 € (null pour désactiver)
         },
-        // Add more zones as needed, e.g. an international catch-all (matched last):
-        // { countries: ['*'], rates: [{ label: 'International', amountCents: 3000 }], freeOverCents: null },
+        // Add more zones as needed, e.g. an EU catch-all (matched last):
+        // { countries: ['*'], rates: [{ label: 'Union européenne', amountCents: 1490 }], freeOverCents: null },
       ],
     },
     discounts: {
@@ -250,7 +291,7 @@ function defaultConfig(): SiteConfig {
       enabled: true, // sends once a provider key is configured (else no-op)
       provider: 'resend', // 'resend' (free-plan friendly) | 'cloudflare' (paid plan)
       from: 'onboarding@resend.dev', // Resend test sender; set a verified domain in admin for real customers
-      fromName: env.STORE_NAME ?? 'My Shop',
+      fromName: env.STORE_NAME ?? 'Ma boutique',
       notifyTo: '', // owner "new order" notification — set yours in store.config.ts ('' = off)
     },
   };
@@ -304,10 +345,7 @@ export function formatDate(
   const iso = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return value;
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone, ...opts }).format(d);
-  } catch {
-    // A bad deployment override should never break an order/admin page.
-    return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...opts }).format(d);
-  }
+  // Locale and the UTC fallback for a bad deployment override both live in the
+  // i18n formatter, so a date reads the same here and in a pure builder.
+  return formatDateTime(d, opts, timeZone);
 }

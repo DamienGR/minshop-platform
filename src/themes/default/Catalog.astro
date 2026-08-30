@@ -3,6 +3,7 @@ import type { CatalogPageModel } from '../../features/storefront/models';
 import ProductCard from './ProductCard.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import CatalogPagination from '../../features/storefront/controls/CatalogPagination.astro';
+import { t } from '../../features/i18n';
 
 /**
  * STORE-OWNED. Edit freely — this file belongs to your store.
@@ -52,7 +53,7 @@ const { model } = Astro.props;
      grid. Reword it freely; keep the role and keep it non-empty. */
   model.products.length === 0 && (
     <p role="status" class="text-muted">
-      No products yet.
+      {t('catalog.empty.default')}
     </p>
   )
 }

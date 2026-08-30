@@ -3,6 +3,7 @@ import type { ProductDetailModel, ProductPurchaseModel } from '../../features/st
 import ProductCard from './ProductCard.astro';
 import ProductGallery from '../../features/storefront/controls/ProductGallery.astro';
 import ProductPurchaseForm from '../../features/storefront/controls/ProductPurchaseForm.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Studio — the work, then the label.
@@ -47,7 +48,7 @@ const { model, purchase } = Astro.props;
     {
       model.categories.length > 0 && (
         <nav
-          aria-label="Categories"
+          aria-label={t('catalog.categories.label')}
           class="mb-7 flex flex-wrap gap-x-5 gap-y-1 text-[10px] font-medium uppercase tracking-[0.2em] text-brand"
         >
           {model.categories.map((category) => (
@@ -70,11 +71,11 @@ const { model, purchase } = Astro.props;
       data-base={model.priceCents}
       data-currency={model.currency}
     >
-      {model.priceVaries && <span>from </span>}
+      {model.priceVaries && <span>{t('product.priceFrom')}</span>}
       {model.formattedPrice}
     </p>
 
-    {model.lowStock && <p data-low-stock class="mt-2 text-xs tracking-[0.16em] text-brand">Low stock</p>}
+    {model.lowStock && <p data-low-stock class="mt-2 text-xs tracking-[0.16em] text-brand">{t('product.lowStock')}</p>}
 
     {
       model.descriptionHtml && (
@@ -94,7 +95,7 @@ const { model, purchase } = Astro.props;
         <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
         <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
       </svg>
-      <span data-share-label>Share</span>
+      <span data-share-label>{t('product.share')}</span>
     </button>
   </div>
 </div>
@@ -103,7 +104,7 @@ const { model, purchase } = Astro.props;
   model.related.length > 0 && (
     <section class="border-t border-line py-16">
       <h2 class="mb-12 text-[10px] font-medium uppercase tracking-[0.32em] text-[color:var(--studio-muted)]">
-        You may also like
+        {t('product.related')}
       </h2>
       <ul class="studio-story grid grid-cols-2 gap-x-8 gap-y-12 lg:grid-cols-4">
         {model.related.map((card, i) => (

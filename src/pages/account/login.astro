@@ -11,13 +11,15 @@ import {
 import { verifyConfiguredTurnstile, TURNSTILE_FIELD } from '../../features/auth/turnstile';
 import { getSecret } from '../../features/secrets/store';
 import Turnstile from '../../features/auth/Turnstile.astro';
+import { t } from '../../features/i18n';
 
 if (!(await accountsEnabled())) return Astro.redirect('/', 303);
 // Already signed in → account.
 if (await getCustomerEmail(Astro.cookies)) return Astro.redirect('/account', 303);
 
 let sent = false;
-let error = Astro.url.searchParams.get('error') === 'expired' ? 'That link expired — request a new one.' : '';
+let error =
+  Astro.url.searchParams.get('error') === 'expired' ? t('account.error.expired') : '';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
@@ -34,9 +36,9 @@ if (Astro.request.method === 'POST') {
     Astro.request.headers.get('CF-Connecting-IP'),
   );
   if (!tsOk) {
-    error = 'Verification failed — please try again.';
+    error = t('account.error.verification');
   } else if (!isValidEmail(email)) {
-    error = 'Enter a valid email address.';
+    error = t('account.error.email');
   } else {
     await requestLogin(email, Astro.url.origin);
     sent = true;
@@ -44,20 +46,19 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<Layout title="Sign in">
+<Layout title={t('account.signIn')}>
   <div class="mx-auto max-w-sm py-10">
-    <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">Sign in</h1>
+    <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('account.signIn')}</h1>
 
     {
       sent ? (
         <p class="rounded-md border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Check your email — we sent a one-time sign-in link. It expires in 15 minutes.
+          {t('account.linkSent')}
         </p>
       ) : (
         <Fragment>
           <p class="mb-5 text-sm text-muted">
-            Enter your email and we'll send a sign-in link — no password needed. Use the address
-            from your orders to see your order history.
+            {t('account.intro')}
           </p>
           {error && (
             <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -71,7 +72,7 @@ if (Astro.request.method === 'POST') {
               required
               autofocus
               autocomplete="email"
-              placeholder="you@example.com"
+              placeholder={t('account.emailPlaceholder')}
               class="w-full rounded-md border border-line px-3 py-2"
             />
             <div class="flex justify-center">
@@ -81,7 +82,7 @@ if (Astro.request.method === 'POST') {
               type="submit"
               class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover"
             >
-              Send sign-in link
+              {t('account.sendLink')}
             </button>
           </form>
         </Fragment>

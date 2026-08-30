@@ -1,4 +1,5 @@
 ---
+import { t } from '../../i18n';
 /**
  * The account link. Thin, but it keeps the destination upstream: account URLs
  * are guarded by middleware, and a template inventing its own path would send
@@ -12,4 +13,4 @@ interface Props {
 const { href, class: className = 'hover:text-brand' } = Astro.props;
 ---
 
-<a href={href} class={className}>Account</a>
+<a href={href} class={className}>{t('shell.account.link')}</a>

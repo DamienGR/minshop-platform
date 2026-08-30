@@ -63,8 +63,10 @@
     { "binding": "FILES", "bucket_name": "__FILES_BUCKET__" }
   ],
   "vars": {
-    "STORE_NAME": "My Shop",
-    "TIME_ZONE": "UTC"
+    // Placeholders until the first-run wizard writes the real values to D1.
+    // French, like the rest of the core: these are what a fresh clone shows.
+    "STORE_NAME": "Ma boutique",
+    "TIME_ZONE": "Europe/Paris"
     // Serve product images from an R2 custom domain (bypasses the Worker /images
     // route and unlocks on-demand delivery in Admin); connect a public custom
     // domain to the bucket first. See README.

@@ -4,24 +4,24 @@ content-type: text/html
 cache-control: private, no-store
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<title>Page not found — My Shop</title>
-<meta name="description" content="The page you're looking for doesn't exist.">
+<title>Page introuvable — Ma boutique</title>
+<meta name="description" content="La page que vous cherchez n’existe pas.">
 <link rel="canonical" href="https://canonical.example/no-such-page">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="My Shop">
-<meta property="og:title" content="Page not found — My Shop">
-<meta property="og:description" content="The page you're looking for doesn't exist.">
+<meta property="og:site_name" content="Ma boutique">
+<meta property="og:title" content="Page introuvable — Ma boutique">
+<meta property="og:description" content="La page que vous cherchez n’existe pas.">
 <meta property="og:url" content="https://canonical.example/no-such-page">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Page not found — My Shop">
-<meta name="twitter:description" content="The page you're looking for doesn't exist.">
+<meta name="twitter:title" content="Page introuvable — Ma boutique">
+<meta name="twitter:description" content="La page que vous cherchez n’existe pas.">
 <script>
       document.documentElement.classList.add('image-fade-enabled');
       const finishImageFade = (event) => {
@@ -38,13 +38,13 @@ cache-control: private, no-store
 <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
 <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-<a href="/" aria-label="My Shop" class="font-serif text-2xl tracking-tight">
-<span>My Shop</span>
+<a href="/" aria-label="Ma boutique" class="font-serif text-2xl tracking-tight">
+<span>Ma boutique</span>
 </a>
 <form method="GET" action="/search" class="ml-auto hidden flex-1 justify-end sm:flex" role="search">
-<input type="search" name="q" value placeholder="Search" aria-label="Search products" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
+<input type="search" name="q" value placeholder="Rechercher" aria-label="Rechercher un produit" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
 </form>
-<nav aria-label="Primary" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
+<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
 <div class="hidden min-w-0 items-center gap-4 xl:flex xl:gap-6">
 <a href="/" title="Shop" class="min-w-0 truncate hover:text-brand">Shop</a>
 <a href="/categories/apparel" title="Apparel" class="min-w-0 truncate hover:text-brand">Apparel</a>
@@ -65,8 +65,8 @@ cache-control: private, no-store
 <a href="/products/sample-tee" class="hover:text-brand">Featured: Sample Tee</a>
 </div>
 </details>
-<a href="/search" class="hover:text-brand sm:hidden">Search</a>
-<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Cart<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
+<a href="/search" class="hover:text-brand sm:hidden">Rechercher</a>
+<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Panier<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
 </span>
 </a>
 </nav>
@@ -74,27 +74,27 @@ cache-control: private, no-store
 </header>
 <main class="page-shell">
 <section class="reveal mx-auto max-w-xl py-16 text-center sm:py-24">
-<p class="text-xs uppercase tracking-[0.25em] text-muted">Error 404</p>
-<h1 class="mt-3 font-serif text-5xl tracking-tight sm:text-6xl">Page not found</h1>
-<p class="mx-auto mt-5 max-w-md text-sm text-muted">The page you're looking for moved, sold out, or never existed.</p>
+<p class="text-xs uppercase tracking-[0.25em] text-muted">Erreur 404</p>
+<h1 class="mt-3 font-serif text-5xl tracking-tight sm:text-6xl">Page introuvable</h1>
+<p class="mx-auto mt-5 max-w-md text-sm text-muted">La page que vous cherchez a été déplacée, épuisée, ou n’a jamais existé.</p>
 <div class="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
-<a href="/" class="rounded-md bg-brand px-5 py-2.5 text-xs font-medium uppercase tracking-wider text-on-brand transition hover:bg-brand-hover">Back to shop</a>
-<a href="/search" class="border-b border-transparent pb-0.5 text-xs uppercase tracking-widest text-muted transition hover:border-brand hover:text-brand">Search the catalog</a>
+<a href="/" class="rounded-md bg-brand px-5 py-2.5 text-xs font-medium uppercase tracking-wider text-on-brand transition hover:bg-brand-hover">Retour à la boutique</a>
+<a href="/search" class="border-b border-transparent pb-0.5 text-xs uppercase tracking-widest text-muted transition hover:border-brand hover:text-brand">Rechercher dans le catalogue</a>
 </div>
 </section>
 </main>
 <footer class="border-t border-line">
 <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-10 text-xs uppercase tracking-widest text-muted">
-<span>&copy; My Shop</span>
+<span>&copy; Ma boutique</span>
 </div>
 </footer>
-<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Cart">
+<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Panier">
 <div data-cart-backdrop class="absolute inset-0 bg-black/30 opacity-0 transition-opacity duration-300">
 </div>
 <aside data-cart-panel class="absolute right-0 top-0 flex h-full w-full max-w-md translate-x-full flex-col bg-paper shadow-xl transition-transform duration-300">
 <div class="flex items-center justify-between border-b border-line px-6 py-5">
 <h2 class="font-serif text-2xl tracking-tight">Your cart</h2>
-<button type="button" data-cart-close aria-label="Close cart" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
+<button type="button" data-cart-close aria-label="Fermer le panier" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
 </div>
 <div data-cart-body class="flex-1 overflow-y-auto px-6 py-5">
 </div>

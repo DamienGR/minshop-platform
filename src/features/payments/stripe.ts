@@ -7,6 +7,25 @@ import type {
 } from './provider';
 import { STRIPE_CHECKOUT_TTL_SECONDS } from './provider';
 import { stripeAllowedCountries } from './stripeCountries.ts';
+import { DEFAULT_CURRENCY, LANG } from '../i18n/locale.ts';
+
+/**
+ * Stripe's locale enum is language-level ('fr'), not a BCP 47 tag with a
+ * region, so the store locale is MAPPED here rather than passed through — the
+ * vendor's vocabulary stays in the vendor's adapter. A language Stripe has no
+ * translation for falls back to its own browser detection instead of failing
+ * the session: an English payment page beats no payment page.
+ */
+const STRIPE_LOCALES: Record<string, Stripe.Checkout.SessionCreateParams.Locale> = {
+  fr: 'fr',
+};
+
+/** Exported so the mapping is testable without standing up a Stripe client. */
+export function stripeLocale(lang: string): Stripe.Checkout.SessionCreateParams.Locale {
+  return STRIPE_LOCALES[lang] ?? 'auto';
+}
+
+const STRIPE_LOCALE = stripeLocale(LANG);
 
 /**
  * The delivery mode a chosen Stripe rate encodes. Session creation stamps every
@@ -53,6 +72,13 @@ export function createStripeProvider(
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
+        // The hosted page is the ONE screen of the purchase the store does not
+        // render, so it is also the one that can silently go back to English.
+        // Pinned to the store's locale rather than left on Stripe's 'auto',
+        // which follows the browser: a French shop's own copy, prices and legal
+        // text would otherwise sit around an English payment form for anyone
+        // whose browser asks for English.
+        locale: STRIPE_LOCALE,
         // Keep the hosted session within the inventory reservation window.
         expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_TTL_SECONDS,
         line_items: params.lineItems.map((li) => ({
@@ -96,7 +122,7 @@ export function createStripeProvider(
               display_name: o.label,
               fixed_amount: {
                 amount: o.amountCents,
-                currency: params.lineItems[0]?.currency ?? 'usd',
+                currency: params.lineItems[0]?.currency ?? DEFAULT_CURRENCY,
               },
               // The mode travels as rate metadata because the label is merchant
               // prose: settlement reads this back to record delivery_method

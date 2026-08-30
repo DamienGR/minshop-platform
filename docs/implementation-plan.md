@@ -936,29 +936,36 @@ Durée indicative : 5 à 8 jours.
 
 #### Livrables
 
-- [ ] dictionnaires de traduction typés ;
-- [ ] storefront français ;
-- [ ] erreurs françaises ;
-- [ ] e-mails français ;
-- [ ] décision concernant la traduction de l'admin ;
-- [ ] `lang="fr"` ;
-- [ ] formats `fr-FR` ;
-- [ ] fuseau `Europe/Paris` ;
-- [ ] checkout Stripe français ;
-- [ ] pages légales brouillon ;
-- [ ] version des CGV enregistrée avec la commande.
+- [x] dictionnaires de traduction typés ;
+- [x] storefront français ;
+- [x] erreurs françaises ;
+- [x] e-mails français ;
+- [x] décision concernant la traduction de l'admin ;
+- [x] `lang="fr"` ;
+- [x] formats `fr-FR` ;
+- [x] fuseau `Europe/Paris` ;
+- [x] checkout Stripe français ;
+- [x] pages légales brouillon ;
+- [x] version des CGV enregistrée avec la commande.
 
 #### Décision TVA et facturation
 
 Une étude courte doit comparer puis figer :
 
-- [ ] prix TTC enregistrés par Minshop ;
-- [ ] taux par produit ou taux unique ;
-- [ ] Stripe Tax activé ou désactivé ;
-- [ ] ventilation de TVA enregistrée avec la commande ;
-- [ ] reçu Stripe ou véritable facture ;
-- [ ] génération et numérotation des factures ;
-- [ ] export destiné à la comptabilité.
+- [x] prix TTC enregistrés par Minshop ;
+- [x] taux par produit ou taux unique ;
+- [x] Stripe Tax activé ou désactivé ;
+- [x] ventilation de TVA enregistrée avec la commande ;
+- [x] reçu Stripe ou véritable facture ;
+- [x] génération et numérotation des factures ;
+- [x] export destiné à la comptabilité.
+
+Les sept réponses sont figées par
+l'[ADR 0010](architecture/decisions/0010-tva-facturation-et-consentement.md),
+avec les alternatives écartées : TTC, taux unique par boutique en points de
+base, Stripe Tax désactivé, ventilation dans deux colonnes propres, reçu et non
+facture au pilote, numérotation différée, et l'export de commandes existant
+augmenté plutôt qu'un second export comptable.
 
 Cette décision doit être validée par un comptable ou conseil compétent avant la
 commercialisation.
@@ -967,23 +974,112 @@ commercialisation.
 
 #### Tests
 
-- [ ] format `1 234,56 €` ;
-- [ ] dates françaises ;
-- [ ] arrondis de panier ;
+- [x] format `1 234,56 €` ;
+- [x] dates françaises ;
+- [x] arrondis de panier ;
 - [ ] remises ;
-- [ ] taux de TVA retenus ;
-- [ ] accents et Unicode ;
-- [ ] chaînes manquantes détectées à la compilation ;
-- [ ] e-mails en français ;
-- [ ] CGV non publiées par défaut ;
-- [ ] paiement bloqué sans acceptation ;
-- [ ] version des CGV capturée ;
-- [ ] checkout Stripe affiché en français.
+- [x] taux de TVA retenus ;
+- [x] accents et Unicode ;
+- [x] chaînes manquantes détectées à la compilation ;
+- [x] e-mails en français ;
+- [x] CGV non publiées par défaut ;
+- [x] paiement bloqué sans acceptation ;
+- [x] version des CGV capturée ;
+- [x] checkout Stripe affiché en français.
 
 #### Critère de sortie
 
 - [ ] Le modèle français de prix, TVA, facturation et consentement est documenté,
   implémenté et validé.
+
+Documenté et implémenté : oui. **Validé : non**, et c'est la validation externe
+ci-dessus qui manque. Le critère reste donc ouvert, comme la condition de
+déploiement du §9 qu'il alimente.
+
+#### État
+
+Trois propriétés portent le reste.
+
+**La locale est une constante de compilation, pas un réglage.** `client.locale`
+n'accepte qu'une valeur au manifeste et l'élargir est une décision de version de
+schéma (§4) ; le code dit maintenant la même chose. `features/i18n/locale.ts`
+est une feuille sans import — c'est ce qui permet à `money.ts`, qui se documente
+comme dépendance-zéro pour rester utilisable depuis du code pur, de formater en
+`fr-FR` sans rien perdre. `<html lang>` en est dérivé plutôt que saisi une
+seconde fois.
+
+**Une chaîne manquante est une erreur de compilation.** `MessageKey` est dérivé
+du catalogue français lui-même, donc `t('clé.inexistante')` ne compile pas et un
+second catalogue déclaré `LocaleCatalog` ne peut pas omettre une clé.
+`test/i18n/` compile deux fixtures cassées exprès pour le prouver, et un
+troisième cas valide pour que l'échec ne vienne pas simplement d'un import
+irrésolu — un garde-fou que personne n'a vu échouer ne prouve rien. Ce que le
+compilateur ne voit pas, `messages.test.ts` le vérifie : apostrophe
+typographique, espace fine insécable avant `? ! ; :`, accents intacts. Les
+assertions de format épellent les points de code (U+202F, U+00A0) plutôt que
+d'afficher `1 234,56 €`, parce qu'un copier-coller transforme ces deux
+caractères en espaces ordinaires sans que la diff le montre.
+
+**Une seule prédicat décide de l'acceptation des CGV.** La case s'affiche et le
+serveur refuse exactement quand la page des CGV est publiée. Deux prédicats
+auraient fini par diverger, et les deux façons de diverger sont mauvaises : un
+formulaire qui demande un accord que personne n'enregistre, ou un serveur qui
+refuse une commande que la page ne permettait pas d'accepter.
+
+La frontière de traduction n'est pas « admin / storefront » mais « qui lit »
+([ADR 0011](architecture/decisions/0011-langue-de-l-administration.md)).
+L'administration reste en anglais au pilote — c'est l'agence qui exploite
+(ADR 0002) —, `AdminLayout` garde donc `lang="en"` délibérément, et
+`/payment-setup`, atteignable depuis le panier, est en français tout en nommant
+en anglais les écrans qui portent ces noms. Les montants et les dates restent
+formatés en `fr-FR` partout, admin comprise : une date au format américain dans
+un back-office français est une erreur d'exploitation, pas une question de
+langue.
+
+Le checkout hébergé Stripe a demandé une correction que rien n'aurait signalée :
+c'est le seul écran de l'achat que la boutique ne rend pas, et sa `locale` valait
+`auto`, c'est-à-dire le navigateur. Un acheteur dont le navigateur demande de
+l'anglais voyait un formulaire de paiement anglais au milieu d'une boutique, de
+prix et de CGV français. L'énumération de Stripe est au niveau de la langue, pas
+du tag BCP 47, donc la correspondance vit dans l'adaptateur.
+
+Le consentement voyage sur la réservation, et le taux de TVA avec lui. C'est la
+seule ligne qui enjambe les deux moitiés d'un achat : l'accord est donné dans la
+requête de commande, l'ordre est écrit minutes plus tard par un règlement qui
+n'a jamais vu l'acheteur. L'alternative — faire transiter les deux champs par
+les métadonnées de chaque canal — offrait quatre occasions de perdre exactement
+ce dont dépendent un litige et un contrôle. Le règlement lit la réservation une
+fois et appelle `vatIncludedCents()`, plutôt qu'une copie SQL de la même
+arithmétique qui finirait par en diverger.
+
+Le refus a lieu **avant** la réservation de stock, et la porte D1 l'affirme sur
+le stock plutôt que sur la route : une commande qui ne peut pas aboutir
+légalement ne doit pas retirer d'inventaire de l'étagère, quel que soit
+l'endroit où le contrôle finira par vivre.
+
+Deux limites, nommées plutôt qu'implicites.
+
+Les rails qui passent par `/checkout` avant de payer — Lightning, OpenNode et
+la démonstration, quand la livraison s'applique — demandent l'acceptation sur
+cette page, et non au panier. Un acheteur qui a coché au panier recoche donc à
+l'étape finale. Stripe, le rail du pilote, réserve directement et ne coche
+qu'une fois. Reporter la case du panier vers `/checkout` par un paramètre
+d'URL pré-cocherait une case de consentement, ce qui est précisément ce qu'il
+ne faut pas faire.
+
+Le test « remises » reste ouvert. Les codes promotionnels sont appliqués par
+Stripe et reviennent dans `discount_cents` ; la ventilation de TVA est bien
+prise sur le montant réellement payé, donc après remise, mais aucun test ne
+l'exerce contre un code promotionnel réel — ce qui demande une clé Stripe et
+appartient au jalon 7.
+
+Deux imports `t` sont signalés inutilisés par `astro check`, qui arrête son
+analyse du frontmatter au premier `return` de premier niveau. Ils sont utilisés ;
+`checkout.astro` porte le même symptôme sur un symbole antérieur à ce jalon.
+
+Vérification locale : `npm run verify` complet, la porte D1 comprise, qui rejoue
+le brouillon des CGV livré par la migration 0040, sa publication, le refus, le
+non-mouvement de stock, l'acceptation, et le taux recopié sur la réservation.
 
 ### Jalon 4 — Import de catalogue
 

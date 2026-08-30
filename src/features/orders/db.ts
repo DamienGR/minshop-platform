@@ -4,6 +4,7 @@ import {
   type StockTransitionPurger,
 } from '../products/stock.ts';
 import { generatePublicId } from '../ids/publicId.ts';
+import { vatIncludedCents } from '../legal/vat.ts';
 
 export interface ShippingAddress {
   name: string | null;
@@ -45,6 +46,14 @@ export interface Order {
   /** 'pickup' | 'shipping' | NULL (pre-0035 or no shipping). Unknown = shipping. */
   delivery_method: string | null;
   ship_address: string | null; // JSON snapshot (ShippingAddress) or null
+  /** Terms version the buyer accepted, or null when the gate was open. */
+  terms_version: string | null;
+  /** When they accepted, UTC "YYYY-MM-DD HH:MM:SS". Null with terms_version. */
+  terms_accepted_at: string | null;
+  /** VAT rate in force at purchase, basis points. Null = no split recorded. */
+  vat_rate_bps: number | null;
+  /** VAT contained in amount_total_cents (prices are TTC), not added to it. */
+  vat_amount_cents: number | null;
   created_at: string;
 }
 
@@ -489,11 +498,42 @@ export async function recordPaidOrder(
     o.providerPaymentId ?? null,
   ] as const;
   const settlementStatuses = "('active', 'payment_pending', 'expired', 'failed')";
+  // The terms acceptance and the VAT rate are READ OFF the reservation rather
+  // than passed in. Settlement runs in a webhook that never saw the shopper, so
+  // every rail would otherwise have to carry both through its own provider
+  // metadata — four chances to drop the fields a dispute and an audit turn on.
+  //
+  // Read here rather than joined in the INSERT so the rounding rule stays in
+  // ONE place: `vatIncludedCents` is what the tests exercise, and a SQL copy of
+  // the same arithmetic would eventually disagree with it. The insert's
+  // reservation guard still decides whether the row is written at all.
+  const carried = o.reservationId
+    ? await db
+        .prepare(
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps FROM checkout_reservations WHERE public_id = ?',
+        )
+        .bind(o.reservationId)
+        .first<{
+          terms_version: string | null;
+          terms_accepted_at: string | null;
+          vat_rate_bps: number | null;
+        }>()
+    : null;
+  const vatRateBps = carried?.vat_rate_bps ?? null;
+  const consentValues = [
+    carried?.terms_version ?? null,
+    carried?.terms_accepted_at ?? null,
+    vatRateBps,
+    // Taken on the total the buyer actually paid, not summed per line.
+    vatRateBps ? vatIncludedCents(o.amountTotalCents, vatRateBps) : null,
+  ] as const;
+  const orderColumns =
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents';
   const insertOrder = o.reservationId
     ? db
         .prepare(
-          `INSERT INTO orders (provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?
+          `INSERT INTO orders (${orderColumns})
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -501,11 +541,11 @@ export async function recordPaidOrder(
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )
-        .bind(...orderValues, o.reservationId)
+        .bind(...orderValues, ...consentValues, o.reservationId)
     : db
         .prepare(
-          `INSERT INTO orders (provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?)
+          `INSERT INTO orders (${orderColumns})
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

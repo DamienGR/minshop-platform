@@ -1,6 +1,7 @@
 ---
 import type { ProductCardModel } from '../../features/storefront/models';
 import StoreImage from '../../features/storefront/controls/StoreImage.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Studio — a plate on a wall.
@@ -34,7 +35,7 @@ const Heading = headingLevel;
       {
         !card.inStock && (
           <span class="absolute left-0 top-5 bg-[color:var(--studio-bone)] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-[color:var(--color-paper)]">
-            Sold out
+            {t('product.soldOut')}
           </span>
         )
       }

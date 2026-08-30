@@ -4,6 +4,7 @@ import StoreNav from '../../features/storefront/controls/StoreNav.astro';
 import StoreSearch from '../../features/storefront/controls/StoreSearch.astro';
 import StoreCartControl from '../../features/storefront/controls/StoreCartControl.astro';
 import StoreAccountControl from '../../features/storefront/controls/StoreAccountControl.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Market — a compact toolbar, not a masthead.
@@ -59,7 +60,7 @@ const link = 'text-xs font-semibold text-[color:var(--market-muted)] hover:text-
     />
 
     <nav
-      aria-label="Store"
+      aria-label={t('shell.nav.store')}
       class="flex min-w-0 items-center gap-3 text-xs font-semibold text-[color:var(--market-muted)] sm:gap-4"
     >
       <StoreNav

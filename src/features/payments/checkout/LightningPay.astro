@@ -2,6 +2,7 @@
 import { renderSVG } from 'uqr';
 import { formatPrice } from '../../../config';
 import type { PendingPayment } from '../lightning/pending';
+import { t, formatNumber } from '../../i18n';
 
 // Lightning QR view. Rendered by /pay/[publicId] for lnbits/phoenixd payments;
 // that route polls the node on load and redirects to the order page once settled.
@@ -17,7 +18,7 @@ const lightningUri = `lightning:${bolt11}`;
 // Server-rendered QR (static SVG — keeps the page near-zero-JS).
 const qrSvg = bolt11 ? renderSVG(bolt11, { border: 2 }) : null;
 const fiat = formatPrice(pending.amount_total_cents, pending.currency);
-const sats = (pending.amount_sat ?? 0).toLocaleString('en-US');
+const sats = formatNumber(pending.amount_sat ?? 0);
 const refreshSeconds = 4;
 // Epoch ms the invoice lapses, so the reload loop can stop instead of polling
 // the node forever on an abandoned tab.
@@ -27,29 +28,28 @@ const expiresAtMs = pending.expires_at ? Date.parse(pending.expires_at) : null;
 {
   expired ? (
     <div class="mx-auto max-w-md text-center">
-      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">Invoice expired</h1>
+      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.lightning.expired.title')}</h1>
       <p class="mb-6 text-sm text-muted">
-        This Lightning invoice is no longer payable and you weren't charged. Start a new
-        checkout to try again.
+        {t('pay.lightning.expired.body')}
       </p>
       <a
         href="/cart"
         class="inline-block rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover"
       >
-        Back to cart
+        {t('pay.lightning.backToCart')}
       </a>
     </div>
   ) : (
     <Fragment>
       <div class="mx-auto max-w-md text-center">
-        <h1 class="mb-1 font-serif text-3xl tracking-tight sm:text-4xl">Pay with Lightning</h1>
+        <h1 class="mb-1 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.lightning.title')}</h1>
         <p class="mb-1 text-3xl font-bold tabular-nums">{sats} sats</p>
-        <p class="mb-6 text-sm text-muted">{fiat} · scan or tap to pay</p>
+        <p class="mb-6 text-sm text-muted">{t('pay.lightning.amountHint', { montant: fiat })}</p>
 
         <a
           href={lightningUri}
           class="block rounded-xl border border-line bg-surface p-4"
-          aria-label="Open in Lightning wallet"
+          aria-label={t('pay.lightning.openWalletLabel')}
         >
           <div
             class="mx-auto aspect-square w-full max-w-[18rem] rounded-lg bg-surface p-2 [&>svg]:h-full [&>svg]:w-full"
@@ -59,7 +59,7 @@ const expiresAtMs = pending.expires_at ? Date.parse(pending.expires_at) : null;
 
         <div class="mt-4 text-left">
           <label class="mb-1 block text-xs font-medium text-muted" for="invoice">
-            Lightning invoice
+            {t('pay.lightning.invoice')}
           </label>
           <div class="flex gap-2">
             <input
@@ -74,21 +74,21 @@ const expiresAtMs = pending.expires_at ? Date.parse(pending.expires_at) : null;
               data-invoice={bolt11}
               class="shrink-0 rounded-md bg-brand px-3 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover"
             >
-              Copy
+              {t('pay.lightning.copy')}
             </button>
           </div>
         </div>
 
         <a href={lightningUri} class="mt-4 inline-block text-sm font-medium text-accent">
-          Open in wallet →
+          {t('pay.lightning.openWallet')} →
         </a>
 
         <p class="mt-6 text-xs text-faint" data-status>
-          Waiting for payment… this page updates automatically.
+          {t('pay.lightning.waiting')}
         </p>
       </div>
 
-      <script is:inline define:vars={{ refreshSeconds, expiresAtMs }}>
+      <script is:inline define:vars={{ refreshSeconds, expiresAtMs, copiedLabel: t('pay.lightning.copied') }}>
         // Near-zero-JS: poll by reloading while the invoice is still payable. The
         // server settles + redirects on payment, or renders the expired view once
         // it lapses. Stop scheduling reloads at expiry so an abandoned tab doesn't
@@ -106,7 +106,7 @@ const expiresAtMs = pending.expires_at ? Date.parse(pending.expires_at) : null;
           try {
             await navigator.clipboard.writeText(btn.dataset.invoice || '');
             const prev = btn.textContent;
-            btn.textContent = 'Copied';
+            btn.textContent = copiedLabel;
             setTimeout(() => (btn.textContent = prev), 1500);
           } catch {
             /* clipboard unavailable — the invoice is still selectable */

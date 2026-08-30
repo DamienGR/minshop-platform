@@ -10,6 +10,7 @@ import { guestOrderUrl } from '../../features/orders/guestAccess.ts';
 import { paginate, queryHref } from '../../pagination';
 import Pagination from '../../components/Pagination.astro';
 import { catalogPath } from '../../features/settings/home';
+import { t } from '../../features/i18n';
 
 if (!(await accountsEnabled())) return Astro.redirect('/', 303);
 const email = await getCustomerEmail(Astro.cookies);
@@ -37,18 +38,21 @@ const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
 ---
 
-<Layout title="Your account">
+<Layout title={t('account.title')}>
   <div class="mx-auto max-w-2xl">
     <div class="mb-6 flex items-center justify-between">
-      <h1 class="font-serif text-3xl tracking-tight sm:text-4xl">Your orders</h1>
-      <a href="/account/logout" class="text-sm font-medium text-accent">Sign out</a>
+      <h1 class="font-serif text-3xl tracking-tight sm:text-4xl">{t('account.orders')}</h1>
+      <a href="/account/logout" class="text-sm font-medium text-accent">{t('account.signOut')}</a>
     </div>
-    <p class="mb-6 text-sm text-muted">Signed in as {email}</p>
+    <p class="mb-6 text-sm text-muted">{t('account.signedInAs', { email })}</p>
 
     {
       orders.length === 0 ? (
         <p class="rounded-lg border border-line bg-surface px-4 py-6 text-center text-sm text-muted">
-          No orders yet. <a href={shopHref} class="font-medium text-accent">Start shopping →</a>
+          {t('account.noOrders')}{' '}
+          <a href={shopHref} class="font-medium text-accent">
+            {t('account.startShopping')}
+          </a>
         </p>
       ) : (
         <ul class="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
@@ -57,11 +61,15 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
               <div>
                 {orderLinks.get(o.id) ? (
                   <a href={orderLinks.get(o.id)} class="font-medium text-ink hover:text-accent">
-                    Order #{orderReference(o.public_id, o.id, orderCfg)}
+                    {t('account.orderNumber', {
+                      numero: orderReference(o.public_id, o.id, orderCfg),
+                    })}
                   </a>
                 ) : (
                   <span class="font-medium text-ink">
-                    Order #{orderReference(o.public_id, o.id, orderCfg)}
+                    {t('account.orderNumber', {
+                      numero: orderReference(o.public_id, o.id, orderCfg),
+                    })}
                   </span>
                 )}
                 <div class="text-xs text-faint">{formatDate(o.created_at, undefined, timeZone)}</div>
@@ -70,7 +78,7 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
                 <div class="tabular-nums">{formatPrice(o.amount_total_cents, o.currency)}</div>
                 <div class="text-xs capitalize text-faint">
                   {o.refunded_cents > 0 && o.refunded_cents < o.amount_total_cents
-                    ? 'Partially refunded'
+                    ? t('account.status.partiallyRefunded')
                     : o.status}
                 </div>
               </div>

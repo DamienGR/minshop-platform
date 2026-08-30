@@ -11,6 +11,7 @@ import { resolveRequiredOrderEmail } from '../../email/orderPolicy';
 import { deliverOrderNotifications } from '../../email/outbox';
 import type { StoreSettings } from '../../settings/db';
 import { purgeStockProductCache } from '../../cache/purge';
+import { t } from '../../i18n/index.ts';
 
 // Settlement logic for the self-rendered /pay page, one function per method. Kept
 // here (beside the views) so the route stays a thin dispatcher.
@@ -23,8 +24,8 @@ export interface DemoSettleResult {
 }
 
 const DECLINE: Record<string, string> = {
-  insufficient: 'Payment declined — insufficient funds. (Simulated)',
-  decline: 'Payment declined — your card was declined. (Simulated)',
+  insufficient: t('pay.demo.declined.insufficient'),
+  decline: t('pay.demo.declined.card'),
 };
 
 /**
@@ -42,11 +43,11 @@ export async function settleDemoCheckout(
 ): Promise<DemoSettleResult> {
   // Fail closed after the demo window even if a POST slips past the page guard.
   if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
-    return { declined: 'This demo checkout has expired.' };
+    return { declined: t('pay.demo.declined.expired') };
   }
   const outcome = String(form.get('outcome') ?? 'approve');
   const email = resolveRequiredOrderEmail(String(form.get('email') ?? ''), pending.email);
-  if (!email) return { declined: 'A valid email is required.' };
+  if (!email) return { declined: t('pay.demo.declined.email') };
   if (outcome === 'approve') {
     const order = { ...pendingToPaidOrder(pending), email };
     // pendingToPaidOrder carries settlePaymentHash, so the pending row settles

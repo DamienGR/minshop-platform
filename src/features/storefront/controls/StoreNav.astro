@@ -1,5 +1,6 @@
 ---
 import type { StorefrontLink } from '../models';
+import { t } from '../../i18n';
 
 /**
  * Merchant navigation: the inline row and its mobile disclosure.
@@ -57,7 +58,7 @@ const {
        visually it belongs at the edge, past the store controls. */
     <details data-nav-disclosure class={disclosureClass}>
       <summary
-        aria-label="Menu"
+        aria-label={t('shell.nav.menu')}
         class="flex cursor-pointer list-none items-center hover:text-brand"
       >
         <svg

@@ -4,24 +4,24 @@ content-type: text/html
 cache-control: private, no-store
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<title>Checkout — My Shop</title>
-<meta name="description" content="Express checkout.">
+<title>Commande — Ma boutique</title>
+<meta name="description" content="Commande express.">
 <link rel="canonical" href="https://canonical.example/express">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="My Shop">
-<meta property="og:title" content="Checkout — My Shop">
-<meta property="og:description" content="Express checkout.">
+<meta property="og:site_name" content="Ma boutique">
+<meta property="og:title" content="Commande — Ma boutique">
+<meta property="og:description" content="Commande express.">
 <meta property="og:url" content="https://canonical.example/express">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Checkout — My Shop">
-<meta name="twitter:description" content="Express checkout.">
+<meta name="twitter:title" content="Commande — Ma boutique">
+<meta name="twitter:description" content="Commande express.">
 <script>
       document.documentElement.classList.add('image-fade-enabled');
       const finishImageFade = (event) => {
@@ -38,13 +38,13 @@ cache-control: private, no-store
 <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
 <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-<a href="/" aria-label="My Shop" class="font-serif text-2xl tracking-tight">
-<span>My Shop</span>
+<a href="/" aria-label="Ma boutique" class="font-serif text-2xl tracking-tight">
+<span>Ma boutique</span>
 </a>
 <form method="GET" action="/search" class="ml-auto hidden flex-1 justify-end sm:flex" role="search">
-<input type="search" name="q" value placeholder="Search" aria-label="Search products" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
+<input type="search" name="q" value placeholder="Rechercher" aria-label="Rechercher un produit" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
 </form>
-<nav aria-label="Primary" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
+<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
 <div class="hidden min-w-0 items-center gap-4 xl:flex xl:gap-6">
 <a href="/" title="Shop" class="min-w-0 truncate hover:text-brand">Shop</a>
 <a href="/categories/apparel" title="Apparel" class="min-w-0 truncate hover:text-brand">Apparel</a>
@@ -65,8 +65,8 @@ cache-control: private, no-store
 <a href="/products/sample-tee" class="hover:text-brand">Featured: Sample Tee</a>
 </div>
 </details>
-<a href="/search" class="hover:text-brand sm:hidden">Search</a>
-<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Cart<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
+<a href="/search" class="hover:text-brand sm:hidden">Rechercher</a>
+<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Panier<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
 </span>
 </a>
 </nav>
@@ -74,21 +74,21 @@ cache-control: private, no-store
 </header>
 <main class="page-shell">
 <div class="mx-auto max-w-md">
-<p class="text-xs uppercase tracking-[0.25em] text-muted">Express checkout</p>
-<h1 class="mt-2 mb-6 font-serif text-3xl tracking-tight sm:text-4xl">Checkout</h1>
+<p class="text-xs uppercase tracking-[0.25em] text-muted">Commande express</p>
+<h1 class="mt-2 mb-6 font-serif text-3xl tracking-tight sm:text-4xl">Commande</h1>
 <ul class="divide-y divide-line border-y border-line">
 <li class="flex items-center gap-4 py-4">
 <img src="/placeholder.png" alt class="h-16 w-16 shrink-0 rounded object-cover" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 <div class="min-w-0 flex-1">
 <p class="truncate text-sm font-medium">Pagination Item 2</p>
-<p class="text-xs text-muted">Qty 1</p>
+<p class="text-xs text-muted">Qté 1</p>
 </div>
-<span class="tabular-nums">$10.02</span>
+<span class="tabular-nums">10,02 €</span>
 </li>
 </ul>
 <div class="mt-4 flex items-center justify-between">
 <span class="text-xs uppercase tracking-widest text-muted">Total</span>
-<span class="text-lg tabular-nums">$10.02</span>
+<span class="text-lg tabular-nums">10,02 €</span>
 </div>
 <div class="mt-6 space-y-2">
 <form method="POST" action="/api/checkout">
@@ -96,28 +96,28 @@ cache-control: private, no-store
 <input type="hidden" name="method" value="demo">
 <button type="submit" class="flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition bg-brand text-on-brand hover:bg-brand-hover">
 <span>
-<span class="block text-sm font-medium">Demo checkout</span>
-<span class="block text-xs text-on-brand/70">Simulated — places a real test order, no charge</span>
+<span class="block text-sm font-medium">Commande de démonstration</span>
+<span class="block text-xs text-on-brand/70">Simulé — enregistre une vraie commande de test, sans débit</span>
 </span>
 <span aria-hidden="true" class="text-on-brand/80">&rarr;</span>
 </button>
 </form>
 </div>
-<a href="/cart" class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back</a>
+<a href="/cart" class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Retour</a>
 </div>
 </main>
 <footer class="border-t border-line">
 <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-10 text-xs uppercase tracking-widest text-muted">
-<span>&copy; My Shop</span>
+<span>&copy; Ma boutique</span>
 </div>
 </footer>
-<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Cart">
+<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Panier">
 <div data-cart-backdrop class="absolute inset-0 bg-black/30 opacity-0 transition-opacity duration-300">
 </div>
 <aside data-cart-panel class="absolute right-0 top-0 flex h-full w-full max-w-md translate-x-full flex-col bg-paper shadow-xl transition-transform duration-300">
 <div class="flex items-center justify-between border-b border-line px-6 py-5">
 <h2 class="font-serif text-2xl tracking-tight">Your cart</h2>
-<button type="button" data-cart-close aria-label="Close cart" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
+<button type="button" data-cart-close aria-label="Fermer le panier" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
 </div>
 <div data-cart-body class="flex-1 overflow-y-auto px-6 py-5">
 </div>

@@ -2,7 +2,8 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import Layout from '../layouts/Layout.astro';
-import { formatPrice } from '../config';
+import { formatPrice, getConfig } from '../config';
+import { readTermsGate } from '../features/legal/terms';
 import { getProductByPublicId } from '../features/products/db';
 import { listVariants, getExtrasByPublicIds } from '../features/products/variants';
 import { parsePublicId } from '../features/ids/publicId.ts';
@@ -13,6 +14,8 @@ import { stripeDestination } from '../features/shipping/destination';
 import { readCart, resolveCart } from '../features/cart/cart';
 import { enabledMethods } from '../features/payments';
 import ProductImage from '../features/products/ProductImage.astro';
+import { paymentMethodCopy } from '../features/payments/labels';
+import { t } from '../features/i18n';
 
 // Express checkout — a single payment-method-picker step (first listed = the
 // store's default). Two sources: "Buy now" (a single product_id [+ variant/extras])
@@ -132,18 +135,17 @@ const destination = stripeDestination(
   Astro.request.headers.get('cf-ipcountry'),
 );
 
-const heading = isBuyNow ? 'Buy now' : 'Checkout';
-const METHOD: Record<string, { label: string; hint: string }> = {
-  stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
-  lightning: { label: 'Pay with Lightning ⚡', hint: 'Instant — from any Lightning wallet' },
-  opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)' },
-  demo: { label: 'Demo checkout', hint: 'Simulated — places a real test order, no charge' },
-};
+const heading = isBuyNow ? t('checkout.express.buyNow') : t('checkout.title');
+// Same predicate the server enforces — see features/legal/terms.ts.
+const terms = await readTermsGate(env.DB, getConfig().legal);
+// Labels come from the shared table, not a local copy: /cart offers the same
+// buttons, and a rail renamed in one place reads as two payment methods.
+const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMethodCopy(m) }));
 ---
 
-<Layout title="Checkout" description="Express checkout.">
+<Layout title={t('checkout.title')} description={t('checkout.express.metaDescription')}>
   <div class="mx-auto max-w-md">
-    <p class="text-xs uppercase tracking-[0.25em] text-muted">Express checkout</p>
+    <p class="text-xs uppercase tracking-[0.25em] text-muted">{t('checkout.express.eyebrow')}</p>
     <h1 class="mt-2 mb-6 font-serif text-3xl tracking-tight sm:text-4xl">{heading}</h1>
 
     <ul class="divide-y divide-line border-y border-line">
@@ -159,7 +161,7 @@ const METHOD: Record<string, { label: string; hint: string }> = {
             />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium">{l.name}</p>
-              <p class="text-xs text-muted">Qty {l.qty}</p>
+              <p class="text-xs text-muted">{t('checkout.express.quantity', { count: l.qty })}</p>
             </div>
             <span class="tabular-nums">{formatPrice(l.unitPriceCents * l.qty)}</span>
           </li>
@@ -168,7 +170,7 @@ const METHOD: Record<string, { label: string; hint: string }> = {
     </ul>
 
     <div class="mt-4 flex items-center justify-between">
-      <span class="text-xs uppercase tracking-widest text-muted">Total</span>
+      <span class="text-xs uppercase tracking-widest text-muted">{t('checkout.express.total')}</span>
       <span class="text-lg tabular-nums">{formatPrice(totalCents)}</span>
     </div>
 
@@ -176,7 +178,7 @@ const METHOD: Record<string, { label: string; hint: string }> = {
         re-sends the same source to /api/checkout with its method. */}
     <div class="mt-6 space-y-2">
       {
-        methods.map((m, i) => (
+        methodRows.map(({ m, primary, copy }) => (
           <form method="POST" action="/api/checkout">
             {carry.map((c) => (
               <input type="hidden" name={c.name} value={c.value} />
@@ -188,7 +190,7 @@ const METHOD: Record<string, { label: string; hint: string }> = {
                 zone — possibly the very country the Stripe filter removed. */}
             {m === 'stripe' && destination.showSelect && (
               <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">
-                Ship to
+                {t('cart.shipTo')}
                 <select
                   name="country"
                   class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink"
@@ -204,21 +206,41 @@ const METHOD: Record<string, { label: string; hint: string }> = {
             {m === 'stripe' && destination.hiddenOnly && (
               <input type="hidden" name="country" value={destination.countries[0]} />
             )}
+            {
+              terms.required && (
+                <label class="mb-2 flex items-start gap-2 text-left text-xs normal-case tracking-normal text-muted">
+                  <input
+                    type="checkbox"
+                    name="accept_terms"
+                    value="on"
+                    required
+                    class="mt-0.5 accent-brand"
+                  />
+                  <span>
+                    {t('terms.accept')}{' '}
+                    <a href={terms.href} class="underline hover:text-brand">
+                      {t('terms.linkLabel')}
+                    </a>{' '}
+                    ({t('terms.version', { version: terms.version })}).
+                  </span>
+                </label>
+              )
+              }
             <button
               type="submit"
               class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${
-                i === 0
+                primary
                   ? 'bg-brand text-on-brand hover:bg-brand-hover'
                   : 'border border-line text-muted hover:border-brand'
               }`}
             >
               <span>
-                <span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span>
-                <span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>
-                  {METHOD[m]?.hint ?? ''}
+                <span class="block text-sm font-medium">{copy.label}</span>
+                <span class={`block text-xs ${primary ? 'text-on-brand/70' : 'text-muted'}`}>
+                  {copy.hint}
                 </span>
               </span>
-              <span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>
+              <span aria-hidden="true" class={primary ? 'text-on-brand/80' : 'text-faint'}>
                 &rarr;
               </span>
             </button>
@@ -231,7 +253,7 @@ const METHOD: Record<string, { label: string; hint: string }> = {
       href={backHref}
       class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand"
     >
-      &larr; Back
+      &larr; {t('checkout.express.back')}
     </a>
   </div>
 </Layout>

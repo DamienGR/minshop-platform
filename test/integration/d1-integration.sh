@@ -621,7 +621,7 @@ stock_before_demo="$(npx wrangler d1 execute DB --local --persist-to "$state_dir
 checkout="$(curl --max-time 30 --fail --silent --show-error \
   -H 'content-type: application/json' \
   -H "origin: http://127.0.0.1:$test_port" \
-  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Testville","postal":"12345","country":"US"}}' \
+  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Villeneuve","postal":"75000","country":"FR"}}' \
   "http://127.0.0.1:$test_port/api/checkout")"
 status_path="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.order_status_url) process.exit(1); process.stdout.write(new URL(b.order_status_url).pathname)' "$checkout")"
 confirming="$(curl --max-time 30 --fail --silent --show-error -H 'Accept:' "http://127.0.0.1:$test_port$status_path")"
@@ -695,6 +695,72 @@ if [[ "$no_ship_status" != "400" ]]; then
   exit 1
 fi
 
+# The terms gate, at the route rather than at the predicate: publishing the CGV
+# page must start refusing a checkout that does not say it accepts them, and
+# accepting one that does. Asserted here because it is the only place the whole
+# chain — page state, gate, route, reservation — is real at once.
+# Migration 0040 already put the terms in the tree, as a DRAFT. Assert that
+# before publishing them: a socle that shipped them published would put a
+# document naming nobody in front of customers.
+terms_draft="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
+  --command "SELECT published FROM pages WHERE slug = 'conditions-generales-de-vente';" |
+  node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s)[0].results[0].published)))')"
+if [[ "$terms_draft" != "0" ]]; then
+  echo "D1 integration failed: the terms page ships published (expected a draft, got published=$terms_draft)" >&2
+  exit 1
+fi
+npx wrangler d1 execute DB --local --persist-to "$state_dir" \
+  --command "UPDATE pages SET published = 1 WHERE slug = 'conditions-generales-de-vente'" >/dev/null
+stock_before_refusal="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
+  --command "SELECT stock FROM products WHERE slug = 'sample-tee';" |
+  node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s)[0].results[0].stock)))')"
+terms_body="$state_dir/terms-refusal.json"
+terms_status="$(curl --max-time 30 --silent --output "$terms_body" --write-out '%{http_code}' \
+  -H 'content-type: application/json' \
+  -H "origin: http://127.0.0.1:$test_port" \
+  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Villeneuve","postal":"75000","country":"FR"}}' \
+  "http://127.0.0.1:$test_port/api/checkout")"
+if [[ "$terms_status" != "400" ]]; then
+  echo "D1 integration failed: published terms did not block a checkout without acceptance (HTTP $terms_status)" >&2
+  exit 1
+fi
+node -e '
+  const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  if (!b.terms_url || !b.terms_url.endsWith("/pages/conditions-generales-de-vente")) {
+    throw new Error(`refusal did not name the terms: ${JSON.stringify(b)}`);
+  }
+  if (!b.terms_version) throw new Error("refusal did not name the version in force");
+' "$terms_body"
+# The stock hold must not have been taken for a checkout that was refused.
+stock_after_refusal="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
+  --command "SELECT stock FROM products WHERE slug = 'sample-tee';" |
+  node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s)[0].results[0].stock)))')"
+if [[ "$stock_after_refusal" -ne "$stock_before_refusal" ]]; then
+  echo "D1 integration failed: a refused checkout moved stock ($stock_before_refusal → $stock_after_refusal)" >&2
+  exit 1
+fi
+# The same request WITH the acceptance goes through, and the order records it.
+accepted_body="$state_dir/terms-accepted.json"
+accepted_status="$(curl --max-time 30 --silent --output "$accepted_body" --write-out '%{http_code}' \
+  -H 'content-type: application/json' \
+  -H "origin: http://127.0.0.1:$test_port" \
+  --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","accept_terms":true,"ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Villeneuve","postal":"75000","country":"FR"}}' \
+  "http://127.0.0.1:$test_port/api/checkout")"
+if [[ "$accepted_status" != "200" ]]; then
+  echo "D1 integration failed: an accepted checkout was refused (HTTP $accepted_status): $(cat "$accepted_body")" >&2
+  exit 1
+fi
+accepted_reservation="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
+  --command "SELECT terms_version, vat_rate_bps FROM checkout_reservations ORDER BY rowid DESC LIMIT 1;" |
+  node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s)[0].results[0])))')"
+node -e '
+  const r = JSON.parse(process.argv[1]);
+  if (!r.terms_version) throw new Error("the accepted checkout recorded no terms version");
+  if (r.vat_rate_bps !== 2000) throw new Error(`expected the 20% rate in basis points, got ${r.vat_rate_bps}`);
+' "$accepted_reservation"
+npx wrangler d1 execute DB --local --persist-to "$state_dir" \
+  --command "UPDATE pages SET published = 0 WHERE slug = 'conditions-generales-de-vente'" >/dev/null
+
 pay_path="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.checkout_url) process.exit(1); process.stdout.write(new URL(b.checkout_url).pathname)' "$checkout")"
 order_id="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.order_public_id) process.exit(1); process.stdout.write(b.order_public_id)' "$checkout")"
 
@@ -706,7 +772,7 @@ originless_status="$(curl --max-time 30 --silent --output "$originless_decline" 
   -H 'content-type: application/x-www-form-urlencoded' \
   --data 'outcome=decline&email=integration%40example.com' \
   "http://127.0.0.1:$test_port$pay_path")"
-if [[ "$originless_status" != "200" ]] || ! grep -q 'Payment declined' "$originless_decline"; then
+if [[ "$originless_status" != "200" ]] || ! grep -q 'Paiement refusé' "$originless_decline"; then
   echo "D1 integration failed: originless capability payment returned HTTP $originless_status" >&2
   exit 1
 fi

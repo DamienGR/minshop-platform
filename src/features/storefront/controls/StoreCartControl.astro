@@ -1,4 +1,5 @@
 ---
+import { t } from '../../i18n';
 /**
  * The header cart link and its live count badge.
  *
@@ -19,7 +20,7 @@ const { href, class: className = 'inline-flex items-center hover:text-brand' } =
 ---
 
 <a href={href} data-cart-open class={className}>
-  Cart
+  {t('shell.cart.link')}
   <span
     data-cart-count-label
     class="inline-block min-w-[4ch] tabular-nums"

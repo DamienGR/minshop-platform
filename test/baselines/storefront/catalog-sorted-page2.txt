@@ -5,24 +5,24 @@ cache-control: public, max-age=0, s-maxage=600
 cache-tag: catalog,shell
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<title>All products — My Shop</title>
-<meta name="description" content="Shop My Shop.">
+<title>Tous les produits — Ma boutique</title>
+<meta name="description" content="Découvrez la boutique Ma boutique.">
 <link rel="canonical" href="https://canonical.example/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="My Shop">
-<meta property="og:title" content="All products — My Shop">
-<meta property="og:description" content="Shop My Shop.">
+<meta property="og:site_name" content="Ma boutique">
+<meta property="og:title" content="Tous les produits — Ma boutique">
+<meta property="og:description" content="Découvrez la boutique Ma boutique.">
 <meta property="og:url" content="https://canonical.example/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="All products — My Shop">
-<meta name="twitter:description" content="Shop My Shop.">
+<meta name="twitter:title" content="Tous les produits — Ma boutique">
+<meta name="twitter:description" content="Découvrez la boutique Ma boutique.">
 <script>
       document.documentElement.classList.add('image-fade-enabled');
       const finishImageFade = (event) => {
@@ -39,13 +39,13 @@ cache-tag: catalog,shell
 <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
 <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-<a href="/" aria-label="My Shop" class="font-serif text-2xl tracking-tight">
-<span>My Shop</span>
+<a href="/" aria-label="Ma boutique" class="font-serif text-2xl tracking-tight">
+<span>Ma boutique</span>
 </a>
 <form method="GET" action="/search" class="ml-auto hidden flex-1 justify-end sm:flex" role="search">
-<input type="search" name="q" value placeholder="Search" aria-label="Search products" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
+<input type="search" name="q" value placeholder="Rechercher" aria-label="Rechercher un produit" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
 </form>
-<nav aria-label="Primary" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
+<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
 <div class="hidden min-w-0 items-center gap-4 xl:flex xl:gap-6">
 <a href="/" title="Shop" class="min-w-0 truncate hover:text-brand">Shop</a>
 <a href="/categories/apparel" title="Apparel" class="min-w-0 truncate hover:text-brand">Apparel</a>
@@ -66,8 +66,8 @@ cache-tag: catalog,shell
 <a href="/products/sample-tee" class="hover:text-brand">Featured: Sample Tee</a>
 </div>
 </details>
-<a href="/search" class="hover:text-brand sm:hidden">Search</a>
-<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Cart<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
+<a href="/search" class="hover:text-brand sm:hidden">Rechercher</a>
+<a href="/cart" data-cart-open class="inline-flex items-center hover:text-brand">Panier<span data-cart-count-label class="inline-block min-w-[4ch] tabular-nums" aria-live="polite" aria-atomic="true">
 </span>
 </a>
 </nav>
@@ -82,7 +82,7 @@ cache-tag: catalog,shell
 <a href="/categories/apparel" class="border-b border-transparent pb-0.5 hover:border-brand hover:text-brand">Apparel</a>
 </div>
 <div class="mb-8 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-xs uppercase tracking-widest text-muted">
-<span>Sort</span>
+<span>Trier</span>
 <a href="/products?sort=newest&amp;dir=desc" class="hover:text-brand ">Newest</a>
 <a href="/products?sort=price&amp;dir=desc" aria-current="true" class="hover:text-brand text-brand">Price ↑</a>
 <a href="/products?sort=name&amp;dir=asc" class="hover:text-brand ">Name</a>
@@ -94,7 +94,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 25" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="eager" fetchpriority="high" decoding="async">
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 25</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.25</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,25 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:60ms">
@@ -103,7 +103,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 26" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 26</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.26</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,26 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:120ms">
@@ -112,7 +112,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 27" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 27</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.27</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,27 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:180ms">
@@ -121,7 +121,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 28" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 28</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.28</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,28 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:240ms">
@@ -130,7 +130,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 29" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 29</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.29</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,29 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:300ms">
@@ -139,7 +139,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Pagination Item 30" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Pagination Item 30</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$10.30</p>
+<p class="mt-1 text-sm tabular-nums text-muted">10,30 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:360ms">
@@ -148,7 +148,7 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Sample Mug" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Sample Mug</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$12.00</p>
+<p class="mt-1 text-sm tabular-nums text-muted">12,00 €</p>
 </a>
 </li>
 <li class="reveal group" style="animation-delay:420ms">
@@ -157,28 +157,28 @@ cache-tag: catalog,shell
 <img src="/placeholder.png" alt="Sample Tee" class="aspect-square w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]" width="600" height="600" loading="lazy" fetchpriority="auto" decoding="async" data-image-fade>
 </div>
 <h2 class="mt-4 text-sm font-medium tracking-tight">Sample Tee</h2>
-<p class="mt-1 text-sm tabular-nums text-muted">$25.00</p>
+<p class="mt-1 text-sm tabular-nums text-muted">25,00 €</p>
 </a>
 </li>
 </ul>
 <nav class="mt-14 flex items-center justify-center gap-1" aria-label="Pagination">
-<a href="/products?sort=price&amp;dir=asc" class="px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:text-brand" rel="prev">Prev</a>
+<a href="/products?sort=price&amp;dir=asc" class="px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:text-brand" rel="prev">Précédent</a>
 <a href="/products?sort=price&amp;dir=asc" class="px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:text-brand ">1</a>
 <a href="/products?sort=price&amp;dir=asc&amp;page=2" aria-current="page" class="px-3 py-1.5 text-xs uppercase tracking-widest text-muted hover:text-brand font-medium text-brand">2</a>
 </nav>
 </main>
 <footer class="border-t border-line">
 <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-10 text-xs uppercase tracking-widest text-muted">
-<span>&copy; My Shop</span>
+<span>&copy; Ma boutique</span>
 </div>
 </footer>
-<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Cart">
+<div data-cart-drawer class="invisible pointer-events-none fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Panier">
 <div data-cart-backdrop class="absolute inset-0 bg-black/30 opacity-0 transition-opacity duration-300">
 </div>
 <aside data-cart-panel class="absolute right-0 top-0 flex h-full w-full max-w-md translate-x-full flex-col bg-paper shadow-xl transition-transform duration-300">
 <div class="flex items-center justify-between border-b border-line px-6 py-5">
 <h2 class="font-serif text-2xl tracking-tight">Your cart</h2>
-<button type="button" data-cart-close aria-label="Close cart" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
+<button type="button" data-cart-close aria-label="Fermer le panier" class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand">&times;</button>
 </div>
 <div data-cart-body class="flex-1 overflow-y-auto px-6 py-5">
 </div>
