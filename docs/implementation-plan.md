@@ -453,7 +453,7 @@ sur les trois créations pour refuser la proposition à la source.
 `npm run verify` passe en local et échouait une fois sur deux dans GitHub
 Actions, toujours au même endroit : la requête qui suit le POST de purge de
 cache (`assert_cache_control /product/sample-tee`,
-`test/integration/d1-integration.sh:335`) n'atteint jamais le Worker et reçoit
+`test/integration/d1-integration.sh:376`) n'atteint jamais le Worker et reçoit
 un HTTP 500 dont le corps est `Error: Network connection lost.` levé par
 l'entry worker de miniflare.
 
@@ -521,6 +521,14 @@ D1 integration failed: GET /product/sample-tee — no response after 3 attempts 
 
 L'échec de `0d2bc65` remet le compteur à zéro, après quatre exécutions vertes
 accumulées depuis la mitigation.
+
+La série en cours repart de `4cb945a`, première exécution avec la relance à
+quatre essais et le second runner. La table s'arrête là volontairement : au-delà
+le compte se lit dans les exécutions du workflow `Verify` sur `main`, et
+recopier ici une ligne par fusion produirait surtout des mises à jour oubliées.
+Ce qui mérite d'être consigné, c'est un échec, parce qu'il remet le compteur à
+zéro et qu'il serait alors d'une nature nouvelle : quatre tentatives et un
+runner neuf n'ont plus rien de commun avec la panne décrite ci-dessus.
 
 ##### Cause identifiée
 
