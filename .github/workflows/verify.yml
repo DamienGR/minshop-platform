@@ -65,6 +65,44 @@ jobs:
         if: needs.verify-first-runner.outputs.outcome != 'success'
         uses: ./.github/actions/run-verify
 
+  # File ownership (plan §3.3). Two questions, one script: is every tracked path
+  # still classified core / client / generated, and does this pull request touch
+  # the core without saying so.
+  #
+  # The second only has teeth in a SHOP repository — a tree with
+  # client/client.yaml — because here every pull request touches the core, and a
+  # gate that fires on all of them teaches people to wave it through. It runs
+  # here anyway, reporting what it would have decided, so the shops that inherit
+  # this workflow inherit a step that has actually executed.
+  #
+  # A shop approves a deliberate core edit by labelling the pull request
+  # `core-change`; the label is a reviewed act, which is the property the gate
+  # is really asking for.
+  paths:
+    name: File ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          # The gate diffs against the merge base, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Classify the tree and gate the change
+        env:
+          MINSHOP_CORE_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'core-change') && 'approved' || '' }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          node scripts/check-paths.mjs --changed --base "origin/${{ github.base_ref }}"
+
   # A store is created by cloning a tag of this repository (plan §3.4), so the
   # baseline that matters is what a FRESH CLONE builds — not what an incrementally
   # updated checkout builds. `verify` above runs in a tree that already carries a
