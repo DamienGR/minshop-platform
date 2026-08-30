@@ -16,21 +16,20 @@
 # proxy loses a connection mid-response, wrangler raises it as a fatal
 # "Error inside ProxyWorker" with an empty message, and the session dies. Remove
 # this wrapper once that is fixed upstream.
-# Eight attempts, and the number is measured rather than chosen.
+# Four attempts, and the number is measured rather than chosen.
 #
-# Thirty probe runs of this wrapper (three sweeps of ten, see the flake probe
-# workflow) put the numbers at: 20% of runs meet the fault at all, and among
-# those, the attempts are NOT independent — a runner that killed one session
-# tends to kill the next. Recoveries landed on attempt 2, 3 and 3; three runs
-# were still dying at attempt 3. So the naive p^n arithmetic is wrong, and three
-# attempts left one run in ten failing, which is no better than a coin flip for
-# a ten-green criterion.
+# Fifty probe runs of this wrapper (see the flake probe workflow) say the same
+# thing twice: about 20% of runs meet the fault, and the attempts within a run
+# are NOT independent. A runner splits into two kinds. One recovers, and always
+# early — every recovery observed landed on attempt 2, 3 or 4. The other dies on
+# every attempt; raising the ceiling from three to eight bought nothing there,
+# one run in the sweep died all eight times.
 #
-# What the same data does show is a per-attempt recovery rate around 0.3 among
-# affected runs, which is the model this number comes from: eight attempts put
-# the residual near 2%, so five ten-run streaks in six survive. Beyond that the
-# curve flattens and the job clock starts to matter — each attempt costs about
-# 50 seconds, and only affected runs pay it.
+# So four attempts covers everything an in-place re-run can cover, at a cost of
+# at most three extra sessions of about 50 seconds, paid only by affected runs.
+# The runners that never recover are not this script's problem to solve: CI runs
+# the suite again on a second runner, which is a fresh draw. See
+# .github/workflows/verify.yml.
 #
 # The honest fix is upstream: cloudflare/workers-sdk#15317. This buys a usable
 # gate until it lands.
@@ -38,7 +37,7 @@ set -uo pipefail
 
 suite="$(dirname "$0")/d1-integration.sh"
 WORKER_DIED_EXIT=75
-ATTEMPTS=8
+ATTEMPTS=4
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
   if (( attempt > 1 )); then
