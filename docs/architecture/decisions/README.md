@@ -28,3 +28,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0005](0005-strategie-de-sauvegarde.md) | Stratégie de sauvegarde et de restauration | Accepté |
 | [0006](0006-politique-des-migrations.md) | Politique des migrations de schéma | Accepté |
 | [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté |
+| [0008](0008-format-du-manifeste-client.md) | Format et autorité du manifeste client | Accepté |

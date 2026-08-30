@@ -179,7 +179,7 @@ Le fichier `client/client.yaml` est la source de vérité non sensible.
 
 ```yaml
 schemaVersion: 1
-coreVersion: 1.0.0
+coreVersion: 0.1.0
 
 client:
   slug: pilot-fr
@@ -209,11 +209,19 @@ cloudflare:
 
 email:
   provider: resend
-  from: commandes@example.fr
+  from: commandes@pilote.example.fr
 
 theme:
-  id: pilot-fr
+  # `pilot-fr` au jalon 5, quand la boutique aura son propre thème.
+  id: studio
 ```
+
+Ce bloc est la copie lisible d'un fichier qui existe :
+`test/fixtures/clients/pilot-fr/client.yaml`. En cas de désaccord entre les deux,
+c'est la fixture qui a raison — elle est validée à chaque `npm run verify`, ce
+bloc ne l'est pas. `coreVersion` y suit la version du socle, donc la valeur
+montrée ici vieillit ; c'est le seul champ dont il ne faut pas recopier la
+valeur.
 
 Un JSON Schema versionné contrôle :
 
@@ -238,6 +246,11 @@ Les énumérations n'acceptent aujourd'hui qu'une valeur pour `locale`,
 `currency`, `market` et `jurisdiction`. C'est délibéré : élargir l'une d'elles
 est une décision de version de schéma avec des notes de migration, ce qui est
 exactement la différence entre un marché supporté et un marché non testé.
+
+Le format, l'autorité de la spécification et la dérivation des noms de
+ressources sont consignés dans
+l'[ADR 0008](architecture/decisions/0008-format-du-manifeste-client.md), avec
+les alternatives écartées.
 
 Les clés API et secrets sont interdits dans le manifeste.
 
@@ -267,6 +280,14 @@ shopctl new <slug>
 shopctl doctor
 shopctl config validate
 ```
+
+`config validate` existe déjà sous la forme de `npm run config:validate`
+(`scripts/check-manifest.mjs`), livré au jalon 1 et exécuté par `verify` : il
+valide les manifestes, refuse deux boutiques sur un même identifiant de
+ressource, contrôle la dérive du schéma publié et vérifie qu'aucune valeur
+client n'est écrite dans le cœur. La commande doit l'**envelopper**, pas le
+réimplémenter — sans quoi la CI et la CLI finiraient par répondre différemment à
+la même question, et c'est la CLI que l'exploitant croit.
 
 `shopctl new` doit :
 
@@ -1061,24 +1082,43 @@ Durée indicative : 3 à 4 jours.
 
 ### 7.1 À chaque commit
 
-- [ ] `npm run format:check` ;
-- [ ] `npm run typecheck` ;
-- [ ] `npm run test:unit` ;
-- [ ] `npm run test:cli` ;
-- [x] contrôle équivalent à `npm run theme:check` dans la CI Minshop ;
-- [x] tests de contrat storefront dans la CI Minshop ;
-- [x] build de production dans la CI Minshop ;
-- [x] contrôle de la chaîne d'outils (`npm run check:toolchain`) ;
-- [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
-- [x] scan de secrets (`npm run check:secrets`) ;
-- [x] validation des manifestes, des identifiants de flotte et de la neutralité
-  du cœur (`npm run config:validate`) ;
-- [x] carte de propriété des chemins et dérive de `CODEOWNERS`
-  (`npm run check:paths`) ;
-- [x] construction des boutiques témoins (job CI « Build shop ») ;
-- [x] construction depuis un clone vierge (job CI dédié).
+Les noms ci-dessous sont ceux du dépôt. `npm run verify` enchaîne les treize
+premiers ; les autres sont des jobs distincts du workflow `Verify`.
 
-Objectif : moins de cinq minutes.
+- [x] chaîne d'outils (`npm run check:toolchain`) ;
+- [x] scan de secrets (`npm run check:secrets`) ;
+- [x] manifestes, identifiants de flotte, neutralité du cœur
+  (`npm run config:validate`) ;
+- [x] propriété des chemins et dérive de `CODEOWNERS` (`npm run check:paths`) ;
+- [x] tests unitaires et de contrat storefront (`vitest run`) ;
+- [x] diagnostics TypeScript et `.astro` (`astro check`) ;
+- [x] frontière du storefront (`npm run theme:check`) ;
+- [x] build de production et vérification du CSS compilé ;
+- [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
+- [x] intégration D1 en boîte noire (`npm run test:integration`) ;
+- [x] pays Stripe cohérents avec le SDK épinglé ;
+- [x] Worker MCP, typecheck et dry run (`npm run mcp:check`) ;
+- [x] paquet `create-minshop` (`npm run scaffold:check`) ;
+- [x] porte de propriété des chemins sur la pull request (job « File ownership ») ;
+- [x] construction des boutiques témoins (job « Build shop ») ;
+- [x] construction de chaque thème que le job principal ne couvre pas
+  (job « Verify theme ») ;
+- [x] construction depuis un clone vierge (job « Build from a clean clone »).
+- [ ] tests de la CLI — au jalon 2, avec `shopctl`.
+- [ ] contrôle de formatage — voir ci-dessous.
+
+Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
+environ trois minutes et demie, les jobs tournant en parallèle.
+
+Quatre entrées de la première version de cette liste ne désignaient aucun script
+du dépôt. Trois avaient un nom réel — `npm run typecheck` est `astro check`, qui
+couvre TypeScript et les diagnostics `.astro` en une passe ; `npm run test:unit`
+est `vitest run` ; `npm run test:cli` arrive au jalon 2 avec la CLI.
+
+La quatrième, `npm run format:check`, n'a pas d'équivalent : aucun formateur
+n'est installé. La renommer vers `astro check` serait faux — un typecheck ne dit
+rien de la mise en forme — donc la case reste ouverte et désigne ce qui manque
+réellement : la décision d'adopter un formateur, ou celle de s'en passer.
 
 ### 7.2 À chaque pull request client
 
