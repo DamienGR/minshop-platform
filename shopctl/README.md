@@ -80,7 +80,7 @@ autre réponse que la CI — et c'est la CLI que l'exploitant croit.
 | --- | --- |
 | `0` | Succès. |
 | `2` | Ligne de commande erronée : commande ou option inconnue, valeur manquante. |
-| `3` | Valeur inutilisable : slug réservé, tag qui n'en est pas un. |
+| `3` | Valeur inutilisable : slug réservé, slug que le cœur emploie déjà, tag qui n'en est pas un. |
 | `4` | Prérequis absent : répertoire occupé, `git` manquant, pas d'identité Git. |
 | `5` | Commande externe en échec (`git`, `npm`, `wrangler`). |
 | `6` | Résultat produit puis refusé par une porte. L'arbre est laissé en place. |

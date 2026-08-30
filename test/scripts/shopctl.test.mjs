@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // .mjs for the same reason as its neighbours: tsconfig pins `types` to the
 // Cloudflare types, so node builtins have no declarations in a .ts file here.
@@ -20,6 +20,13 @@ import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
 const CORE_TAG = 'v0.1.0';
+
+// Every test in this file spawns real processes — a git clone of the whole
+// tree, the gates the shop carries, `wrangler --version`. Vitest's five-second
+// default is a budget for pure functions; here it only measures how loaded the
+// machine is, and a suite that fails on a busy laptop is a suite people learn
+// to re-run instead of read.
+vi.setConfig({ testTimeout: 60_000 });
 
 /** Git needs an identity to commit, and a test must not depend on the one the
  *  developer happens to have configured. */
@@ -237,6 +244,33 @@ describe('shopctl new', () => {
     const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
     expect(result.status).toBe(EXIT_CODES.input);
     expect(result.stderr).toMatch(/reserved by the platform/);
+  });
+
+  // The reserved list can never be complete: the neutrality gate also trips on
+  // ordinary English the core happens to use, and `clean-clone` — a word this
+  // core writes into its own tooling — is deliberately NOT reserved so this
+  // path stays exercised. What must not happen is the CLI blaming the core: the
+  // fix is another slug, not a bug report.
+  it('reports a slug the core already uses as a bad name, not a core bug', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'clean-clone', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/is a word this core already uses/);
+    expect(result.stderr).toMatch(/Choose another slug/);
+    expect(result.stderr).not.toMatch(/core bug/);
+    // Files are named so the operator can see WHY, and nothing survives.
+    expect(result.stderr).toMatch(/scripts\/check-clean-clone\.sh|package\.json|AGENTS\.md/);
+    expect(existsSync(join(work, 'shop-clean-clone'))).toBe(false);
+  });
+
+  it('still calls a genuine gate failure a core bug', () => {
+    // Everything shopctl writes is validated first, so a gate that refuses the
+    // result is the core's problem — and the tree stays put to be read.
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install', '--json'], work);
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).checks.every((check) => check.ok)).toBe(true);
   });
 
   it('refuses a malformed slug before touching the disk', () => {

@@ -861,6 +861,24 @@ aurait vu échouer un fichier auquel il n'a jamais touché. Les noms que la
 documentation emploie — `acme`, `example` — sont donc réservés comme la RFC 2606
 réserve `example.com`, et le cœur n'écrit plus d'exemple de slug plausible.
 
+La mesure a montré que le piège dépassait les exemples de documentation. Un nom
+de commerçant ordinaire passe sans une seule fuite ; ce qui restait pris, c'est
+le **vocabulaire du socle** — `check`, `mcp`, `products`, `clean-clone` — que le
+cœur écrit dans ses propres workflows et sa propre prose. `RESERVED_SLUGS`
+couvre désormais les préfixes de routes publiques, **dérivés de `src/pages/` par
+un test** plutôt que recopiés à la main : une route ajoutée sans réserver son
+nom fait échouer la suite, au lieu de libérer le nom en silence.
+
+Cette liste ne pourra jamais être complète — la porte se déclenche aussi sur de
+l'anglais ordinaire que le cœur emploie —, et c'est ce qui rend le second
+correctif plus important que le premier. `shopctl new` lisait un échec de porte
+et concluait « c'est un bug du cœur, pas une mauvaise option ». Pour une
+collision de neutralité sur le slug de la boutique elle-même, c'est exactement
+l'inverse : le cœur a raison, le nom est mauvais. La commande lit maintenant le
+rapport JSON de la porte, distingue les deux cas, nomme les fichiers en cause,
+dit de choisir un autre slug et **ne garde rien**. Réserver les noms connus ne
+fait qu'avancer l'échec avant le clone.
+
 Vérification locale : `shopctl new test-client --core v0.1.0`, puis `npm ci`,
 `npm ci --prefix mcp` et `npm run verify` dans `shop-test-client`, sans aucune
 modification manuelle. En CI, le job « Generated shop » refait la création et

@@ -125,5 +125,9 @@ partant sur la sortie d'erreur.
   --json` : la CLI ne peut pas répondre autrement que la porte ;
 - `npm run check:paths` classe `shopctl/` comme `core` et regénère
   `.github/CODEOWNERS` en conséquence ;
+- le test « reports a slug the core already uses as a bad name, not a core bug »
+  fixe la distinction que la CLI doit faire entre un cœur fautif et un mauvais
+  nom : `clean-clone` reste délibérément non réservé pour que ce chemin soit
+  exercé à chaque exécution de la suite ;
 - le critère de sortie du jalon 2 — `shopctl new`, puis `npm ci` et
   `npm run verify` dans la boutique générée — exécute la CLI de bout en bout.

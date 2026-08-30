@@ -37,24 +37,43 @@ const THEME_ID = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 /**
  * Slugs a shop may not take.
  *
- * Four reasons, all of them "the name is already load-bearing somewhere":
- * storefront and admin route prefixes, the resource names the fleet tooling
- * greps for, the environment words its reports print, and the names the
- * documentation uses for an imaginary shop. A shop that took one of the first
- * three would work until the day an operator read `minshop-staging-db` as an
- * environment rather than a customer.
+ * Four reasons, all of them "the name is already load-bearing somewhere".
  *
- * The last group — `acme`, `example` — is reserved for a subtler reason. The
- * core-neutrality gate fails on any core-owned file containing a shop's slug or
- * display name, and the read-me writes `shopctl new acme` to show what the
- * command looks like. Whoever picked `acme` for a real customer would get a
- * baffling failure in a file they never touched, so the documentation's names
- * are reserved the way RFC 2606 reserves example.com.
+ * PUBLIC ROUTES. `/products/`, `/cart`, `/pay/` and their neighbours are the
+ * storefront's own URL space. This group is not maintained by hand — the test
+ * "every public route prefix is a reserved slug" derives it from `src/pages/`
+ * and fails when a route is added without reserving its name.
+ *
+ * PLATFORM RESOURCES AND ENVIRONMENTS. The names the fleet tooling greps for
+ * and the words its reports print. A shop that took one would work until the
+ * day an operator read `minshop-staging-db` as an environment rather than a
+ * customer.
+ *
+ * CORE TOOLING VOCABULARY — `check`, `mcp`. The core writes these into its own
+ * workflows and scripts (`minshop-check`, `minshop-mcp`), and the
+ * core-neutrality gate fails on any core file containing a shop's slug or
+ * worker name. `db` belongs to the same group and is deliberately absent: the
+ * three-character minimum already refuses it, and a second rule saying the same
+ * thing only makes the first one look optional.
+ *
+ * DOCUMENTATION NAMES — `acme`, `example`. Same mechanism: the read-me writes
+ * `shopctl new acme` to show what the command looks like. Whoever picked it for
+ * a real customer would get a baffling failure in a file they never touched, so
+ * the documentation's names are reserved the way RFC 2606 reserves example.com.
+ *
+ * The list can never be complete — the gate also trips on ordinary English the
+ * core happens to use — so `shopctl new` reads the gate's report and tells the
+ * operator to choose another slug rather than blaming the core. Reserving the
+ * known names only makes that failure arrive earlier, before anything is
+ * cloned.
  */
 export const RESERVED_SLUGS = [
-  'acme', 'admin', 'agency', 'api', 'assets', 'cdn', 'core', 'default', 'dev',
-  'example', 'files', 'fleet', 'images', 'internal', 'local', 'mail', 'minshop',
-  'platform', 'preview', 'prod', 'production', 'shop', 'staging', 'store',
+  'account', 'acme', 'admin', 'agency', 'api', 'assets', 'cart', 'categories',
+  'category', 'cdn', 'check', 'checkout', 'core', 'default', 'dev',
+  'example', 'express', 'files', 'fleet', 'images', 'index', 'internal', 'llms',
+  'local', 'mail', 'mcp', 'minshop', 'order', 'pages', 'partials', 'pay',
+  'payment-setup', 'platform', 'preview', 'prod', 'product', 'production',
+  'products', 'robots', 'search', 'shop', 'sitemap', 'staging', 'store',
   'support', 'test', 'www',
 ];
 

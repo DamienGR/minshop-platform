@@ -21,7 +21,7 @@
  * contract, and every file removed at creation is a conflict re-resolved at
  * every upgrade that touches it.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { RESERVED_SLUGS, validateManifest } from '../../../scripts/manifest-schema.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
@@ -248,6 +248,9 @@ export function runNew(args, reporter) {
   const target = resolve(cwd, String(args.values['--dir'] ?? `shop-${slug}`));
   if (target === cwd) throw preconditionError('--dir is the current directory.', 'shopctl new creates a new repository; give it a directory of its own.');
   assertUsableTarget(target);
+  // Whether the clone is ours to remove. An operator who pre-made an empty
+  // directory keeps it; only a tree shopctl created is a tree shopctl deletes.
+  const createdTarget = !existsSync(target);
 
   // ------------------------------------------------------- 2..5. the git side
   reporter.step(`Socle ${repository} @ ${tag}`);
@@ -319,17 +322,38 @@ export function runNew(args, reporter) {
   const checks = [];
   if (verify) {
     reporter.section('Vérification minimale');
-    for (const [label, argv] of [
-      ['manifeste', ['scripts/check-manifest.mjs']],
-      ['propriété des chemins', ['scripts/check-paths.mjs']],
-    ]) {
-      const result = capture('node', argv, { cwd: target, allowFailure: true });
-      const ok = result.status === 0;
-      checks.push({ check: label, ok, status: result.status });
-      if (ok) reporter.ok(label);
-      else reporter.fail(`${label} — ${(result.stderr || result.stdout).trim().split('\n').slice(0, 6).join('\n    ')}`);
-    }
+    // --json on the manifest gate, because its report is structured and this
+    // command needs to tell two very different failures apart (see below).
+    const manifestGate = capture('node', ['scripts/check-manifest.mjs', '--json'], { cwd: target, allowFailure: true });
+    checks.push({ check: 'manifeste', ok: manifestGate.status === 0, status: manifestGate.status });
+    if (manifestGate.status === 0) reporter.ok('manifeste');
+    else reporter.fail(`manifeste — ${describeGateFailure(manifestGate)}`);
+
+    const pathsGate = capture('node', ['scripts/check-paths.mjs'], { cwd: target, allowFailure: true });
+    checks.push({ check: 'propriété des chemins', ok: pathsGate.status === 0, status: pathsGate.status });
+    if (pathsGate.status === 0) reporter.ok('propriété des chemins');
+    else reporter.fail(`propriété des chemins — ${(pathsGate.stderr || pathsGate.stdout).trim().split('\n').slice(0, 6).join('\n    ')}`);
+
     if (checks.some((check) => !check.ok)) {
+      // A neutrality finding on THIS shop's own slug is not a core bug, it is a
+      // bad name: the core legitimately contains the word, and no shop may be
+      // called after something the core already says. Saying "this is a core
+      // bug" there would send the operator to file a ticket when the fix is to
+      // pick another slug. RESERVED_SLUGS catches the known ones before the
+      // clone; it can never catch them all, because the gate also trips on
+      // ordinary English the core happens to use.
+      const collisions = ownSlugCollisions(manifestGate, slug);
+      if (collisions.length > 0 && checks.every((check) => check.ok || check.check === 'manifeste')) {
+        if (createdTarget) rmSync(target, { recursive: true, force: true });
+        throw inputError(
+          `"${slug}" is a word this core already uses, in ${collisions.length} of its own file${collisions.length > 1 ? 's' : ''}.`,
+          [
+            'The core-neutrality gate refuses a core file that names a shop, so this shop could never pass its own CI.',
+            `Files: ${collisions.slice(0, 5).join(', ')}${collisions.length > 5 ? ', …' : ''}`,
+            'Choose another slug. Nothing was kept.',
+          ].join('\n'),
+        );
+      }
       throw verificationError(
         'the generated shop does not pass its own gates.',
         `Left in ${target} so the failure can be read. This is a core bug, not a bad option: every value shopctl wrote was validated first.`,
@@ -387,6 +411,45 @@ export function runNew(args, reporter) {
     nextSteps,
   });
   return 0;
+}
+
+/**
+ * Core files the gate says name THIS shop, from its own JSON report.
+ *
+ * Reading the gate's report rather than re-running its logic: the CLI and the
+ * CI must not be able to reach different conclusions about the same tree, and
+ * `check-manifest.mjs --json` already publishes the findings with the slug each
+ * one names.
+ */
+function ownSlugCollisions(gate, slug) {
+  let report;
+  try {
+    report = JSON.parse(gate.stdout);
+  } catch {
+    return [];
+  }
+  const findings = report?.coreNeutrality?.findings ?? [];
+  if (findings.length === 0) return [];
+  // Only when the neutrality findings are the WHOLE story, and all of them name
+  // this shop. A manifest that is also invalid for another reason is a
+  // different failure and keeps the report it deserves.
+  const manifestErrors = (report?.manifests ?? []).some((entry) => entry.errors?.length > 0);
+  if (manifestErrors || (report?.collisions ?? []).length > 0) return [];
+  if (!findings.every((finding) => finding.slug === slug)) return [];
+  return [...new Set(findings.map((finding) => finding.path))];
+}
+
+/** The first line worth showing from a gate that failed. */
+function describeGateFailure(gate) {
+  const collisions = (() => {
+    try {
+      return JSON.parse(gate.stdout)?.coreNeutrality?.findings ?? [];
+    } catch {
+      return [];
+    }
+  })();
+  if (collisions.length > 0) return `le cœur nomme déjà "${collisions[0].value}" (${collisions[0].path})`;
+  return (gate.stderr || gate.stdout).trim().split('\n').slice(0, 6).join('\n    ');
 }
 
 function importsReadme(slug) {
