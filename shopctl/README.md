@@ -31,6 +31,26 @@ plan §5 et arrivent aux jalons suivants.
 
 ## `shopctl new`
 
+Deux variables d'environnement portent les défauts qu'une **agence** a et que le
+**socle** ne doit pas avoir :
+
+| Variable | Effet |
+| --- | --- |
+| `MINSHOP_DOMAIN_SUFFIX` | `--domain` devient `<slug>.<suffixe>`. Sans elle, le domaine est `<slug>.example.com`, un placeholder RFC 2606 que `new` demande de remplacer. |
+| `CLOUDFLARE_ACCOUNT_ID` | `--account` par défaut — la même variable que `provision`, `deploy` et `destroy` lisent déjà. |
+
+Aucune des deux ne peut être un littéral dans le code : `config:validate` échoue
+sur tout fichier du cœur contenant le domaine d'une boutique, et un socle qui
+connaît une agence est un socle qu'on ne peut pas vendre à la seconde. Le
+rapport de `new` dit d'où vient chaque valeur — un identifiant de compte écrit
+dans un manifeste commité depuis une variable ambiante est un fait qui se voit
+arriver, pas qui se découvre dans un diff.
+
+`--core` a déjà un défaut : la version du socle depuis lequel la CLI tourne. Ce
+n'est **pas** « le dernier tag » — la CLI qui crée une boutique depuis `v1.2.0`
+est celle que ce tag transporte (ADR 0009), et prendre un tag plus récent ferait
+écrire le manifeste par une version différente de celle du code cloné.
+
 ```sh
 npm run shopctl -- new acme \
   --core v1.0.0 \

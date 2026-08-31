@@ -45,6 +45,49 @@ const SLUG = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
  *  and that still satisfies the manifest's "not a platform subdomain" rule. */
 const PLACEHOLDER_DOMAIN_SUFFIX = 'example.com';
 
+/**
+ * Two defaults an AGENCY has and the CORE must not.
+ *
+ * `MINSHOP_DOMAIN_SUFFIX` turns `--domain` into `<slug>.<suffixe>`, which is
+ * what a shop built on the agency's own domain wants during construction.
+ * It cannot be a literal in this file: `config:validate` fails on any core file
+ * containing a shop's domain, and a core that knows one agency is a core that
+ * cannot be sold to a second (ADR 0008). An environment variable is the right
+ * home — visible in the shell that set it, unlike a configuration file nobody
+ * remembers writing.
+ *
+ * `CLOUDFLARE_ACCOUNT_ID` is the same variable `provision`, `deploy` and
+ * `destroy` already read; reusing it rather than inventing a second one keeps
+ * "which account" a single question with a single answer.
+ *
+ * Both are REPORTED wherever they are used. An account id written into a
+ * committed manifest from an ambient variable is exactly the value an operator
+ * should see arrive, not discover in a diff.
+ */
+const DOMAIN_SUFFIX_VARIABLE = 'MINSHOP_DOMAIN_SUFFIX';
+const DOMAIN_SHAPE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+/** The domain a slug implies, and where that answer came from. */
+export function resolveDomain(slug, flag, env = process.env) {
+  if (flag) return { domain: String(flag), from: '--domain' };
+  const suffix = String(env[DOMAIN_SUFFIX_VARIABLE] ?? '').trim();
+  if (!suffix) return { domain: `${slug}.${PLACEHOLDER_DOMAIN_SUFFIX}`, from: 'placeholder' };
+  if (!DOMAIN_SHAPE.test(suffix)) {
+    throw inputError(
+      `${DOMAIN_SUFFIX_VARIABLE} = « ${suffix} » n'est pas un domaine.`,
+      'Attendu : studiomaestro.fr, sans schéma ni barre oblique. Retirez la variable pour retomber sur le placeholder de documentation.',
+    );
+  }
+  return { domain: `${slug}.${suffix}`, from: DOMAIN_SUFFIX_VARIABLE };
+}
+
+/** The Cloudflare account a new shop declares, and where that came from. */
+export function resolveAccountId(flag, env = process.env) {
+  if (flag) return { accountId: String(flag), from: '--account' };
+  const ambient = String(env.CLOUDFLARE_ACCOUNT_ID ?? '').trim();
+  return ambient ? { accountId: ambient, from: 'CLOUDFLARE_ACCOUNT_ID' } : { accountId: null, from: null };
+}
+
 export const NEW_OPTIONS = {
   '--core': 'tag',
   '--from': 'value',
@@ -68,13 +111,15 @@ export const newUsage = `Usage: shopctl new <slug> [options]
   --origin <url>      Remote "origin" du futur dépôt (défaut avec --create-repo :
                       <owner>/shop-<slug>)
   --name <nom>        Nom affiché (défaut : dérivé du slug)
-  --domain <domaine>  Domaine de production (défaut : <slug>.${PLACEHOLDER_DOMAIN_SUFFIX})
+  --domain <domaine>  Domaine de production (défaut : <slug>.${PLACEHOLDER_DOMAIN_SUFFIX},
+                      ou <slug>.$${DOMAIN_SUFFIX_VARIABLE} si la variable est posée)
   --email <adresse>   Expéditeur des e-mails (défaut : commandes@<domaine>)
   --theme <id>        Thème de la boutique (défaut : dérivé du slug)
   --from-theme <id>   Thème de référence copié (défaut : default)
   --branch <nom>      Branche de travail créée sur le tag (défaut : main)
   --dir <chemin>      Répertoire cible (défaut : shop-<slug>)
   --account <id>      Compte Cloudflare de la boutique, écrit dans le manifeste
+                      (défaut : $CLOUDFLARE_ACCOUNT_ID)
   --create-repo       Créer le dépôt GitHub, ses environnements et leurs secrets
                       (enveloppe la CLI gh)
   --owner <compte>    Compte ou organisation GitHub du dépôt déduit
@@ -258,7 +303,7 @@ export function runNew(args, reporter) {
   }
 
   const displayName = String(args.values['--name'] ?? displayNameFromSlug(slug));
-  const domain = String(args.values['--domain'] ?? `${slug}.${PLACEHOLDER_DOMAIN_SUFFIX}`);
+  const { domain, from: domainFrom } = resolveDomain(slug, args.values['--domain']);
   const email = String(args.values['--email'] ?? `commandes@${domain}`);
   const theme = resolveThemeId(args.values['--theme'], slug);
   const referenceTheme = String(args.values['--from-theme'] ?? 'default');
@@ -288,7 +333,7 @@ export function runNew(args, reporter) {
   }
 
   // The manifest is decided and checked here, before a single byte is written.
-  const accountId = args.values['--account'] ? String(args.values['--account']) : null;
+  const { accountId, from: accountFrom } = resolveAccountId(args.values['--account']);
   const manifest = buildManifest({ slug, displayName, domain, email, theme, coreVersion, accountId });
   const { errors } = validateManifest(manifest, { coreVersion });
   if (errors.length > 0) {
@@ -486,7 +531,7 @@ export function runNew(args, reporter) {
   const nextSteps = [
     ...(installed ? [] : ['npm ci', 'npm ci --prefix mcp']),
     'shopctl doctor',
-    ...(domain.endsWith('.example.com') ? [`remplacer le domaine placeholder ${domain} dans client/client.yaml`] : []),
+    ...(domainFrom === 'placeholder' ? [`remplacer le domaine placeholder ${domain} dans client/client.yaml`] : []),
     ...(accountId ? [] : ['ajouter cloudflare.accountId au manifeste (ou relancer avec --account)']),
     ...(forgeError !== null
       ? ['shopctl repo   # reprend la création du dépôt là où elle a échoué']
@@ -504,6 +549,8 @@ export function runNew(args, reporter) {
   reporter.step(`  slug     ${slug}`);
   reporter.step(`  thème    ${theme}`);
   reporter.step(`  socle    ${tag}`);
+  reporter.step(`  domaine  ${domain}${domainFrom === '--domain' ? '' : `  (${domainFrom === 'placeholder' ? 'placeholder de documentation' : `depuis ${domainFrom}`})`}`);
+  reporter.step(`  compte   ${accountId ?? '(non déclaré)'}${accountFrom && accountFrom !== '--account' ? `  (depuis ${accountFrom})` : ''}`);
   reporter.step(`  Worker   ${names.worker}  (+ ${names.database}, ${names.images}, ${names.files}, ${names.sessions})`);
   reporter.section('Prochaines actions');
   for (const step of nextSteps) reporter.step(`  ${step}`);
@@ -512,7 +559,10 @@ export function runNew(args, reporter) {
     command: 'new',
     ok: forgeError === null,
     target,
-    shop: { slug, displayName, domain, email, theme, referenceTheme },
+    shop: { slug, displayName, domain, email, theme, referenceTheme, accountId },
+    // Where each defaulted value came from. An account id written into a
+    // committed manifest from an ambient variable is a fact worth recording.
+    defaults: { domain: domainFrom, account: accountFrom },
     core: { repository, tag, version: coreVersion },
     git: { branch, remotes: { core: repository, origin: originUrl } },
     forge,

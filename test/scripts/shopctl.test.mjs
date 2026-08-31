@@ -9,7 +9,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { parseArguments } from '../../shopctl/src/cli.mjs';
-import { NEW_OPTIONS, displayNameFromSlug, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
+import { NEW_OPTIONS, displayNameFromSlug, resolveAccountId, resolveDomain, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
 import { buildManifest, renderManifest, yamlScalar } from '../../shopctl/src/manifest-template.mjs';
 import { assertNoCredentialsInArgv, classifyCredential, redact } from '../../shopctl/src/secrets.mjs';
 import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
@@ -238,6 +238,59 @@ describe('credentials', () => {
 
 // ---------------------------------------------------------------------------
 // `shopctl new`, against the real core tree.
+
+/**
+ * The two defaults an AGENCY has and the CORE must not.
+ *
+ * Neither can be a literal in the source: `config:validate` fails on any core
+ * file containing a shop's domain, and a core that knows one agency cannot be
+ * sold to a second. An environment variable is the right home — visible in the
+ * shell that set it, unlike a configuration file nobody remembers writing.
+ */
+describe('the defaults an agency sets once', () => {
+  it('builds the domain from the suffix, and says where it came from', () => {
+    expect(resolveDomain('maestro-demo', undefined, { MINSHOP_DOMAIN_SUFFIX: 'studiomaestro.fr' })).toEqual({
+      domain: 'maestro-demo.studiomaestro.fr',
+      from: 'MINSHOP_DOMAIN_SUFFIX',
+    });
+  });
+
+  // The placeholder is RFC 2606 and can never be registered by anyone, so it
+  // stays loud: `new` keeps "replace this domain" in its next steps only while
+  // it is the one in use.
+  it('falls back to the documentation placeholder', () => {
+    expect(resolveDomain('maestro-demo', undefined, {})).toEqual({
+      domain: 'maestro-demo.example.com',
+      from: 'placeholder',
+    });
+  });
+
+  it('lets the flag win over the variable', () => {
+    expect(resolveDomain('x', 'boutique.fr', { MINSHOP_DOMAIN_SUFFIX: 'studiomaestro.fr' })).toEqual({
+      domain: 'boutique.fr',
+      from: '--domain',
+    });
+  });
+
+  // A suffix that is not a domain would produce a manifest that fails
+  // validation for a reason naming a field the operator never typed.
+  it('refuses a suffix that is not a domain, naming the variable', () => {
+    expect(() => resolveDomain('x', undefined, { MINSHOP_DOMAIN_SUFFIX: 'https://studiomaestro.fr/' })).toThrow(
+      /MINSHOP_DOMAIN_SUFFIX/,
+    );
+  });
+
+  // The same variable `provision`, `deploy` and `destroy` already read: one
+  // question, one answer.
+  it('takes the account from the environment when no flag names one', () => {
+    expect(resolveAccountId(undefined, { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32) })).toEqual({
+      accountId: 'a'.repeat(32),
+      from: 'CLOUDFLARE_ACCOUNT_ID',
+    });
+    expect(resolveAccountId(undefined, {})).toEqual({ accountId: null, from: null });
+    expect(resolveAccountId('b'.repeat(32), { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32) }).from).toBe('--account');
+  });
+});
 
 describe('shopctl new', () => {
   // `gh` is asked before the clone, not at the forge step: a missing or

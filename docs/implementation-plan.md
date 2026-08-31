@@ -315,6 +315,13 @@ différemment à la même question, et c'est la CLI que l'exploitant croit. Sous
 `--json`, elle relaie le document de la porte tel quel, et un test compare les
 deux sorties : la divergence est impossible, pas seulement improbable.
 
+Deux défauts appartiennent à l'**agence** et pas au **socle**, et vivent donc
+dans l'environnement plutôt que dans le code : `MINSHOP_DOMAIN_SUFFIX` fait de
+`--domain` un `<slug>.<suffixe>`, et `CLOUDFLARE_ACCOUNT_ID` sert de `--account`.
+Les écrire en dur serait impossible de toute façon — `config:validate` échoue sur
+tout fichier du cœur contenant le domaine d'une boutique — et ce serait surtout
+un socle qui connaît une agence, donc invendable à la seconde.
+
 `shopctl new` doit :
 
 1. [x] valider le slug et les options ;
@@ -333,7 +340,8 @@ deux sorties : la divergence est impossible, pas seulement improbable.
     transporte (`check-manifest.mjs`, `check-paths.mjs`), pas celles du socle
     hôte, et sans `node_modules` ;
 11. [x] présenter les prochaines actions ;
-12. [x] écrire le compte Cloudflare attendu quand `--account` le donne ;
+12. [x] écrire le compte Cloudflare attendu, depuis `--account` ou
+    `CLOUDFLARE_ACCOUNT_ID` ; le rapport dit laquelle des deux a répondu ;
 13. [x] créer le dépôt GitHub, ses environnements et leurs secrets sur
     `--create-repo` — voir §5.2 bis.
 

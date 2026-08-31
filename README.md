@@ -177,11 +177,10 @@ npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
 
 ```bash
 # Créer le dépôt d'une boutique depuis un tag du socle (jalon 2)
-shopctl new acme \
-  --core v1.0.0 \
-  --origin git@github.com:agence/shop-acme.git \
-  --name "Boutique Acme" \
-  --domain acme.fr
+#   --core   défaut : la version du socle depuis lequel la CLI tourne
+#   --domain défaut : <slug>.example.com, ou <slug>.$MINSHOP_DOMAIN_SUFFIX
+#   --account défaut : $CLOUDFLARE_ACCOUNT_ID
+shopctl new acme --name "Boutique Acme" --create-repo
 
 cd shop-acme
 
