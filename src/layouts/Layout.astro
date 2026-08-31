@@ -6,7 +6,7 @@ import { normalizeSearchQuery } from '../features/search/query';
 import { EMPTY_MENUS, visibleItems } from '../features/navigation/db';
 import { getEmailProvider } from '../features/email';
 import { buildShellModel } from '../features/storefront/shell';
-import { LANG, t } from '../features/i18n';
+import { LANG, LOCALE, t } from '../features/i18n';
 import StoreHeader from '#theme/Header.astro';
 import StoreFooter from '#theme/Footer.astro';
 import '../styles/global.css';
@@ -86,7 +86,19 @@ const shell = buildShellModel({
 ---
 
 <!doctype html>
-<html lang={LANG}>
+{/* `lang` is the LANGUAGE subtag, which is what HTML wants; `data-locale` is
+    the full tag, which is what `Intl` wants. Both come from the one constant in
+    features/i18n/locale.ts, so they cannot drift apart.
+
+    The attribute exists for client scripts. A bundled script cannot import
+    `formatMoney` — it would pull the whole module graph into the browser — and
+    a hardcoded tag inside one is exactly the bug this replaced: the product
+    page server-rendered `24,00 €` and rewrote it to `€24.00` the instant its
+    live-price script ran. Reading the tag off the document keeps that script
+    minified and keeps invariant 7 true: nothing but locale.ts names a locale.
+
+    Two-sided, so pinned on both sides by test/storefront/locale-source.test.mjs. */}
+<html lang={LANG} data-locale={LOCALE}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

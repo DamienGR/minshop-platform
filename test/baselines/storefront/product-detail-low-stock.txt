@@ -5,7 +5,7 @@ cache-control: public, max-age=0, s-maxage=600
 cache-tag: catalog,product:prod_<id>,shell
 
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-locale="fr-FR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -76,7 +76,7 @@ cache-tag: catalog,product:prod_<id>,shell
 </div>
 </header>
 <main class="page-shell">
-<a href="/" class="text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back to shop</a>
+<a href="/" class="text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Retour à la boutique</a>
 <div class="mt-6 grid gap-10 md:grid-cols-2 md:gap-16">
 <div class="reveal relative overflow-hidden rounded-lg bg-surface">
 <img src="/placeholder.png" alt="Pagination Item 5" class="aspect-square w-full bg-surface object-cover" width="600" height="600" loading="eager" fetchpriority="high" decoding="async">
@@ -117,7 +117,7 @@ cache-tag: catalog,product:prod_<id>,shell
 </div>
 </div>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Pagination Item 5","description":"pagination fixture","image":"https://canonical.example/placeholder.png","offers":{"@type":"Offer","price":"10.05","priceCurrency":"EUR","availability":"https://schema.org/InStock","url":"https://canonical.example/products/pagination-item-5"}}</script>
-<script type="module">globalThis.process??={},globalThis.process.env??={};var e=document.querySelector(`[data-options-form]`),t=document.querySelector(`[data-price-display]`),n=document.querySelector(`[data-hero-track]`);if(e instanceof HTMLFormElement&&t instanceof HTMLElement){let r=(t.dataset.currency||`usd`).toUpperCase(),i=Number(t.dataset.base||`0`),a=new Intl.NumberFormat(`en-US`,{style:`currency`,currency:r}),o=10**(a.resolvedOptions().maximumFractionDigits??2),s=e=>{if(!(n instanceof HTMLElement)||!e)return;let t=document.getElementById(`pi-${e}`);t instanceof HTMLElement&&n.contains(t)&&(n.scrollLeft=t.offsetLeft)},c=n=>{let r=e.querySelector(`input[name="variant_id"]:checked`),c=r?Number(r.getAttribute(`data-price`)):i;for(let t of e.querySelectorAll(`input[name="extra"]:checked`))c+=Number(t.getAttribute(`data-price`))||0;t.textContent=a.format(c/o),n&&r&&s(r.getAttribute(`data-image-id`)||``)};e.addEventListener(`change`,()=>c(!0)),c(!0)}</script>
+<script type="module">globalThis.process??={},globalThis.process.env??={};var e=document.querySelector(`[data-options-form]`),t=document.querySelector(`[data-price-display]`),n=document.querySelector(`[data-hero-track]`);if(e instanceof HTMLFormElement&&t instanceof HTMLElement){let r=(t.dataset.currency||`usd`).toUpperCase(),i=Number(t.dataset.base||`0`),a=new Intl.NumberFormat(document.documentElement.dataset.locale,{style:`currency`,currency:r}),o=10**(a.resolvedOptions().maximumFractionDigits??2),s=e=>{if(!(n instanceof HTMLElement)||!e)return;let t=document.getElementById(`pi-${e}`);t instanceof HTMLElement&&n.contains(t)&&(n.scrollLeft=t.offsetLeft)},c=n=>{let r=e.querySelector(`input[name="variant_id"]:checked`),c=r?Number(r.getAttribute(`data-price`)):i;for(let t of e.querySelectorAll(`input[name="extra"]:checked`))c+=Number(t.getAttribute(`data-price`))||0;t.textContent=a.format(c/o),n&&r&&s(r.getAttribute(`data-image-id`)||``)};e.addEventListener(`change`,()=>c(!0)),c(!0)}</script>
 <script>(function(){const copiedLabel = "Lien copié";
 
     // @ts-nocheck -- plain-JS client script (annotations would ship to the browser)

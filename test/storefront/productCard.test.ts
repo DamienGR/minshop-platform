@@ -140,6 +140,19 @@ describe('the store-owned product card', () => {
     expect(lcp).toContain('fetchpriority="high"');
   });
 
+  it('renders a very long name in full, beside its price', async () => {
+    // Truncation is a CSS decision, never a rendering one. A template that cut
+    // the string server-side would ship the shortened name to the accessibility
+    // tree and to every crawler, where no ellipsis can put it back — and the
+    // price, which shares the caption line, has to survive it.
+    const name =
+      'Torchon en lin lavé, tissé et ourlé à la main dans le Nord de la France, grand format';
+    const html = await render(ProductCard, cardFor(product({ name })));
+
+    expect(html).toContain(name);
+    expect(html).toContain('24,00\u00a0\u20ac');
+  });
+
   it('never fades the LCP image', async () => {
     // An opacity:0 element is not a valid LCP candidate, so fading a priority
     // image would undo the head start `priority` just bought.

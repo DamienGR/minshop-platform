@@ -1,6 +1,7 @@
 ---
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { formatDate, getConfig } from '../../../config';
 import { listPages } from '../../../features/pages/db';
 import { menuReferencesFor } from '../../../features/navigation/admin';
 
@@ -12,8 +13,11 @@ const menuRefs = await menuReferencesFor(
   'page',
   pages.map((p) => p.id),
 );
-const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-const formatDate = (iso: string) => dateFmt.format(new Date(`${iso.replace(' ', 'T')}Z`));
+// The shared formatter, like every other admin list. A local Intl instance
+// here formatted in en-US and in UTC, so this one screen disagreed with the
+// orders and customers lists beside it about both the date's shape and the day
+// it fell on (invariant 7: only formatPrice/formatDate name a locale).
+const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
 ---
 
 <AdminLayout title="Pages" active="pages">
@@ -66,7 +70,7 @@ const formatDate = (iso: string) => dateFmt.format(new Date(`${iso.replace(' ', 
                   )}
                 </td>
                 <td data-label="Updated" class="py-3 pr-4 text-gray-500">
-                  {formatDate(page.updated_at)}
+                  {formatDate(page.updated_at, { dateStyle: 'medium' }, timeZone)}
                 </td>
                 <td class="py-3 text-right">
                   <span class="inline-flex items-center gap-3">

@@ -1,6 +1,7 @@
 ---
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { formatDate, getConfig } from '../../../config';
 import Pagination from '../../../components/Pagination.astro';
 import { MEDIA_PAGE_SIZE, countMedia } from '../../../features/media/db';
 import { isUnused, usageLinks } from '../../../features/media/usage';
@@ -17,8 +18,8 @@ const { page, offset, totalPages } = paginate(Astro.url.searchParams, total, MED
 const { items, usage, baseUrl } = await loadMediaPage(MEDIA_PAGE_SIZE, offset);
 const hrefFor = (p: number) => queryHref('/admin/media', { page: p > 1 ? p : undefined });
 
-const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-const formatDate = (iso: string) => dateFmt.format(new Date(`${iso.replace(' ', 'T')}Z`));
+// See the note in admin/pages: the shared formatter, in the store's time zone.
+const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
 
 /** Legacy rows backfilled from R2 have no size — show nothing, not "0 B". */
 function formatSize(bytes: number | null): string | null {
@@ -101,7 +102,7 @@ function formatSize(bytes: number | null): string | null {
                 {m.original_name}
               </p>
               <p class="text-xs text-gray-500">
-                {formatDate(m.created_at)}
+                {formatDate(m.created_at, { dateStyle: 'medium' }, timeZone)}
                 {dimensions ? ` · ${dimensions}` : ''}
                 {size ? ` · ${size}` : ''}
                 {!m.mime_type && !size ? ' · Legacy image' : ''}

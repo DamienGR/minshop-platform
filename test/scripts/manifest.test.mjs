@@ -49,7 +49,7 @@ describe('manifest YAML reader', () => {
     expect(parsed.commerce.pricesIncludeTax).toBe(true);
     expect(parsed.commerce.defaultVatRate).toBe(20);
     // The trailing comment on the theme line is not part of the value.
-    expect(parsed.theme.id).toBe('studio');
+    expect(parsed.theme.id).toBe('atelier');
   });
 
   it('keeps a # inside quotes and drops one that starts a comment', () => {
@@ -356,7 +356,7 @@ describe('theme id agreement', () => {
   // Only the tree knows what is on disk, so this one is caught by loadManifest
   // rather than by the schema: the manifest below is perfectly well-formed.
   it('refuses a theme with no directory in this tree', () => {
-    const text = read(fixture('pilot-fr')).replace(/id: studio/, 'id: no-such-theme');
+    const text = read(fixture('pilot-fr')).replace(/id: atelier.*/, 'id: no-such-theme');
     expect(validateManifest(parseManifestYaml(text)).ok).toBe(true);
 
     const file = join(mkdtempSync(join(tmpdir(), 'minshop-manifest-')), 'client.yaml');

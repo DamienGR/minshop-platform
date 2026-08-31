@@ -66,6 +66,8 @@ export const fr = {
   'product.share.copied': 'Lien copié',
   'product.details': 'Détails',
   'product.related': 'Vous aimerez aussi',
+  'product.backToShop': 'Retour à la boutique',
+  'product.digitalDelivery': 'Téléchargement numérique',
   'product.error.chooseOption': 'Choisissez : {option}.',
 
   // ─── Panier ────────────────────────────────────────────────────────────────────

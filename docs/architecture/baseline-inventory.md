@@ -116,7 +116,7 @@ cœur.
 | Pages éditoriales et légales (Markdown) | `src/features/pages` | inclus |
 | Médias R2, propriété unique des fichiers | `src/features/media`, `src/features/storage` | inclus |
 | Navigation et menus | `src/features/navigation` | inclus |
-| Thèmes (`default`, `market`, `studio`) | `src/themes` | inclus (thème client dérivé au jalon 5) |
+| Thèmes (`default`, `market`, `studio`) | `src/themes` | inclus ; le pilote a le sien (`atelier`, côté client) depuis le jalon 5 |
 | Administration (CRUD, réglages, coffre de secrets) | `src/pages/admin`, `src/features/settings`, `src/features/secrets` | inclus |
 | Authentification admin (session, Cloudflare Access, Turnstile) | `src/features/auth` | inclus |
 | E-mails transactionnels (Resend, Cloudflare) | `src/features/email` | inclus |

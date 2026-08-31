@@ -74,7 +74,7 @@ Deux boutiques fictives doivent exister dès le début du développement :
 - [x] produits simples et variantes ;
 - [x] états en stock, stock faible et épuisé ;
 - [ ] livraison fixe, par poids et gratuite au seuil ;
-- [ ] thème entièrement personnalisé ;
+- [x] thème entièrement personnalisé — `atelier`, jalon 5 ;
 - [ ] pages légales fictives clairement identifiées comme telles.
 
 #### `canary-minimal`
@@ -100,7 +100,8 @@ Le plan de contrôle comprend :
   (`shopctl/`, [ADR 0009](architecture/decisions/0009-forme-de-la-cli-shopctl.md)) ;
   provisioning, catalogue, déploiement, sauvegarde et flotte aux jalons suivants ;
 - [x] les schémas de configuration ;
-- [ ] les templates de boutique ;
+- [x] les templates de boutique — trois designs livrés par le socle, plus le
+  thème propre à une boutique que `pilot-fr` démontre depuis le jalon 5 ;
 - [ ] le registre privé de flotte ;
 - [ ] les workflows de mise à jour ;
 - [ ] les tests génériques propres à la plateforme multi-client.
@@ -214,8 +215,7 @@ email:
   from: commandes@pilote.example.fr
 
 theme:
-  # `pilot-fr` au jalon 5, quand la boutique aura son propre thème.
-  id: studio
+  id: atelier  # src/themes/atelier/
 ```
 
 Ce bloc est la copie lisible d'un fichier qui existe :
@@ -1233,21 +1233,27 @@ Durée indicative : 4 à 6 jours.
 
 #### Livrables
 
-- [ ] design tokens ;
-- [ ] header et navigation ;
-- [ ] footer ;
-- [ ] catalogue ;
-- [ ] cartes produits ;
-- [ ] fiche produit ;
-- [ ] pages de contenu ;
-- [ ] responsive ;
-- [ ] états vides, longs, épuisés et en erreur.
+- [x] design tokens ;
+- [x] header et navigation ;
+- [x] footer ;
+- [x] catalogue ;
+- [x] cartes produits ;
+- [x] fiche produit ;
+- [x] pages de contenu ;
+- [x] responsive ;
+- [x] états vides, longs, épuisés et en erreur.
 
 #### Tests
 
-- [ ] `npm run theme:check` sur le thème du pilote ;
-- [ ] `npm run test:storefront-contract` sur le thème du pilote ;
-- [ ] `npm run verify` sur le thème du pilote.
+- [x] `npm run theme:check` sur le thème du pilote ;
+- [x] `npm run test:storefront-contract` sur le thème du pilote ;
+- [x] `npm run verify` sur le thème du pilote.
+
+Les trois passent sans qu'aucun fichier de CI ait été modifié : les jobs
+« Verify theme » et « Build shop » découvrent les thèmes et les boutiques dans
+l'arbre plutôt que dans une liste, donc `atelier` a rejoint la matrice le jour
+où le répertoire a existé. C'est la propriété que le jalon 1 avait achetée et
+que celui-ci encaisse.
 
 Ajouter :
 
@@ -1258,15 +1264,98 @@ Ajouter :
 - [ ] zoom 200 % ;
 - [ ] navigation sans JavaScript ;
 - [ ] ajout au panier avec et sans JavaScript ;
-- [ ] titres très longs ;
-- [ ] catalogue vide ;
-- [ ] produit épuisé ;
+- [x] titres très longs ;
+- [x] catalogue vide ;
+- [x] produit épuisé ;
 - [ ] erreur de recherche.
+
+Les trois cochés sont des contrats de rendu, donc ils vivent dans la suite
+`test/storefront/` et s'appliquent à TOUS les thèmes, pas seulement au pilote.
+Les sept autres demandent un vrai navigateur ; voir l'État.
 
 #### Critère de sortie
 
 - [ ] Le storefront est visuellement spécifique et tous les contrats fonctionnels
-  Minshop restent verts.
+  Minshop restent verts. **La seconde moitié est acquise, la première n'est pas
+  encore prouvée par une porte** — voir l'État.
+
+#### État
+
+**Le thème du pilote appartient au marchand, et c'est le fait structurant.**
+`src/themes/atelier/` ne porte aucun identifiant réservé, donc
+`scripts/path-ownership.mjs` le classe côté `client` : le cœur n'y touchera
+jamais et une montée de version ne peut pas y produire de conflit (ADR 0003).
+Les deux boutiques témoins cessent du même coup d'être symétriques, ce qui est
+un gain : `canary-minimal` continue de sélectionner un thème livré par le socle,
+`pilot-fr` sélectionne un design que le cœur ne possède pas. La paire vérifie
+maintenant deux propriétés au lieu d'une.
+
+**Rien n'a été ajouté à la CI.** Le job « Verify theme » interroge
+`discoverThemeIds()` et le job « Build shop » interroge `prepare-client --list` ;
+les deux ont donc pris `atelier` en charge sans qu'une liste soit éditée. Un
+thème que le socle ne connaît pas passe exactement les mêmes portes que les
+siens : contrat storefront, `astro check`, frontière de présentation, build,
+CSS compilé.
+
+**Le catalogue de messages est propriété du cœur, et un thème client ne peut
+donc pas y écrire sa copie.** Les trois thèmes livrés ont chacun leur clé
+`catalog.empty.<thème>` ; `atelier` n'en prend pas et lit
+`catalog.empty.default`. Ce n'est pas un pis-aller : une clé nommée d'après un
+client dans un fichier du cœur serait précisément la condition que
+`config:validate` existe pour interdire. La formulation qui doit appartenir au
+marchand a déjà un endroit où vivre — l'annonce, les pages, les noms de
+catégories — et cet endroit est l'administration, pas un fichier source.
+
+**Deux bogues du socle français sont sortis de l'exercice**, tous deux
+invisibles pour les portes existantes parce que toutes les portes existantes
+lisent du HTML sans jamais exécuter de script :
+
+- le script de prix vivant de `/products/[slug]` construisait
+  `new Intl.NumberFormat('en-US', …)`. Le serveur rendait `24,00 €` et le
+  navigateur le réécrivait en `€24.00` dès qu'un produit avait une variante ou
+  une option. Les lignes de base storefront sont capturées avec `curl`, donc
+  aucun script ne s'y exécute ; les contrats de conteneur rendent du balisage à
+  partir de props et n'en exécutent pas davantage. Il a fallu ouvrir la page.
+  `Layout.astro` publie désormais `<html lang="fr" data-locale="fr-FR">` — la
+  sous-étiquette de langue pour HTML, l'étiquette complète pour `Intl`, les deux
+  tirées de la même constante — et le script la lit là. `define:vars` aurait
+  marché aussi, mais impose `is:inline` : un script non minifié, commentaires
+  compris, sur la page la plus visitée de la boutique. Mesuré sur une fiche
+  produit : +354 octets gzip pour cette voie contre +21 pour l'attribut, à
+  correction identique ;
+- `/admin/media` et `/admin/pages` construisaient chacun leur propre
+  `Intl.DateTimeFormat('en-US')` et formataient en UTC, donc ces deux écrans
+  contredisaient les listes Commandes et Clients d'à côté sur la forme de la
+  date ET sur le jour affiché. Les deux passent maintenant par le `formatDate`
+  partagé et le fuseau de la boutique, comme le reste de l'administration
+  (ADR 0011 garde l'admin en anglais ; les dates et les montants, eux, suivent
+  la boutique).
+
+`test/storefront/locale-source.test.mjs` est la porte qui manquait :
+`src/features/i18n/locale.ts`, `format.ts` et `money.ts` sont les seuls modules
+autorisés à nommer une langue, et tout autre `new Intl.X('…')` fait échouer la
+suite. Elle a été vérifiée dans les deux sens — remise en place, l'ancienne
+ligne la fait tomber.
+
+**Ce qui reste demande un navigateur, et c'est une décision, pas un oubli.**
+Playwright, axe et la régression visuelle valent chacun une dépendance de
+développement et un job de CI — et un navigateur à installer sur le runner —,
+donc le choix appartient au projet, pas à ce jalon.
+
+Le design a bien été ouvert dans Chromium pendant ce jalon, contre le Worker
+CONSTRUIT et non contre le serveur de développement, ce qui est la seule façon
+d'observer le script minifié que reçoit un visiteur. Ce qui a été mesuré :
+
+- débordement horizontal **0 px** sur sept pages × 390, 768 et 1440 px, plus un
+  passage à 200 % de zoom. C'est la ligne « responsive » des livrables ;
+- prix vivant en `24,00 €` puis `29,00 €` après avoir coché une option, sur le
+  bundle minifié — la vérification de la correction ci-dessus ;
+- ajout au panier **sans JavaScript** : `<form method="POST" action="/api/cart">`,
+  et un POST direct répond 303 vers `/cart`.
+
+Une inspection n'est pas une porte. Ces trois mesures ne sont reproductibles
+aujourd'hui que sur le poste de qui les relance, donc le critère de sortie du
+jalon reste ouvert et les lignes correspondantes restent décochées.
 
 ### Jalon 6 — Provisioning et CI/CD
 

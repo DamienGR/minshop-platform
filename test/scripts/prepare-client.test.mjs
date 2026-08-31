@@ -46,7 +46,7 @@ describe('rendering the Wrangler configuration', () => {
 
 describe('preparing a shop', () => {
   it.each([
-    ['pilot-fr', 'studio'],
+    ['pilot-fr', 'atelier'],
     ['canary-minimal', 'market'],
   ])('derives %s from its manifest', (slug, theme) => {
     const { report, config } = prepare(slug);
