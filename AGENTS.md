@@ -172,6 +172,7 @@ npm run shopctl -- provision --env staging --dry-run
 npm run shopctl -- provision --env staging
 npm run shopctl -- deploy --env staging
 npm run shopctl -- deploy --env production --yes
+npm run shopctl -- destroy --env staging --confirm <slug>
 ```
 
 Four rules hold for every command, present and future:
@@ -207,6 +208,22 @@ run creates nothing; a killed run resumes by asking the same questions. An
 existing secret is KEPT, never rotated — `SECRETS_KEK` decrypts the payment keys
 already in D1, and a new one would break payments with no error anyone can read.
 
+A shop's LIFECYCLE has four steps, and the account boundary falls between the
+second and the third (ADR 0015): build on the agency account, private preview
+behind Access, **client enters content on the client's account**, go live and
+tear the agency copy down. The boundary is there because Cloudflare transfers
+nothing between accounts — putting it at go-live would make `backup`/`restore`
+(jalon 9) a prerequisite of every launch. Declaring `cloudflare.stagingDomain`
+renders the staging route AND closes workers.dev, because an Access app binds
+to a hostname and its header is forgeable against a `*.workers.dev` origin;
+leaving both open closes nothing. `deploy` then smoke-tests the inverse
+property: an unauthenticated 200 fails the run.
+
+`destroy` is irreversible and shaped by it: the shop's slug typed out (not
+`--yes`, which becomes a reflex), `--yes` on top in production, read-before-
+write, the database deleted LAST and only once everything else is gone, and a
+non-empty bucket's refusal relayed rather than worked around.
+
 `repo` wraps `gh`, and that is forced rather than preferred (ADR 0014): a GitHub
 environment secret is a libsodium sealed box (X25519 + Blake2b +
 XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
@@ -224,8 +241,8 @@ a pass. `.github/workflows/deploy.yml` runs the same commands behind a GitHub
 Environment so production waits for a reviewer.
 
 Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
-`provision.test.mjs` and `deploy.test.mjs` (account, environment, deployment),
-run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
+`provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
+environment, deployment, teardown), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
 tags it, and runs the real binary against it. The last two install
 `test/fixtures/wrangler-double.mjs` at `node_modules/.bin/wrangler` in a
 throwaway shop, and `test/fixtures/gh-double.mjs` on the PATH where `gh` would

@@ -23,6 +23,7 @@ ait un `node_modules` où que ce soit.
 | `shopctl catalog …` | 4 | Valide, simule et applique le catalogue CSV du commerçant. |
 | `shopctl repo` | 6 | Crée ou confirme le dépôt GitHub, ses environnements et leurs secrets. |
 | `shopctl provision --env <env>` | 6 | Crée ou confirme les ressources Cloudflare d'un environnement. |
+| `shopctl destroy --env <env>` | 6 | Supprime les ressources Cloudflare d'un environnement. Irréversible. |
 | `shopctl deploy --env <env>` | 6 | Vérifie, migre, construit, téléverse, puis teste la boutique déployée. |
 
 Les commandes `verify`, `backup`, `restore`, `core` et `fleet` sont décrites au
@@ -157,6 +158,52 @@ n'aboutit pas est un échec, jamais un succès. Il nomme la version vers laquell
 revenir plutôt que de revenir tout seul : un rollback automatique se
 déclencherait aussi sur un contrôle qui a échoué parce que le réseau n'atteignait
 pas le site.
+
+## Le cycle de vie d'une boutique
+
+Quatre étapes, et la frontière entre le compte de l'agence et celui du client
+tombe entre la deuxième et la troisième
+([ADR 0015](../docs/architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)) :
+
+| | Où | Commande |
+| --- | --- | --- |
+| 1. Construction | `staging`, compte agence | `shopctl new … --create-repo` puis `provision`/`deploy --env staging` |
+| 2. Preview privée | idem, derrière Access | `cloudflare.stagingDomain` au manifeste, puis `deploy --env staging` |
+| 3. Saisie par le client | **compte client** | `provision --env staging` sur le nouveau compte |
+| 4. Mise en ligne | `production`, compte client | `deploy --env production --yes`, puis `destroy --env staging` côté agence |
+
+La frontière est là et pas à l'étape 4 pour une raison mesurable : Cloudflare ne
+transfère rien entre comptes. Le seul moment où des données existent est la
+saisie, et elle a donc déjà lieu sur le compte définitif — il n'y a jamais de
+migration à écrire.
+
+**Déclarer `cloudflare.stagingDomain` ferme `workers.dev`** sur cet
+environnement, et ce n'est pas un réglage séparé : une application Cloudflare
+Access se lie à un nom d'hôte, et l'en-tête qu'elle injecte est falsifiable
+contre une origine `*.workers.dev`. Laisser les deux ouverts revient à ne rien
+fermer. Le test de fumée d'un environnement déclaré privé pose alors la question
+inverse : une réponse 200 à une requête non authentifiée fait échouer le
+déploiement.
+
+## `shopctl destroy`
+
+```sh
+npm run shopctl -- destroy --env staging --confirm <slug>
+npm run shopctl -- destroy --env production --confirm <slug> --yes
+```
+
+Irréversible, et tout dans cette commande découle de là. Elle **demande le slug
+saisi** plutôt qu'un `--yes`, qui devient un réflexe dès la troisième fois : un
+slug doit être cherché, et le chercher est la pause qu'on achète. La production
+exige `--yes` en plus.
+
+Elle **lit d'abord et dit ce qu'elle a trouvé** ; `--dry-run` est la même marche
+sans les écritures. Elle **supprime la base en dernier**, et seulement si le
+reste est parti : une exécution interrompue laisse une base lisible et
+exportable plutôt que des buckets que plus rien n'interprète. Et elle **ne vide
+jamais un bucket** — R2 refuse d'en supprimer un qui porte encore des objets, et
+ce refus est relayé tel quel, parce qu'un teardown qui vide un bucket à votre
+place est un teardown qui supprime ce que personne ne voulait perdre.
 
 ## Conventions
 

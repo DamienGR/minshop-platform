@@ -99,6 +99,38 @@ export const SMOKE_CHECKS = [
 ];
 
 /**
+ * The checks for an environment that is supposed to be CLOSED.
+ *
+ * A private preview inverts the storefront question: a 200 from an
+ * unauthenticated request is the failure, not the pass. Everything else
+ * follows — a gated origin cannot answer 200 on `/products` or `/robots.txt`
+ * either, so those checks would fail for the right reason but with the wrong
+ * message, and a message that misnames the cause is how an operator spends an
+ * afternoon on the wrong thing.
+ *
+ * What this proves is narrow and worth stating: that the Access application is
+ * actually in front of the hostname. It cannot prove the workers.dev URL is
+ * shut — that origin has a different name, and if it is open it is open whether
+ * or not this check passes. `provision` reads the rendered configuration for
+ * that half.
+ */
+export const GATED_CHECKS = [
+  {
+    id: 'gated',
+    path: '/',
+    what: 'la preview est fermée aux requêtes non authentifiées',
+    check(response) {
+      // 401, 403 and any redirect are all "something stands in front of it".
+      // 200 is the one answer that means nothing does.
+      if (response.status === 200) {
+        return 'répond 200 sans authentification : la preview est publique. Vérifiez que l\'application Access couvre ce nom d\'hôte, et que workers.dev est fermé.';
+      }
+      return null;
+    },
+  },
+];
+
+/**
  * Turn responses into verdicts.
  *
  * @param {Record<string, SmokeResponse>} responses by check id
@@ -154,12 +186,12 @@ export async function fetchSmoke(url, { timeoutMs = 15_000, fetchImpl = fetch } 
  *
  * @param {string} origin e.g. https://minshop-atelier-staging.example.workers.dev
  */
-export async function runSmoke(origin, { checks = SMOKE_CHECKS, ...options } = {}) {
+export async function runSmoke(origin, { gated = false, checks = gated ? GATED_CHECKS : SMOKE_CHECKS, ...options } = {}) {
   const responses = {};
   for (const check of checks) {
     responses[check.id] = await fetchSmoke(new URL(check.path, origin).toString(), options);
   }
-  return { origin, ...evaluateSmoke(responses, checks) };
+  return { origin, gated, ...evaluateSmoke(responses, checks) };
 }
 
 /**

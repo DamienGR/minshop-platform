@@ -34,6 +34,13 @@ cloudflare:
   # canary-minimal ne le déclare pas, et la paire vérifie donc les deux
   # branches — le champ est facultatif parce qu'il s'apprend au provisioning.
   accountId: 0000000000000000000000000000abcd
+  # Nom d'hôte de la preview privée, devant lequel une application Cloudflare
+  # Access est posée pendant la construction. Sa présence ferme workers.dev sur
+  # staging : une app Access se lie à un nom d'hôte, et l'en-tête qu'elle injecte
+  # est falsifiable contre une origine *.workers.dev — donc laisser les deux
+  # ouverts revient à ne rien fermer. canary-minimal ne le déclare pas et sert
+  # son staging sur workers.dev : la paire vérifie les deux rendus.
+  stagingDomain: preview-pilote.example.fr
 
 email:
   provider: resend

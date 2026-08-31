@@ -202,6 +202,13 @@
           "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
           "minLength": 4,
           "maxLength": 253
+        },
+        "stagingDomain": {
+          "description": "Hostname the staging environment answers on, so an Access application can be put in front of it. Absent means staging is served on workers.dev, which CANNOT be gated: the Cf-Access-Jwt-Assertion header is forgeable against a *.workers.dev origin, so an Access app bound to a custom hostname is bypassed there. A shop being previewed by a client before launch needs this; one that is already public does not.",
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+          "minLength": 4,
+          "maxLength": 253
         }
       }
     },
@@ -271,6 +278,10 @@
     {
       "id": "production-domain-is-custom",
       "description": "A shop is reachable on its own domain, not a platform subdomain."
+    },
+    {
+      "id": "staging-domain-is-not-production",
+      "description": "The staging hostname and the production domain must differ."
     },
     {
       "id": "no-credentials",

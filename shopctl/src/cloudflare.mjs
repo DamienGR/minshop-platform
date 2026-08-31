@@ -298,6 +298,49 @@ export function workerExists(worker, { cwd }) {
   return result.status === 0;
 }
 
+/**
+ * Delete one Worker, database or bucket.
+ *
+ * Each returns what happened rather than throwing on "already gone": a teardown
+ * that has to be re-run because one resource was missing is a teardown people
+ * stop finishing, and a half-torn-down environment is worse than either state.
+ * A REAL failure — a non-empty bucket, a permission the token lacks — is
+ * reported with wrangler's own first line, because those two have different
+ * remedies and the operator has to be able to tell them apart.
+ */
+function removal(result, name) {
+  if (result.status === 0) return { name, removed: true, reason: null };
+  const text = stripAnsi(`${result.stdout}\n${result.stderr}`);
+  if (/not found|does not exist|Couldn't find|could not resolve|no such/i.test(text)) {
+    return { name, removed: false, reason: 'absent' };
+  }
+  return { name, removed: false, reason: firstLine(text) ?? 'échec' };
+}
+
+export function deleteWorker(worker, { cwd }) {
+  return removal(wrangler(['delete', '--name', worker], { cwd, allowFailure: true }), worker);
+}
+
+export function deleteDatabase(name, { cwd }) {
+  return removal(wrangler(['d1', 'delete', name, '--skip-confirmation'], { cwd, allowFailure: true }), name);
+}
+
+/** R2 refuses to delete a bucket that still holds objects. That refusal is
+ *  relayed rather than worked around: emptying a bucket on the operator's
+ *  behalf is how a teardown deletes something nobody meant to lose. */
+export function deleteBucket(name, { cwd, jurisdiction }) {
+  return removal(wrangler(['r2', 'bucket', 'delete', name, '-J', jurisdiction], { cwd, allowFailure: true }), name);
+}
+
+function firstLine(text) {
+  return (
+    String(text)
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith('⛅') && !/^─+$/.test(line)) ?? null
+  );
+}
+
 /** Apply the migrations the tree carries to the bound database. */
 export function applyMigrations({ cwd, remote = true, binding = 'DB' }) {
   wrangler(['d1', 'migrations', 'apply', binding, remote ? '--remote' : '--local'], { cwd });

@@ -168,6 +168,12 @@ export const MANIFEST_SPEC = {
         description:
           'Public custom domain of the images bucket, when one is attached. Absent means product images are served through the Worker, which is the default and is never wrong — only slower.',
       },
+      stagingDomain: {
+        optional: true,
+        schema: { type: 'string', pattern: DOMAIN, minLength: 4, maxLength: 253 },
+        description:
+          'Hostname the staging environment answers on, so an Access application can be put in front of it. Absent means staging is served on workers.dev, which CANNOT be gated: the Cf-Access-Jwt-Assertion header is forgeable against a *.workers.dev origin, so an Access app bound to a custom hostname is bypassed there. A shop being previewed by a client before launch needs this; one that is already public does not.',
+      },
     },
   },
   email: {
@@ -295,6 +301,21 @@ export const CROSS_FIELD_RULES = [
         return {
           path: 'cloudflare.productionDomain',
           message: `is a ${platform} address. Production runs on the merchant's own domain: the platform subdomain cannot carry the shop's email alignment or survive a worker rename.`,
+        };
+      }
+      return null;
+    },
+  },
+  {
+    id: 'staging-domain-is-not-production',
+    description: 'The staging hostname and the production domain must differ.',
+    check(m) {
+      const staging = m.cloudflare?.stagingDomain;
+      if (staging && staging === m.cloudflare?.productionDomain) {
+        return {
+          path: 'cloudflare.stagingDomain',
+          message:
+            'is the production domain. Two environments on one hostname means whichever deployed last is serving the shop, and the one taking orders is the one nobody chose.',
         };
       }
       return null;

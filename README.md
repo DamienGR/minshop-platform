@@ -206,7 +206,18 @@ shopctl provision --env staging
 # Déployer, avec test de fumée (jalon 6)
 shopctl deploy --env staging
 shopctl deploy --env production --yes
+
+# Retirer un environnement d'un compte (jalon 6) — irréversible
+shopctl destroy --env staging --confirm <slug>
 ```
+
+Le cycle de vie d'une boutique compte quatre étapes, et la frontière entre le
+compte Cloudflare de l'agence et celui du client tombe **avant la saisie des
+contenus**, pas à la mise en ligne
+([ADR 0015](docs/architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)) :
+construction et preview privée chez l'agence, saisie et production chez le
+client. Cloudflare ne transfère rien entre comptes, donc placer la frontière
+plus tard imposerait une migration de données à chaque livraison.
 
 La locale, la devise, le marché et la juridiction n'ont pas d'option : chaque
 énumération n'accepte aujourd'hui qu'une valeur, et l'élargir est une décision

@@ -1517,6 +1517,7 @@ Durée indicative : 4 à 5 jours.
 - [x] GitHub Environments ;
 - [x] approbation production ;
 - [x] dépôt, environnements et secrets créés par la CLI (§5.2 bis, ADR 0014) ;
+- [x] preview privée de staging et suppression d'un environnement (ADR 0015) ;
 - [x] domaine personnalisé ;
 - [x] domaine d'images ;
 - [x] bucket privé non public ;
@@ -1678,6 +1679,38 @@ de protection sont **tentées, jamais supposées** : sur un dépôt privé hors
 GitHub Pro, l'API refuse les relecteurs et accepte l'environnement ; la commande
 garde l'environnement, qui porte les secrets, et dit que l'approbation n'est pas
 opposable au lieu de laisser croire qu'elle l'est.
+
+**Le cycle de vie a été fixé, et il déplace une frontière.** Quatre étapes —
+construction, preview privée, saisie par le client, mise en ligne — et le compte
+Cloudflare du client devient le prérequis de la **troisième**, pas de la
+quatrième ([ADR 0015](architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)).
+La raison est mesurable : Cloudflare ne transfère rien entre comptes, donc le
+seul moment où des données existent doit déjà se passer sur le compte définitif.
+Placer la frontière à la mise en ligne aurait rendu `shopctl backup`/`restore`
+— jalon 9 — obligatoire avant toute livraison.
+
+Deux constats du code ont décidé de la preview. Une application Cloudflare
+Access **se lie à un nom d'hôte**, et `src/middleware.ts` explique pourquoi il
+vérifie la signature du JWT plutôt que de faire confiance à l'en-tête : celui-ci
+est falsifiable contre une origine `*.workers.dev`. Une preview privée exige
+donc un nom d'hôte **et** `workers.dev` fermé, et déclarer
+`cloudflare.stagingDomain` fait maintenant les deux d'un coup — ce sont les deux
+moitiés d'une seule décision, pas deux réglages. Et `isProtected()` ne couvre
+que `/admin` : fermer une preview est une affaire de bordure, pas de code, donc
+le cœur n'a pas bougé.
+
+Le test de fumée pose alors la **question inverse** sur un environnement déclaré
+privé : une réponse 200 à une requête non authentifiée le fait échouer. C'est la
+panne qui ressemble à un succès — une URL de preview envoyée au client, qu'un
+moteur de recherche trouve aussi, servant une boutique qui n'a pas ouvert.
+
+**`shopctl destroy` ferme le cycle**, et son irréversibilité dessine tout le
+reste : il demande le slug **saisi** plutôt qu'un `--yes` qui devient un réflexe
+dès la troisième fois, exige `--yes` en plus en production, lit avant d'écrire,
+supprime la base **en dernier** et seulement si le reste est parti — une
+exécution interrompue laisse une base lisible plutôt que des buckets que plus
+rien n'interprète — et ne vide jamais un bucket : R2 refuse d'en supprimer un
+non vide, et ce refus est relayé tel quel.
 
 **Un bug est sorti de la doublure `gh`**, et il n'aurait été vu sur aucune
 machine de développement ordinaire : `git remote get-url origin` applique les

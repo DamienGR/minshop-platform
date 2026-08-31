@@ -258,7 +258,9 @@ describe('fleet identifiers', () => {
       __WORKERS_DEV__: 'false',
       __ROUTES__: JSON.stringify([{ pattern: 'pilote.example.fr', custom_domain: true }]),
     });
-    expect(wranglerSubstitutions(base(), { env: 'staging' })).toMatchObject({ __WORKERS_DEV__: 'true', __ROUTES__: '[]' });
+    const open = base();
+    delete open.cloudflare.stagingDomain;
+    expect(wranglerSubstitutions(open, { env: 'staging' })).toMatchObject({ __WORKERS_DEV__: 'true', __ROUTES__: '[]' });
   });
 
   // Empty is the ordinary case and never wrong: the storefront reads
@@ -314,6 +316,7 @@ describe('fleet identifiers', () => {
     expect(collisions.map((c) => c.value)).toEqual([
       'pilot-fr',
       'pilote.example.fr',
+      'preview-pilote.example.fr',
       'minshop-pilot-fr',
       'minshop-pilot-fr-db',
       'minshop-pilot-fr-images',
@@ -352,9 +355,50 @@ describe('fleet identifiers', () => {
     const b = { file: 'b.yaml', manifest: base() };
     b.manifest.client.slug = 'other-shop';
     b.manifest.cloudflare.workerName = 'minshop-other-shop';
+    b.manifest.cloudflare.stagingDomain = 'preview-autre.example.fr';
     expect(detectFleetCollisions([a, b])).toEqual([
-      { kind: 'production domain', value: 'pilote.example.fr', files: ['a.yaml', 'b.yaml'] },
+      { kind: 'hostname', value: 'pilote.example.fr', files: ['a.yaml', 'b.yaml'] },
     ]);
+  });
+
+  /**
+   * A staging preview and another shop's production domain are the same kind of
+   * claim, so they collide with each other.
+   *
+   * Whichever deployed last is serving the hostname, and the shop taking orders
+   * on it is the one nobody chose. Keying both on `hostname` rather than on
+   * "staging domain" and "production domain" is what makes that detectable.
+   */
+  it('detects a staging preview parked on another shop’s production domain', () => {
+    const a = { file: 'a.yaml', manifest: base() };
+    const b = { file: 'b.yaml', manifest: base() };
+    b.manifest.client.slug = 'other-shop';
+    b.manifest.cloudflare.workerName = 'minshop-other-shop';
+    b.manifest.cloudflare.productionDomain = 'autre.example.fr';
+    b.manifest.cloudflare.stagingDomain = 'pilote.example.fr';
+    expect(detectFleetCollisions([a, b])).toEqual([
+      { kind: 'hostname', value: 'pilote.example.fr', files: ['a.yaml', 'b.yaml'] },
+    ]);
+  });
+
+  // Staging is gated only when it has a hostname AND workers.dev is shut: an
+  // Access application binds to a hostname, and the header it injects is
+  // forgeable against a *.workers.dev origin.
+  it('closes workers.dev for a staging preview that has a hostname', () => {
+    const gated = base();
+    gated.cloudflare.stagingDomain = 'preview-pilote.example.fr';
+    expect(wranglerSubstitutions(gated, { env: 'staging' })).toMatchObject({
+      __WORKERS_DEV__: 'false',
+      __ROUTES__: JSON.stringify([{ pattern: 'preview-pilote.example.fr', custom_domain: true }]),
+    });
+  });
+
+  // Without one, workers.dev stays open because it is then the only way to
+  // reach staging at all — and the report says the preview is not private.
+  it('keeps workers.dev for a staging environment with no hostname', () => {
+    const open = base();
+    delete open.cloudflare.stagingDomain;
+    expect(wranglerSubstitutions(open, { env: 'staging' })).toMatchObject({ __WORKERS_DEV__: 'true', __ROUTES__: '[]' });
   });
 });
 
@@ -425,7 +469,7 @@ describe('published JSON Schema', () => {
       }
     };
     walk(MANIFEST_SPEC);
-    expect(optional).toEqual(['cloudflare.accountId', 'cloudflare.imagesDomain']);
+    expect(optional).toEqual(['cloudflare.accountId', 'cloudflare.imagesDomain', 'cloudflare.stagingDomain']);
 
     const schema = manifestJsonSchema();
     const check = (node, prefix = []) => {

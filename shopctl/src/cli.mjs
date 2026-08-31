@@ -21,6 +21,7 @@ import { CATALOG_OPTIONS, catalogUsage, runCatalog } from './commands/catalog.mj
 import { PROVISION_OPTIONS, provisionUsage, runProvision } from './commands/provision.mjs';
 import { DEPLOY_OPTIONS, deployUsage, runDeploy } from './commands/deploy.mjs';
 import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
+import { DESTROY_OPTIONS, destroyUsage, runDestroy } from './commands/destroy.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -33,6 +34,7 @@ Usage: shopctl <commande> [options]
   repo                Créer le dépôt GitHub, ses environnements et leurs secrets
   provision           Créer ou confirmer les ressources Cloudflare d'un environnement
   deploy              Vérifier, migrer, construire, téléverser et tester la boutique
+  destroy             Supprimer les ressources Cloudflare d'un environnement
 
 Options globales:
   --json              Sortie machine sur stdout (la progression passe sur stderr)
@@ -62,6 +64,7 @@ export const COMMANDS = {
     values: DEPLOY_OPTIONS,
     flags: ['--dry-run', '--yes', '--skip-verify', '--skip-build', '--skip-smoke'],
   },
+  destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
 };
 
 /** Flags every command accepts. */

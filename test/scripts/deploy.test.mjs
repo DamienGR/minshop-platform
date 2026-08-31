@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
-import { SMOKE_CHECKS, evaluateSmoke, originFromDeployOutput, runSmoke } from '../../shopctl/src/smoke.mjs';
+import { GATED_CHECKS, SMOKE_CHECKS, evaluateSmoke, originFromDeployOutput, runSmoke } from '../../shopctl/src/smoke.mjs';
 import { names, shop } from '../helpers/provisioned-shop.mjs';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -105,6 +105,34 @@ describe('the smoke test', () => {
   });
 });
 
+/**
+ * A private preview asks the opposite question of a public shop.
+ *
+ * The failure it exists to catch is the one that looks like success: a staging
+ * URL the client was sent, that a search engine also found, serving a shop that
+ * has not launched.
+ */
+describe('the smoke test on a gated preview', () => {
+  const answer = (status) => ({ gated: { ok: true, status, body: '', headers: {}, error: null } });
+
+  it('passes on anything that stands in front of the shop', () => {
+    for (const status of [302, 401, 403]) {
+      expect(evaluateSmoke(answer(status), GATED_CHECKS).ok).toBe(true);
+    }
+  });
+
+  it('fails on the one answer that means nothing does', () => {
+    const verdict = evaluateSmoke(answer(200), GATED_CHECKS);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.results[0].message).toMatch(/publique/);
+  });
+
+  it('still refuses to read an unreachable origin as closed', () => {
+    const verdict = evaluateSmoke({ gated: { ok: false, status: null, body: '', headers: {}, error: 'ETIMEDOUT' } }, GATED_CHECKS);
+    expect(verdict.ok).toBe(false);
+  });
+});
+
 describe('the smoke test against a live origin', () => {
   let server;
   let origin;
@@ -140,6 +168,18 @@ describe('the smoke test against a live origin', () => {
     routes.set('/admin', { status: 302 });
     const report = await runSmoke(origin);
     expect(report.results.find((result) => result.id === 'admin-closed')).toMatchObject({ ok: true, status: 302 });
+  });
+
+  it('runs the gated checks instead when the environment is private', async () => {
+    routes.set('/', { status: 302 });
+    const report = await runSmoke(origin, { gated: true });
+    expect(report).toMatchObject({ gated: true, ok: true });
+    expect(report.results.map((result) => result.id)).toEqual(['gated']);
+  });
+
+  it('fails a private environment that answers 200 to a stranger', async () => {
+    routes.set('/', { status: 200, body: '<!doctype html><html lang="fr">' });
+    expect((await runSmoke(origin, { gated: true })).ok).toBe(false);
   });
 });
 

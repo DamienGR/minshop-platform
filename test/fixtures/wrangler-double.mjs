@@ -198,6 +198,35 @@ if (command.startsWith('secret put')) {
   done(`✨ Success! Uploaded secret ${secret}`);
 }
 
+if (positionals[0] === 'delete' && flag('--name')) {
+  const name = flag('--name');
+  const index = (state.workers ?? []).findIndex((candidate) => candidate.name === name);
+  if (index === -1) fail(`Could not find Worker "${name}".`);
+  state.workers.splice(index, 1);
+  done(`? Are you sure you want to delete ${name}?\n🤖 Using fallback value in non-interactive context: yes\n✨ Successfully deleted ${name}`);
+}
+
+if (command.startsWith('d1 delete')) {
+  const name = positionals[2];
+  const index = (state.d1 ?? []).findIndex((entry) => entry.name === name);
+  if (index === -1) fail(`Couldn't find DB with name '${name}'`);
+  state.d1.splice(index, 1);
+  done(`✅ Deleted '${name}' successfully.`);
+}
+
+if (command.startsWith('r2 bucket delete')) {
+  const name = positionals[3];
+  const wanted = jurisdictionOf();
+  const index = (state.r2 ?? []).findIndex((bucket) => bucket.name === name && (bucket.jurisdiction ?? null) === (wanted ?? null));
+  if (index === -1) fail('The specified bucket does not exist.');
+  // R2 refuses a bucket that still holds objects. The double refuses it too,
+  // because that refusal is the one branch of the teardown that has a remedy
+  // the operator has to be told about.
+  if ((state.r2[index].objects ?? 0) > 0) fail('The bucket you tried to delete is not empty. [code: 10014]');
+  state.r2.splice(index, 1);
+  done(`Deleted bucket '${name}'.`);
+}
+
 if (command.startsWith('versions list')) {
   const name = flag('--name');
   const worker = (state.workers ?? []).find((candidate) => candidate.name === name);

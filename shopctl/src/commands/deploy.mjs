@@ -277,7 +277,13 @@ export async function runDeploy(args, reporter) {
       `Relancez avec --url https://… (le domaine de la boutique, ou l'URL workers.dev de ${names.worker}).`,
     );
   } else {
-    smoke = await runSmoke(origin);
+    // A staging environment with a hostname is a preview the client is meant to
+    // see and nobody else; its smoke test asks the opposite question of a public
+    // one. Read from the manifest rather than from a flag, so a deployment
+    // cannot be told the shop is private when the configuration says otherwise.
+    const gated = env === 'staging' && Boolean(manifest.cloudflare.stagingDomain);
+    smoke = await runSmoke(origin, { gated });
+    if (gated) reporter.step(`    Preview privée attendue sur ${manifest.cloudflare.stagingDomain}.`);
     for (const result of smoke.results) {
       const line = `${result.path} — ${result.what}${result.status ? ` (${result.status})` : ''}`;
       if (result.ok) reporter.ok(line);

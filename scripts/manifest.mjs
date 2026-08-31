@@ -141,7 +141,13 @@ export function loadManifest(file, { root = process.cwd(), core = coreVersion(ro
 export function fleetIdentifiers(manifest) {
   const claims = [
     { kind: 'slug', env: null, value: manifest.client.slug },
-    { kind: 'production domain', env: null, value: manifest.cloudflare.productionDomain },
+    // Hostnames, both of them: a staging preview and another shop's production
+    // domain colliding would put two shops on one name, and the one serving is
+    // whichever deployed last.
+    { kind: 'hostname', env: 'production', value: manifest.cloudflare.productionDomain },
+    ...(manifest.cloudflare.stagingDomain
+      ? [{ kind: 'hostname', env: 'staging', value: manifest.cloudflare.stagingDomain }]
+      : []),
   ];
   // The deployed names too, and not as a formality: a suffix is a namespace
   // only if nothing else can land in it. A shop slugged `acme-staging` derives
@@ -212,14 +218,25 @@ export function renderWrangler(template, substitutions) {
  *  manifest value; this is where the runtime learns it. */
 export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-0000-0000-000000000000', env = null } = {}) {
   const names = resourceNames(manifest, { env });
-  // The custom domain is PRODUCTION's, and turning workers.dev off is the other
-  // half of the same decision: a shop reachable on two origins is one the
-  // merchant never advertised, indexed by search engines and outside whatever
-  // sits in front of the real one. Staging keeps workers.dev because that is
-  // how staging is reached at all — it has no domain of its own and should not
-  // have one.
-  const production = env === 'production';
-  const routes = production ? [{ pattern: manifest.cloudflare.productionDomain, custom_domain: true }] : [];
+  // A custom domain and closing workers.dev are one decision, not two: a shop
+  // reachable on two origins is one the merchant never advertised, indexed by
+  // search engines and outside whatever sits in front of the real one.
+  //
+  // Production always has one. Staging has one only when the manifest names it,
+  // and then for the opposite reason — not to publish the shop but to HIDE it.
+  // A Cloudflare Access application binds to a hostname; the header it injects
+  // is forgeable against a `*.workers.dev` origin, so an Access app protecting
+  // a custom hostname is simply bypassed by the workers.dev URL. A staging
+  // environment a client previews before launch is therefore gated only if it
+  // has a hostname AND workers.dev is shut. Without `stagingDomain`, staging
+  // keeps workers.dev, because that is then the only way to reach it at all.
+  const host =
+    env === 'production'
+      ? manifest.cloudflare.productionDomain
+      : env === 'staging'
+        ? (manifest.cloudflare.stagingDomain ?? null)
+        : null;
+  const routes = host ? [{ pattern: host, custom_domain: true }] : [];
   const imagesDomain = manifest.cloudflare.imagesDomain ?? null;
   return {
     __NAME__: names.worker,
@@ -228,7 +245,7 @@ export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-00
     __BUCKET__: names.images,
     __FILES_BUCKET__: names.files,
     __JURISDICTION__: manifest.cloudflare.jurisdiction,
-    __WORKERS_DEV__: production ? 'false' : 'true',
+    __WORKERS_DEV__: host ? 'false' : 'true',
     __ROUTES__: JSON.stringify(routes),
     // Empty is the ordinary case and never wrong: the storefront reads
     // `env.IMAGE_BASE_URL ?? ''` and serves images through the Worker, which is
