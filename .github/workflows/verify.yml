@@ -282,6 +282,98 @@ jobs:
       - name: Verify the shop builds and honours the contract
         run: npm run verify:theme
 
+  # Every theme in the tree, the configured one included — the browser job above
+  # covers all of them, unlike `themes`, which deliberately skips the theme the
+  # main `verify` already built.
+  discover-all-themes:
+    name: Discover every theme
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      themes: ${{ steps.discover.outputs.themes }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: List every theme in the tree
+        id: discover
+        run: |
+          themes=$(node --input-type=module -e "
+            import { discoverThemeIds } from './scripts/themes.mjs';
+            console.log(JSON.stringify(discoverThemeIds()));
+          ")
+          echo "discovered: $themes"
+          echo "themes=$themes" >> "$GITHUB_OUTPUT"
+
+  # The browser gate (plan, jalon 5). Everything the container contracts cannot
+  # see: accessibility, keyboard order, page zoom, the no-JavaScript path, and
+  # the compiled design.
+  #
+  # Its own job rather than a step inside `verify`, because it is the one gate
+  # that needs a browser. `verify` is what a shop runs on a laptop and in the
+  # deploy path; making it download 150 MB of Chromium to answer would be a bad
+  # trade for everyone who is not changing a template.
+  #
+  # Every theme, not just the pilot's. What it asserts is a set of storefront
+  # contracts — a WCAG violation and an unreachable cart are defects in any
+  # design — and the per-theme design signature only exists per theme.
+  browser:
+    name: Browser (${{ matrix.theme }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: discover-all-themes
+    if: needs.discover-all-themes.outputs.themes != '[]'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        theme: ${{ fromJSON(needs.discover-all-themes.outputs.themes) }}
+
+    env:
+      THEME: ${{ matrix.theme }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install storefront dependencies
+        run: npm ci
+
+      # The revision pinned by the @playwright/test version in package-lock,
+      # with its system libraries. test/browser/chromium.mjs only ever falls
+      # back to another build when this step has not run.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create isolated Wrangler configuration
+        run: |
+          sed \
+            -e 's/__NAME__/minshop-check/g' \
+            -e 's/__DB_NAME__/minshop-check-db/g' \
+            -e 's/__DB_ID__/00000000-0000-0000-0000-000000000000/g' \
+            -e 's/__BUCKET__/minshop-check-images/g' \
+            -e 's/__FILES_BUCKET__/minshop-check-files/g' \
+            wrangler.template.jsonc > wrangler.jsonc
+
+      - name: Run the browser suite
+        run: npm run test:browser
+
+      - name: Upload the failure trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-trace-${{ matrix.theme }}
+          path: test-results/
+          retention-days: 7
+
   # Which themes exist is a property of the TREE, not of this file: a generated
   # store carries its merchant-owned theme plus whatever shipped themes it kept,
   # and a hardcoded list here would silently stop covering them. Discovery

@@ -4,6 +4,7 @@ import StoreNav from '../../features/storefront/controls/StoreNav.astro';
 import StoreSearch from '../../features/storefront/controls/StoreSearch.astro';
 import StoreCartControl from '../../features/storefront/controls/StoreCartControl.astro';
 import StoreAccountControl from '../../features/storefront/controls/StoreAccountControl.astro';
+import { t } from '../../features/i18n';
 
 /**
  * Studio — a masthead that gets out of the way.
@@ -41,7 +42,14 @@ const small =
 
 <header class="border-b border-line">
   <div class="mx-auto flex max-w-[96rem] flex-wrap items-baseline gap-x-10 gap-y-4 px-12 pb-6 pt-8">
-    <a href="/" aria-label={model.storeName} class="shrink-0">
+    {/* The wordmark is the elastic item and the controls are not, so the
+        shrinking has to land here. `shrink-0` did the opposite: it pinned the
+        anchor at the name's max-content width, and a merchant called
+        "Atelier de céramique de Haute-Provence" pushed the cart off the right
+        edge at phone width. Flex shrink is proportional to base size, so the
+        nav below also carries `shrink-0` — otherwise it absorbs a share it has
+        no way to give back, and overflows on its own. */}
+    <a href="/" aria-label={model.storeName} class="min-w-0 truncate">
       {
         model.logo ? (
           <img src={model.logo.src} alt={model.logo.alt} class="h-9 max-w-52 object-contain" />
@@ -51,13 +59,13 @@ const small =
       }
     </a>
 
-    <nav aria-label="Store" class="ml-auto flex min-w-0 items-center gap-6">
+    <nav aria-label={t('shell.nav.store')} class="ml-auto flex min-w-0 shrink-0 items-center gap-6">
       <StoreNav
         links={model.headerLinks}
         class={`hidden min-w-0 items-center gap-6 xl:flex ${small}`}
         disclosureClass={`relative order-last xl:hidden ${small}`}
       />
-      <a href={model.search.action} class={`${small} sm:hidden`}>Search</a>
+      <a href={model.search.action} class={`${small} sm:hidden`}>{t('shell.search.link')}</a>
       {model.account.enabled && <StoreAccountControl href={model.account.href} class={small} />}
       {
         model.cart.enabled && (

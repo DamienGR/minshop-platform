@@ -1257,27 +1257,35 @@ que celui-ci encaisse.
 
 Ajouter :
 
-- [ ] Playwright desktop et mobile ;
-- [ ] régression visuelle ;
-- [ ] axe ;
-- [ ] navigation clavier ;
-- [ ] zoom 200 % ;
-- [ ] navigation sans JavaScript ;
-- [ ] ajout au panier avec et sans JavaScript ;
+- [x] Playwright desktop et mobile ;
+- [x] régression visuelle ;
+- [x] axe ;
+- [x] navigation clavier ;
+- [x] zoom 200 % ;
+- [x] navigation sans JavaScript ;
+- [x] ajout au panier avec et sans JavaScript ;
 - [x] titres très longs ;
 - [x] catalogue vide ;
 - [x] produit épuisé ;
-- [ ] erreur de recherche.
+- [x] erreur de recherche.
 
-Les trois cochés sont des contrats de rendu, donc ils vivent dans la suite
-`test/storefront/` et s'appliquent à TOUS les thèmes, pas seulement au pilote.
-Les sept autres demandent un vrai navigateur ; voir l'État.
+Tout est porté par `npm run test:browser` — Playwright contre le Worker
+**construit**, sur une D1 isolée semée par les mêmes fixtures que les lignes de
+base HTML. 84 tests, deux projets (bureau et téléphone), un job de CI par thème.
+Les quatre designs le passent, parce que ce que la suite affirme sont des
+contrats du storefront et non des préférences du pilote.
+
+Ce qui n'est PAS gaté, et pourquoi : la barre des 320 px CSS de WCAG 1.4.10
+(400 % de zoom sur un écran de 1280, ou un iPhone SE). `atelier` la tient ;
+`default` la manque de 37 px, et arbitrer lequel de son menu, de son lien de
+recherche ou de son panier cède la place à cette largeur est une décision de
+design qui appartient au propriétaire de ce thème, pas à un test. Une porte que
+le thème livré ne peut pas passer serait désactivée en une semaine.
 
 #### Critère de sortie
 
-- [ ] Le storefront est visuellement spécifique et tous les contrats fonctionnels
-  Minshop restent verts. **La seconde moitié est acquise, la première n'est pas
-  encore prouvée par une porte** — voir l'État.
+- [x] Le storefront est visuellement spécifique et tous les contrats fonctionnels
+  Minshop restent verts.
 
 #### État
 
@@ -1337,25 +1345,70 @@ autorisés à nommer une langue, et tout autre `new Intl.X('…')` fait échouer
 suite. Elle a été vérifiée dans les deux sens — remise en place, l'ancienne
 ligne la fait tomber.
 
-**Ce qui reste demande un navigateur, et c'est une décision, pas un oubli.**
-Playwright, axe et la régression visuelle valent chacun une dépendance de
-développement et un job de CI — et un navigateur à installer sur le runner —,
-donc le choix appartient au projet, pas à ce jalon.
+### La porte navigateur
 
-Le design a bien été ouvert dans Chromium pendant ce jalon, contre le Worker
-CONSTRUIT et non contre le serveur de développement, ce qui est la seule façon
-d'observer le script minifié que reçoit un visiteur. Ce qui a été mesuré :
+Une inspection n'est pas une porte, donc les mesures faites à la main pendant ce
+jalon sont devenues `npm run test:browser` : Playwright contre le Worker
+**construit**, sur une D1 isolée semée par `test/fixtures/storefront-states.sql`
+— la même fixture que les lignes de base HTML, pour qu'un état vérifié ici soit
+un état qu'on peut ouvrir dans un navigateur et regarder.
 
-- débordement horizontal **0 px** sur sept pages × 390, 768 et 1440 px, plus un
-  passage à 200 % de zoom. C'est la ligne « responsive » des livrables ;
-- prix vivant en `24,00 €` puis `29,00 €` après avoir coché une option, sur le
-  bundle minifié — la vérification de la correction ci-dessus ;
-- ajout au panier **sans JavaScript** : `<form method="POST" action="/api/cart">`,
-  et un POST direct répond 303 vers `/cart`.
+Elle n'est pas dans `npm run verify`, et c'est délibéré plutôt que budgétaire :
+`verify` est la porte qu'une boutique passe sur un portable et dans le chemin de
+déploiement, et elle ne doit pas avoir besoin de télécharger 150 Mo de Chromium
+pour répondre. La CI lui donne un job par thème.
 
-Une inspection n'est pas une porte. Ces trois mesures ne sont reproductibles
-aujourd'hui que sur le poste de qui les relance, donc le critère de sortie du
-jalon reste ouvert et les lignes correspondantes restent décochées.
+**Ce qu'elle attrape, personne d'autre ne le voyait.** Les contrats de conteneur
+rendent un composant à partir de props : aucune feuille de style n'est
+appliquée, aucun script client ne s'exécute, rien n'a de largeur. C'est la bonne
+forme pour un contrat de présentation et c'est structurellement aveugle à toute
+une classe de défauts. Quatre sont sortis dès la première exécution, tous dans
+le **cœur** et donc dans les quatre thèmes :
+
+- `ProductGallery` donnait à ses vignettes des liens **sans nom accessible**.
+  Un lecteur d'écran annonçait une rangée de « lien » anonymes. Le nom est
+  maintenant positionnel — « Image 2 sur 4 » — plutôt que le nom du produit, qui
+  aurait étiqueté les quatre à l'identique ;
+- la piste de la galerie **défile sans pouvoir prendre le focus**. Au clavier,
+  les images après la première n'existaient tout simplement pas ;
+- `/categories/<slug>` affichait `No products in this category yet.` — la
+  dernière phrase anglaise du storefront — et surtout l'affichait **sans
+  `role="status"`**, alors que le catalogue, lui, doit annoncer son état vide
+  sur chaque thème. Une catégorie vide devenait une page blanche muette ;
+- les trois thèmes livrés **épinglaient leur nom de boutique** à sa largeur
+  naturelle (`shrink-0`). « Ma boutique » tient partout ; « Atelier de céramique
+  de Haute-Provence » poussait le panier hors de l'écran à 390 px. Le
+  rétrécissement flex étant proportionnel, il a fallu les deux moitiés du
+  correctif : le nom rétrécit (`min-w-0 truncate`), les commandes non
+  (`shrink-0`), sinon le `<nav>` absorbe une part qu'il ne sait pas rendre.
+
+**La régression visuelle n'est pas une comparaison de pixels**, et c'est le
+choix de conception de cette suite. Une capture PNG n'a de sens que contre le
+moteur de rendu qui l'a enregistrée — hinting, positionnement sous-pixel,
+rastérisation GPU diffèrent entre un portable et un runner —, donc il lui faut
+un conteneur épinglé ou elle signale des échecs que personne n'a causés. Ce
+dépôt dépense déjà un workflow entier à mesurer un aléa
+(`.github/workflows/d1-flake-probe.yml`) ; en ajouter un second, auto-infligé,
+serait un mauvais échange. Ce qui régresse vraiment dans un design piloté par
+des jetons, c'est un jeton — et cela se lit dans le style **calculé**, qui est
+défini par la spécification et identique sur toutes les machines. La suite
+enregistre donc dix sondes par thème (`test/browser/__signatures__/`). Vérifié :
+changer `--color-paper` d'un seul chiffre hexadécimal fait tomber la porte.
+
+**Ce qui n'est pas gaté** est nommé plutôt qu'omis : la barre des 320 px CSS de
+WCAG 1.4.10. `atelier` la tient, `default` la manque de 37 px — son `<nav>` porte
+un menu replié, un lien de recherche et le panier, et aucun des trois ne peut
+céder. Choisir lequel cède est une décision de design qui appartient au
+propriétaire de ce thème. Le plan demandait 200 % ; c'est 200 % qui est gaté.
+
+Deux notes d'outillage. Chromium vient de `npx playwright install chromium` ;
+sur une machine qui en a déjà un et ne peut pas en télécharger un autre,
+`test/browser/chromium.mjs` se rabat sur ce qu'il trouve et le dit à voix haute
+plutôt que de résoudre en silence. Et la visibilité du focus est affirmée comme
+une **différence** entre les styles calculés focalisé et non focalisé, pas comme
+« a un contour » : un thème qui allume l'entourage de son champ de recherche via
+`focus-within:` est parfaitement valable et échouerait une liste de propriétés
+autorisées.
 
 ### Jalon 6 — Provisioning et CI/CD
 
@@ -1547,7 +1600,9 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] construction des boutiques témoins (job « Build shop ») ;
 - [x] construction de chaque thème que le job principal ne couvre pas
   (job « Verify theme ») ;
-- [x] construction depuis un clone vierge (job « Build from a clean clone »).
+- [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
+- [x] porte navigateur par thème — axe, clavier, zoom, sans JavaScript,
+  signature du design (job « Browser », `npm run test:browser`).
 - [ ] tests de la CLI — au jalon 2, avec `shopctl`.
 - [ ] contrôle de formatage — voir ci-dessous.
 
