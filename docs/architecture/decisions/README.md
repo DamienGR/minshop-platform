@@ -32,3 +32,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0009](0009-forme-de-la-cli-shopctl.md) | Forme, langage et livraison de la CLI `shopctl` | Accepté |
 | [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve |
 | [0011](0011-langue-de-l-administration.md) | Langue de l'administration | Accepté |
+| [0012](0012-identite-du-catalogue-importe.md) | Identité du catalogue importé | Accepté |

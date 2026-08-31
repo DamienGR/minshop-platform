@@ -6,6 +6,9 @@ export interface Product {
   public_id: string | null;
   name: string;
   slug: string;
+  /** The merchant's own reference, and the identity the catalogue import is
+   *  idempotent on (migration 0042). NULL = the product has no reference. */
+  sku: string | null;
   description: string | null;
   price_cents: number;
   currency: string;
@@ -31,6 +34,7 @@ export interface Product {
 /** Scalar fields parsed from the product form (image handled separately). */
 export interface ProductFields {
   name: string;
+  sku: string | null;
   description: string | null;
   price_cents: number;
   currency: string;
@@ -394,11 +398,11 @@ export async function createProduct(db: D1Database, p: ProductInput): Promise<nu
   return withPublicId('product', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO products (name, slug, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, public_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO products (name, slug, sku, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, public_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
       )
-      .bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, publicId)
+      .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -408,11 +412,11 @@ export async function updateProduct(db: D1Database, id: number, p: ProductInput)
   await db
     .prepare(
       `UPDATE products
-         SET name = ?, slug = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
+         SET name = ?, slug = ?, sku = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
              weight_grams = ?, requires_shipping = ?
        WHERE id = ?`,
     )
-    .bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id)
+    .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id)
     .run();
 }
 

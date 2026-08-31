@@ -1,0 +1,29 @@
+sku;product;name;slug;description;variant_group;variant;price;stock;weight_grams;requires_shipping;active;categories;images
+CAB-LIN;;Cabas en lin lavé;;"Un grand cabas en lin lavé, cousu à Roubaix. Les anses passent à l'épaule.";;;39,00;12;380;oui;oui;maison|textile;photos/cabas-lin.png
+CAR-A5;;Carnet recyclé A5;;96 pages lignées, papier recyclé 90 g.;;;12,50;4;210;oui;oui;papeterie;photos/carnet-recycle.png
+CAR-A6;;Carnet recyclé A6;;Le même papier, format poche.;;;8,90;18;120;oui;oui;papeterie;photos/carnet-recycle.png
+MUG-GRE;;Mug en grès émaillé;;"Grès tourné à la main : chaque pièce a sa nuance.";;;24,00;0;450;oui;oui;maison;photos/mug-gres.png
+SAV-MAR;;Savon de Marseille 300 g;;Cube 72 % d'huile d'olive, sans parfum.;;;6,90;40;300;oui;oui;soins;photos/savon-marseille.png
+TEE-S;TEE;Tee-shirt en coton bio;;"Coton biologique filé au Portugal.
+
+Coupe droite, col rond.";Taille;S;29,90;9;180;oui;oui;textile;photos/tee-coton.png
+TEE-M;TEE;;;;;M;29,90;3;190;;;;
+TEE-L;TEE;;;;;L;29,90;0;200;;;;
+TEE-XL;TEE;;;;;XL;32,90;6;215;;;;
+BOU-CIR;;Bougie de cire d'abeille;;Cire française, mèche coton, 40 heures.;;;18,00;7;320;oui;oui;maison;photos/bougie-cire.png
+TOR-LIN;;Torchon en lin;;Tissé en Normandie, 50 × 70 cm.;;;14,00;22;140;oui;oui;maison|textile;photos/torchon-lin.png
+PLA-HET;;Planche à découper en hêtre;;Hêtre massif huilé, 35 × 22 cm.;;;34,00;5;900;oui;oui;maison;photos/planche-hetre.png
+STY-BOI;;Stylo en bois de frêne;;Recharge bille noire standard.;;;16,00;11;30;oui;oui;papeterie;
+CRA-12;;Boîte de douze crayons;;Douze couleurs, mine tendre, bois certifié.;;;19,50;2;280;oui;oui;papeterie;
+ENV-KRA;;Enveloppes kraft, lot de 25;;Format C6, rabat gommé.;;;9,00;30;190;oui;oui;papeterie;
+BAU-LEV;;Baume à lèvres calendula;;Cire d'abeille et huile de calendula.;;;7,50;25;15;oui;oui;soins;
+HUI-AMA;;Huile d'amande douce 100 ml;;Première pression à froid, flacon verre.;;;13,00;0;280;oui;oui;soins;
+SHA-LAV;SHA;Shampooing solide;;Sans sulfate, pour cheveux normaux.;Parfum;Lavande;11,90;14;95;oui;oui;soins;
+SHA-VER;SHA;;;;;Verveine;11,90;1;95;;;;
+ECH-LAI;;Écharpe en laine mérinos;;Laine mérinos, 180 × 30 cm.;;;49,00;6;260;oui;oui;textile;
+CHA-3638;CHA;Chaussettes en coton;;Coton peigné, côtes fines.;Pointure;36-38;12,00;15;70;oui;oui;textile;
+CHA-3941;CHA;;;;;39-41;12,00;8;75;;;;
+CHA-4244;CHA;;;;;42-44;12,00;0;80;;;;
+NAP-LIN;;Nappe en lin 150 × 250;;Lin lavé, ourlet à la main.;;;89,00;3;1200;oui;oui;maison|textile;photos/cabas-lin.png
+POR-CLE;;Porte-clés en cuir;;Cuir tanné végétal, anneau laiton.;;;15,00;19;40;oui;oui;maison;
+CAR-VOE;;Cartes de vœux, lot de 8;;"Huit motifs, imprimés à Lille, avec enveloppes.";;;14,50;0;150;oui;oui;papeterie;

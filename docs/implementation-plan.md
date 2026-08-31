@@ -69,10 +69,10 @@ Deux boutiques fictives doivent exister dès le début du développement :
 
 #### `pilot-fr`
 
-- [ ] vingt produits ;
-- [ ] plusieurs catégories ;
-- [ ] produits simples et variantes ;
-- [ ] états en stock, stock faible et épuisé ;
+- [x] vingt produits ;
+- [x] plusieurs catégories ;
+- [x] produits simples et variantes ;
+- [x] états en stock, stock faible et épuisé ;
 - [ ] livraison fixe, par poids et gratuite au seuil ;
 - [ ] thème entièrement personnalisé ;
 - [ ] pages légales fictives clairement identifiées comme telles.
@@ -377,12 +377,17 @@ shopctl catalog report
 
 L'import doit être :
 
-- [ ] validé avant toute écriture ;
-- [ ] idempotent par SKU ;
-- [ ] capable de reprendre ;
-- [ ] explicite sur les créations et mises à jour ;
-- [ ] capable de traiter les images ;
-- [ ] capable de refuser un changement destructif non demandé.
+- [x] validé avant toute écriture ;
+- [x] idempotent par SKU ;
+- [x] capable de reprendre ;
+- [x] explicite sur les créations et mises à jour ;
+- [x] capable de traiter les images ;
+- [x] capable de refuser un changement destructif non demandé.
+
+Livré au jalon 4. Trois options portent les changements que l'import refuse
+autrement : `--allow-slug-change`, `--allow-remove-variants` et
+`--create-categories`. `--remote` vise la base déployée ; l'omission vise la base
+locale, jamais l'inverse.
 
 ### 5.5 Vérification et déploiement
 
@@ -1098,35 +1103,129 @@ Durée indicative : 3 à 4 jours.
 
 #### Livrables
 
-- [ ] format CSV contractuel ;
-- [ ] schéma et validateur ;
-- [ ] dry-run ;
-- [ ] upsert idempotent par SKU ;
-- [ ] import d'images ;
-- [ ] optimisation d'images ;
-- [ ] rapport d'import ;
-- [ ] catalogue témoin de vingt produits.
+- [x] format CSV contractuel ;
+- [x] schéma et validateur ;
+- [x] dry-run ;
+- [x] upsert idempotent par SKU ;
+- [x] import d'images ;
+- [x] optimisation d'images — voir l'État, qui nomme ce qui est fait et ce qui
+  est délégué ;
+- [x] rapport d'import ;
+- [x] catalogue témoin de vingt produits.
 
 #### Tests
 
-- [ ] SKU manquant ;
-- [ ] SKU dupliqué ;
-- [ ] prix invalide ;
-- [ ] stock non entier ;
-- [ ] variante incohérente ;
-- [ ] catégorie inconnue ;
-- [ ] image absente ou trop lourde ;
-- [ ] faux type MIME ;
-- [ ] Markdown hostile ;
-- [ ] réimport sans doublon ;
-- [ ] mise à jour d'un produit ;
-- [ ] interruption et reprise ;
-- [ ] import de 100 produits.
+- [x] SKU manquant ;
+- [x] SKU dupliqué ;
+- [x] prix invalide ;
+- [x] stock non entier ;
+- [x] variante incohérente ;
+- [x] catégorie inconnue ;
+- [x] image absente ou trop lourde ;
+- [x] faux type MIME ;
+- [x] Markdown hostile ;
+- [x] réimport sans doublon ;
+- [x] mise à jour d'un produit ;
+- [x] interruption et reprise ;
+- [x] import de 100 produits.
 
 #### Critère de sortie
 
-- [ ] Le catalogue peut être reconstruit intégralement à partir du CSV et des
+- [x] Le catalogue peut être reconstruit intégralement à partir du CSV et des
   médias sources.
+
+Vérifié, pas affirmé : `npm run test:catalog` applique les migrations du dépôt à
+une base vide, y importe le catalogue témoin, et relit les vingt produits, leurs
+neuf variantes, leurs quatre catégories et leurs huit médias. C'est la
+reconstruction intégrale, exécutée à chaque commit.
+
+#### État
+
+Une décision porte tout le reste, et elle est figée par
+l'[ADR 0012](architecture/decisions/0012-identite-du-catalogue-importe.md) :
+**l'identité est la référence, et rien d'autre**. `products.sku` arrive avec la migration 0042 — les variantes en
+avaient une depuis 0017, parce qu'une variante *est* l'unité d'inventaire ; un
+produit simple n'avait nulle part où mettre la sienne. Le slug ne pouvait pas
+tenir ce rôle : il bouge dès qu'on corrige un nom, et l'identifiant de ligne est
+une invention de la boutique, absente du fichier que le commerçant maintient.
+
+De cette décision découlent les deux propriétés que le plan demandait
+séparément. **L'idempotence** n'est pas « réécrire les mêmes valeurs » mais
+« n'avoir rien à écrire » : le second import du catalogue témoin produit un plan
+vide — zéro instruction, zéro envoi — et le test l'affirme sur ce nombre-là.
+**La reprise** ne tient aucun journal. Une exécution interrompue laisse un état
+que la suivante lit, et le plan calculé depuis cet état *est* le reste à faire.
+Le test coupe le premier import après quarante instructions et vérifie que la
+reprise atterrit sur exactement le catalogue d'un import ininterrompu. Un
+journal aurait eu besoin de survivre à l'interruption qu'il était censé décrire.
+
+Les images suivent la même logique, déplacée dans le nommage : la clé R2 est
+`media/<20 hex de sha256>.<ext>`. Deux produits qui partagent une photo
+partagent un objet et une ligne `media` ; un réimport n'envoie rien, sans avoir à
+interroger le bucket. La contrainte des vingt caractères n'est pas esthétique :
+au-delà de 32 chiffres hexadécimaux, le pipeline d'observabilité de Cloudflare
+biffe l'identifiant dans l'URL et chaque requête d'image se journalise en
+`GET /images/media/REDACTED.webp` (voir `mediaKeyFor()`). L'admin garde ses clés
+aléatoires : deux téléversements de la même photo y sont deux gestes délibérés,
+là où deux exécutions d'un import sont le même geste.
+
+**Le séparateur est déduit de l'en-tête.** Un tableur français exporte en `;`,
+et pour une bonne raison : la virgule est le séparateur décimal, donc un export
+en virgules demanderait de guillemeter chaque prix, et la première fois que l'un
+ne l'est pas la ligne se décale d'une colonne sans que rien ne le signale. La
+décision se prend sur la ligne d'en-tête seule, où elle est sans ambiguïté —
+aucun nom de colonne du contrat ne contient l'un ou l'autre caractère.
+
+**Rien n'est écrit tant que tout n'est pas jugé, et rien n'est supprimé.** Un
+plan qui porte un refus ne porte aucune instruction : « à moitié importé » est
+l'état que personne ne sait nommer. Une variante qui quitte le fichier est
+désactivée et non effacée — `order_items.variant_id` la référence, et
+l'historique n'appartient pas au catalogue. Les produits absents du fichier ne
+sont pas touchés du tout : un CSV n'est pas tenu d'être le catalogue entier, et
+importer la gamme d'un fournisseur ne doit pas retirer celle d'un autre. Les
+trois pertes possibles demandent chacune leur option : `--allow-slug-change`
+(une URL publique retirée doit laisser une redirection derrière elle,
+invariant 9), `--allow-remove-variants`, `--create-categories`.
+
+**Le fichier SQL est la surface de sécurité.** Un import de deux cents produits
+fait deux mille instructions, et payer un démarrage de processus par instruction
+transforme trente secondes en une demi-heure : l'applicateur passe donc un
+`wrangler d1 execute --file` unique, ce qui interdit les paramètres liés et
+inline chaque valeur. `catalog/sql.mjs` est écrit pour être ennuyeux — guillemet
+simple doublé, octet NUL refusé — et la porte écrit
+`'); DROP TABLE products;--` dans une vraie base pour le relire tel quel.
+
+La porte de test ne simule pas la base. `node:sqlite` applique les migrations du
+dépôt, puis les instructions que le planificateur a produites : ce qui est
+vérifié est le SQL livré, ses sous-requêtes, ses index et ses déclencheurs FTS.
+Un faux magasin serait passé le jour où le vrai `INSERT` aurait violé une
+contrainte. Le module est lancé dans un processus enfant parce que `node:sqlite`
+demande `--experimental-sqlite` sur la moitié basse de la ligne Node certifiée.
+
+Deux limites, nommées plutôt qu'implicites.
+
+**L'optimisation d'images ne redimensionne pas.** Rien dans une CLI sans
+dépendance ne réencode un JPEG, et la boutique n'en a pas besoin :
+`features/products/image.ts` sert déjà chaque image du catalogue en quatre
+largeurs via `fit=scale-down,format=auto`. Ce que l'import doit au commerçant est
+donc le contrôle et l'avertissement — type réel lu dans les octets, SVG refusé
+parce qu'il s'exécuterait sur le domaine de la boutique, budget de 5 Mo identique
+à celui du téléversement admin, dimensions enregistrées, source au-delà de
+2048 px signalée — et non un réencodage silencieux qui changerait les octets dont
+la clé est dérivée. Une source trop grande coûte du stockage et la première
+transformation, pas de la bande passante à chaque page vue.
+
+**`product_variants.sku` n'a pas d'index unique.** La colonne est du texte libre
+dans l'admin depuis 0017, donc une boutique peut déjà porter des doublons, et
+une migration qui échoue sur les données d'une boutique est une migration qu'on
+ne peut pas livrer à une flotte. L'import refuse une référence ambiguë au moment
+du plan, en nommant les deux lignes — ce qu'un index ne saurait pas faire.
+
+Deux règles pures existent en double exemplaire, délibérément : `slugify()` et
+la lecture des dimensions dans l'en-tête d'une image. L'une vit dans le bundle
+du Worker, l'autre dans une CLI sans étape de build. Les deux paires sont
+épinglées l'une à l'autre sur un corpus partagé, pour qu'une divergence fasse
+échouer une porte au lieu de produire deux URL pour un même nom.
 
 ### Jalon 5 — Thème du pilote
 
@@ -1344,7 +1443,9 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] manifestes, identifiants de flotte, neutralité du cœur
   (`npm run config:validate`) ;
 - [x] propriété des chemins et dérive de `CODEOWNERS` (`npm run check:paths`) ;
-- [x] tests unitaires et de contrat storefront (`vitest run`) ;
+- [x] tests unitaires, de contrat storefront et d'import de catalogue
+  (`vitest run` ; la porte catalogue s'adresse seule par
+  `npm run test:catalog`) ;
 - [x] diagnostics TypeScript et `.astro` (`astro check`) ;
 - [x] frontière du storefront (`npm run theme:check`) ;
 - [x] build de production et vérification du CSS compilé ;
@@ -1377,7 +1478,8 @@ réellement : la décision d'adopter un formateur, ou celle de s'en passer.
 ### 7.2 À chaque pull request client
 
 - [ ] `npm run verify` ;
-- [ ] `npm run test:catalog` ;
+- [ ] `npm run test:catalog` — le script existe depuis le jalon 4 ; ce qui
+  manque ici est la CI du dépôt d'une boutique, pas la porte ;
 - [ ] `npm run test:tenant-isolation` ;
 - [ ] `npm run test:e2e` ;
 - [ ] `npm run test:a11y` ;

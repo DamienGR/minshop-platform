@@ -24,6 +24,7 @@
     "test:d1": "astro build && npm run test:integration",
     "test:storefront-equivalence": "astro build && bash test/integration/storefront-baselines.sh",
     "test:storefront-contract": "vitest run test/storefront",
+    "test:catalog": "vitest run test/scripts/catalog.test.mjs",
     "theme:check": "node scripts/check-themes.mjs",
     "verify": "npm run check:toolchain && npm run check:secrets && npm run config:validate && npm run check:paths && npm run theme:sync && vitest run && astro check && npm run theme:check && astro build && node scripts/check-built-css.mjs && npm run check:deploy && npm run test:integration && node --experimental-strip-types scripts/check-stripe-countries.mjs && npm run mcp:check && npm run scaffold:check",
     "check:toolchain": "node scripts/check-toolchain.mjs",

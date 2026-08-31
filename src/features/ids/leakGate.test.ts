@@ -9,6 +9,7 @@ const product: Product = {
   public_id: 'prod_k7m2qx8vn6',
   name: 'Canvas Tote Bag',
   slug: 'canvas-tote-bag',
+  sku: null,
   description: null,
   price_cents: 2400,
   currency: 'usd',
