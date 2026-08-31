@@ -1390,16 +1390,36 @@ un conteneur épinglé ou elle signale des échecs que personne n'a causés. Ce
 dépôt dépense déjà un workflow entier à mesurer un aléa
 (`.github/workflows/d1-flake-probe.yml`) ; en ajouter un second, auto-infligé,
 serait un mauvais échange. Ce qui régresse vraiment dans un design piloté par
-des jetons, c'est un jeton — et cela se lit dans le style **calculé**, qui est
-défini par la spécification et identique sur toutes les machines. La suite
+des jetons, c'est un jeton — et cela se lit dans le style **calculé**. La suite
 enregistre donc dix sondes par thème (`test/browser/__signatures__/`). Vérifié :
 changer `--color-paper` d'un seul chiffre hexadécimal fait tomber la porte.
+
+« Le style calculé est identique sur toutes les machines » était vrai à moitié,
+et la CI l'a dit tout de suite : `default` et `atelier` sont rouges au premier
+passage, `studio` et `market` verts. C'est exact pour `rgb(...)`, faux pour les
+formes à large gamut — un modificateur d'alpha comme `bg-paper/85` est compilé
+par Tailwind en `color-mix(in oklab, …)`, et la valeur calculée revient en
+`oklab()` avec une précision flottante propre à l'implémentation. D'où
+`oklab(0.96524 …)` ici et `oklab(0.965308 …)` sur le runner, sur les deux seuls
+thèmes dont l'en-tête porte un fond translucide. Un écart de 5e-5 en clarté
+oklab vaut un centième de pas sur 8 bits : aucun écran ne peut le montrer, donc
+ce n'est pas une régression visuelle. Les couleurs passent maintenant par un
+canevas 1×1 — le convertisseur du navigateur lui-même — et sont enregistrées en
+octets sRGB, ce qui rend la sonde exacte au lieu de la rendre tolérante.
 
 **Ce qui n'est pas gaté** est nommé plutôt qu'omis : la barre des 320 px CSS de
 WCAG 1.4.10. `atelier` la tient, `default` la manque de 37 px — son `<nav>` porte
 un menu replié, un lien de recherche et le panier, et aucun des trois ne peut
 céder. Choisir lequel cède est une décision de design qui appartient au
 propriétaire de ce thème. Le plan demandait 200 % ; c'est 200 % qui est gaté.
+
+Le même passage a sorti un aléa de la suite elle-même, sur `atelier` seul et
+sur les deux projets : le clic sans JavaScript visait un bouton encore en
+mouvement. Le bloc « sans JavaScript » était le seul à ne pas attendre que la
+page se stabilise, et il attendait `domcontentloaded` là où les images comptent
+— sur un lien rapide elles étaient déjà là, sur le runner elles arrivaient après
+et décalaient le formulaire sous le pointeur. Reproduit en bridant le réseau à
+30 ko/s, corrigé en attendant `load`, puis revérifié sous le même bridage.
 
 Deux notes d'outillage. Chromium vient de `npx playwright install chromium` ;
 sur une machine qui en a déjà un et ne peut pas en télécharger un autre,

@@ -23,8 +23,8 @@
     "lineHeight": "24px",
     "letterSpacing": "normal",
     "textTransform": "none",
-    "borderTopColor": "oklch(0.21 0.034 264.665)",
-    "borderBottomColor": "oklch(0.21 0.034 264.665)",
+    "borderTopColor": "rgba(16, 24, 40, 255)",
+    "borderBottomColor": "rgba(16, 24, 40, 255)",
     "borderBottomWidth": "2px",
     "borderRadius": "0px",
     "boxShadow": "none"
@@ -68,8 +68,8 @@
     "lineHeight": "24px",
     "letterSpacing": "normal",
     "textTransform": "none",
-    "borderTopColor": "oklch(0.21 0.034 264.665)",
-    "borderBottomColor": "oklch(0.21 0.034 264.665)",
+    "borderTopColor": "rgba(16, 24, 40, 255)",
+    "borderBottomColor": "rgba(16, 24, 40, 255)",
     "borderBottomWidth": "0px",
     "borderRadius": "0px",
     "boxShadow": "none"

@@ -20,11 +20,24 @@ export const ROUTES = [
   { name: 'introuvable', path: '/no-such-page', why: 'la 404' },
 ];
 
-/** Wait for the page to be settled enough to measure: fonts resolved, the
- *  reveal animation finished. Both move geometry, and both finish on their own —
- *  polling for them beats sleeping through the slowest possible case. */
+/**
+ * Wait until the page has stopped moving.
+ *
+ * Three things move geometry after first paint, and all three have to be done
+ * before anything measures a box or clicks a control: images arriving and
+ * resizing their boxes, fonts swapping, and the core `.reveal` animation
+ * sliding its element into place. Each finishes on its own, so this polls for
+ * the end rather than sleeping through the slowest possible case.
+ *
+ * `load` and not `domcontentloaded` — that difference is a red CI run. On a
+ * fast local network the images were there before any test looked; on the
+ * runner they were not, the purchase form kept shifting under a late-loading
+ * hero, and Playwright refused to click a moving button until the test timed
+ * out. Reproduced by throttling the network to 30 kB/s, which fails on
+ * `domcontentloaded` and passes on `load`.
+ */
 export async function settle(page) {
-  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('load');
   await page.evaluate(() => document.fonts?.ready);
   await page.evaluate(
     () =>

@@ -27,6 +27,19 @@ import { settle } from './pages.mjs';
  * theme's utilities are PRESENT in the bundle; this proves they are the ones
  * actually applied to the element.
  *
+ * COLOURS ARE COMPARED AT DISPLAY PRECISION, and that correction cost a red CI
+ * run. "Computed styles are spec-defined and identical on every machine" is true
+ * of `rgb(...)`; it is NOT true of the wide-gamut forms. Tailwind compiles an
+ * alpha modifier like `bg-paper/85` through `color-mix(in oklab, …)`, and the
+ * computed value comes back as `oklab()` with implementation-defined float
+ * precision — so the two themes whose header carries an alpha background
+ * (`default`, `atelier`) recorded `oklab(0.96524 …)` here and read back
+ * `oklab(0.965308 …)` on the runner, while `studio` and `market`, whose headers
+ * are opaque, passed. A difference of 5e-5 in oklab lightness is roughly a
+ * hundredth of an 8-bit step: no display can show it, so it is not a visual
+ * regression. Every colour is therefore resolved through a 1×1 canvas to its
+ * sRGB bytes before being recorded.
+ *
  * Re-record after a deliberate design change:
  *   THEME=<id> UPDATE_SIGNATURE=1 npm run test:browser -- design-signature
  * and read the diff like source.
@@ -89,8 +102,60 @@ async function probe(page, selector) {
   const el = page.locator(selector).first();
   if ((await el.count()) === 0) return null;
   return el.evaluate((node, properties) => {
+    // A 1×1 canvas is the browser's own colour converter, which is what makes
+    // this exact rather than a rounding rule with a boundary to fall off.
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    // A colour no design uses, so "the assignment was rejected" is
+    // distinguishable from "the colour really is the sentinel".
+    const SENTINEL = 'rgba(1, 2, 3, 0.004)';
+
+    /** One colour → its sRGB bytes, or null if this browser cannot parse it. */
+    const toBytes = (value) => {
+      ctx.fillStyle = SENTINEL;
+      ctx.fillStyle = value;
+      if (ctx.fillStyle === SENTINEL) return null;
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    };
+
+    // Only the wide-gamut forms need this; `rgb()` is already integers. Scanned
+    // with brace matching rather than a regex because these functions nest —
+    // `color-mix(in oklab, oklch(…), …)` is one value, not two.
+    const FUNCTIONS = ['oklab(', 'oklch(', 'lab(', 'lch(', 'color-mix(', 'color('];
+    const normalise = (value) => {
+      let out = '';
+      let i = 0;
+      while (i < value.length) {
+        let hit = null;
+        for (const name of FUNCTIONS) {
+          const at = value.indexOf(name, i);
+          if (at !== -1 && (hit === null || at < hit.at)) hit = { name, at };
+        }
+        if (!hit) return out + value.slice(i);
+        out += value.slice(i, hit.at);
+        let depth = 0;
+        let j = hit.at + hit.name.length - 1;
+        for (; j < value.length; j += 1) {
+          if (value[j] === '(') depth += 1;
+          else if (value[j] === ')' && --depth === 0) {
+            j += 1;
+            break;
+          }
+        }
+        const raw = value.slice(hit.at, j);
+        out += toBytes(raw) ?? raw;
+        i = j;
+      }
+      return out;
+    };
+
     const s = getComputedStyle(node);
-    return Object.fromEntries(properties.map((p) => [p, s[p]]));
+    return Object.fromEntries(properties.map((p) => [p, normalise(s[p])]));
   }, PROPERTIES);
 }
 

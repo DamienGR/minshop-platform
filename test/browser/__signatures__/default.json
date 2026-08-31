@@ -15,7 +15,7 @@
     "boxShadow": "none"
   },
   "/ · en-tête": {
-    "backgroundColor": "oklab(0.979498 0.000587255 0.00571752 / 0.85)",
+    "backgroundColor": "rgba(250, 248, 244, 217)",
     "color": "rgb(17, 24, 39)",
     "fontFamily": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
     "fontSize": "16px",

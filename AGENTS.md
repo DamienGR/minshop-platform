@@ -259,8 +259,11 @@ What it asserts, and why each one is here rather than in vitest:
   meaningful against the renderer that recorded it, so it needs a pinned
   container or it reports failures nobody caused — and this repository already
   spends a workflow measuring one flake. What actually regresses in a
-  token-driven design is a token, and that is what this records. Re-record a
-  deliberate change with
+  token-driven design is a token, and that is what this records. Colours are
+  recorded as sRGB bytes, resolved through a 1×1 canvas: Tailwind compiles an
+  alpha modifier (`bg-paper/85`) through `color-mix(in oklab, …)`, and the
+  computed `oklab()` carries implementation-defined float precision that differs
+  between Chromium builds. Re-record a deliberate change with
   `THEME=<id> UPDATE_SIGNATURE=1 npm run test:browser -- design-signature`.
 
 Chromium comes from `npx playwright install chromium`. On a machine that already

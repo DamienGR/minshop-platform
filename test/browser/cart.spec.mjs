@@ -33,6 +33,7 @@ test.describe('sans JavaScript', () => {
 
   test('le catalogue et la navigation restent entiers', async ({ page }) => {
     await page.goto('/');
+    await settle(page);
 
     await expect(page.locator('main a[href^="/products/"]').first()).toBeVisible();
     // The images must be VISIBLE, not merely present: the fade enhancement
@@ -48,18 +49,27 @@ test.describe('sans JavaScript', () => {
 
   test('l’ajout au panier reste un vrai formulaire', async ({ page }) => {
     await page.goto('/products/pagination-item-2');
+    // Settle BEFORE aiming at the button. Without it the hero image lands late
+    // on a slow link, the form shifts under the pointer, and Playwright — quite
+    // correctly — refuses to click a moving control.
+    await settle(page);
 
     const form = page.locator('form[action="/api/cart"]');
     await expect(form).toHaveAttribute('method', /post/i);
 
-    await form.getByRole('button', { name: /panier/i }).first().click();
-    // No drawer to open, so the server answers with the cart page itself.
-    await page.waitForURL('**/cart');
+    // The click navigates, so the wait is armed before it rather than after:
+    // a submit that resolves faster than the next statement would otherwise
+    // race the assertion.
+    await Promise.all([
+      page.waitForURL('**/cart'),
+      form.getByRole('button', { name: /panier/i }).first().click(),
+    ]);
     await expect(page.locator('body')).toContainText('Pagination Item 2');
   });
 
   test('la fiche produit montre son image principale', async ({ page }) => {
     await page.goto('/products/sample-tee');
+    await settle(page);
 
     const hero = page.locator('[data-hero-track] img').first();
     await expect(hero).toBeVisible();
