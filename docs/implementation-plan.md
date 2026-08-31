@@ -332,7 +332,38 @@ deux sorties : la divergence est impossible, pas seulement improbable.
 10. [x] exécuter une vérification minimale — les portes que la **boutique**
     transporte (`check-manifest.mjs`, `check-paths.mjs`), pas celles du socle
     hôte, et sans `node_modules` ;
-11. [x] présenter les prochaines actions.
+11. [x] présenter les prochaines actions ;
+12. [x] écrire le compte Cloudflare attendu quand `--account` le donne ;
+13. [x] créer le dépôt GitHub, ses environnements et leurs secrets sur
+    `--create-repo` — voir §5.2 bis.
+
+### 5.2 bis Forge
+
+```bash
+shopctl repo
+shopctl repo --reviewer <login>
+shopctl new <slug> --origin <url> --account <id> --create-repo
+```
+
+Ajouté au jalon 6, hors du plan initial, parce que la question « combien de
+gestes manuels pour une nouvelle boutique » a une réponse mesurable et qu'elle
+était de neuf. `shopctl repo` crée ou confirme :
+
+- [x] le dépôt GitHub, **privé** par défaut ;
+- [x] la branche sur le remote ;
+- [x] les environnements `staging` et `production` ;
+- [x] leurs secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` ;
+- [x] les relecteurs obligatoires en production, quand le plan GitHub les permet.
+
+Rejouable comme `provision` : chaque étape interroge GitHub avant d'écrire, un
+second passage ne crée rien et ne pousse rien.
+
+La commande **enveloppe `gh`**, et ce n'est pas une préférence
+([ADR 0014](architecture/decisions/0014-automatisation-de-la-forge.md)) : un
+secret d'environnement GitHub est chiffré en sealed box libsodium — X25519,
+Blake2b, XSalsa20-Poly1305 — et Node 22 ne fournit pas le dernier. Une CLI sans
+dépendance ne peut donc pas chiffrer un secret pour GitHub ; `gh secret set` le
+fait déjà correctement.
 
 ### 5.3 Provisioning
 
@@ -1484,6 +1515,7 @@ Durée indicative : 4 à 5 jours.
 - [x] secrets internes ;
 - [x] GitHub Environments ;
 - [x] approbation production ;
+- [x] dépôt, environnements et secrets créés par la CLI (§5.2 bis, ADR 0014) ;
 - [x] domaine personnalisé ;
 - [x] domaine d'images ;
 - [x] bucket privé non public ;
@@ -1610,13 +1642,48 @@ troisième champ facultatif sera un acte délibéré.
   la liste humaine. Un déploiement de production sur un domaine non délégué
   échoue bruyamment — `workers_dev` étant fermé — ce qui est le bon échec, mais
   ce n'est pas une vérification ;
-- **les GitHub Environments eux-mêmes.** Le workflow s'y attache et lit leurs
-  secrets ; que `production` porte bien des relecteurs obligatoires est un
-  réglage du dépôt, pas un fichier. `test/scripts/deploy.test.mjs` épingle ce
+- **les GitHub Environments eux-mêmes.** `shopctl repo` les crée et y pose les
+  secrets, mais que `production` porte bien des relecteurs obligatoires dépend
+  du plan GitHub du compte : les règles de protection sont payantes sur un dépôt
+  privé. La commande le tente et le rapporte ; ce qu'elle ne peut pas faire,
+  elle ne le simule pas. `test/scripts/deploy.test.mjs` épingle ce
   que le fichier peut porter — l'attachement à l'environnement, le passage par
   les commandes de la CLI plutôt que par des appels wrangler propres au
   pipeline, `pipefail` sur les étapes qui passent le rapport dans `tee`, et
   qu'aucune entrée de dispatch n'est interpolée dans une source shell.
+
+**La forge est automatisée, et c'est une contrainte cryptographique qui a
+décidé de la forme.** Créer une boutique demandait neuf gestes, dont six clics
+dans GitHub : le dépôt, la poussée, deux environnements, quatre secrets, les
+relecteurs. `shopctl repo` fait les quatre premiers et tente le cinquième, de
+façon rejouable, et `shopctl new --create-repo` l'enchaîne après le premier
+commit. Une nouvelle boutique tient maintenant en trois commandes.
+
+La forme — envelopper `gh` plutôt que parler à l'API — n'est pas une
+préférence. Un secret d'environnement GitHub se chiffre en sealed box
+libsodium : X25519, Blake2b, **XSalsa20-Poly1305**. Node 22 fournit les deux
+premiers et pas le troisième, vérifié plutôt que supposé. Une CLI qui ne peut
+avoir aucune dépendance — `shopctl new` tourne avant qu'il n'existe un
+`node_modules` — ne peut donc pas chiffrer un secret pour GitHub du tout
+(ADR 0014).
+
+Trois décisions valent d'être connues. Le dépôt est **privé** par défaut, et un
+dépôt existant n'est jamais repassé en privé : la visibilité est signalée, pas
+corrigée, parce que refermer un dépôt ne défait pas les clones déjà faits. Un
+secret déjà présent est **réécrit**, à l'inverse exact de la règle Cloudflare :
+GitHub ne renvoie jamais la valeur d'un secret, donc « déjà là » ne peut pas se
+lire « déjà correct » — ce pourrait être le jeton du mois dernier. Et les règles
+de protection sont **tentées, jamais supposées** : sur un dépôt privé hors
+GitHub Pro, l'API refuse les relecteurs et accepte l'environnement ; la commande
+garde l'environnement, qui porte les secrets, et dit que l'approbation n'est pas
+opposable au lieu de laisser croire qu'elle l'est.
+
+**Un bug est sorti de la doublure `gh`**, et il n'aurait été vu sur aucune
+machine de développement ordinaire : `git remote get-url origin` applique les
+réécritures locales `url.<base>.insteadOf` — courantes en entreprise et derrière
+un miroir. shopctl lisait donc l'URL réécrite comme identité du dépôt et aurait
+créé un dépôt GitHub nommé d'après ce que la réécriture pointe. Il lit
+maintenant `git config --get remote.origin.url`, la valeur configurée.
 
 **Deux corrections d'outillage sont sorties de l'exercice.** `npx --no-install
 wrangler` coûte environ une demi-seconde de résolution avant que wrangler

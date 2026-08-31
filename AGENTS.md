@@ -166,6 +166,7 @@ npm run shopctl -- doctor            # tools, tree, provisioning prerequisites
 npm run shopctl -- config validate   # the manifest gate, through the CLI
 npm run shopctl -- catalog validate ./imports/catalog.csv
 npm run shopctl -- catalog import ./imports/catalog.csv --dry-run
+npm run shopctl -- repo                 # dépôt GitHub, environnements, secrets
 npm run shopctl -- provision --env staging --dry-run
 npm run shopctl -- provision --env staging
 npm run shopctl -- deploy --env staging
@@ -190,6 +191,8 @@ Four rules hold for every command, present and future:
   refuse to run without `--env`; `deploy --env production` refuses without
   `--yes`; neither will guess the Cloudflare account (manifest `accountId`,
   `--account`, or `CLOUDFLARE_ACCOUNT_ID`, and two that disagree stop the run).
+  `repo` creates a PRIVATE repository unless told otherwise, and never reopens
+  or recloses an existing one.
 
 `shopctl new` clones a TAG with its history, renames the core remote to `core`,
 and DELETES NOTHING: a shop keeps receiving core tags by merge, so every file
@@ -203,19 +206,31 @@ run creates nothing; a killed run resumes by asking the same questions. An
 existing secret is KEPT, never rotated — `SECRETS_KEK` decrypts the payment keys
 already in D1, and a new one would break payments with no error anyone can read.
 
+`repo` wraps `gh`, and that is forced rather than preferred (ADR 0014): a GitHub
+environment secret is a libsodium sealed box (X25519 + Blake2b +
+XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
+CLI cannot encrypt one at all. It creates the repository, pushes, creates both
+environments and sets their Cloudflare secrets — idempotently, asking GitHub
+first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
+rule, because GitHub never returns a secret's value: "already there" cannot be
+read as "already correct".
+
 `deploy` follows plan §5.5 in order: resources, config, `npm run verify`,
 bookmark (production), migrations, build, upload, deferred secrets, smoke test.
 The smoke test can fail the command, and an unreachable site is a failure, never
 a pass. `.github/workflows/deploy.yml` runs the same commands behind a GitHub
 Environment so production waits for a reviewer.
 
-Tests: `test/scripts/shopctl.test.mjs` (creation), `provision.test.mjs` and
-`deploy.test.mjs` (account, environment, deployment), run by `npm test` and
-`npm run verify`. The first builds a real core from this repository's index,
+Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
+`provision.test.mjs` and `deploy.test.mjs` (account, environment, deployment),
+run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
 tags it, and runs the real binary against it. The last two install
 `test/fixtures/wrangler-double.mjs` at `node_modules/.bin/wrangler` in a
-throwaway shop, so the real argument construction, the real output parsers and
-the real exit codes are exercised — only the Cloudflare account is imaginary.
+throwaway shop, and `test/fixtures/gh-double.mjs` on the PATH where `gh` would
+live, against a real git repository whose GitHub remote is rewritten to a local
+bare one by `url.<path>.insteadOf`. The real argument construction, the real
+output parsers and the real exit codes are exercised — only the accounts are
+imaginary.
 
 ## The catalogue import
 

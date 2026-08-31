@@ -117,6 +117,27 @@ export function runDoctor(args, reporter) {
     );
   }
 
+  reporter.section('Prérequis de la forge (jalon 6)');
+  // WARN rather than FAIL, on the same reasoning as wrangler below: `gh` is a
+  // prerequisite of `shopctl repo`, not of the tree in front of us. A shop that
+  // already has its repository never needs it again.
+  if (isAvailable('gh', ['--version'])) {
+    const version = capture('gh', ['--version'], { allowFailure: true }).stdout.trim().split('\n')[0];
+    reporter.ok(version || 'gh installé');
+    if (offline) {
+      reporter.warn('session GitHub non vérifiée (--offline).');
+    } else if (capture('gh', ['auth', 'status'], { allowFailure: true }).status === 0) {
+      reporter.ok('session GitHub active (gh auth status)');
+    } else {
+      reporter.warn('gh n\'est pas authentifié.', 'gh auth login — ou GH_TOKEN en CI. Sans lui, `shopctl repo` ne peut ni créer le dépôt ni poser les secrets d\'environnement.');
+    }
+  } else {
+    reporter.warn(
+      'gh (GitHub CLI) n\'est pas installé.',
+      'https://cli.github.com — `shopctl repo` l\'enveloppe pour créer le dépôt, ses environnements et leurs secrets (ADR 0014). Le reste de la CLI n\'en a pas besoin.',
+    );
+  }
+
   reporter.section('Prérequis de provisioning (jalon 6)');
   const wranglerBin = resolve(tree.root, 'node_modules/.bin/wrangler');
   if (existsSync(wranglerBin)) {

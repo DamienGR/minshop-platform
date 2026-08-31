@@ -21,6 +21,7 @@ ait un `node_modules` où que ce soit.
 | `shopctl doctor` | 2 | Outils, arbre courant, prérequis de provisioning, checklist humaine. |
 | `shopctl config validate` | 2 | Valide les manifestes de l'arbre courant. |
 | `shopctl catalog …` | 4 | Valide, simule et applique le catalogue CSV du commerçant. |
+| `shopctl repo` | 6 | Crée ou confirme le dépôt GitHub, ses environnements et leurs secrets. |
 | `shopctl provision --env <env>` | 6 | Crée ou confirme les ressources Cloudflare d'un environnement. |
 | `shopctl deploy --env <env>` | 6 | Vérifie, migre, construit, téléverse, puis teste la boutique déployée. |
 
@@ -68,6 +69,42 @@ création serait un conflit à re-résoudre à chaque mise à niveau qui y touch
 Ce que le périmètre certifié fixe — locale, devise, marché, juridiction, mode de
 checkout — n'a pas d'option : élargir une de ces énumérations est une décision
 de version de schéma ([ADR 0008](../docs/architecture/decisions/0008-format-du-manifeste-client.md)).
+
+## `shopctl repo`
+
+```sh
+npm run shopctl -- repo --reviewer <login>
+npm run shopctl -- new <slug> --origin <url> --account <id> --create-repo
+```
+
+Crée ou confirme, de façon rejouable : le dépôt GitHub (**privé** par défaut),
+la branche sur le remote, les environnements `staging` et `production`, et leurs
+secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`. Une nouvelle boutique
+passe ainsi de neuf gestes à trois commandes.
+
+**Elle enveloppe `gh`, et c'est forcé plutôt que préféré.** Un secret
+d'environnement GitHub se chiffre en sealed box libsodium — X25519, Blake2b,
+XSalsa20-Poly1305 — et Node 22 ne fournit pas le dernier. Une CLI qui ne peut
+avoir aucune dépendance ne peut donc pas chiffrer un secret pour GitHub du tout
+([ADR 0014](../docs/architecture/decisions/0014-automatisation-de-la-forge.md)).
+
+**Les jetons viennent de l'environnement, jamais d'un argument.**
+`CLOUDFLARE_API_TOKEN` sert aux deux environnements ;
+`CLOUDFLARE_API_TOKEN_STAGING` et `CLOUDFLARE_API_TOKEN_PRODUCTION` les
+distinguent, ce qui est tout l'intérêt de les cloisonner. Un environnement laissé
+sans jeton est un avertissement, pas un échec : relancez la commande une fois la
+variable posée, elle ne recréera rien.
+
+**Un secret déjà présent est réécrit**, à l'inverse de la règle Cloudflare.
+GitHub ne renvoie jamais la valeur d'un secret, donc « déjà là » ne peut pas se
+lire « déjà correct » : ce pourrait être le jeton du mois dernier. Rien en aval
+n'est chiffré avec, donc réécrire ne coûte rien.
+
+**Les règles de protection sont tentées, jamais supposées.** Sur un dépôt privé
+hors GitHub Pro, l'API refuse les relecteurs obligatoires et accepte
+l'environnement. La commande garde l'environnement — c'est lui qui porte les
+secrets — et dit que l'approbation n'est pas opposable, plutôt que de laisser
+croire qu'elle l'est.
 
 ## `shopctl provision` et `shopctl deploy`
 
@@ -146,9 +183,11 @@ Exécutés par `npm test` et par `npm run verify`.
 `test/scripts/shopctl.test.mjs` construit un socle réel depuis l'index de ce
 dépôt, le tague, et fait tourner le vrai binaire contre lui.
 
-`test/scripts/provision.test.mjs` et `test/scripts/deploy.test.mjs` installent
-`test/fixtures/wrangler-double.mjs` à l'endroit exact où vivrait le vrai binaire
-— `node_modules/.bin/wrangler` — dans une boutique jetable. Le chemin exercé est
+`test/scripts/repo.test.mjs`, `provision.test.mjs` et `deploy.test.mjs`
+installent `test/fixtures/wrangler-double.mjs` et `test/fixtures/gh-double.mjs`
+aux endroits exacts où vivraient les vrais binaires — `node_modules/.bin/wrangler`
+et le `PATH` — dans une boutique jetable dont le remote GitHub est réécrit en
+local par `url.<chemin>.insteadOf`, si bien que `git push` s'exécute réellement. Le chemin exercé est
 donc le chemin réel : construction des arguments, analyse des sorties, codes de
 sortie. Seul le compte Cloudflare est imaginaire, ce qui permet d'affirmer ce
 qu'aucun compte de test ne permettrait de rejouer à volonté : la reprise après

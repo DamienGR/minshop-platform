@@ -1,0 +1,321 @@
+/**
+ * `shopctl repo` — the shop's GitHub repository, its environments, and the
+ * credentials those environments scope.
+ *
+ * This is the half of "creating a shop" that used to be a dashboard visit.
+ * `shopctl new` produces a tree and a first commit; everything between that
+ * commit and a runnable `Deploy` workflow was, until now, six clicks and two
+ * copy-pastes per customer — which is exactly the shape of work that is done
+ * slightly differently every time and discovered wrong on the third shop.
+ *
+ * Four steps, each idempotent, each asking before writing:
+ *
+ *   1. the repository exists (created PRIVATE if not);
+ *   2. the branch is on the remote;
+ *   3. `staging` and `production` exist as GitHub Environments;
+ *   4. each carries CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+ *
+ * The tokens come from the ENVIRONMENT, never from an argument: `shopctl` has
+ * refused credential-shaped arguments since jalon 2 (secrets.mjs), and a
+ * command whose whole job is to place secrets is the last place to make an
+ * exception. `CLOUDFLARE_API_TOKEN_STAGING` and `…_PRODUCTION` let one run
+ * place two different tokens, which is the point of scoping them per
+ * environment at all — a staging run that could read the production token
+ * would make the separation decorative.
+ *
+ * What it deliberately does NOT do is push protection rules onto an account
+ * that cannot have them. Required reviewers are a paid feature on a private
+ * repository; the command attempts them, reports plainly when GitHub refuses,
+ * and still leaves the environment in place, because the environment is what
+ * scopes the secrets and that half works on every plan.
+ */
+import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
+import { ShopctlError, preconditionError } from '../errors.mjs';
+import { capture } from '../process.mjs';
+import { resolveShop } from '../shop.mjs';
+import {
+  assertForgeReady,
+  branchOnRemote,
+  createRepository,
+  environmentSecrets,
+  environments,
+  originUrl,
+  parseGithubRemote,
+  pushBranch,
+  putEnvironment,
+  repository,
+  setEnvironmentSecret,
+  userId,
+} from '../forge.mjs';
+
+export const REPO_OPTIONS = { '--shop': 'slug', '--origin': 'url', '--branch': 'nom', '--reviewer': 'login' };
+
+export const repoUsage = `Usage: shopctl repo [options]
+
+  --origin <url>      Dépôt GitHub de la boutique, si le remote "origin" est absent.
+  --branch <nom>      Branche à pousser (défaut : la branche courante).
+  --reviewer <login>  Relecteur obligatoire en production. Répétable via une liste
+                      séparée par des virgules.
+  --public            Créer le dépôt public. Par défaut : privé.
+  --no-push           Ne pas pousser la branche.
+  --dry-run           Interroger GitHub et n'écrire nulle part.
+  --shop <slug>       Manifeste à utiliser quand l'arbre en contient plusieurs.
+  --json              Rapport lisible par une machine.
+
+Crée ou confirme le dépôt, pousse la branche, crée les environnements
+${ENVIRONMENTS.join(' et ')}, et y pose les secrets Cloudflare.
+
+Les secrets viennent de l'environnement, jamais de la ligne de commande :
+
+  CLOUDFLARE_API_TOKEN               utilisé pour les deux environnements
+  CLOUDFLARE_API_TOKEN_STAGING       remplace le précédent pour staging
+  CLOUDFLARE_API_TOKEN_PRODUCTION    remplace le précédent pour production
+
+L'identifiant de compte, lui, vient du manifeste (cloudflare.accountId).
+`;
+
+/**
+ * Which Cloudflare token belongs to which environment.
+ *
+ * A per-environment variable wins over the shared one, and the shared one is
+ * accepted rather than refused: an agency starting out has one token, and
+ * demanding two before anything can be set up would be a rule that teaches
+ * people to put the production token in both. Which one was used is reported,
+ * so "both environments share a token" is a fact on the record rather than an
+ * assumption.
+ */
+export function tokenFor(env, source = process.env) {
+  const specific = source[`CLOUDFLARE_API_TOKEN_${env.toUpperCase()}`];
+  if (specific) return { value: specific, from: `CLOUDFLARE_API_TOKEN_${env.toUpperCase()}` };
+  if (source.CLOUDFLARE_API_TOKEN) return { value: source.CLOUDFLARE_API_TOKEN, from: 'CLOUDFLARE_API_TOKEN' };
+  return null;
+}
+
+/** The branch a shop tree is on. */
+function currentBranch(cwd) {
+  return capture('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).stdout.trim();
+}
+
+export function runRepo(args, reporter) {
+  if (args.positionals.length > 0) {
+    throw new ShopctlError(`repo ne prend pas d'argument positionnel ; reçu « ${args.positionals.join('", "')} ».`, {
+      kind: 'usage',
+      hint: repoUsage.trim(),
+    });
+  }
+  const dryRun = args.values['--dry-run'] === true;
+  const json = args.values['--json'] === true;
+  const shop = resolveShop(process.cwd(), args.values['--shop']);
+  setupRepository({
+    shop,
+    reporter,
+    dryRun,
+    json,
+    origin: args.values['--origin'] ?? null,
+    branch: args.values['--branch'] ?? null,
+    reviewers: String(args.values['--reviewer'] ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    visibility: args.values['--public'] === true ? 'public' : 'private',
+    push: args.values['--no-push'] !== true,
+  });
+  return 0;
+}
+
+/**
+ * The whole sequence, callable from `shopctl new` as well as from `shopctl repo`.
+ *
+ * One implementation and two entry points, rather than a second copy inside
+ * `new`: a creation path that set up the repository slightly differently from
+ * the command that repairs it is the drift this CLI refuses everywhere else.
+ *
+ * Returns the report and emits it only when it IS the command. Called from
+ * `new`, `emit` is false and the payload is embedded in that command's own
+ * document — under `--json`, stdout carries exactly one document, and two would
+ * make `shopctl new … --json | jq` fail on the second.
+ *
+ * @returns {object} the report, whether or not it was emitted
+ */
+export function setupRepository({
+  shop,
+  reporter,
+  dryRun = false,
+  json = false,
+  origin = null,
+  branch = null,
+  reviewers = [],
+  visibility = 'private',
+  push = true,
+  env = process.env,
+  emit = true,
+}) {
+  const { manifest, root } = shop;
+
+  reporter.section('GitHub');
+  assertForgeReady({ cwd: root });
+
+  const url = origin ?? originUrl(root);
+  if (!url) {
+    throw preconditionError(
+      'la boutique n\'a pas de remote « origin » et --origin n\'a pas été fourni.',
+      'shopctl repo --origin git@github.com:proprietaire/shop-<slug>.git — ou `git remote add origin <url>` d\'abord.',
+    );
+  }
+  const target = parseGithubRemote(url);
+  const head = branch ?? currentBranch(root);
+
+  // ── 1. the repository ─────────────────────────────────────────────────────
+  const existing = repository(target.nameWithOwner, { cwd: root });
+  let created = false;
+  if (existing) {
+    reporter.ok(`${target.nameWithOwner} existe déjà (${existing.visibility?.toLowerCase() ?? 'visibilité inconnue'})`);
+    // Named, not corrected. Flipping a repository to private does not un-clone
+    // it, and changing a customer's repository visibility from a provisioning
+    // command is not this command's decision to make.
+    if (existing.visibility && existing.visibility.toLowerCase() === 'public' && visibility === 'private') {
+      reporter.warn(
+        `${target.nameWithOwner} est PUBLIC alors que le dépôt d'une boutique est privé par défaut.`,
+        'Il porte le manifeste, le catalogue et les contenus d\'un client. Le repasser en privé ne défait pas les clones déjà faits : vérifiez d\'abord que c\'était voulu.',
+      );
+    }
+  } else if (dryRun) {
+    reporter.todo(`${target.nameWithOwner} serait créé (${visibility})`);
+  } else {
+    createRepository(target.nameWithOwner, {
+      cwd: root,
+      visibility,
+      description: `Boutique Minshop — ${manifest.client.displayName}`,
+    });
+    created = true;
+    reporter.ok(`${target.nameWithOwner} créé (${visibility})`);
+  }
+
+  // ── 2. the branch ─────────────────────────────────────────────────────────
+  let pushed = false;
+  if (!push) {
+    reporter.warn(`branche ${head} non poussée (--no-push).`);
+  } else if (dryRun) {
+    reporter.todo(`${head} serait poussée sur origin`);
+  } else if (!created && branchOnRemote(root, head)) {
+    // Already there. Not force-pushed, not fast-forwarded, not touched: what
+    // the remote branch contains is the shop's history and this command has no
+    // business rewriting it.
+    reporter.ok(`${head} est déjà sur origin`);
+  } else {
+    pushBranch(root, head);
+    pushed = true;
+    reporter.ok(`${head} poussée sur origin`);
+  }
+
+  // ── 3. the environments ───────────────────────────────────────────────────
+  reporter.section('Environnements');
+  // A repository that does not exist yet has no environments to list, and
+  // asking would be one failed call per run of `--dry-run` on a new shop.
+  const existingEnvironments = existing || created ? environments(target.nameWithOwner, { cwd: root }) : [];
+  const reviewerIds = [];
+  if (reviewers.length > 0 && !dryRun) {
+    for (const login of reviewers) {
+      const id = userId(login, { cwd: root });
+      if (id) reviewerIds.push({ type: 'User', id });
+      else reporter.warn(`relecteur « ${login} » introuvable sur GitHub.`, 'Vérifiez l\'identifiant ; il est ignoré pour cette exécution.');
+    }
+  }
+
+  /** @type {Array<{ env: string, action: string, protected: boolean, refusal: string|null }>} */
+  const environmentReport = [];
+  for (const name of ENVIRONMENTS) {
+    // Reviewers on production only. A staging deployment that needed a
+    // signature would be batched, and a staging environment deployed in
+    // batches stops resembling production (ADR 0013).
+    const wanted = name === 'production' ? reviewerIds : [];
+    if (dryRun) {
+      environmentReport.push({ env: name, action: existingEnvironments.includes(name) ? 'keep' : 'create', protected: false, refusal: null });
+      reporter.todo(`${name} — ${existingEnvironments.includes(name) ? 'déjà présent' : 'serait créé'}`);
+      continue;
+    }
+    const outcome = putEnvironment(target.nameWithOwner, name, { cwd: root, reviewers: wanted });
+    environmentReport.push({
+      env: name,
+      action: existingEnvironments.includes(name) ? 'keep' : 'create',
+      protected: outcome.protected,
+      refusal: outcome.refusal ?? null,
+    });
+    reporter.ok(`${name} — ${existingEnvironments.includes(name) ? 'déjà présent' : 'créé'}${outcome.protected ? `, ${wanted.length} relecteur(s) obligatoire(s)` : ''}`);
+    if (outcome.refusal) {
+      reporter.warn(
+        `${name} : GitHub a refusé les relecteurs obligatoires.`,
+        'Les règles de protection d\'environnement sont payantes sur un dépôt privé (GitHub Pro, Team ou Enterprise). L\'environnement existe et porte ses secrets ; l\'approbation, elle, n\'est pas opposable tant que le plan ne la permet pas. `shopctl deploy --env production` exige toujours --yes.',
+      );
+    } else if (name === 'production' && wanted.length === 0 && !dryRun) {
+      reporter.warn(
+        'production n\'a aucun relecteur obligatoire.',
+        'Passez --reviewer <login> pour que le déploiement attende une approbation humaine (plan §7.4).',
+      );
+    }
+  }
+
+  // ── 4. the secrets ────────────────────────────────────────────────────────
+  reporter.section('Secrets d\'environnement');
+  const accountId = manifest.cloudflare.accountId ?? env.CLOUDFLARE_ACCOUNT_ID ?? null;
+  if (!accountId) {
+    throw preconditionError(
+      'aucun identifiant de compte Cloudflare à poser dans les environnements.',
+      'Ajoutez cloudflare.accountId au manifeste de la boutique, ou exportez CLOUDFLARE_ACCOUNT_ID. Sans lui, le workflow Deploy ne saurait pas quel compte viser.',
+    );
+  }
+
+  const secretReport = [];
+  const missingTokens = [];
+  for (const name of ENVIRONMENTS) {
+    const token = tokenFor(name, env);
+    if (!token) {
+      missingTokens.push(name);
+      reporter.warn(
+        `${name} : aucun jeton Cloudflare dans l'environnement.`,
+        `Exportez CLOUDFLARE_API_TOKEN_${name.toUpperCase()} (ou CLOUDFLARE_API_TOKEN pour les deux) et relancez : la commande est rejouable, elle ne recréera rien.`,
+      );
+      continue;
+    }
+    const present = dryRun ? [] : environmentSecrets(target.nameWithOwner, name, { cwd: root });
+    if (dryRun) {
+      reporter.todo(`${name} — CLOUDFLARE_API_TOKEN (${token.from}) et CLOUDFLARE_ACCOUNT_ID seraient posés`);
+      secretReport.push({ env: name, set: [], from: token.from });
+      continue;
+    }
+    // Overwritten rather than skipped when present, and that is the opposite of
+    // the Cloudflare rule for a reason: GitHub never returns a secret's value,
+    // so "already there" cannot be read as "already correct" — it could be last
+    // month's rotated token. Nothing downstream is encrypted with it, so
+    // rewriting costs nothing, where keeping a stale one costs a red pipeline
+    // nobody can diagnose from the outside.
+    setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_API_TOKEN', token.value, { cwd: root });
+    setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_ACCOUNT_ID', accountId, { cwd: root });
+    secretReport.push({ env: name, set: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'], from: token.from, replaced: present });
+    reporter.ok(
+      `${name} — CLOUDFLARE_API_TOKEN (depuis ${token.from}) et CLOUDFLARE_ACCOUNT_ID posés${present.length > 0 ? ' (remplacés)' : ''}`,
+    );
+  }
+
+  const report = {
+    command: 'repo',
+    ok: true,
+    dryRun,
+    shop: manifest.client.slug,
+    repository: { ...target, created, visibility },
+    branch: { name: head, pushed },
+    environments: environmentReport,
+    secrets: secretReport,
+    missingTokens,
+  };
+  if (emit) reporter.result(report);
+
+  if (!json) {
+    reporter.section(
+      missingTokens.length > 0
+        ? `Dépôt prêt. ${missingTokens.length} environnement(s) sans jeton : relancez \`shopctl repo\` une fois les variables posées.`
+        : `Dépôt prêt : https://github.com/${target.nameWithOwner}`,
+    );
+  }
+  return report;
+}

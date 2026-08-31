@@ -47,9 +47,9 @@ export const workerNameFor = (slug) => `${RESOURCE_PREFIX}-${slug}`;
 /**
  * The manifest object for a new shop.
  *
- * @param {{ slug: string, displayName: string, domain: string, email: string, theme: string, coreVersion: string }} values
+ * @param {{ slug: string, displayName: string, domain: string, email: string, theme: string, coreVersion: string, accountId?: string|null }} values
  */
-export function buildManifest({ slug, displayName, domain, email, theme, coreVersion }) {
+export function buildManifest({ slug, displayName, domain, email, theme, coreVersion, accountId = null }) {
   return {
     schemaVersion: 1,
     coreVersion,
@@ -81,6 +81,11 @@ export function buildManifest({ slug, displayName, domain, email, theme, coreVer
       jurisdiction: 'eu',
       workerName: workerNameFor(slug),
       productionDomain: domain,
+      // Optional, and omitted rather than placeheld when unknown: a shop LEARNS
+      // its account at provisioning, and an all-zero id would validate while
+      // meaning nothing — which is exactly what `provision` refusing to guess
+      // is there to prevent.
+      ...(accountId ? { accountId } : {}),
     },
     email: {
       provider: 'resend',
@@ -109,6 +114,10 @@ const NOTES = {
   'cloudflare.productionDomain': [
     'PLACEHOLDER : domaine réservé à la documentation (RFC 2606).',
     'À remplacer par le domaine du commerçant avant tout provisioning.',
+  ],
+  'cloudflare.accountId': [
+    'Compte Cloudflare de cette boutique. `shopctl provision` refuse tout autre',
+    'compte : provisionner ailleurs ne se défait pas (ADR 0002).',
   ],
   'email.from': ['PLACEHOLDER : suit le domaine ci-dessus.'],
   'theme.id': ['Thème propre à la boutique. Le socle ne le modifie jamais.'],

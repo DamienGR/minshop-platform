@@ -25,10 +25,11 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { relative, resolve } from 'node:path';
 import { RESERVED_SLUGS, validateManifest } from '../../../scripts/manifest-schema.mjs';
-import { resourceNames } from '../../../scripts/manifest.mjs';
+import { CLIENT_MANIFEST, resourceNames } from '../../../scripts/manifest.mjs';
+import { setupRepository } from './repo.mjs';
 import { RESERVED_THEME_IDS, THEMES_DIR, isValidThemeId, normalizeThemeId } from '../../../scripts/themes.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
-import { inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
+import { EXIT_CODES, ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { capture, run } from '../process.mjs';
 import { buildManifest, renderManifest } from '../manifest-template.mjs';
 import { COLUMNS } from '../catalog/contract.mjs';
@@ -54,6 +55,8 @@ export const NEW_OPTIONS = {
   '--from-theme': 'value',
   '--branch': 'value',
   '--dir': 'value',
+  '--account': 'value',
+  '--reviewer': 'value',
 };
 
 export const newUsage = `Usage: shopctl new <slug> [options]
@@ -68,6 +71,10 @@ export const newUsage = `Usage: shopctl new <slug> [options]
   --from-theme <id>   Thème de référence copié (défaut : default)
   --branch <nom>      Branche de travail créée sur le tag (défaut : main)
   --dir <chemin>      Répertoire cible (défaut : shop-<slug>)
+  --account <id>      Compte Cloudflare de la boutique, écrit dans le manifeste
+  --create-repo       Créer le dépôt GitHub, ses environnements et leurs secrets
+                      (demande --origin ; enveloppe la CLI gh)
+  --reviewer <login>  Relecteur obligatoire en production, avec --create-repo
   --no-install        Ne pas installer les dépendances
   --no-verify         Ne pas exécuter la vérification minimale
   --json              Rapport de création lisible par une machine
@@ -248,6 +255,16 @@ export function runNew(args, reporter) {
   const tag = String(args.values['--core'] ?? `v${corePackage().version}`);
   const coreVersion = versionFromTag(tag);
 
+  // Checked here, with the other options, rather than at the forge step: a
+  // flag combination that cannot work must cost a message, not a clone, a git
+  // history and a directory to clean up.
+  if (args.values['--create-repo'] === true && !originUrl) {
+    throw inputError(
+      '--create-repo sans --origin : shopctl ne sait pas quel dépôt créer.',
+      'Ajoutez --origin git@github.com:proprietaire/shop-<slug>.git.',
+    );
+  }
+
   if (theme === referenceTheme) {
     throw inputError(
       `--theme and --from-theme are both "${theme}".`,
@@ -256,7 +273,8 @@ export function runNew(args, reporter) {
   }
 
   // The manifest is decided and checked here, before a single byte is written.
-  const manifest = buildManifest({ slug, displayName, domain, email, theme, coreVersion });
+  const accountId = args.values['--account'] ? String(args.values['--account']) : null;
+  const manifest = buildManifest({ slug, displayName, domain, email, theme, coreVersion, accountId });
   const { errors } = validateManifest(manifest, { coreVersion });
   if (errors.length > 0) {
     throw inputError(
@@ -408,14 +426,63 @@ export function runNew(args, reporter) {
     installed = true;
   }
 
+  // ------------------------------------------------------ 10. the forge side
+  //
+  // Opt-in, and last. Everything above this line is local and reversible — a
+  // failure costs `rm -rf` and nothing else. Creating the repository is the
+  // first step that leaves something behind on a service, so it happens once
+  // the tree is built, verified and committed, and only when asked.
+  let forge = null;
+  let forgeError = null;
+  if (args.values['--create-repo'] === true) {
+    try {
+      forge = setupRepository({
+        shop: { root: target, manifest, file: CLIENT_MANIFEST },
+        reporter,
+        origin: originUrl,
+        branch,
+        reviewers: String(args.values['--reviewer'] ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+        json: reporter.json,
+        // `new` emits its own document; a second one on the same stdout would
+        // break every caller that pipes it into a parser.
+        emit: false,
+      });
+    } catch (error) {
+      // The shop itself is complete: cloned, written, verified, committed. Only
+      // the forge step failed, and it is the one step that is entirely
+      // re-runnable — `shopctl repo` picks up exactly here. So the tree is kept
+      // and named, the failure is reported in full, and the exit code is 6:
+      // "produced, then a gate refused the result; the tree is left to inspect".
+      if (!(error instanceof ShopctlError)) throw error;
+      forgeError = { kind: error.kind, message: error.message, hint: error.hint };
+      reporter.fail(error.message, error.hint);
+      reporter.warn(
+        `la boutique est complète dans ${relative(cwd, target) || target} ; seule la création du dépôt a échoué.`,
+        'Corrigez ce que la ligne ✗ ci-dessus nomme, puis relancez `shopctl repo` depuis la boutique : rien n\'est à refaire.',
+      );
+    }
+  }
+
   // --------------------------------------------------------- 11. what's next
   const names = resourceNames(manifest);
   const nextSteps = [
     ...(installed ? [] : ['npm ci', 'npm ci --prefix mcp']),
     'shopctl doctor',
-    `remplacer le domaine placeholder ${domain} dans client/client.yaml`,
-    ...(originUrl ? [`git push -u origin ${branch}`] : ['git remote add origin <url> && git push -u origin ' + branch]),
+    ...(domain.endsWith('.example.com') ? [`remplacer le domaine placeholder ${domain} dans client/client.yaml`] : []),
+    ...(accountId ? [] : ['ajouter cloudflare.accountId au manifeste (ou relancer avec --account)']),
+    ...(forgeError !== null
+      ? ['shopctl repo   # reprend la création du dépôt là où elle a échoué']
+      : forge !== null
+      ? []
+      : originUrl
+        ? [`shopctl repo   # crée le dépôt, les environnements et leurs secrets`, `git push -u origin ${branch}`]
+        : ['git remote add origin <url> && shopctl repo']),
     'npm run verify',
+    'shopctl provision --env staging',
+    'shopctl deploy --env staging',
   ];
 
   reporter.section(`Boutique ${displayName} prête dans ${relative(cwd, target) || target}`);
@@ -428,17 +495,21 @@ export function runNew(args, reporter) {
 
   reporter.result({
     command: 'new',
-    ok: true,
+    ok: forgeError === null,
     target,
     shop: { slug, displayName, domain, email, theme, referenceTheme },
     core: { repository, tag, version: coreVersion },
     git: { branch, remotes: { core: repository, origin: originUrl } },
+    forge,
+    forgeError,
     resources: names,
     installed,
     checks,
     nextSteps,
   });
-  return 0;
+  // 6, not 0: the shop was produced and one gate refused its result. The tree
+  // is left in place, and `shopctl repo` resumes exactly where this stopped.
+  return forgeError === null ? EXIT_CODES.ok : EXIT_CODES.verification;
 }
 
 /**

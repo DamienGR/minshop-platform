@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // .mjs for the same reason as its neighbours: tsconfig pins `types` to the
 // Cloudflare types, so node builtins have no declarations in a .ts file here.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
@@ -240,6 +240,49 @@ describe('credentials', () => {
 // `shopctl new`, against the real core tree.
 
 describe('shopctl new', () => {
+  // Checked with the other options, before anything is cloned: a flag
+  // combination that cannot work must cost a message, not a clone, a git
+  // history and a directory to clean up.
+  it('refuses --create-repo without --origin before touching the disk', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--create-repo'], work);
+    expect(result.status).toBe(EXIT_CODES.input);
+    expect(result.stderr).toMatch(/--create-repo sans --origin/);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  /**
+   * The forge step is the last one, and the only one that is entirely
+   * re-runnable.
+   *
+   * When it fails — no `gh`, no session, a name already taken — the shop itself
+   * is finished: cloned, written, verified, committed. Throwing that away, or
+   * reporting success, would both be wrong. Exit 6 is the code that already
+   * means "produced, then a gate refused the result; the tree is left in place
+   * to inspect", and `shopctl repo` resumes exactly there.
+   */
+  it('keeps the shop when only the forge step fails', () => {
+    const work = workspace();
+    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    symlinkSync(process.execPath, join(withoutGh, 'node'));
+    symlinkSync(execFileSync('which', ['git'], { encoding: 'utf8' }).trim(), join(withoutGh, 'git'));
+
+    const result = spawnSync(
+      'node',
+      [BIN, 'new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--no-install', '--create-repo', '--origin', 'git@github.com:agence/shop-atelier-x.git', '--json'],
+      { cwd: work, encoding: 'utf8', env: { ...GIT_ENV, PATH: withoutGh, HOME: process.env.HOME } },
+    );
+
+    expect(result.status).toBe(EXIT_CODES.verification);
+    const report = JSON.parse(result.stdout);
+    expect(report.ok).toBe(false);
+    expect(report.forge).toBeNull();
+    expect(report.forgeError.kind).toBe('precondition');
+    // The shop is there, and the next step says how to finish it.
+    expect(treeFiles(join(work, 'shop-atelier-x'))).toContain('client/client.yaml');
+    expect(report.nextSteps.some((step) => step.startsWith('shopctl repo'))).toBe(true);
+  });
+
   it('refuses a slug the platform already uses', () => {
     const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
     expect(result.status).toBe(EXIT_CODES.input);

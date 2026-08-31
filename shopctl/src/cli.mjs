@@ -20,6 +20,7 @@ import { configUsage, runConfig } from './commands/config.mjs';
 import { CATALOG_OPTIONS, catalogUsage, runCatalog } from './commands/catalog.mjs';
 import { PROVISION_OPTIONS, provisionUsage, runProvision } from './commands/provision.mjs';
 import { DEPLOY_OPTIONS, deployUsage, runDeploy } from './commands/deploy.mjs';
+import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -29,6 +30,7 @@ Usage: shopctl <commande> [options]
   doctor              Vérifier outils, arbre courant et prérequis
   config validate     Valider les manifestes de l'arbre courant
   catalog             Valider et importer le catalogue produit (CSV)
+  repo                Créer le dépôt GitHub, ses environnements et leurs secrets
   provision           Créer ou confirmer les ressources Cloudflare d'un environnement
   deploy              Vérifier, migrer, construire, téléverser et tester la boutique
 
@@ -43,7 +45,7 @@ aux jalons suivants.
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
 export const COMMANDS = {
-  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify'] },
+  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify', '--create-repo'] },
   doctor: { run: runDoctor, usage: doctorUsage, values: {}, flags: ['--offline'] },
   config: { run: runConfig, usage: configUsage, values: {}, flags: [] },
   catalog: {
@@ -52,6 +54,7 @@ export const COMMANDS = {
     values: CATALOG_OPTIONS,
     flags: ['--dry-run', '--remote', '--create-categories', '--allow-slug-change', '--allow-remove-variants'],
   },
+  repo: { run: runRepo, usage: repoUsage, values: REPO_OPTIONS, flags: ['--dry-run', '--public', '--no-push'] },
   provision: { run: runProvision, usage: provisionUsage, values: PROVISION_OPTIONS, flags: ['--dry-run'] },
   deploy: {
     run: runDeploy,

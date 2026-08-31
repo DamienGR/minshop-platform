@@ -21,6 +21,16 @@ import { stripAnsi } from '../../shopctl/src/cloudflare.mjs';
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
 const DOUBLE = resolve(CORE, 'test/fixtures/wrangler-double.mjs');
+const GH_DOUBLE = resolve(CORE, 'test/fixtures/gh-double.mjs');
+
+/** Git needs an identity to commit, and a test must not depend on the one the
+ *  developer happens to have configured. */
+const GIT_ENV = {
+  GIT_AUTHOR_NAME: 'Minshop Tests',
+  GIT_AUTHOR_EMAIL: 'tests@example.com',
+  GIT_COMMITTER_NAME: 'Minshop Tests',
+  GIT_COMMITTER_EMAIL: 'tests@example.com',
+};
 
 export const ACCOUNT = { id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', name: 'Agence' };
 export const OTHER_ACCOUNT = { id: '0123456789abcdef0123456789abcdef', name: 'Compte perso' };
@@ -34,7 +44,7 @@ export const OTHER_ACCOUNT = { id: '0123456789abcdef0123456789abcdef', name: 'Co
  * running it — and what is under test is the conversation with the account, not
  * the shape of a generated tree, which jalon 2's suite already pins.
  */
-export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = false } = {}) {
+export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = false, forge = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'shopctl-provision-'));
   const core = JSON.parse(readFileSync(resolve(CORE, 'package.json'), 'utf8'));
 
@@ -93,36 +103,90 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
   chmodSync(shim, 0o755);
 
   const statePath = join(root, 'cf-state.json');
-  const state = {
-    authenticated: true,
-    accounts: [ACCOUNT],
-    d1: [],
-    r2: [],
-    workers: [],
-    calls: [],
-  };
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  writeFileSync(
+    statePath,
+    JSON.stringify({ authenticated: true, accounts: [ACCOUNT], d1: [], r2: [], workers: [], calls: [] }, null, 2),
+  );
+
+  /**
+   * The forge side: a real git repository, a real remote, and a `gh` that
+   * answers from a file.
+   *
+   * The remote is a LOCAL bare repository that git reaches through
+   * `url.<path>.insteadOf`, so the URL shopctl parses and hands to `gh` is a
+   * genuine `git@github.com:…` one while `git push` and `git ls-remote` never
+   * leave the machine. That keeps the real git path under test — the URL
+   * parsing, the push, the "is the branch already on the remote" question —
+   * rather than stubbing the one command whose behaviour matters.
+   */
+  const ghState = join(root, 'gh-state.json');
+  const bin = join(root, '.bin');
+  let remote = null;
+  const nameWithOwner = `agence/shop-${slug}`;
+  const originUrl = `git@github.com:${nameWithOwner}.git`;
+  if (forge) {
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nimport('${GH_DOUBLE}');\n`);
+    chmodSync(join(bin, 'gh'), 0o755);
+
+    remote = mkdtempSync(join(tmpdir(), 'shopctl-remote-'));
+    const git = (args, cwd = root) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_ENV } });
+    git(['init', '--quiet', '--initial-branch=main']);
+    git(['config', 'user.name', 'Minshop Tests']);
+    git(['config', 'user.email', 'tests@example.com']);
+    git(['config', `url.${remote}.insteadOf`, originUrl]);
+    git(['remote', 'add', 'origin', originUrl]);
+    git(['add', '-A']);
+    git(['commit', '--quiet', '-m', 'Initialiser la boutique']);
+    spawnSync('git', ['init', '--bare', '--quiet', remote], { encoding: 'utf8' });
+
+    writeFileSync(ghState, JSON.stringify({ authenticated: true, repos: {}, users: { damien: 17449459 }, calls: [] }, null, 2));
+  }
 
   return {
     root,
     slug,
     statePath,
+    ghState,
+    /** Where the `gh` double lives. A test that calls into shopctl IN-PROCESS
+     *  has to put it on this process's own PATH; the spawned runs get it from
+     *  `run()`. */
+    binDir: bin,
+    nameWithOwner,
+    originUrl,
+    remote,
     account(patch) {
       writeFileSync(statePath, JSON.stringify({ ...JSON.parse(readFileSync(statePath, 'utf8')), ...patch }, null, 2));
     },
     read() {
       return JSON.parse(readFileSync(statePath, 'utf8'));
     },
-    run(args) {
+    /** What the imaginary GitHub holds. */
+    github(patch) {
+      const current = JSON.parse(readFileSync(ghState, 'utf8'));
+      if (!patch) return current;
+      writeFileSync(ghState, JSON.stringify({ ...current, ...patch }, null, 2));
+      return current;
+    },
+    run(args, env = {}) {
       const result = spawnSync('node', [BIN, ...args], {
         cwd: root,
         encoding: 'utf8',
-        env: { ...process.env, WRANGLER_DOUBLE_STATE: statePath, CLOUDFLARE_ACCOUNT_ID: '' },
+        env: {
+          ...process.env,
+          ...GIT_ENV,
+          WRANGLER_DOUBLE_STATE: statePath,
+          GH_DOUBLE_STATE: ghState,
+          CLOUDFLARE_ACCOUNT_ID: '',
+          CLOUDFLARE_API_TOKEN: '',
+          ...(forge ? { PATH: `${bin}:${process.env.PATH}` } : {}),
+          ...env,
+        },
       });
       return { ...result, stdout: stripAnsi(result.stdout ?? ''), stderr: stripAnsi(result.stderr ?? '') };
     },
-    json(args) {
-      const result = this.run([...args, '--json']);
+    json(args, env = {}) {
+      const result = this.run([...args, '--json'], env);
       return { ...result, report: result.stdout.trim() ? JSON.parse(result.stdout) : null };
     },
   };

@@ -196,6 +196,9 @@ shopctl catalog validate ./imports/catalog.csv
 shopctl catalog import ./imports/catalog.csv --dry-run
 shopctl catalog import ./imports/catalog.csv
 
+# Créer le dépôt GitHub, ses environnements et leurs secrets (jalon 6)
+shopctl repo --reviewer <login-github>
+
 # Provisionner des ressources isolées (jalon 6)
 shopctl provision --env staging --dry-run
 shopctl provision --env staging
@@ -210,6 +213,12 @@ La locale, la devise, le marché et la juridiction n'ont pas d'option : chaque
 de version de schéma
 ([ADR 0008](docs/architecture/decisions/0008-format-du-manifeste-client.md)),
 pas un drapeau.
+
+Une boutique complète tient en trois commandes : `shopctl new … --account <id>
+--origin <url> --create-repo`, puis `shopctl provision --env staging`, puis
+`shopctl deploy --env staging`. La première enveloppe `gh` pour créer le dépôt
+— **privé** par défaut —, ses environnements et leurs secrets
+([ADR 0014](docs/architecture/decisions/0014-automatisation-de-la-forge.md)).
 
 Rien de ce qui touche un compte n'a de valeur par défaut. `provision` et
 `deploy` exigent `--env`, `deploy --env production` exige `--yes`, et le compte
