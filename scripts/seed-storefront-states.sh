@@ -76,6 +76,7 @@ Seeded. Routes worth looking at (npm run dev):
   /products?sort=price&dir=asc     sort links
   /products?page=2                 pagination
   /categories/apparel              category listing
+  /categories/bientot              empty catalogue (announced empty state)
   /search?q=sample                 search results
   /search?q=zzzznomatch            empty search
   /products/sample-tee             variants, extras, multi-image gallery

@@ -37,8 +37,16 @@ const hasGallery = images.length > 1;
 {
   hasGallery ? (
     <div class={className}>
+      {/* `tabindex="0"` is not decoration: the track scrolls horizontally, and a
+          region that scrolls but cannot take focus is unreachable to anyone
+          driving the page from the keyboard — the images past the first simply
+          do not exist for them. The label comes with it, because a focus stop
+          that announces nothing is its own problem. */}
       <div
         data-hero-track
+        tabindex="0"
+        role="group"
+        aria-label={t('product.gallery')}
         class="no-scrollbar relative flex snap-x snap-mandatory overflow-x-auto scroll-smooth rounded-lg bg-surface"
       >
         {images.map((image) => (
@@ -64,9 +72,18 @@ const hasGallery = images.length > 1;
         )}
       </div>
       <div class="no-scrollbar mt-3 flex gap-2 overflow-x-auto">
-        {images.map((image) => (
+        {/* The thumbnail is decorative — the hero above carries the content, so
+            alt stays empty — but the LINK still needs a name, or a screen
+            reader announces a row of anonymous "link"s. Positional rather than
+            the product name: every thumbnail on this page shows the same
+            product, so the name would label them all identically. */}
+        {images.map((image, index) => (
           <a
             href={`#pi-${image.anchor}`}
+            aria-label={t('product.gallery.image', {
+              position: String(index + 1),
+              total: String(images.length),
+            })}
             class="shrink-0 overflow-hidden rounded border border-line bg-surface transition hover:border-brand"
           >
             <img

@@ -74,7 +74,7 @@ Deux boutiques fictives doivent exister dès le début du développement :
 - [x] produits simples et variantes ;
 - [x] états en stock, stock faible et épuisé ;
 - [ ] livraison fixe, par poids et gratuite au seuil ;
-- [ ] thème entièrement personnalisé ;
+- [x] thème entièrement personnalisé — `atelier`, jalon 5 ;
 - [ ] pages légales fictives clairement identifiées comme telles.
 
 #### `canary-minimal`
@@ -100,7 +100,8 @@ Le plan de contrôle comprend :
   (`shopctl/`, [ADR 0009](architecture/decisions/0009-forme-de-la-cli-shopctl.md)) ;
   provisioning, catalogue, déploiement, sauvegarde et flotte aux jalons suivants ;
 - [x] les schémas de configuration ;
-- [ ] les templates de boutique ;
+- [x] les templates de boutique — trois designs livrés par le socle, plus le
+  thème propre à une boutique que `pilot-fr` démontre depuis le jalon 5 ;
 - [ ] le registre privé de flotte ;
 - [ ] les workflows de mise à jour ;
 - [ ] les tests génériques propres à la plateforme multi-client.
@@ -214,8 +215,7 @@ email:
   from: commandes@pilote.example.fr
 
 theme:
-  # `pilot-fr` au jalon 5, quand la boutique aura son propre thème.
-  id: studio
+  id: atelier  # src/themes/atelier/
 ```
 
 Ce bloc est la copie lisible d'un fichier qui existe :
@@ -1233,40 +1233,202 @@ Durée indicative : 4 à 6 jours.
 
 #### Livrables
 
-- [ ] design tokens ;
-- [ ] header et navigation ;
-- [ ] footer ;
-- [ ] catalogue ;
-- [ ] cartes produits ;
-- [ ] fiche produit ;
-- [ ] pages de contenu ;
-- [ ] responsive ;
-- [ ] états vides, longs, épuisés et en erreur.
+- [x] design tokens ;
+- [x] header et navigation ;
+- [x] footer ;
+- [x] catalogue ;
+- [x] cartes produits ;
+- [x] fiche produit ;
+- [x] pages de contenu ;
+- [x] responsive ;
+- [x] états vides, longs, épuisés et en erreur.
 
 #### Tests
 
-- [ ] `npm run theme:check` sur le thème du pilote ;
-- [ ] `npm run test:storefront-contract` sur le thème du pilote ;
-- [ ] `npm run verify` sur le thème du pilote.
+- [x] `npm run theme:check` sur le thème du pilote ;
+- [x] `npm run test:storefront-contract` sur le thème du pilote ;
+- [x] `npm run verify` sur le thème du pilote.
+
+Les trois passent sans qu'aucun fichier de CI ait été modifié : les jobs
+« Verify theme » et « Build shop » découvrent les thèmes et les boutiques dans
+l'arbre plutôt que dans une liste, donc `atelier` a rejoint la matrice le jour
+où le répertoire a existé. C'est la propriété que le jalon 1 avait achetée et
+que celui-ci encaisse.
 
 Ajouter :
 
-- [ ] Playwright desktop et mobile ;
-- [ ] régression visuelle ;
-- [ ] axe ;
-- [ ] navigation clavier ;
-- [ ] zoom 200 % ;
-- [ ] navigation sans JavaScript ;
-- [ ] ajout au panier avec et sans JavaScript ;
-- [ ] titres très longs ;
-- [ ] catalogue vide ;
-- [ ] produit épuisé ;
-- [ ] erreur de recherche.
+- [x] Playwright desktop et mobile ;
+- [x] régression visuelle ;
+- [x] axe ;
+- [x] navigation clavier ;
+- [x] zoom 200 % ;
+- [x] navigation sans JavaScript ;
+- [x] ajout au panier avec et sans JavaScript ;
+- [x] titres très longs ;
+- [x] catalogue vide ;
+- [x] produit épuisé ;
+- [x] erreur de recherche.
+
+Tout est porté par `npm run test:browser` — Playwright contre le Worker
+**construit**, sur une D1 isolée semée par les mêmes fixtures que les lignes de
+base HTML. 84 tests, deux projets (bureau et téléphone), un job de CI par thème.
+Les quatre designs le passent, parce que ce que la suite affirme sont des
+contrats du storefront et non des préférences du pilote.
+
+Ce qui n'est PAS gaté, et pourquoi : la barre des 320 px CSS de WCAG 1.4.10
+(400 % de zoom sur un écran de 1280, ou un iPhone SE). `atelier` la tient ;
+`default` la manque de 37 px, et arbitrer lequel de son menu, de son lien de
+recherche ou de son panier cède la place à cette largeur est une décision de
+design qui appartient au propriétaire de ce thème, pas à un test. Une porte que
+le thème livré ne peut pas passer serait désactivée en une semaine.
 
 #### Critère de sortie
 
-- [ ] Le storefront est visuellement spécifique et tous les contrats fonctionnels
+- [x] Le storefront est visuellement spécifique et tous les contrats fonctionnels
   Minshop restent verts.
+
+#### État
+
+**Le thème du pilote appartient au marchand, et c'est le fait structurant.**
+`src/themes/atelier/` ne porte aucun identifiant réservé, donc
+`scripts/path-ownership.mjs` le classe côté `client` : le cœur n'y touchera
+jamais et une montée de version ne peut pas y produire de conflit (ADR 0003).
+Les deux boutiques témoins cessent du même coup d'être symétriques, ce qui est
+un gain : `canary-minimal` continue de sélectionner un thème livré par le socle,
+`pilot-fr` sélectionne un design que le cœur ne possède pas. La paire vérifie
+maintenant deux propriétés au lieu d'une.
+
+**Rien n'a été ajouté à la CI.** Le job « Verify theme » interroge
+`discoverThemeIds()` et le job « Build shop » interroge `prepare-client --list` ;
+les deux ont donc pris `atelier` en charge sans qu'une liste soit éditée. Un
+thème que le socle ne connaît pas passe exactement les mêmes portes que les
+siens : contrat storefront, `astro check`, frontière de présentation, build,
+CSS compilé.
+
+**Le catalogue de messages est propriété du cœur, et un thème client ne peut
+donc pas y écrire sa copie.** Les trois thèmes livrés ont chacun leur clé
+`catalog.empty.<thème>` ; `atelier` n'en prend pas et lit
+`catalog.empty.default`. Ce n'est pas un pis-aller : une clé nommée d'après un
+client dans un fichier du cœur serait précisément la condition que
+`config:validate` existe pour interdire. La formulation qui doit appartenir au
+marchand a déjà un endroit où vivre — l'annonce, les pages, les noms de
+catégories — et cet endroit est l'administration, pas un fichier source.
+
+**Deux bogues du socle français sont sortis de l'exercice**, tous deux
+invisibles pour les portes existantes parce que toutes les portes existantes
+lisent du HTML sans jamais exécuter de script :
+
+- le script de prix vivant de `/products/[slug]` construisait
+  `new Intl.NumberFormat('en-US', …)`. Le serveur rendait `24,00 €` et le
+  navigateur le réécrivait en `€24.00` dès qu'un produit avait une variante ou
+  une option. Les lignes de base storefront sont capturées avec `curl`, donc
+  aucun script ne s'y exécute ; les contrats de conteneur rendent du balisage à
+  partir de props et n'en exécutent pas davantage. Il a fallu ouvrir la page.
+  `Layout.astro` publie désormais `<html lang="fr" data-locale="fr-FR">` — la
+  sous-étiquette de langue pour HTML, l'étiquette complète pour `Intl`, les deux
+  tirées de la même constante — et le script la lit là. `define:vars` aurait
+  marché aussi, mais impose `is:inline` : un script non minifié, commentaires
+  compris, sur la page la plus visitée de la boutique. Mesuré sur une fiche
+  produit : +354 octets gzip pour cette voie contre +21 pour l'attribut, à
+  correction identique ;
+- `/admin/media` et `/admin/pages` construisaient chacun leur propre
+  `Intl.DateTimeFormat('en-US')` et formataient en UTC, donc ces deux écrans
+  contredisaient les listes Commandes et Clients d'à côté sur la forme de la
+  date ET sur le jour affiché. Les deux passent maintenant par le `formatDate`
+  partagé et le fuseau de la boutique, comme le reste de l'administration
+  (ADR 0011 garde l'admin en anglais ; les dates et les montants, eux, suivent
+  la boutique).
+
+`test/storefront/locale-source.test.mjs` est la porte qui manquait :
+`src/features/i18n/locale.ts`, `format.ts` et `money.ts` sont les seuls modules
+autorisés à nommer une langue, et tout autre `new Intl.X('…')` fait échouer la
+suite. Elle a été vérifiée dans les deux sens — remise en place, l'ancienne
+ligne la fait tomber.
+
+### La porte navigateur
+
+Une inspection n'est pas une porte, donc les mesures faites à la main pendant ce
+jalon sont devenues `npm run test:browser` : Playwright contre le Worker
+**construit**, sur une D1 isolée semée par `test/fixtures/storefront-states.sql`
+— la même fixture que les lignes de base HTML, pour qu'un état vérifié ici soit
+un état qu'on peut ouvrir dans un navigateur et regarder.
+
+Elle n'est pas dans `npm run verify`, et c'est délibéré plutôt que budgétaire :
+`verify` est la porte qu'une boutique passe sur un portable et dans le chemin de
+déploiement, et elle ne doit pas avoir besoin de télécharger 150 Mo de Chromium
+pour répondre. La CI lui donne un job par thème.
+
+**Ce qu'elle attrape, personne d'autre ne le voyait.** Les contrats de conteneur
+rendent un composant à partir de props : aucune feuille de style n'est
+appliquée, aucun script client ne s'exécute, rien n'a de largeur. C'est la bonne
+forme pour un contrat de présentation et c'est structurellement aveugle à toute
+une classe de défauts. Quatre sont sortis dès la première exécution, tous dans
+le **cœur** et donc dans les quatre thèmes :
+
+- `ProductGallery` donnait à ses vignettes des liens **sans nom accessible**.
+  Un lecteur d'écran annonçait une rangée de « lien » anonymes. Le nom est
+  maintenant positionnel — « Image 2 sur 4 » — plutôt que le nom du produit, qui
+  aurait étiqueté les quatre à l'identique ;
+- la piste de la galerie **défile sans pouvoir prendre le focus**. Au clavier,
+  les images après la première n'existaient tout simplement pas ;
+- `/categories/<slug>` affichait `No products in this category yet.` — la
+  dernière phrase anglaise du storefront — et surtout l'affichait **sans
+  `role="status"`**, alors que le catalogue, lui, doit annoncer son état vide
+  sur chaque thème. Une catégorie vide devenait une page blanche muette ;
+- les trois thèmes livrés **épinglaient leur nom de boutique** à sa largeur
+  naturelle (`shrink-0`). « Ma boutique » tient partout ; « Atelier de céramique
+  de Haute-Provence » poussait le panier hors de l'écran à 390 px. Le
+  rétrécissement flex étant proportionnel, il a fallu les deux moitiés du
+  correctif : le nom rétrécit (`min-w-0 truncate`), les commandes non
+  (`shrink-0`), sinon le `<nav>` absorbe une part qu'il ne sait pas rendre.
+
+**La régression visuelle n'est pas une comparaison de pixels**, et c'est le
+choix de conception de cette suite. Une capture PNG n'a de sens que contre le
+moteur de rendu qui l'a enregistrée — hinting, positionnement sous-pixel,
+rastérisation GPU diffèrent entre un portable et un runner —, donc il lui faut
+un conteneur épinglé ou elle signale des échecs que personne n'a causés. Ce
+dépôt dépense déjà un workflow entier à mesurer un aléa
+(`.github/workflows/d1-flake-probe.yml`) ; en ajouter un second, auto-infligé,
+serait un mauvais échange. Ce qui régresse vraiment dans un design piloté par
+des jetons, c'est un jeton — et cela se lit dans le style **calculé**. La suite
+enregistre donc dix sondes par thème (`test/browser/__signatures__/`). Vérifié :
+changer `--color-paper` d'un seul chiffre hexadécimal fait tomber la porte.
+
+« Le style calculé est identique sur toutes les machines » était vrai à moitié,
+et la CI l'a dit tout de suite : `default` et `atelier` sont rouges au premier
+passage, `studio` et `market` verts. C'est exact pour `rgb(...)`, faux pour les
+formes à large gamut — un modificateur d'alpha comme `bg-paper/85` est compilé
+par Tailwind en `color-mix(in oklab, …)`, et la valeur calculée revient en
+`oklab()` avec une précision flottante propre à l'implémentation. D'où
+`oklab(0.96524 …)` ici et `oklab(0.965308 …)` sur le runner, sur les deux seuls
+thèmes dont l'en-tête porte un fond translucide. Un écart de 5e-5 en clarté
+oklab vaut un centième de pas sur 8 bits : aucun écran ne peut le montrer, donc
+ce n'est pas une régression visuelle. Les couleurs passent maintenant par un
+canevas 1×1 — le convertisseur du navigateur lui-même — et sont enregistrées en
+octets sRGB, ce qui rend la sonde exacte au lieu de la rendre tolérante.
+
+**Ce qui n'est pas gaté** est nommé plutôt qu'omis : la barre des 320 px CSS de
+WCAG 1.4.10. `atelier` la tient, `default` la manque de 37 px — son `<nav>` porte
+un menu replié, un lien de recherche et le panier, et aucun des trois ne peut
+céder. Choisir lequel cède est une décision de design qui appartient au
+propriétaire de ce thème. Le plan demandait 200 % ; c'est 200 % qui est gaté.
+
+Le même passage a sorti un aléa de la suite elle-même, sur `atelier` seul et
+sur les deux projets : le clic sans JavaScript visait un bouton encore en
+mouvement. Le bloc « sans JavaScript » était le seul à ne pas attendre que la
+page se stabilise, et il attendait `domcontentloaded` là où les images comptent
+— sur un lien rapide elles étaient déjà là, sur le runner elles arrivaient après
+et décalaient le formulaire sous le pointeur. Reproduit en bridant le réseau à
+30 ko/s, corrigé en attendant `load`, puis revérifié sous le même bridage.
+
+Deux notes d'outillage. Chromium vient de `npx playwright install chromium` ;
+sur une machine qui en a déjà un et ne peut pas en télécharger un autre,
+`test/browser/chromium.mjs` se rabat sur ce qu'il trouve et le dit à voix haute
+plutôt que de résoudre en silence. Et la visibilité du focus est affirmée comme
+une **différence** entre les styles calculés focalisé et non focalisé, pas comme
+« a un contour » : un thème qui allume l'entourage de son champ de recherche via
+`focus-within:` est parfaitement valable et échouerait une liste de propriétés
+autorisées.
 
 ### Jalon 6 — Provisioning et CI/CD
 
@@ -1458,7 +1620,9 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] construction des boutiques témoins (job « Build shop ») ;
 - [x] construction de chaque thème que le job principal ne couvre pas
   (job « Verify theme ») ;
-- [x] construction depuis un clone vierge (job « Build from a clean clone »).
+- [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
+- [x] porte navigateur par thème — axe, clavier, zoom, sans JavaScript,
+  signature du design (job « Browser », `npm run test:browser`).
 - [ ] tests de la CLI — au jalon 2, avec `shopctl`.
 - [ ] contrôle de formatage — voir ci-dessous.
 

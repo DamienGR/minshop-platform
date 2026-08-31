@@ -44,6 +44,7 @@ export const fr = {
   'catalog.empty.default': 'Aucun produit pour le moment.',
   'catalog.empty.market': 'Rien ici pour l’instant. Revenez bientôt.',
   'catalog.empty.studio': 'Rien à l’affiche pour le moment.',
+  'catalog.empty.category': 'Aucun produit dans cette catégorie pour le moment.',
   'catalog.title.all': 'Tous les produits',
   'catalog.categories.label': 'Catégories',
   'catalog.sort.label': 'Trier',
@@ -66,6 +67,10 @@ export const fr = {
   'product.share.copied': 'Lien copié',
   'product.details': 'Détails',
   'product.related': 'Vous aimerez aussi',
+  'product.backToShop': 'Retour à la boutique',
+  'product.gallery': 'Images du produit',
+  'product.gallery.image': 'Image {position} sur {total}',
+  'product.digitalDelivery': 'Téléchargement numérique',
   'product.error.chooseOption': 'Choisissez : {option}.',
 
   // ─── Panier ────────────────────────────────────────────────────────────────────

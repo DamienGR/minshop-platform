@@ -49,7 +49,14 @@ if (loaded.backfillRelated) {
     if (form instanceof HTMLFormElement && out instanceof HTMLElement) {
       const currency = (out.dataset.currency || 'usd').toUpperCase();
       const base = Number(out.dataset.base || '0');
-      const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency });
+      // The store's locale off <html data-locale>, never a literal: this is the
+      // one price a client formats, and a tag written here would fight the
+      // server's own (invariant 7). Layout.astro emits it from the same
+      // constant formatMoney reads.
+      const fmt = new Intl.NumberFormat(document.documentElement.dataset.locale, {
+        style: 'currency',
+        currency,
+      });
       const divisor = 10 ** (fmt.resolvedOptions().maximumFractionDigits ?? 2);
 
       // Scroll the gallery carousel to the variant's linked image (if any). The

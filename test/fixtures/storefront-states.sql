@@ -34,6 +34,16 @@ INSERT INTO categories (name, slug)
 SELECT 'Apparel', 'apparel'
 WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'apparel');
 
+-- A category with NOTHING in it. The empty catalogue is a branch every theme
+-- has to render — a listing with no grid and an announced empty state — and
+-- until now it was the one branch nobody could open in a browser: the seeded
+-- store had a single category and it was full. It is a category rather than a
+-- product with no matches because /categories/<slug> is the route that reaches
+-- the catalogue template with an empty product list.
+INSERT INTO categories (name, slug)
+SELECT 'Bientôt', 'bientot'
+WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'bientot');
+
 -- sample-tee plus siblings, so the product page renders a populated
 -- "You may also like" row instead of omitting the section.
 INSERT INTO product_categories (product_id, category_id)

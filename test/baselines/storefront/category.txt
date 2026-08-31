@@ -5,7 +5,7 @@ cache-control: public, max-age=0, s-maxage=600
 cache-tag: catalog,product:prod_<id>,product:prod_<id>,product:prod_<id>,product:prod_<id>,product:prod_<id>,shell
 
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-locale="fr-FR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -39,13 +39,13 @@ cache-tag: catalog,product:prod_<id>,product:prod_<id>,product:prod_<id>,product
 <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
 <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-<a href="/" aria-label="Ma boutique" class="font-serif text-2xl tracking-tight">
+<a href="/" aria-label="Ma boutique" class="min-w-0 truncate font-serif text-2xl tracking-tight">
 <span>Ma boutique</span>
 </a>
 <form method="GET" action="/search" class="ml-auto hidden flex-1 justify-end sm:flex" role="search">
 <input type="search" name="q" value placeholder="Rechercher" aria-label="Rechercher un produit" class="w-40 border-0 border-b border-line bg-transparent px-1 py-1 text-sm transition-all focus:w-56 focus:border-brand focus:outline-none">
 </form>
-<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
+<nav aria-label="Navigation principale" class="ml-auto flex min-w-0 shrink-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6">
 <div class="hidden min-w-0 items-center gap-4 xl:flex xl:gap-6">
 <a href="/" title="Shop" class="min-w-0 truncate hover:text-brand">Shop</a>
 <a href="/categories/apparel" title="Apparel" class="min-w-0 truncate hover:text-brand">Apparel</a>
@@ -75,7 +75,7 @@ cache-tag: catalog,product:prod_<id>,product:prod_<id>,product:prod_<id>,product
 </header>
 <main class="page-shell">
 <nav class="mb-4 flex flex-wrap gap-x-2 text-xs uppercase tracking-widest text-faint">
-<a href="/" class="hover:text-brand">Shop</a>
+<a href="/" class="hover:text-brand">Boutique</a>
 <span class="flex gap-x-2">
 <span aria-hidden="true">/</span>
 <a href="/categories/apparel" class="hover:text-brand">Apparel</a>

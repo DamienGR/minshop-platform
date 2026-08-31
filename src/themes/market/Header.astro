@@ -42,7 +42,14 @@ const link = 'text-xs font-semibold text-[color:var(--market-muted)] hover:text-
 
 <header class="sticky top-0 z-20 border-b-2 border-gray-900 bg-paper">
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2">
-    <a href="/" aria-label={model.storeName} class="shrink-0">
+    {/* The wordmark is the elastic item and the controls are not, so the
+        shrinking has to land here. `shrink-0` did the opposite: it pinned the
+        anchor at the name's max-content width, and a merchant called
+        "Atelier de céramique de Haute-Provence" pushed the cart off the right
+        edge at phone width. Flex shrink is proportional to base size, so the
+        nav below also carries `shrink-0` — otherwise it absorbs a share it has
+        no way to give back, and overflows on its own. */}
+    <a href="/" aria-label={model.storeName} class="min-w-0 truncate">
       {
         model.logo ? (
           <img src={model.logo.src} alt={model.logo.alt} class="h-7 max-w-40 object-contain" />
@@ -61,7 +68,7 @@ const link = 'text-xs font-semibold text-[color:var(--market-muted)] hover:text-
 
     <nav
       aria-label={t('shell.nav.store')}
-      class="flex min-w-0 items-center gap-3 text-xs font-semibold text-[color:var(--market-muted)] sm:gap-4"
+      class="flex min-w-0 shrink-0 items-center gap-3 text-xs font-semibold text-[color:var(--market-muted)] sm:gap-4"
     >
       <StoreNav
         links={model.headerLinks}

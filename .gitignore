@@ -30,6 +30,10 @@ wrangler.jsonc.bak
 
 # Tooling artifacts
 .playwright-mcp/
+# Playwright run output (traces + screenshots of failures, HTML report).
+# The committed artefact of the browser suite is test/browser/__signatures__/.
+test-results/
+playwright-report/
 coverage/
 .overmind.sock
 

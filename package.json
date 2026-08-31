@@ -26,6 +26,7 @@
     "test:storefront-contract": "vitest run test/storefront",
     "test:catalog": "vitest run test/scripts/catalog.test.mjs",
     "theme:check": "node scripts/check-themes.mjs",
+    "test:browser": "astro build && playwright test",
     "verify": "npm run check:toolchain && npm run check:secrets && npm run config:validate && npm run check:paths && npm run theme:sync && vitest run && astro check && npm run theme:check && astro build && node scripts/check-built-css.mjs && npm run check:deploy && npm run test:integration && node --experimental-strip-types scripts/check-stripe-countries.mjs && npm run mcp:check && npm run scaffold:check",
     "check:toolchain": "node scripts/check-toolchain.mjs",
     "check:deploy": "node scripts/check-deploy.mjs",
@@ -61,7 +62,9 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@axe-core/playwright": "4.13.0",
     "@cloudflare/workers-types": "^5.20260826.1",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/markdown-it": "^14.2.0",
     "miniflare": "^4.20260730.0",

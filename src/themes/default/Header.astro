@@ -44,7 +44,12 @@ const { model } = Astro.props;
 
 <header class="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur">
   <div class="mx-auto flex max-w-6xl items-center gap-6 px-6 py-5">
-    <a href="/" aria-label={model.storeName} class="font-serif text-2xl tracking-tight">
+    {/* `min-w-0 truncate` is what lets the row survive 320 CSS px — a small
+        phone, or 400 % browser zoom on a desktop (WCAG 1.4.10). A flex item
+        defaults to min-width:auto, so without it the wordmark refuses to
+        shrink and pushes the cart 37px off the right edge, where a shopper
+        cannot reach it and a horizontal scrollbar appears on every page. */}
+    <a href="/" aria-label={model.storeName} class="min-w-0 truncate font-serif text-2xl tracking-tight">
       {
         model.logo ? (
           /* Not lazy: the header logo is above the fold on every page. The
@@ -69,7 +74,7 @@ const { model } = Astro.props;
         putting min-w-0 only on the links themselves is not enough. */}
     <nav
       aria-label={t('shell.nav.primary')}
-      class="ml-auto flex min-w-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6"
+      class="ml-auto flex min-w-0 shrink-0 items-center gap-4 text-xs uppercase tracking-widest text-muted sm:gap-6"
     >
       <StoreNav links={model.headerLinks} />
       {/* Search input is desktop-only; give mobile a link to the search page. */}

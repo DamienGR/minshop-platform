@@ -35,5 +35,8 @@ email:
   from: commandes@pilote.example.fr
 
 theme:
-  # Thème livré par le socle jusqu'au jalon 5, qui donnera au pilote le sien.
-  id: studio
+  # Le thème du pilote (jalon 5). Son identifiant n'est pas réservé par le
+  # socle, donc scripts/path-ownership.mjs classe src/themes/atelier/ côté
+  # « client » : il appartient au marchand, et une montée de version du socle
+  # ne le touche jamais.
+  id: atelier  # src/themes/atelier/
