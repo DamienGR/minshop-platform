@@ -11,4 +11,4 @@ import { main } from '../src/cli.mjs';
 // would be a second thing to keep in step, and the first to fall behind.
 const { version } = corePackage();
 
-process.exit(main(process.argv.slice(2), { version }));
+process.exit(await main(process.argv.slice(2), { version }));

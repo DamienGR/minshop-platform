@@ -29,6 +29,11 @@ cloudflare:
   jurisdiction: eu
   workerName: minshop-pilot-fr
   productionDomain: pilote.example.fr
+  # Le compte attendu par `shopctl provision`, qui refuse tout autre compte
+  # (ADR 0002). Valeur de fixture : ce témoin n'est provisionné nulle part.
+  # canary-minimal ne le déclare pas, et la paire vérifie donc les deux
+  # branches — le champ est facultatif parce qu'il s'apprend au provisioning.
+  accountId: 0000000000000000000000000000abcd
 
 email:
   provider: resend

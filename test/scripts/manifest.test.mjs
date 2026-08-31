@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { parseManifestYaml } from '../../scripts/manifest-yaml.mjs';
 import {
   CROSS_FIELD_RULES,
+  MANIFEST_SPEC,
   RESERVED_SLUGS,
   SCHEMA_VERSION,
   checkCoreCompatibility,
@@ -234,6 +235,66 @@ describe('fleet identifiers', () => {
       __DB_ID__: '00000000-0000-0000-0000-000000000000',
       __BUCKET__: 'minshop-pilot-fr-images',
       __FILES_BUCKET__: 'minshop-pilot-fr-files',
+      __JURISDICTION__: 'eu',
+      // No environment named, so: no custom domain, workers.dev on, images
+      // through the Worker. That is the render a witness build and local
+      // development get, and none of them reaches an account.
+      __WORKERS_DEV__: 'true',
+      __ROUTES__: '[]',
+      __IMAGE_BASE_URL__: '',
+    });
+  });
+
+  /**
+   * The custom domain is production's, and workers.dev goes off with it.
+   *
+   * Two doors into one shop is an origin the merchant never advertised: indexed
+   * by search engines, outside whatever Access sits on the real hostname, and
+   * serving the same database. Staging keeps workers.dev because that is how
+   * staging is reached at all.
+   */
+  it('gives production its domain and closes workers.dev', () => {
+    expect(wranglerSubstitutions(base(), { env: 'production' })).toMatchObject({
+      __WORKERS_DEV__: 'false',
+      __ROUTES__: JSON.stringify([{ pattern: 'pilote.example.fr', custom_domain: true }]),
+    });
+    expect(wranglerSubstitutions(base(), { env: 'staging' })).toMatchObject({ __WORKERS_DEV__: 'true', __ROUTES__: '[]' });
+  });
+
+  // Empty is the ordinary case and never wrong: the storefront reads
+  // `env.IMAGE_BASE_URL ?? ''` and serves images through the Worker, which is
+  // slower and always correct.
+  it('serves images from the Worker unless the manifest names a domain', () => {
+    expect(wranglerSubstitutions(base()).__IMAGE_BASE_URL__).toBe('');
+    const withDomain = base();
+    withDomain.cloudflare.imagesDomain = 'images.example.fr';
+    expect(wranglerSubstitutions(withDomain).__IMAGE_BASE_URL__).toBe('https://images.example.fr');
+  });
+
+  // Plan §5.3 names them `minshop-{slug}-{env}…`. The environment qualifies the
+  // STEM, so one shop is still one name family and an account listing sorts a
+  // shop's staging and production resources next to each other.
+  it('qualifies every name with the environment', () => {
+    expect(resourceNames(base(), { env: 'staging' })).toEqual({
+      worker: 'minshop-pilot-fr-staging',
+      database: 'minshop-pilot-fr-staging-db',
+      images: 'minshop-pilot-fr-staging-images',
+      files: 'minshop-pilot-fr-staging-files',
+      sessions: 'minshop-pilot-fr-staging-session',
+    });
+  });
+
+  it('refuses an environment the fleet does not have', () => {
+    expect(() => resourceNames(base(), { env: 'preprod' })).toThrow(/unknown environment/);
+  });
+
+  // The R2 binding has to repeat the jurisdiction or the deployed Worker binds
+  // a bucket that answers as if it were empty — a failure with no error.
+  it('carries the jurisdiction into the environment\u2019s render', () => {
+    expect(wranglerSubstitutions(base(), { env: 'production' })).toMatchObject({
+      __NAME__: 'minshop-pilot-fr-production',
+      __FILES_BUCKET__: 'minshop-pilot-fr-production-files',
+      __JURISDICTION__: 'eu',
     });
   });
 
@@ -250,16 +311,40 @@ describe('fleet identifiers', () => {
     const a = { file: 'a.yaml', manifest: base() };
     const b = { file: 'b.yaml', manifest: base() };
     const collisions = detectFleetCollisions([a, b]);
-    expect(collisions.map((c) => c.kind)).toEqual([
-      'slug',
-      'worker',
-      'D1 database',
-      'images bucket',
-      'files bucket',
-      'sessions KV',
-      'production domain',
+    expect(collisions.map((c) => c.value)).toEqual([
+      'pilot-fr',
+      'pilote.example.fr',
+      'minshop-pilot-fr',
+      'minshop-pilot-fr-db',
+      'minshop-pilot-fr-images',
+      'minshop-pilot-fr-files',
+      'minshop-pilot-fr-session',
+      'minshop-pilot-fr-staging',
+      'minshop-pilot-fr-staging-db',
+      'minshop-pilot-fr-staging-images',
+      'minshop-pilot-fr-staging-files',
+      'minshop-pilot-fr-staging-session',
+      'minshop-pilot-fr-production',
+      'minshop-pilot-fr-production-db',
+      'minshop-pilot-fr-production-images',
+      'minshop-pilot-fr-production-files',
+      'minshop-pilot-fr-production-session',
     ]);
     expect(collisions[0].files).toEqual(['a.yaml', 'b.yaml']);
+  });
+
+  // A suffix is a namespace only if nothing else can land in it. `acme-staging`
+  // derives exactly the staging family of `acme`, and nothing at runtime would
+  // keep the two shops' orders apart (ADR 0001).
+  it('detects a slug that collides with another shop\u2019s environment', () => {
+    const a = { file: 'acme.yaml', manifest: base() };
+    a.manifest.client.slug = 'ceramics';
+    a.manifest.cloudflare.workerName = 'minshop-ceramics';
+    const b = { file: 'staging.yaml', manifest: base() };
+    b.manifest.client.slug = 'ceramics-staging';
+    b.manifest.cloudflare.workerName = 'minshop-ceramics-staging';
+    b.manifest.cloudflare.productionDomain = 'autre.example.fr';
+    expect(detectFleetCollisions([a, b]).map((c) => c.value)).toContain('minshop-ceramics-staging-db');
   });
 
   it('detects a shared production domain between otherwise distinct shops', () => {
@@ -306,15 +391,60 @@ describe('published JSON Schema', () => {
     expect(committed).toEqual(manifestJsonSchema());
   });
 
-  it('closes every mapping and requires every field', () => {
-    const schema = manifestJsonSchema();
+  // The closed mapping is the primary defence against a credential landing in a
+  // committed file: an invented `stripeKey:` is refused by the shape, before the
+  // value is ever judged.
+  it('closes every mapping', () => {
     const check = (node) => {
       expect(node.additionalProperties).toBe(false);
-      expect(node.required.sort()).toEqual(Object.keys(node.properties).sort());
       for (const child of Object.values(node.properties)) if (child.type === 'object') check(child);
     };
+    check(manifestJsonSchema());
+    expect(manifestJsonSchema().properties.client.properties.slug.pattern).toBeTruthy();
+  });
+
+  /**
+   * Optional fields are pinned by name, not counted.
+   *
+   * Every field a shop must DECIDE is required, because a missing one is a
+   * decision nobody made — that is what makes the manifest a source of truth
+   * rather than a bag of hints. The exception is a value the shop LEARNS:
+   * `accountId` exists only after provisioning has run, `imagesDomain` only if
+   * a domain was ever attached, and requiring either would force a placeholder
+   * that validates and means nothing.
+   *
+   * A new name in this list is therefore a deliberate act with a reason, and
+   * this assertion is where the reason gets written down.
+   */
+  it('requires every field a shop has to decide', () => {
+    const optional = [];
+    const walk = (spec, prefix = []) => {
+      for (const [key, field] of Object.entries(spec)) {
+        if (field.kind === 'section') walk(field.fields, [...prefix, key]);
+        else if (field.optional) optional.push([...prefix, key].join('.'));
+      }
+    };
+    walk(MANIFEST_SPEC);
+    expect(optional).toEqual(['cloudflare.accountId', 'cloudflare.imagesDomain']);
+
+    const schema = manifestJsonSchema();
+    const check = (node, prefix = []) => {
+      const expected = Object.keys(node.properties).filter((key) => !optional.includes([...prefix, key].join('.')));
+      expect(node.required.sort()).toEqual(expected.sort());
+      for (const [key, child] of Object.entries(node.properties)) if (child.type === 'object') check(child, [...prefix, key]);
+    };
     check(schema);
-    expect(schema.properties.client.properties.slug.pattern).toBeTruthy();
+  });
+
+  // An optional field is optional, not ignored: a value that IS present still
+  // has to be the right shape, or the manifest advertises an account nothing
+  // can reach.
+  it('still validates an optional field that is present', () => {
+    const manifest = loadManifest(fixture('pilot-fr'), { root }).manifest;
+    expect(validateManifest({ ...manifest, cloudflare: { ...manifest.cloudflare, accountId: 'nope' } }).errors).toContainEqual(
+      expect.objectContaining({ path: 'cloudflare.accountId' }),
+    );
+    expect(validateManifest({ ...manifest, cloudflare: { ...manifest.cloudflare, accountId: 'a'.repeat(32) } }).ok).toBe(true);
   });
 
   it('lists the rules it cannot express, so a generic validator is not mistaken for the gate', () => {

@@ -23,11 +23,14 @@ import { CsvError, parseCsvRecords } from '../catalog/csv.mjs';
 import { buildCatalogue } from '../catalog/contract.mjs';
 import { oversizedForDelivery, resolveCatalogueImages, DELIVERY_MAX_WIDTH } from '../catalog/media.mjs';
 import { planImport } from '../catalog/plan.mjs';
-import { applyStatements, assertWranglerNamesShop, imagesBucket, putObject, readCatalogue } from '../catalog/store.mjs';
-import { inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
-import { findManifestBySlug, discoverManifests, loadManifest } from '../../../scripts/manifest.mjs';
+import { applyStatements, assertWranglerNamesShop, imagesBucket, jurisdictionFlags, putObject, readCatalogue } from '../catalog/store.mjs';
+import { inputError, usageError, verificationError } from '../errors.mjs';
+import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
+import { resolveShop } from '../shop.mjs';
 
-export const CATALOG_OPTIONS = { '--shop': 'slug' };
+export const CATALOG_OPTIONS = { '--shop': 'slug', '--env': 'environnement' };
+
+export { resolveShop };
 
 export const catalogUsage = `Usage: shopctl catalog <sous-commande> [options]
 
@@ -38,6 +41,7 @@ export const catalogUsage = `Usage: shopctl catalog <sous-commande> [options]
 Options:
   --dry-run                 Calculer et afficher le plan sans rien écrire (import)
   --remote                  Viser la base déployée. Par défaut : la base locale.
+  --env <staging|production>  Environnement déployé visé. Obligatoire avec --remote.
   --create-categories       Créer les catégories que le fichier nomme et que la boutique n'a pas
   --allow-slug-change       Autoriser le déplacement d'une URL de produit
   --allow-remove-variants   Autoriser la désactivation des unités vendues absentes du fichier
@@ -48,29 +52,36 @@ Le format des colonnes est décrit dans imports/README.md, et rappelé par
 \`shopctl catalog validate\` dès qu'une colonne manque ou est inconnue.
 `;
 
-/** The tree being operated, and the manifest that describes it. */
-export function resolveShop(cwd, slug) {
-  if (slug) {
-    const found = findManifestBySlug(slug, { root: cwd });
-    if (!found) throw inputError(`aucun manifeste pour « ${slug} » dans ${cwd}.`);
-    if (found.errors.length > 0) throw verificationError(`le manifeste de « ${slug} » n'est pas valide.`, 'Lancez `shopctl config validate`.');
-    return { root: cwd, manifest: found.manifest, file: found.file };
+/**
+ * Which deployed environment `--remote` means.
+ *
+ * There is no default, and that is the point: a shop has a staging database and
+ * a production one (plan §5.3), they hold different catalogues, and an import
+ * that guessed would be indistinguishable from one that was told. Omitting
+ * `--env` therefore names the unqualified family — the local tree, which is
+ * where a first import belongs — and asking for `--remote` without saying which
+ * remote is a usage error rather than a coin flip.
+ */
+export function resolveEnvironment(value, remote) {
+  if (value === undefined) {
+    if (remote) {
+      throw usageError(
+        '--remote sans --env : quelle base déployée ?',
+        `La boutique en a deux : ${ENVIRONMENTS.join(' et ')}. Ajoutez --env <${ENVIRONMENTS.join('|')}>.`,
+      );
+    }
+    return null;
   }
-  if (existsSync(resolve(cwd, 'client/client.yaml'))) {
-    const loaded = loadManifest('client/client.yaml', { root: cwd });
-    if (loaded.errors.length > 0) throw verificationError('le manifeste de la boutique n\'est pas valide.', 'Lancez `shopctl config validate`.');
-    return { root: cwd, manifest: loaded.manifest, file: loaded.file };
+  if (!ENVIRONMENTS.includes(value)) {
+    throw usageError(`--env « ${value} » est inconnu.`, `Environnements : ${ENVIRONMENTS.join(', ')}.`);
   }
-  // A core checkout carries the witness manifests and no shop of its own, so
-  // naming one is the only unambiguous answer. Guessing would import a
-  // catalogue into whichever fixture happened to sort first.
-  const known = discoverManifests(cwd);
-  throw preconditionError(
-    `${cwd} n'est pas une boutique (pas de client/client.yaml).`,
-    known.length > 0
-      ? `Précisez --shop parmi les manifestes de cet arbre : ${known.join(', ')}.`
-      : 'Lancez cette commande à la racine du dépôt d\'une boutique.',
-  );
+  if (!remote) {
+    throw usageError(
+      '--env sans --remote : la base locale n\'appartient à aucun environnement.',
+      'Ajoutez --remote pour viser la base déployée, ou retirez --env.',
+    );
+  }
+  return value;
 }
 
 /** Read the file and turn it into a catalogue, or into the list of what is wrong. */
@@ -112,10 +123,11 @@ export function runCatalog(args, reporter) {
   const shop = resolveShop(process.cwd(), args.values['--shop']);
   const currency = shop.manifest.client.currency;
   const remote = args.values['--remote'] === true;
+  const env = resolveEnvironment(args.values['--env'], remote);
 
   if (subcommand === 'report') {
     if (rest.length > 0) throw usageError(`catalog report takes no argument; got "${rest.join('", "')}".`);
-    return runReport({ shop, remote, json }, reporter);
+    return runReport({ shop, remote, env, json }, reporter);
   }
 
   const [file, ...extra] = rest;
@@ -169,7 +181,7 @@ export function runCatalog(args, reporter) {
   }
 
   const dryRun = args.values['--dry-run'] === true;
-  const bucket = imagesBucket(shop.manifest);
+  const bucket = imagesBucket(shop.manifest, { env });
   // Checked BEFORE the read, not before the write: a read against the wrong
   // shop's database produces a plan that looks plausible and is about someone
   // else's catalogue.
@@ -194,6 +206,7 @@ export function runCatalog(args, reporter) {
       ok: plan.refusals.length === 0,
       file,
       target: remote ? 'remote' : 'local',
+      env,
       dryRun,
       applied: !dryRun && plan.refusals.length === 0,
       summary: plan.summary,
@@ -217,7 +230,7 @@ export function runCatalog(args, reporter) {
 
   for (const upload of plan.uploads) {
     reporter.step(`Envoi de ${upload.key} (${upload.path})…`);
-    putObject(upload, { cwd: shop.root, bucket, remote });
+    putObject(upload, { cwd: shop.root, bucket, remote, jurisdiction: jurisdictionFlags(shop.manifest, remote) });
   }
   applyStatements(plan.statements, { cwd: shop.root, remote });
 
@@ -278,14 +291,15 @@ function printPlan(reporter, plan, { file, dryRun, remote, oversized }) {
   }
 }
 
-function runReport({ shop, remote, json }, reporter) {
-  assertWranglerNamesShop(shop.root, imagesBucket(shop.manifest));
+function runReport({ shop, remote, env, json }, reporter) {
+  assertWranglerNamesShop(shop.root, imagesBucket(shop.manifest, { env }));
   const store = readCatalogue({ cwd: shop.root, remote });
   const withSku = store.products.filter((product) => product.sku);
   const activeVariants = store.variants.filter((variant) => variant.active === 1);
   const payload = {
     shop: shop.manifest.client.slug,
     target: remote ? 'remote' : 'local',
+    env,
     products: store.products.length,
     productsActive: store.products.filter((product) => product.active === 1).length,
     productsWithSku: withSku.length,

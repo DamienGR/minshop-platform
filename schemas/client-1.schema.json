@@ -190,6 +190,18 @@
           "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
           "minLength": 4,
           "maxLength": 253
+        },
+        "accountId": {
+          "description": "Cloudflare account this shop is provisioned in. Written once provisioning has confirmed it; `shopctl provision` refuses to run against any other account. Not a credential — it is in the URL of every dashboard page — and it is what makes \"wrong account\" a refusal rather than a discovery.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "imagesDomain": {
+          "description": "Public custom domain of the images bucket, when one is attached. Absent means product images are served through the Worker, which is the default and is never wrong — only slower.",
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+          "minLength": 4,
+          "maxLength": 253
         }
       }
     },

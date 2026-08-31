@@ -13,16 +13,19 @@ node shopctl/bin/shopctl.mjs <commande>     # sans passer par npm
 Aucune dépendance, aucune étape de build : `shopctl new` tourne avant qu'il n'y
 ait un `node_modules` où que ce soit.
 
-## Commandes livrées (jalon 2)
+## Commandes livrées
 
-| Commande | Rôle |
-| --- | --- |
-| `shopctl new <slug>` | Crée le dépôt d'une boutique depuis un tag du socle. |
-| `shopctl doctor` | Outils, arbre courant, prérequis de provisioning, checklist humaine. |
-| `shopctl config validate` | Valide les manifestes de l'arbre courant. |
+| Commande | Jalon | Rôle |
+| --- | --- | --- |
+| `shopctl new <slug>` | 2 | Crée le dépôt d'une boutique depuis un tag du socle. |
+| `shopctl doctor` | 2 | Outils, arbre courant, prérequis de provisioning, checklist humaine. |
+| `shopctl config validate` | 2 | Valide les manifestes de l'arbre courant. |
+| `shopctl catalog …` | 4 | Valide, simule et applique le catalogue CSV du commerçant. |
+| `shopctl provision --env <env>` | 6 | Crée ou confirme les ressources Cloudflare d'un environnement. |
+| `shopctl deploy --env <env>` | 6 | Vérifie, migre, construit, téléverse, puis teste la boutique déployée. |
 
-Les commandes `provision`, `catalog`, `verify`, `deploy`, `backup`, `restore`,
-`core` et `fleet` sont décrites au plan §5 et arrivent aux jalons suivants.
+Les commandes `verify`, `backup`, `restore`, `core` et `fleet` sont décrites au
+plan §5 et arrivent aux jalons suivants.
 
 ## `shopctl new`
 
@@ -66,6 +69,49 @@ Ce que le périmètre certifié fixe — locale, devise, marché, juridiction, m
 checkout — n'a pas d'option : élargir une de ces énumérations est une décision
 de version de schéma ([ADR 0008](../docs/architecture/decisions/0008-format-du-manifeste-client.md)).
 
+## `shopctl provision` et `shopctl deploy`
+
+```sh
+npm run shopctl -- provision --env staging --dry-run
+npm run shopctl -- provision --env staging
+npm run shopctl -- deploy --env staging
+npm run shopctl -- deploy --env production --yes
+```
+
+`provision` crée ou confirme, pour un environnement, la base D1 et les deux
+buckets R2 dans la juridiction du manifeste, garde le bucket de fichiers privé,
+applique les migrations et pose les secrets internes. `deploy` suit ensuite
+l'ordre du plan §5.5 : ressources, configuration, `npm run verify`, bookmark
+Time Travel en production, migrations, build, téléversement, secrets différés,
+test de fumée.
+
+Quatre propriétés valent d'être connues.
+
+**Rien qui touche un compte n'a de valeur par défaut.** `--env` est obligatoire,
+`--yes` l'est en production, et le compte Cloudflare attendu doit être nommé —
+par `cloudflare.accountId`, par `--account` ou par `CLOUDFLARE_ACCOUNT_ID`. Deux
+sources qui divergent arrêtent l'exécution ; aucune source du tout l'arrête
+aussi, même si le jeton n'atteint qu'un compte. Provisionner dans le mauvais
+compte ne se défait pas en supprimant des ressources : les données d'un client
+ont existé là où elles n'auraient jamais dû (ADR 0002).
+
+**Il n'y a pas de fichier d'état, et c'est ce qui rend `provision` rejouable.**
+Chaque étape interroge le compte puis décide. Un second passage ne crée rien ;
+une exécution interrompue reprend sans `--resume` et sans mode particulier. Un
+secret déjà posé est **conservé** : `SECRETS_KEK` déchiffre les clés de paiement
+déjà en base, et en générer un nouveau les rendrait toutes illisibles sans
+qu'aucun message ne le dise.
+
+**La juridiction est relue, jamais supposée.** Pour R2, à deux faces : présent
+en juridiction `eu` et absent de la juridiction par défaut. Pour D1, quand l'API
+ne publie pas le champ, le rapport dit « non vérifié » plutôt que « conforme ».
+
+**Le test de fumée peut faire échouer le déploiement**, et une requête qui
+n'aboutit pas est un échec, jamais un succès. Il nomme la version vers laquelle
+revenir plutôt que de revenir tout seul : un rollback automatique se
+déclencherait aussi sur un contrôle qui a échoué parce que le réseau n'atteignait
+pas le site.
+
 ## Conventions
 
 **Enveloppe, ne réimplémente pas.** `config validate` appelle
@@ -95,6 +141,16 @@ logs de la CI. Les motifs sont ceux du manifeste, importés et non recopiés.
 
 ## Tests
 
-`test/scripts/shopctl.test.mjs`, exécuté par `npm test` et par `npm run verify`.
-Il construit un socle réel depuis l'index de ce dépôt, le tague, et fait tourner
-le vrai binaire contre lui.
+Exécutés par `npm test` et par `npm run verify`.
+
+`test/scripts/shopctl.test.mjs` construit un socle réel depuis l'index de ce
+dépôt, le tague, et fait tourner le vrai binaire contre lui.
+
+`test/scripts/provision.test.mjs` et `test/scripts/deploy.test.mjs` installent
+`test/fixtures/wrangler-double.mjs` à l'endroit exact où vivrait le vrai binaire
+— `node_modules/.bin/wrangler` — dans une boutique jetable. Le chemin exercé est
+donc le chemin réel : construction des arguments, analyse des sorties, codes de
+sortie. Seul le compte Cloudflare est imaginaire, ce qui permet d'affirmer ce
+qu'aucun compte de test ne permettrait de rejouer à volonté : la reprise après
+interruption, le mauvais compte refusé, le bucket devenu public, le secret qui
+n'apparaît jamais dans un vecteur d'arguments.

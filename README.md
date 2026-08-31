@@ -173,10 +173,10 @@ qu'il n'existe un `node_modules` quelque part. Détail dans
 npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
 ```
 
-### Livré (jalon 2)
+### Livré
 
 ```bash
-# Créer le dépôt d'une boutique depuis un tag du socle
+# Créer le dépôt d'une boutique depuis un tag du socle (jalon 2)
 shopctl new acme \
   --core v1.0.0 \
   --origin git@github.com:agence/shop-acme.git \
@@ -190,6 +190,19 @@ shopctl doctor
 
 # Valider les manifestes de l'arbre courant
 shopctl config validate
+
+# Importer et vérifier le catalogue (jalon 4)
+shopctl catalog validate ./imports/catalog.csv
+shopctl catalog import ./imports/catalog.csv --dry-run
+shopctl catalog import ./imports/catalog.csv
+
+# Provisionner des ressources isolées (jalon 6)
+shopctl provision --env staging --dry-run
+shopctl provision --env staging
+
+# Déployer, avec test de fumée (jalon 6)
+shopctl deploy --env staging
+shopctl deploy --env production --yes
 ```
 
 La locale, la devise, le marché et la juridiction n'ont pas d'option : chaque
@@ -198,23 +211,20 @@ de version de schéma
 ([ADR 0008](docs/architecture/decisions/0008-format-du-manifeste-client.md)),
 pas un drapeau.
 
+Rien de ce qui touche un compte n'a de valeur par défaut. `provision` et
+`deploy` exigent `--env`, `deploy --env production` exige `--yes`, et le compte
+Cloudflare attendu doit être nommé — par `cloudflare.accountId` dans le
+manifeste, par `--account`, ou par `CLOUDFLARE_ACCOUNT_ID` — deux sources qui
+divergent arrêtant l'exécution
+([ADR 0013](docs/architecture/decisions/0013-environnements-de-deploiement.md)).
+
 ### Contrat cible des jalons suivants
 
 Les commandes ci-dessous ne sont pas encore implémentées.
 
 ```bash
-# Provisionner des ressources isolées
-shopctl provision --env staging --dry-run
-shopctl provision --env staging
-
-# Importer et vérifier le catalogue
-shopctl catalog import ./imports/catalog.csv --dry-run
-shopctl catalog import ./imports/catalog.csv
-
-# Tester et déployer
+# Vérifier une boutique déployée
 shopctl verify --env staging
-shopctl deploy --env staging
-shopctl deploy --env production
 
 # Exploiter la boutique
 shopctl backup --env production
@@ -244,7 +254,8 @@ Chaque boutique possède au minimum deux environnements indépendants :
 | `staging` | Recette et validation | Stripe test | Fictives |
 | `production` | Boutique publique | Stripe live | Réelles |
 
-Convention prévue pour les ressources :
+Convention des ressources
+([ADR 0013](docs/architecture/decisions/0013-environnements-de-deploiement.md)) :
 
 ```text
 minshop-{client}-{env}            Worker
@@ -253,9 +264,17 @@ minshop-{client}-{env}-images     R2 public
 minshop-{client}-{env}-files      R2 privé
 ```
 
-Le compte Cloudflare actif devra être comparé au manifeste avant toute
-opération. La CLI devra refuser de déployer lorsque le compte ou l'environnement
-ne correspond pas à la boutique.
+L'environnement qualifie la **souche** du nom : une boutique reste une seule
+famille `minshop-{client}*`, et `destroy-cf.sh` la retire d'un coup. La famille
+non qualifiée — `minshop-{client}-db` — n'est pas un troisième environnement :
+c'est celle que rendent les builds témoins et le développement local, dont aucun
+ne joint un compte.
+
+Le compte Cloudflare actif est comparé au manifeste avant toute opération, et
+`shopctl` refuse de provisionner ou de déployer quand il ne correspond pas — ou
+quand rien ne le nomme. La production porte le domaine personnalisé et ferme
+`workers.dev` au même moment ; staging garde `workers.dev`, qui est le seul
+moyen de l'atteindre.
 
 ## Stratégie de mise à jour
 

@@ -57,16 +57,22 @@ node --input-type=module -e "
   console.log('    theme: ' + s.id + ' (from ' + s.source + ')');
 "
 
-echo "▸ [1/5] Creating D1 database '$DB_NAME'…"
-DB_OUT="$($W d1 create "$DB_NAME" --update-config=false)"
+# Jurisdiction, on every data resource, from creation: it cannot be changed
+# afterwards — a base created outside it can only be re-created and re-seeded
+# (ADR 0004). The R2 bindings rendered below repeat it, because a bucket in the
+# `eu` jurisdiction is invisible to a binding that does not name it.
+JURISDICTION="${MINSHOP_JURISDICTION:-eu}"
+
+echo "▸ [1/5] Creating D1 database '$DB_NAME' (jurisdiction $JURISDICTION)…"
+DB_OUT="$($W d1 create "$DB_NAME" --jurisdiction "$JURISDICTION" --update-config=false)"
 DB_ID="$(printf '%s' "$DB_OUT" | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 [ -n "$DB_ID" ] || { echo "✗ could not parse database_id from output:"; echo "$DB_OUT"; exit 1; }
 echo "    database_id=$DB_ID"
 
 echo "▸ [2/5] Creating R2 bucket '$BUCKET'…"
-$W r2 bucket create "$BUCKET" --update-config=false
+$W r2 bucket create "$BUCKET" --jurisdiction "$JURISDICTION" --update-config=false
 echo "    Creating private digital-file bucket '$FILES_BUCKET'…"
-$W r2 bucket create "$FILES_BUCKET" --update-config=false
+$W r2 bucket create "$FILES_BUCKET" --jurisdiction "$JURISDICTION" --update-config=false
 echo "    Keep this bucket private: do not enable r2.dev or attach a custom domain."
 
 # FREE-PLAN DEFAULT: D1 + R2 only. Semantic search (Workers AI + Vectorize) is
@@ -75,6 +81,10 @@ echo "    Keep this bucket private: do not enable r2.dev or attach a custom doma
 
 echo "▸ [3/5] Rendering instance config → wrangler.jsonc (backed up at startup)…"
 sed -e "s/__NAME__/$SLUG/g" \
+    -e "s/__JURISDICTION__/$JURISDICTION/g" \
+    -e "s/__WORKERS_DEV__/true/g" \
+    -e "s/__ROUTES__/[]/g" \
+    -e "s/__IMAGE_BASE_URL__//g" \
     -e "s/__DB_NAME__/$DB_NAME/g" \
     -e "s/__DB_ID__/$DB_ID/g" \
     -e "s/__BUCKET__/$BUCKET/g" \

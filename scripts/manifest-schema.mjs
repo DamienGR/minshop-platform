@@ -33,6 +33,10 @@ const EMAIL = '^[a-z0-9._%+-]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9
 /** Mirrors isValidThemeId() in themes.mjs; manifest-schema.test.mjs pins the
  *  two together, because the id here becomes the directory name there. */
 const THEME_ID = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
+/** A Cloudflare account id: 32 lowercase hex characters. Not a secret — it is
+ *  the first path segment of every dashboard URL — and short enough that the
+ *  40-character credential pattern below cannot mistake it for one. */
+const ACCOUNT_ID = '^[0-9a-f]{32}$';
 
 /**
  * Slugs a shop may not take.
@@ -151,6 +155,18 @@ export const MANIFEST_SPEC = {
       productionDomain: {
         schema: { type: 'string', pattern: DOMAIN, minLength: 4, maxLength: 253 },
         description: 'Custom production domain of the storefront.',
+      },
+      accountId: {
+        optional: true,
+        schema: { type: 'string', pattern: ACCOUNT_ID },
+        description:
+          'Cloudflare account this shop is provisioned in. Written once provisioning has confirmed it; `shopctl provision` refuses to run against any other account. Not a credential — it is in the URL of every dashboard page — and it is what makes "wrong account" a refusal rather than a discovery.',
+      },
+      imagesDomain: {
+        optional: true,
+        schema: { type: 'string', pattern: DOMAIN, minLength: 4, maxLength: 253 },
+        description:
+          'Public custom domain of the images bucket, when one is attached. Absent means product images are served through the Worker, which is the default and is never wrong — only slower.',
       },
     },
   },
@@ -373,7 +389,12 @@ function validateMapping(value, spec, prefix, errors) {
   for (const [key, field] of Object.entries(spec)) {
     const path = [...prefix, key].join('.');
     if (!(key in value)) {
-      errors.push({ path, message: `is required (${field.description}).` });
+      // `optional` is rare on purpose. Every field a shop must decide is
+      // required, because a missing one is a decision nobody made. It is spent
+      // on the values a shop LEARNS rather than chooses — an account id exists
+      // only once provisioning has run — where requiring it would force a
+      // placeholder that validates and means nothing.
+      if (!field.optional) errors.push({ path, message: `is required (${field.description}).` });
       continue;
     }
     if (field.kind === 'section') validateMapping(value[key], field.fields, [...prefix, key], errors);
@@ -483,7 +504,7 @@ export function manifestJsonSchema() {
     title: `Minshop client manifest, schema version ${SCHEMA_VERSION}`,
     type: 'object',
     additionalProperties: false,
-    required: Object.keys(MANIFEST_SPEC),
+    required: Object.keys(MANIFEST_SPEC).filter((key) => !MANIFEST_SPEC[key].optional),
     properties,
     'x-crossFieldRules': CROSS_FIELD_RULES.map(({ id, description }) => ({ id, description })),
   };
@@ -494,5 +515,10 @@ function sectionSchema(fields) {
   for (const [key, field] of Object.entries(fields)) {
     properties[key] = { description: field.description, ...field.schema };
   }
-  return { type: 'object', additionalProperties: false, required: Object.keys(fields), properties };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: Object.keys(fields).filter((key) => !fields[key].optional),
+    properties,
+  };
 }

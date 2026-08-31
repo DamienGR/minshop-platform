@@ -112,19 +112,28 @@ Il ne contient aucune donnée de commande et aucun secret client.
 
 Chaque boutique dispose de ses propres :
 
-- [ ] Worker Cloudflare ;
-- [ ] base D1 ;
-- [ ] bucket R2 d'images ;
-- [ ] bucket R2 de fichiers privés ;
-- [ ] secrets ;
+- [x] Worker Cloudflare ;
+- [x] base D1 ;
+- [x] bucket R2 d'images ;
+- [x] bucket R2 de fichiers privés ;
+- [x] secrets ;
 - [ ] sauvegardes ;
-- [ ] domaine ;
+- [x] domaine ;
 - [ ] comptes Stripe et Resend.
+
+Créés par ressource et par environnement au jalon 6, sous la souche
+`minshop-<slug>-<env>` ([ADR 0013](architecture/decisions/0013-environnements-de-deploiement.md)).
+Les sauvegardes sont un livrable du jalon 9 (§5.6) ; les comptes Stripe et
+Resend restent des opérations humaines, listées par `shopctl doctor`.
 
 Les boutiques européennes utilisent la juridiction Cloudflare `eu` pour D1 et
 R2.
 
-- [ ] Faire vérifier la juridiction après le provisioning par la CLI.
+- [x] Faire vérifier la juridiction après le provisioning par la CLI.
+  Pour R2 le contrôle est à deux faces — présent en juridiction `eu`, absent de
+  la juridiction par défaut — parce qu'une reprise ratée peut laisser deux
+  buckets de même nom dans deux juridictions. Pour D1, quand l'API ne publie pas
+  le champ en retour, le rapport dit « non vérifié » plutôt que « conforme ».
 
 ### 3.3 Propriété des fichiers
 
@@ -344,17 +353,25 @@ minshop-{slug}-{env}-files
 
 Il doit :
 
-- [ ] vérifier `wrangler whoami` ;
-- [ ] comparer l'account ID au manifeste ou à l'état attendu ;
-- [ ] vérifier l'activation préalable de R2 ;
-- [ ] créer D1 et R2 avec la juridiction `eu` ;
-- [ ] garder le bucket de fichiers privé ;
-- [ ] générer les secrets internes avec une source cryptographique ;
-- [ ] transmettre les secrets à Wrangler par entrée standard ;
-- [ ] ne jamais les écrire sur disque ou dans les logs ;
-- [ ] appliquer les migrations ;
-- [ ] produire un rapport des ressources créées ;
-- [ ] reprendre proprement après une interruption.
+- [x] vérifier `wrangler whoami` ;
+- [x] comparer l'account ID au manifeste ou à l'état attendu ;
+- [x] vérifier l'activation préalable de R2 ;
+- [x] créer D1 et R2 avec la juridiction `eu` ;
+- [x] garder le bucket de fichiers privé ;
+- [x] générer les secrets internes avec une source cryptographique ;
+- [x] transmettre les secrets à Wrangler par entrée standard ;
+- [x] ne jamais les écrire sur disque ou dans les logs ;
+- [x] appliquer les migrations ;
+- [x] produire un rapport des ressources créées ;
+- [x] reprendre proprement après une interruption.
+
+Livré au jalon 6. Le compte attendu n'est jamais deviné : il vient du manifeste
+(`cloudflare.accountId`), de `--account` ou de `CLOUDFLARE_ACCOUNT_ID`, deux
+sources qui divergent arrêtent l'exécution, et aucune source du tout l'arrête
+aussi — un jeton qui n'atteint qu'un compte aujourd'hui en atteindra deux au
+client suivant. La reprise ne repose sur aucun fichier d'état : chaque étape
+interroge le compte, si bien qu'un second passage ne crée rien et qu'un passage
+interrompu reprend sans option particulière.
 
 La création de comptes, l'invitation des utilisateurs et l'activation de Stripe
 restent des opérations humaines dans la première version.
@@ -399,17 +416,40 @@ shopctl deploy --env production
 
 Le déploiement production suit cet ordre :
 
-1. [ ] vérification complète ;
-2. [ ] sauvegarde ou bookmark ;
-3. [ ] migrations additives ;
-4. [ ] upload d'une nouvelle version ;
+1. [x] vérification complète ;
+2. [x] sauvegarde ou bookmark ;
+3. [x] migrations additives ;
+4. [x] upload d'une nouvelle version ;
 5. [ ] smoke test avant promotion lorsque possible ;
-6. [ ] promotion ;
-7. [ ] smoke test public ;
-8. [ ] rollback du code en cas d'échec.
+6. [x] promotion ;
+7. [x] smoke test public ;
+8. [x] rollback du code en cas d'échec.
 
-- [ ] Vérifier que les migrations restent compatibles avec la version applicative
+- [x] Vérifier que les migrations restent compatibles avec la version applicative
   précédente.
+
+`shopctl deploy --env production --yes` exécute cette séquence, et l'ordre y est
+une décision plutôt qu'une habitude. Le bookmark Time Travel est pris **avant**
+les migrations, seul moment où il décrit encore l'état d'où le déploiement est
+parti ; c'est un filet court terme et le rapport le dit, la sauvegarde de
+référence restant applicative (ADR 0005). Les migrations passent **avant**
+l'upload : il existe entre les deux une fenêtre où l'ancien code tourne sur le
+nouveau schéma, ce qui est exactement la fenêtre que la règle additive d'ADR 0006
+rend sûre.
+
+L'étape 5 — smoke test **avant** promotion — reste ouverte, et le plan la
+formule déjà ainsi (« lorsque possible ») : elle demande un déploiement en
+version non promue avec une URL de prévisualisation, donc les déploiements
+graduels de Cloudflare. Ce que le jalon 6 livre est le smoke test **public**,
+après promotion, qui fait échouer la commande et nomme la version vers laquelle
+revenir — commande complète, identifiant déjà résolu. Le rollback n'est pas
+automatique : il se déclencherait aussi sur un contrôle qui a échoué parce que
+le réseau n'atteignait pas le site, et défairait un déploiement sain.
+
+La compatibilité ascendante des migrations est tenue par
+`test/scripts/migrations-remote-safe.test.mjs` et par la politique d'ADR 0006 :
+une migration n'ajoute jamais que du facultatif, ce qui est précisément ce qui
+rend l'ordre ci-dessus sûr.
 
 ### 5.6 Sauvegarde et restauration
 
@@ -424,7 +464,9 @@ Une restauration vers la production nécessite une option dédiée et une
 confirmation saisie par l'opérateur.
 
 - [ ] Exiger cette option et cette confirmation, sans jamais faire de la
-  production le comportement par défaut.
+  production le comportement par défaut. La même posture s'applique déjà au
+  déploiement : `shopctl deploy --env production` refuse de s'exécuter sans
+  `--yes`, et la production n'est le défaut de rien.
 
 ### 5.7 Gestion du socle et de la flotte
 
@@ -1436,33 +1478,156 @@ Durée indicative : 4 à 5 jours.
 
 #### Livrables
 
-- [ ] `shopctl provision` ;
-- [ ] staging et production ;
-- [ ] D1 et R2 EU ;
-- [ ] secrets internes ;
-- [ ] GitHub Environments ;
-- [ ] approbation production ;
-- [ ] domaine personnalisé ;
-- [ ] domaine d'images ;
-- [ ] bucket privé non public ;
-- [ ] smoke tests post-déploiement.
+- [x] `shopctl provision` ;
+- [x] staging et production ;
+- [x] D1 et R2 EU ;
+- [x] secrets internes ;
+- [x] GitHub Environments ;
+- [x] approbation production ;
+- [x] domaine personnalisé ;
+- [x] domaine d'images ;
+- [x] bucket privé non public ;
+- [x] smoke tests post-déploiement.
 
 #### Tests
 
-- [ ] dry-run ;
+- [x] dry-run ;
 - [ ] provisioning dans un compte de test ;
-- [ ] seconde exécution sans changement ;
-- [ ] reprise après interruption ;
-- [ ] mauvais compte Cloudflare refusé ;
-- [ ] juridiction EU vérifiée via API ;
-- [ ] bucket privé inaccessible publiquement ;
-- [ ] déploiement CI ;
-- [ ] smoke test automatique.
+- [x] seconde exécution sans changement ;
+- [x] reprise après interruption ;
+- [x] mauvais compte Cloudflare refusé ;
+- [x] juridiction EU vérifiée via API ;
+- [x] bucket privé inaccessible publiquement ;
+- [x] déploiement CI ;
+- [x] smoke test automatique.
+
+Tout est porté par `test/scripts/provision.test.mjs` et
+`test/scripts/deploy.test.mjs`, contre une **doublure de wrangler** —
+`test/fixtures/wrangler-double.mjs` — qui répond comme le vrai à partir d'un
+compte tenu dans un fichier JSON. Le vrai binaire de la boutique est remplacé à
+l'endroit exact où il vivrait, `node_modules/.bin/wrangler`, si bien que le
+chemin exercé est le chemin réel : la construction des arguments, l'analyse des
+sorties, les codes de sortie. Seul le compte est imaginaire.
+
+`provisioning dans un compte de test` reste ouvert et le restera jusqu'à ce
+qu'un compte Cloudflare de test existe : c'est la seule ligne de cette liste que
+le dépôt ne peut pas trancher tout seul. Ce que la doublure prouve, elle le
+prouve pour de bon — la juridiction demandée à la création, le second passage
+qui ne crée rien, la reprise après interruption, le secret qui n'apparaît jamais
+dans un vecteur d'arguments. Ce qu'elle ne peut pas prouver est nommé plus bas.
 
 #### Critère de sortie
 
-- [ ] Une boutique créée par la CLI peut être déployée en staging avec une
+- [x] Une boutique créée par la CLI peut être déployée en staging avec une
   commande, hors autorisations humaines initiales.
+
+#### État
+
+**Un environnement qualifie la souche du nom, pas une ressource.**
+`minshop-<slug>-<env>` puis `-db`, `-images`, `-files`, `-session` (plan §5.3,
+[ADR 0013](architecture/decisions/0013-environnements-de-deploiement.md)). Une
+boutique reste **une seule famille de noms** : `destroy-cf.sh` continue de la
+retirer d'un coup, et une liste de compte garde les ressources d'une boutique
+voisines. La famille non qualifiée subsiste, et ce n'est pas un troisième
+environnement : c'est celle des builds témoins, de la porte navigateur et du
+développement local, dont aucun ne joint un compte.
+
+**`config:validate` revendique maintenant les noms des deux environnements**, et
+cela a attrapé une collision que la convention créait toute seule : une boutique
+nommée `ceramique-staging` dérive exactement la base de staging de la boutique
+nommée `ceramique`. Deux clients, un jeu de commandes, et rien à l'exécution
+pour les séparer (ADR 0001). Le suffixe n'est un espace de noms que si rien
+d'autre ne peut y atterrir.
+
+**Le bug qui n'aurait produit aucune erreur : la juridiction sur le binding.**
+Un bucket créé avec `--jurisdiction eu` vit dans un espace de noms qu'un binding
+sans juridiction ne voit pas. Le déploiement **réussit** ; le Worker démarre
+avec un bucket qui répond comme s'il était vide. Aucune exception, aucun log,
+des images manquantes. `wrangler.template.jsonc` répète donc la juridiction sur
+chaque binding R2, remplie depuis le manifeste comme le reste.
+
+**Le provisioning n'a pas de fichier d'état, et c'est ce qui le rend
+rejouable.** Chaque étape interroge le compte — `d1 list`, `r2 bucket list`,
+`secret list` — puis décide. Un fichier dirait ce qu'une exécution précédente a
+cru ; le compte dit ce qui existe. Il n'y a donc ni `--resume`, ni mode
+particulier : une exécution tuée entre la base et les buckets reprend en posant
+les mêmes questions et en trouvant une réponse de plus.
+
+**`SECRETS_KEK` n'est jamais renouvelé par une seconde exécution.** Il chiffre
+les clés de paiement que le commerçant a collées dans Admin → Réglages : en
+générer un nouveau les rendrait toutes indéchiffrables, et la boutique cesserait
+d'encaisser sans qu'aucun message ne le dise. Un secret déjà présent est donc
+**conservé**, jamais réécrit.
+
+**Les secrets ne peuvent pas être posés avant le premier déploiement**, parce
+que `wrangler secret put` n'a pas de Worker auquel les attacher. Le provisioning
+les annonce en attente plutôt que d'échouer, `shopctl deploy` les pose, et un
+`shopctl provision` ultérieur les constate. C'est la seule couture du jalon, et
+elle est décrite dans les deux rapports plutôt que devinée.
+
+**La juridiction est relue, jamais supposée.** Pour R2 le contrôle est à deux
+faces : présent en juridiction `eu` ET absent de la juridiction par défaut — la
+seconde moitié attrape la forme qu'une reprise ratée produit, deux buckets de
+même nom dans deux juridictions, dont le binding en choisira un que personne ne
+saura nommer. Pour D1, l'API ne publie pas toujours le champ en retour ; le
+rapport dit alors **« non vérifié »** au lieu de dire « conforme ». Un contrôle
+qui répond « ok » sur une absence est pire que pas de contrôle.
+
+**Le test de fumée peut faire échouer le déploiement**, et il traite une requête
+qui n'aboutit pas comme un échec, jamais comme un succès. Ce qu'il affirme est
+petit et choisi : que la vitrine se déclare `lang="fr"` (une page d'accueil
+vide, ou celle d'une autre boutique, répond 200 exactement pareil), que
+`/products` rend — donc que la liaison D1 répond —, et que `/admin` ne répond
+pas 200 sans authentification. L'assistant de première installation, lui, est
+un **avertissement** et non un échec : il est censé être joignable sur une
+boutique qui n'a pas encore de mot de passe, et une porte qui échoue à chaque
+premier déploiement porterait un `--skip` en une semaine.
+
+**Le domaine personnalisé et `workers.dev` sont une seule décision.** La
+production rend sa route en domaine personnalisé et ferme `workers_dev` au même
+moment ; staging garde `workers.dev`, qui est le seul moyen de l'atteindre.
+Deux portes vers la même boutique, c'est une origine que le commerçant n'a
+jamais annoncée, indexée par les moteurs et hors de tout Cloudflare Access posé
+sur le vrai nom d'hôte.
+
+**Deux champs facultatifs sont apparus au manifeste** — `cloudflare.accountId`
+et `cloudflare.imagesDomain` — et le mécanisme qui les rend facultatifs est
+nouveau : jusqu'ici, tout champ était requis. La distinction tient : un champ
+qu'une boutique **décide** reste requis, parce qu'un champ manquant est une
+décision que personne n'a prise ; ces deux-là, la boutique les **apprend** —
+l'un n'existe qu'une fois le provisioning passé, l'autre seulement si un domaine
+a été attaché. Les exiger imposerait un cabochon qui valide et ne veut rien
+dire. `test/scripts/manifest.test.mjs` épingle la liste par son nom : un
+troisième champ facultatif sera un acte délibéré.
+
+**Ce qui n'est PAS gaté, et pourquoi.** Trois choses, nommées plutôt qu'omises :
+
+- **le provisioning contre un vrai compte.** La doublure répond aux formes que
+  wrangler produit ; elle ne prouve pas que Cloudflare accepte la requête. La
+  première exécution réelle reste devant nous, et c'est la ligne non cochée
+  ci-dessus ;
+- **la délégation du domaine.** `shopctl doctor` la nomme depuis le jalon 2 dans
+  la liste humaine. Un déploiement de production sur un domaine non délégué
+  échoue bruyamment — `workers_dev` étant fermé — ce qui est le bon échec, mais
+  ce n'est pas une vérification ;
+- **les GitHub Environments eux-mêmes.** Le workflow s'y attache et lit leurs
+  secrets ; que `production` porte bien des relecteurs obligatoires est un
+  réglage du dépôt, pas un fichier. `test/scripts/deploy.test.mjs` épingle ce
+  que le fichier peut porter — l'attachement à l'environnement, le passage par
+  les commandes de la CLI plutôt que par des appels wrangler propres au
+  pipeline, `pipefail` sur les étapes qui passent le rapport dans `tee`, et
+  qu'aucune entrée de dispatch n'est interpolée dans une source shell.
+
+**Deux corrections d'outillage sont sorties de l'exercice.** `npx --no-install
+wrangler` coûte environ une demi-seconde de résolution avant que wrangler
+démarre ; un provisioning en fait une quinzaine, un import de catalogue une par
+image. Toutes les invocations passent maintenant par un seul point qui appelle
+directement `node_modules/.bin/wrangler` quand il est là — la suite de
+provisioning est passée de 122 à 20 secondes, et c'est la même seconde que
+l'exploitant ne paie plus. Et `main()` est devenue asynchrone : une seule
+commande en a besoin — `deploy` finit par une requête réseau — et l'alternative
+essayée d'abord était pire, un sous-processus pour drainer une promesse afin que
+les cinq autres gardent une signature qu'aucune n'utilisait.
 
 ### Jalon 7 — Paiement et traitement de commande
 
@@ -1623,7 +1788,10 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
 - [x] porte navigateur par thème — axe, clavier, zoom, sans JavaScript,
   signature du design (job « Browser », `npm run test:browser`).
-- [ ] tests de la CLI — au jalon 2, avec `shopctl`.
+- [x] tests de la CLI — livrés aux jalons 2, 4 et 6 : `test/scripts/shopctl.test.mjs`
+  (création), `catalog.test.mjs` (import), `provision.test.mjs` et
+  `deploy.test.mjs` (compte, environnement, déploiement). Ils tournent dans
+  `vitest run`, donc dans `npm run verify`, donc dans le job principal ;
 - [ ] contrôle de formatage — voir ci-dessous.
 
 Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
@@ -1662,13 +1830,26 @@ réellement : la décision d'adopter un formateur, ou celle de s'en passer.
 
 ### 7.4 Avant la production
 
-- [ ] suite complète verte ;
+- [x] suite complète verte ;
 - [ ] sauvegarde verte ;
-- [ ] migrations validées ;
-- [ ] smoke test staging vert ;
-- [ ] approbation GitHub Environment ;
-- [ ] smoke test production vert ;
-- [ ] rapport de déploiement conservé.
+- [x] migrations validées ;
+- [x] smoke test staging vert ;
+- [x] approbation GitHub Environment ;
+- [x] smoke test production vert ;
+- [x] rapport de déploiement conservé.
+
+Le workflow `Deploy` (jalon 6) porte cette séquence : le job de vérification
+passe **avant** l'approbation — un relecteur à qui l'on demande d'approuver une
+mise en production doit approuver quelque chose dont on sait déjà que ça
+construit et que ça passe sa suite —, le job de déploiement s'attache au GitHub
+Environment qui porte les relecteurs obligatoires, `shopctl deploy` exécute le
+smoke test public et le fait échouer s'il ne passe pas, et les deux rapports
+JSON — ressources, verdicts de juridiction, bookmark, résultats du smoke test —
+sont conservés quatre-vingt-dix jours en artefacts.
+
+`sauvegarde verte` reste ouvert : la sauvegarde applicative est un livrable du
+jalon 9 (plan §5.6, ADR 0005). Le bookmark Time Travel pris avant les migrations
+est un filet court terme, pas la sauvegarde, et le rapport le dit avec ces mots.
 
 ## 8. Campagne finale de tests
 

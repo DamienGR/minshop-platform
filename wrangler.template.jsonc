@@ -1,7 +1,9 @@
 {
-  // Template for a provisioned instance. scripts/provision-cf.sh fills the __…__
-  // placeholders, renders this to ./wrangler.jsonc, deploys, then restores the
-  // original. Keep shared runtime settings in sync with wrangler.jsonc; bindings
+  // Template for a provisioned instance. `shopctl provision --env <env>` fills
+  // the __…__ placeholders from the client manifest and renders this to
+  // ./wrangler.jsonc; scripts/prepare-client.mjs does the same for a build that
+  // never reaches an account, and scripts/provision-cf.sh for the single-instance
+  // path. Keep shared runtime settings in sync with wrangler.jsonc; bindings
   // intentionally differ because this template defaults to free-plan resources.
   //
   // FREE-PLAN DEFAULT: only D1 + R2 — both included on the Cloudflare free plan.
@@ -27,6 +29,15 @@
   // releases expired inventory holds without waiting for the next shopper.
   "triggers": { "crons": ["*/5 * * * *"] },
   "observability": { "enabled": true, "traces": { "enabled": true, "head_sampling_rate": 1 } },
+  // The custom production domain, from cloudflare.productionDomain in the client
+  // manifest. `shopctl provision --env production` renders it as a route and
+  // turns workers.dev OFF at the same time: two doors into the same shop means
+  // an origin the merchant never advertised, indexed by search engines, outside
+  // whatever Access sits on the real one. Staging and every account-free render
+  // get an empty route list and keep workers.dev, which is how they are reached
+  // at all.
+  "workers_dev": __WORKERS_DEV__,
+  "routes": __ROUTES__,
   // Fresh instances begin on workers.dev and therefore stay uncached. A later
   // custom-domain config may enable this only alongside CANONICAL_ORIGIN and
   // workers_dev: false. cross_version_cache additionally requires a shared
@@ -57,20 +68,28 @@
       "migrations_dir": "migrations"
     }
   ],
+  // The jurisdiction is repeated on every binding, and it is not decoration: a
+  // bucket created with `--jurisdiction eu` (ADR 0004) lives in a namespace a
+  // plain binding cannot see. Omit it and the deploy SUCCEEDS — the Worker
+  // simply boots with a bucket that answers as if it were empty, which is the
+  // worst shape this mistake could take.
   "r2_buckets": [
-    { "binding": "BUCKET", "bucket_name": "__BUCKET__" },
+    { "binding": "BUCKET", "bucket_name": "__BUCKET__", "jurisdiction": "__JURISDICTION__" },
     // Private deliverables: never enable r2.dev or attach a custom domain.
-    { "binding": "FILES", "bucket_name": "__FILES_BUCKET__" }
+    { "binding": "FILES", "bucket_name": "__FILES_BUCKET__", "jurisdiction": "__JURISDICTION__" }
   ],
   "vars": {
     // Placeholders until the first-run wizard writes the real values to D1.
     // French, like the rest of the core: these are what a fresh clone shows.
     "STORE_NAME": "Ma boutique",
-    "TIME_ZONE": "Europe/Paris"
+    "TIME_ZONE": "Europe/Paris",
     // Serve product images from an R2 custom domain (bypasses the Worker /images
-    // route and unlocks on-demand delivery in Admin); connect a public custom
-    // domain to the bucket first. See README.
-    // "IMAGE_BASE_URL": "https://images.example.com"
+    // route and unlocks on-demand delivery in Admin), from cloudflare.imagesDomain
+    // in the client manifest. Empty is the ordinary case and never wrong: images
+    // go through the Worker, which is slower and always correct. Attach the
+    // domain to the images bucket first — `shopctl provision` reports which
+    // domains it finds.
+    "IMAGE_BASE_URL": "__IMAGE_BASE_URL__"
     //
     // This store's MCP endpoint, if you deployed the optional mcp/ Worker.
     // llms.txt advertises it to agents only when set — leave it unset and
