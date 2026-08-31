@@ -240,14 +240,21 @@ describe('credentials', () => {
 // `shopctl new`, against the real core tree.
 
 describe('shopctl new', () => {
-  // Checked with the other options, before anything is cloned: a flag
-  // combination that cannot work must cost a message, not a clone, a git
-  // history and a directory to clean up.
-  it('refuses --create-repo without --origin before touching the disk', () => {
+  // `gh` is asked before the clone, not at the forge step: a missing or
+  // unauthenticated `gh` must cost a message, not five hundred cloned files and
+  // a directory to clean up.
+  it('refuses --create-repo without gh before touching the disk', () => {
     const work = workspace();
-    const result = shopctl(['new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--create-repo'], work);
-    expect(result.status).toBe(EXIT_CODES.input);
-    expect(result.stderr).toMatch(/--create-repo sans --origin/);
+    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    symlinkSync(process.execPath, join(withoutGh, 'node'));
+
+    const result = spawnSync('node', [BIN, 'new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--create-repo'], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...GIT_ENV, PATH: withoutGh, HOME: process.env.HOME },
+    });
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/gh \(GitHub CLI\) est requis/);
     expect(treeFiles(work)).toEqual([]);
   });
 

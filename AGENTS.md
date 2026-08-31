@@ -167,6 +167,7 @@ npm run shopctl -- config validate   # the manifest gate, through the CLI
 npm run shopctl -- catalog validate ./imports/catalog.csv
 npm run shopctl -- catalog import ./imports/catalog.csv --dry-run
 npm run shopctl -- repo                 # dépôt GitHub, environnements, secrets
+npm run shopctl -- new <slug> --account <id> --create-repo   # les trois d'un coup
 npm run shopctl -- provision --env staging --dry-run
 npm run shopctl -- provision --env staging
 npm run shopctl -- deploy --env staging
@@ -209,9 +210,10 @@ already in D1, and a new one would break payments with no error anyone can read.
 `repo` wraps `gh`, and that is forced rather than preferred (ADR 0014): a GitHub
 environment secret is a libsodium sealed box (X25519 + Blake2b +
 XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
-CLI cannot encrypt one at all. It creates the repository, pushes, creates both
-environments and sets their Cloudflare secrets — idempotently, asking GitHub
-first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
+CLI cannot encrypt one at all. It creates the repository — derived as `<owner>/shop-<slug>` when neither
+`--origin` nor the tree's remote names one, and announced before it is created
+— pushes, creates both environments and sets their Cloudflare secrets;
+idempotently, asking GitHub first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
 rule, because GitHub never returns a secret's value: "already there" cannot be
 read as "already correct".
 

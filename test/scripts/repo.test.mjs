@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
-import { parseGithubRemote } from '../../shopctl/src/forge.mjs';
+import { parseGithubRemote, repositoryNameFor, repositoryUrl } from '../../shopctl/src/forge.mjs';
 import { setupRepository, tokenFor } from '../../shopctl/src/commands/repo.mjs';
 import { Reporter } from '../../shopctl/src/report.mjs';
 import { shop } from '../helpers/provisioned-shop.mjs';
@@ -51,6 +52,25 @@ describe('a GitHub remote', () => {
   it('refuses a remote that is not GitHub', () => {
     expect(() => parseGithubRemote('git@gitlab.com:agence/shop-x.git')).toThrow(/pas une URL de dépôt GitHub/);
     expect(() => parseGithubRemote('')).toThrow(/pas une URL/);
+  });
+});
+
+describe('the repository a slug implies', () => {
+  // `shop-<slug>` next to `minshop-<slug>` on Cloudflare: one shop, two
+  // services, one name to grep for.
+  it('is shop-<slug>, in the scheme gh is configured for', () => {
+    expect(repositoryNameFor('maestro-demo')).toBe('shop-maestro-demo');
+    expect(repositoryUrl('agence', 'shop-x', 'ssh')).toBe('git@github.com:agence/shop-x.git');
+    expect(repositoryUrl('agence', 'shop-x', 'https')).toBe('https://github.com/agence/shop-x.git');
+    // HTTPS is the fallback because it is gh's own default and works with the
+    // credential helper `gh auth login` installs.
+    expect(repositoryUrl('agence', 'shop-x')).toMatch(/^https:/);
+  });
+
+  it('round-trips through the parser', () => {
+    for (const protocol of ['ssh', 'https']) {
+      expect(parseGithubRemote(repositoryUrl('agence', 'shop-x', protocol)).nameWithOwner).toBe('agence/shop-x');
+    }
   });
 });
 
@@ -156,6 +176,54 @@ describe('shopctl repo', () => {
       const result = target.run(['repo'], TOKENS);
       expect(result.status).toBe(EXIT_CODES.precondition);
       expect(result.stderr).toMatch(/aucun identifiant de compte Cloudflare/);
+    });
+  });
+
+  describe('when nothing names a repository', () => {
+    // The convention is only reached when neither --origin nor an existing
+    // remote says anything, and it is announced: a repository created somewhere
+    // the operator did not name is exactly what is found a week later.
+    it('derives <owner>/shop-<slug> from the authenticated account', () => {
+      const target = forgeShop();
+      // A tree with no remote at all, which is what `shopctl new` without
+      // --origin leaves behind.
+      spawnSync('git', ['remote', 'remove', 'origin'], { cwd: target.root });
+      target.github({ login: 'studiomaestro' });
+
+      const { report, status } = target.json(['repo', '--no-push'], TOKENS);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.repository).toMatchObject({ nameWithOwner: `studiomaestro/shop-${target.slug}`, derived: true });
+      expect(Object.keys(target.github().repos)).toEqual([`studiomaestro/shop-${target.slug}`]);
+    });
+
+    it('takes --owner over the authenticated account', () => {
+      const target = forgeShop();
+      spawnSync('git', ['remote', 'remove', 'origin'], { cwd: target.root });
+      target.github({ login: 'une-personne' });
+
+      const { report } = target.json(['repo', '--owner', 'studiomaestro', '--no-push'], TOKENS);
+      expect(report.repository.nameWithOwner).toBe(`studiomaestro/shop-${target.slug}`);
+    });
+
+    // Written into the tree, or `git push -u origin` has nowhere to go and
+    // every later `git pull` in that clone fails for an unrelated-looking
+    // reason.
+    it('configures the derived URL as the tree’s origin', () => {
+      const target = forgeShop();
+      spawnSync('git', ['remote', 'remove', 'origin'], { cwd: target.root });
+      target.github({ login: 'studiomaestro', config: { git_protocol: 'ssh' } });
+
+      target.run(['repo', '--no-push'], TOKENS);
+      const configured = spawnSync('git', ['config', '--get', 'remote.origin.url'], { cwd: target.root, encoding: 'utf8' });
+      expect(configured.stdout.trim()).toBe(`git@github.com:studiomaestro/shop-${target.slug}.git`);
+    });
+
+    // An existing remote always wins: the shop already says where it lives.
+    it('never overrides a remote the tree already has', () => {
+      const target = forgeShop();
+      target.github({ login: 'quelquun-dautre' });
+      const { report } = target.json(['repo', '--no-push'], TOKENS);
+      expect(report.repository).toMatchObject({ nameWithOwner: target.nameWithOwner, derived: false });
     });
   });
 

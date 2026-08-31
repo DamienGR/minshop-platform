@@ -342,14 +342,15 @@ deux sorties : la divergence est impossible, pas seulement improbable.
 ```bash
 shopctl repo
 shopctl repo --reviewer <login>
-shopctl new <slug> --origin <url> --account <id> --create-repo
+shopctl new <slug> --account <id> --create-repo --reviewer <login>
 ```
 
 Ajouté au jalon 6, hors du plan initial, parce que la question « combien de
 gestes manuels pour une nouvelle boutique » a une réponse mesurable et qu'elle
 était de neuf. `shopctl repo` crée ou confirme :
 
-- [x] le dépôt GitHub, **privé** par défaut ;
+- [x] le dépôt GitHub, **privé** par défaut, déduit en `<owner>/shop-<slug>`
+  quand ni `--origin` ni le remote de l'arbre ne le nomment ;
 - [x] la branche sur le remote ;
 - [x] les environnements `staging` et `production` ;
 - [x] leurs secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` ;

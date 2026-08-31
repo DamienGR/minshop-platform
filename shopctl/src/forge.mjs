@@ -95,6 +95,50 @@ export function originUrl(cwd) {
   return url || null;
 }
 
+/**
+ * The account a repository is created under when nothing names one.
+ *
+ * The authenticated user, from `gh` itself. An agency working under an
+ * organisation passes `--owner`; the default is right for the common case and
+ * is REPORTED before anything is created, because "which account did that land
+ * in" is not a question anyone should have to answer by looking.
+ */
+export function defaultOwner({ cwd } = {}) {
+  const result = gh(['api', 'user', '--jq', '.login'], { cwd, allowFailure: true });
+  const login = result.status === 0 ? result.stdout.trim() : '';
+  if (!login) {
+    throw preconditionError(
+      'gh ne dit pas sous quel compte il est authentifié.',
+      'Passez --owner <compte-ou-organisation>, ou vérifiez `gh auth status`.',
+    );
+  }
+  return login;
+}
+
+/**
+ * Which URL scheme to write into the remote.
+ *
+ * `gh`'s own configured protocol, not a preference of this CLI: an operator
+ * authenticated over HTTPS and handed an `git@github.com:` remote discovers it
+ * at the first push, which is after the repository has been created. HTTPS is
+ * the fallback because it is `gh`'s own default and works with the credential
+ * helper `gh auth login` installs.
+ */
+export function gitProtocol({ cwd } = {}) {
+  const result = gh(['config', 'get', 'git_protocol'], { cwd, allowFailure: true });
+  return (result.status === 0 ? result.stdout.trim() : '') === 'ssh' ? 'ssh' : 'https';
+}
+
+/** The remote URL for one repository, in the scheme `gh` is configured for. */
+export function repositoryUrl(owner, repo, protocol = 'https') {
+  return protocol === 'ssh' ? `git@github.com:${owner}/${repo}.git` : `https://github.com/${owner}/${repo}.git`;
+}
+
+/** The repository name a slug implies. Derived, never asked for: `shop-<slug>`
+ *  next to `minshop-<slug>` on Cloudflare is one shop, two services, one name
+ *  to grep for. */
+export const repositoryNameFor = (slug) => `shop-${slug}`;
+
 /** What GitHub knows about this repository, or null when it does not exist. */
 export function repository(nameWithOwner, { cwd } = {}) {
   const result = gh(['repo', 'view', nameWithOwner, '--json', 'nameWithOwner,visibility,defaultBranchRef,isEmpty'], {

@@ -74,8 +74,17 @@ de version de schéma ([ADR 0008](../docs/architecture/decisions/0008-format-du-
 
 ```sh
 npm run shopctl -- repo --reviewer <login>
-npm run shopctl -- new <slug> --origin <url> --account <id> --create-repo
+npm run shopctl -- new <slug> --account <id> --create-repo --reviewer <login>
 ```
+
+Le dépôt est **déduit** quand rien ne le nomme : `<owner>/shop-<slug>`, sous le
+compte authentifié dans `gh` ou celui que `--owner` désigne, dans le schéma
+d'URL que `gh` est configuré pour. Trois sources, par ordre de netteté :
+`--origin`, le remote « origin » que l'arbre porte déjà, puis la convention —
+qui est **annoncée** avant toute création, parce qu'un dépôt créé quelque part
+que l'opérateur n'a pas nommé est exactement ce qu'on retrouve une semaine plus
+tard. `shop-<slug>` répond à `minshop-<slug>` côté Cloudflare : une boutique,
+deux services, un seul nom à chercher.
 
 Crée ou confirme, de façon rejouable : le dépôt GitHub (**privé** par défaut),
 la branche sur le remote, les environnements `staging` et `production`, et leurs

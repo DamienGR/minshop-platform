@@ -18,6 +18,8 @@
  * State lives at $GH_DOUBLE_STATE:
  *
  *   authenticated   boolean                 false makes `gh auth status` exit 1
+ *   login           string                  what `gh api user --jq .login` says
+ *   config          { git_protocol }        what `gh config get` answers
  *   repos           { "owner/name": { visibility, environments, secrets } }
  *   users           { login: id }
  *   refuseReviewers boolean                 the free-plan private-repo refusal
@@ -72,6 +74,10 @@ const fail = (text, code = 1) => {
 
 if (argv.includes('--version')) done('gh version 2.62.0 (double)');
 
+if (argv[0] === 'config' && argv[1] === 'get') {
+  done(String((state.config ?? {})[argv[2]] ?? ''));
+}
+
 if (argv[0] === 'auth' && argv[1] === 'status') {
   if (state.authenticated === false) fail('You are not logged into any GitHub hosts. To log in, run: gh auth login');
   done('github.com\n  ✓ Logged in to github.com account ops (keyring)');
@@ -104,6 +110,8 @@ if (argv[0] === 'repo' && argv[1] === 'create') {
 if (argv[0] === 'api') {
   const method = flag('--method') ?? 'GET';
   const path = argv.find((argument, index) => !argument.startsWith('-') && index > 0 && argv[index - 1] !== '--method');
+
+  if (path === 'user') done(state.login ?? 'ops');
 
   const users = path?.match(/^users\/(.+)$/);
   if (users) {

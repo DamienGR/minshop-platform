@@ -27,6 +27,7 @@ import { relative, resolve } from 'node:path';
 import { RESERVED_SLUGS, validateManifest } from '../../../scripts/manifest-schema.mjs';
 import { CLIENT_MANIFEST, resourceNames } from '../../../scripts/manifest.mjs';
 import { setupRepository } from './repo.mjs';
+import { assertForgeReady, defaultOwner, gitProtocol, repositoryNameFor, repositoryUrl } from '../forge.mjs';
 import { RESERVED_THEME_IDS, THEMES_DIR, isValidThemeId, normalizeThemeId } from '../../../scripts/themes.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { EXIT_CODES, ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
@@ -57,13 +58,15 @@ export const NEW_OPTIONS = {
   '--dir': 'value',
   '--account': 'value',
   '--reviewer': 'value',
+  '--owner': 'value',
 };
 
 export const newUsage = `Usage: shopctl new <slug> [options]
 
   --core <tag>        Tag du socle à cloner (défaut : v<version du socle courant>)
   --from <url|chemin> Dépôt du socle (défaut : le remote "origin" de ce dépôt)
-  --origin <url>      Remote "origin" du futur dépôt de la boutique
+  --origin <url>      Remote "origin" du futur dépôt (défaut avec --create-repo :
+                      <owner>/shop-<slug>)
   --name <nom>        Nom affiché (défaut : dérivé du slug)
   --domain <domaine>  Domaine de production (défaut : <slug>.${PLACEHOLDER_DOMAIN_SUFFIX})
   --email <adresse>   Expéditeur des e-mails (défaut : commandes@<domaine>)
@@ -73,7 +76,8 @@ export const newUsage = `Usage: shopctl new <slug> [options]
   --dir <chemin>      Répertoire cible (défaut : shop-<slug>)
   --account <id>      Compte Cloudflare de la boutique, écrit dans le manifeste
   --create-repo       Créer le dépôt GitHub, ses environnements et leurs secrets
-                      (demande --origin ; enveloppe la CLI gh)
+                      (enveloppe la CLI gh)
+  --owner <compte>    Compte ou organisation GitHub du dépôt déduit
   --reviewer <login>  Relecteur obligatoire en production, avec --create-repo
   --no-install        Ne pas installer les dépendances
   --no-verify         Ne pas exécuter la vérification minimale
@@ -196,6 +200,18 @@ function defaultCoreRepository() {
 
 /** Does this ref exist as a TAG in that repository? Asked over the wire before
  *  anything is created, so a typo costs a message and not a half-clone. */
+/**
+ * The repository a slug implies, when `--origin` says nothing.
+ *
+ * `gh` is asked HERE — before the clone — rather than at the forge step: a
+ * missing or unauthenticated `gh` must cost a message, not five hundred cloned
+ * files and a directory to clean up.
+ */
+function deriveOriginUrl(slug, owner) {
+  assertForgeReady();
+  return repositoryUrl(owner ?? defaultOwner(), repositoryNameFor(slug), gitProtocol());
+}
+
 function assertTagExists(repository, tag) {
   const listed = capture('git', ['ls-remote', '--tags', '--refs', repository], { allowFailure: true });
   if (listed.status !== 0) {
@@ -248,22 +264,21 @@ export function runNew(args, reporter) {
   const referenceTheme = String(args.values['--from-theme'] ?? 'default');
   const branch = String(args.values['--branch'] ?? 'main');
   const repository = String(args.values['--from'] ?? defaultCoreRepository());
-  const originUrl = args.values['--origin'] ? String(args.values['--origin']) : null;
+  // Resolved BEFORE the clone, so the remote is configured once, at the point
+  // the clone already does it. Deriving it later would leave a shop whose
+  // `origin` was added by a different step than every other shop's.
+  const createRepo = args.values['--create-repo'] === true;
+  const originUrl = args.values['--origin']
+    ? String(args.values['--origin'])
+    : createRepo
+      ? deriveOriginUrl(slug, args.values['--owner'] ? String(args.values['--owner']) : null)
+      : null;
   const install = args.values['--no-install'] !== true;
   const verify = args.values['--no-verify'] !== true;
 
   const tag = String(args.values['--core'] ?? `v${corePackage().version}`);
   const coreVersion = versionFromTag(tag);
 
-  // Checked here, with the other options, rather than at the forge step: a
-  // flag combination that cannot work must cost a message, not a clone, a git
-  // history and a directory to clean up.
-  if (args.values['--create-repo'] === true && !originUrl) {
-    throw inputError(
-      '--create-repo sans --origin : shopctl ne sait pas quel dépôt créer.',
-      'Ajoutez --origin git@github.com:proprietaire/shop-<slug>.git.',
-    );
-  }
 
   if (theme === referenceTheme) {
     throw inputError(
@@ -434,7 +449,7 @@ export function runNew(args, reporter) {
   // the tree is built, verified and committed, and only when asked.
   let forge = null;
   let forgeError = null;
-  if (args.values['--create-repo'] === true) {
+  if (createRepo) {
     try {
       forge = setupRepository({
         shop: { root: target, manifest, file: CLIENT_MANIFEST },

@@ -37,22 +37,29 @@ import {
   assertForgeReady,
   branchOnRemote,
   createRepository,
+  defaultOwner,
   environmentSecrets,
   environments,
+  gitProtocol,
   originUrl,
   parseGithubRemote,
   pushBranch,
   putEnvironment,
   repository,
+  repositoryNameFor,
+  repositoryUrl,
   setEnvironmentSecret,
   userId,
 } from '../forge.mjs';
 
-export const REPO_OPTIONS = { '--shop': 'slug', '--origin': 'url', '--branch': 'nom', '--reviewer': 'login' };
+export const REPO_OPTIONS = { '--shop': 'slug', '--origin': 'url', '--owner': 'compte', '--branch': 'nom', '--reviewer': 'login' };
 
 export const repoUsage = `Usage: shopctl repo [options]
 
-  --origin <url>      Dépôt GitHub de la boutique, si le remote "origin" est absent.
+  --origin <url>      Dépôt GitHub de la boutique. Par défaut, dérivé :
+                      <owner>/shop-<slug>.
+  --owner <compte>    Compte ou organisation GitHub (défaut : le compte
+                      authentifié dans gh).
   --branch <nom>      Branche à pousser (défaut : la branche courante).
   --reviewer <login>  Relecteur obligatoire en production. Répétable via une liste
                       séparée par des virgules.
@@ -112,6 +119,7 @@ export function runRepo(args, reporter) {
     dryRun,
     json,
     origin: args.values['--origin'] ?? null,
+    owner: args.values['--owner'] ?? null,
     branch: args.values['--branch'] ?? null,
     reviewers: String(args.values['--reviewer'] ?? '')
       .split(',')
@@ -143,6 +151,7 @@ export function setupRepository({
   dryRun = false,
   json = false,
   origin = null,
+  owner = null,
   branch = null,
   reviewers = [],
   visibility = 'private',
@@ -155,14 +164,20 @@ export function setupRepository({
   reporter.section('GitHub');
   assertForgeReady({ cwd: root });
 
-  const url = origin ?? originUrl(root);
+  // Three sources, in decreasing order of how explicit they are: the flag, the
+  // remote the tree already has, and the convention. The convention is only
+  // reached when nothing else says anything — and it is announced, because a
+  // repository created somewhere the operator did not name is exactly the kind
+  // of thing found a week later.
+  let url = origin ?? originUrl(root);
+  let derived = false;
   if (!url) {
-    throw preconditionError(
-      'la boutique n\'a pas de remote « origin » et --origin n\'a pas été fourni.',
-      'shopctl repo --origin git@github.com:proprietaire/shop-<slug>.git — ou `git remote add origin <url>` d\'abord.',
-    );
+    const account = owner ?? defaultOwner({ cwd: root });
+    url = repositoryUrl(account, repositoryNameFor(manifest.client.slug), gitProtocol({ cwd: root }));
+    derived = true;
   }
   const target = parseGithubRemote(url);
+  if (derived) reporter.step(`Dépôt déduit : ${target.nameWithOwner} (ni --origin ni remote « origin »)`);
   const head = branch ?? currentBranch(root);
 
   // ── 1. the repository ─────────────────────────────────────────────────────
@@ -192,6 +207,15 @@ export function setupRepository({
   }
 
   // ── 2. the branch ─────────────────────────────────────────────────────────
+  //
+  // A derived URL is written into the tree before the push: `git push -u origin`
+  // needs a remote named `origin`, and leaving the shop without one would make
+  // every later `git pull` in that clone fail for a reason nobody would connect
+  // to this command.
+  if (derived && !dryRun && !originUrl(root)) {
+    capture('git', ['remote', 'add', 'origin', url], { cwd: root });
+    reporter.ok(`remote « origin » configuré sur ${url}`);
+  }
   let pushed = false;
   if (!push) {
     reporter.warn(`branche ${head} non poussée (--no-push).`);
@@ -302,7 +326,7 @@ export function setupRepository({
     ok: true,
     dryRun,
     shop: manifest.client.slug,
-    repository: { ...target, created, visibility },
+    repository: { ...target, url, created, derived, visibility },
     branch: { name: head, pushed },
     environments: environmentReport,
     secrets: secretReport,

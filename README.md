@@ -214,9 +214,10 @@ de version de schéma
 ([ADR 0008](docs/architecture/decisions/0008-format-du-manifeste-client.md)),
 pas un drapeau.
 
-Une boutique complète tient en trois commandes : `shopctl new … --account <id>
---origin <url> --create-repo`, puis `shopctl provision --env staging`, puis
-`shopctl deploy --env staging`. La première enveloppe `gh` pour créer le dépôt
+Une boutique complète tient en trois commandes : `shopctl new <slug> --account
+<id> --create-repo`, puis `shopctl provision --env staging`, puis
+`shopctl deploy --env staging`. Le dépôt est déduit — `<owner>/shop-<slug>` —
+quand `--origin` ne le nomme pas. La première enveloppe `gh` pour créer le dépôt
 — **privé** par défaut —, ses environnements et leurs secrets
 ([ADR 0014](docs/architecture/decisions/0014-automatisation-de-la-forge.md)).
 
