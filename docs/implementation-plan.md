@@ -1760,37 +1760,138 @@ Durée indicative : 4 à 5 jours.
 #### Livrables
 
 - [ ] Stripe test et live ;
-- [ ] webhook signé ;
-- [ ] livraison France ;
-- [ ] promotions ;
-- [ ] comportement TVA retenu ;
-- [ ] Resend ;
-- [ ] confirmation de commande ;
+- [x] webhook signé ;
+- [x] livraison France ;
+- [x] promotions ;
+- [x] comportement TVA retenu ;
+- [x] Resend ;
+- [x] confirmation de commande ;
 - [ ] notification d'expédition ;
-- [ ] remboursement.
+- [x] remboursement.
 
 #### Tests
 
-- [ ] paiement réussi ;
-- [ ] paiement refusé ;
-- [ ] paiement asynchrone réussi et échoué ;
-- [ ] session expirée ;
-- [ ] webhook dupliqué ;
-- [ ] webhook désordonné ;
-- [ ] signature invalide ;
-- [ ] remboursement total ;
-- [ ] remboursement partiel ;
-- [ ] Resend indisponible ;
-- [ ] achat concurrent de la dernière unité ;
-- [ ] prix changé depuis l'ajout au panier ;
-- [ ] stock changé ;
-- [ ] franco au seuil exact ;
-- [ ] promotion invalide ou expirée.
+- [x] paiement réussi ;
+- [x] paiement refusé ;
+- [x] paiement asynchrone réussi et échoué ;
+- [x] session expirée ;
+- [x] webhook dupliqué ;
+- [x] webhook désordonné ;
+- [x] signature invalide ;
+- [x] remboursement total ;
+- [x] remboursement partiel ;
+- [x] Resend indisponible ;
+- [x] achat concurrent de la dernière unité ;
+- [x] prix changé depuis l'ajout au panier ;
+- [x] stock changé ;
+- [x] franco au seuil exact ;
+- [x] promotion invalide ou expirée.
 
 #### Critère de sortie
 
 - [ ] Un paiement réel de faible montant peut être encaissé puis remboursé avec
   cohérence entre Stripe, D1, stock, admin et e-mails.
+
+#### État
+
+**Tout existait, rien n'était prouvé.** Le règlement — la vérification de
+signature, la normalisation de l'événement, l'écriture de la commande, le stock,
+les remboursements, les e-mails — était écrit depuis longtemps et couvert nulle
+part : aucun test n'avait jamais construit un événement Stripe, aucun n'avait
+vérifié une signature, et `recordPaidWebhookOrder` — la fonction qui décide si
+de l'argent devient une commande — n'avait jamais été appelée par un test. Les
+suites voisines éprouvent les pièces qu'elle orchestre (réservations,
+comptabilité des remboursements, machine à états de l'outbox) isolément ; c'est
+l'orchestration qui manquait, et c'est là que les livraisons dupliquées,
+tardives et désordonnées font leurs dégâts. Le jalon 7 est un jalon de
+certification, pas de construction : le trou était dans la porte, pas dans le
+code. `test/integration/settlement.mjs` (quinze scénarios) et
+`src/features/payments/stripeWebhook.test.ts` (vingt et un) le referment.
+
+**La suite parle à la vraie fonction, pas à une copie.** `recordWebhook.ts`
+importe `cloudflare:workers` à la première ligne, et tout ce qu'il délègue aussi
+— la fabrique de paiement, celle d'e-mail, le notificateur de remboursement.
+Deux issues existaient. Réécrire cette chaîne pour qu'elle reçoive `db` en
+paramètre : une modification du code de production faite pour un test, sur le
+seul chemin où une erreur coûte l'argent d'un client. Ou injecter la liaison :
+`test/helpers/workers-loader.mjs` résout `cloudflare:workers` vers un module que
+la suite remplit d'une vraie base Miniflare. C'est la seconde, et le code
+exécuté est **octet pour octet** le code déployé. Le crochet fait aussi ce que
+Vite fait pour tous les autres consommateurs de ces fichiers — résoudre `./db`
+sans extension —, et seulement après un échec de Node, jamais à sa place.
+
+**Le schéma est le vrai.** Les autres scripts d'intégration écrivent à la main
+les quelques tables qu'ils touchent. Le règlement, lui, n'est pas isolé : il
+écrit les commandes, les lignes, le registre d'identités et ses déclencheurs, le
+stock sur deux tables, les réservations, les exceptions d'inventaire, l'outbox,
+les remboursements et leurs événements, et lit les réglages et l'accès invité au
+passage. Un sous-ensemble écrit à la main, c'est un second schéma à tenir à jour,
+et la dérive est silencieuse : une colonne que la suite a oubliée est une colonne
+que la suite ne peut pas voir mal tourner. `test/helpers/d1-schema.mjs` applique
+donc les 43 migrations réelles, 159 instructions, à chaque exécution. Son
+découpeur ne réanalyse pas SQL : il s'appuie sur la règle que
+`migrations-remote-safe.test.mjs` impose déjà — un corps de déclencheur ne
+contient jamais un second `END;` — qui est exactement la règle du découpeur
+distant de wrangler.
+
+**Le seul défaut trouvé : une expiration enregistrée comme un refus.** Le cycle
+de vie d'une réservation distingue `expired` de `failed`, et
+`markInventoryReservationTerminal` prend le statut en paramètre pour cela. Son
+unique appelant passait `'failed'`, toujours — si bien qu'un panier abandonné sur
+la page hébergée de Stripe et une carte refusée laissaient la même ligne en base.
+Rien ne bougeait côté argent, et c'est précisément pourquoi le défaut a survécu :
+le règlement traite les deux pareil, seul l'exploitant qui relit la ligne
+ensuite y perd quelque chose. `WebhookResult` porte maintenant un
+`releaseReason`, l'adaptateur Stripe nomme la raison que Stripe lui donne, et un
+adaptateur qui ne sait pas distinguer ne dit rien et retombe sur `'failed'` — la
+valeur conservatrice. Le cœur reste ignorant du fournisseur (invariant 4).
+
+**Ce que « paiement refusé » veut dire sur une page hébergée.** Une carte refusée
+n'atteint jamais la boutique : Stripe la refuse sur sa propre page et l'acheteur
+recommence. Ce que la boutique apprend, c'est la fin de la tentative — un débit
+différé qui échoue (`async_payment_failed`) ou la session qui expire — et ce sont
+ces deux événements que la suite éprouve. Il n'y a pas de troisième forme à
+tester, et un test « carte refusée » qui inventerait un événement testerait une
+fiction.
+
+**Un remboursement se réconcilie en absolu, et le rejeu le prouve.** Stripe
+publie le **cumul** remboursé d'une charge, jamais un delta. La suite rembourse
+15 € sur 50 €, puis la totalité, puis **redélivre le premier événement** : le
+total ne recule pas, aucune troisième ligne n'apparaît, et les deux lignes du
+registre portent 15 € et 35 € — leurs propres deltas, pas le cumul. Un événement
+qu'aucune commande ne réclame est mis en file de réconciliation plutôt que perdu,
+même quand la corrélation auprès du fournisseur ne rend rien.
+
+**Une panne d'e-mail ne coûte pas la commande.** Resend répondant 503, la
+commande est écrite, les deux lignes d'outbox restent `pending` avec une
+tentative et l'erreur, et un appel ultérieur les termine sans qu'un second
+webhook soit nécessaire. Sans fournisseur configuré du tout, les lignes sont
+`skipped` : une boutique sans e-mail n'est pas une boutique en échec.
+
+**Ce qui n'est PAS gaté, et pourquoi.** Quatre choses, nommées plutôt qu'omises :
+
+- **un paiement réel sur un vrai compte Stripe.** La doublure produit les formes
+  que Stripe produit et signe comme Stripe signe ; elle ne prouve pas que le
+  compte accepte la session. C'est la ligne non cochée du critère de sortie, et
+  elle rejoint celle du jalon 6 : les deux attendent le même premier passage
+  réel ;
+- **« Stripe test et live ».** Le couple de clés est une configuration du
+  coffre, pas du code : l'adaptateur ne sait pas laquelle il tient, et c'est
+  voulu ;
+- **la notification d'expédition.** Elle est mise en file à la fulfillment, pas
+  au règlement — un autre déclencheur, que ce jalon n'a pas touché ;
+- **une promotion invalide ou expirée.** Le refus arrive sur la page de Stripe et
+  la boutique ne le voit jamais. Ce que le dépôt peut prouver, il le prouve : un
+  code refusé ne laisse aucune remise sur la commande, un code accepté y dépose
+  exactement son montant, et une remise de 100 % règle en
+  `no_payment_required` sans intention de paiement.
+
+**Une observation laissée en l'état.** `verifyWebhook` sait relire un instantané
+de panier dans `session.metadata.items` ; l'adaptateur Stripe n'en écrit jamais —
+`orderItemsJson` ne sert qu'aux rails auto-rendus, qui le gardent dans
+`pending_payments`. La branche est donc morte pour Stripe. Elle n'est pas
+supprimée ici : elle est inoffensive, et son retrait appartient à une revue de
+l'ensemble du port plutôt qu'à un jalon de certification.
 
 ### Jalon 8 — Sécurité et exploitation
 

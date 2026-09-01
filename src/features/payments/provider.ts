@@ -99,6 +99,15 @@ export interface WebhookResult {
   type: string;
   /** Abandoned/expired checkout whose held inventory should be released. */
   releaseReservationId?: string;
+  /**
+   * WHY that hold ended, in the reservation's own vocabulary. A hosted session
+   * that simply timed out and a payment the bank refused both release the same
+   * inventory, but they are not the same event to a merchant reading the row
+   * afterwards — one is an abandoned basket, the other a declined customer.
+   * Optional: an adapter that cannot tell them apart says nothing and the core
+   * records the conservative 'failed'.
+   */
+  releaseReason?: 'expired' | 'failed';
   /** Delayed payment started; protect its hold from ordinary checkout expiry. */
   pendingReservationId?: string;
   /** Pending-payment row to mark settled only after the paid order commits. */

@@ -157,6 +157,11 @@ export function createStripeProvider(
         return {
           type: event.type,
           releaseReservationId: event.data.object.metadata?.reservation_id ?? undefined,
+          // Stripe distinguishes these two and so does the reservation's own
+          // status vocabulary, so the distinction is carried rather than
+          // collapsed: an abandoned hosted session is not a refused payment.
+          releaseReason:
+            event.type === 'checkout.session.expired' ? 'expired' : 'failed',
         };
       }
 

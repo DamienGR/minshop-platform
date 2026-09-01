@@ -543,6 +543,16 @@ total, never per line.
 - **A search backend:** implement `SearchProvider` in `features/search/<name>.ts`;
   add a branch to `getSearchProvider()`. Semantic (`vector`) keeps the index in
   sync via `indexProduct`/`unindexProduct` called from the admin product routes.
+- **An integration test for code that reads `env`:** a module importing
+  `cloudflare:workers` can't be loaded by a plain Node script, which is why the
+  settlement path went untested for so long. Run the script as
+  `node --experimental-strip-types --import ./test/helpers/register-workers-loader.mjs …`
+  and call `setWorkersEnv({ DB })` (from `test/helpers/workers-env.mjs`) BEFORE
+  the dynamic `import()` of the module under test — the loader resolves
+  `cloudflare:workers` to that object, so the code under test is unchanged.
+  `applyMigrations(db)` from `test/helpers/d1-schema.mjs` gives the suite the
+  real 43-migration schema instead of a hand-written subset that drifts.
+  `test/integration/settlement.mjs` is the worked example.
 
 ## Gotchas — preflight checklist
 

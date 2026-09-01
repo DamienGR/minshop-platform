@@ -122,6 +122,8 @@ export function createOpenNodeProvider(
         return {
           type: `opennode.${status ?? 'unknown'}`,
           releaseReservationId: pending?.public_id,
+          // The only status that releases here is 'expired' (see above).
+          releaseReason: 'expired' as const,
         };
       }
 
