@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 // .mjs for the same reason as its neighbours: tsconfig pins `types` to the
 // Cloudflare types, so node builtins have no declarations in a .ts file here.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { parseArguments } from '../../shopctl/src/cli.mjs';
-import { NEW_OPTIONS, displayNameFromSlug, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
+import { NEW_OPTIONS, cloneableRepositoryUrl, displayNameFromSlug, resolveAccountId, resolveDomain, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
 import { buildManifest, renderManifest, yamlScalar } from '../../shopctl/src/manifest-template.mjs';
 import { assertNoCredentialsInArgv, classifyCredential, redact } from '../../shopctl/src/secrets.mjs';
 import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
@@ -239,7 +239,193 @@ describe('credentials', () => {
 // ---------------------------------------------------------------------------
 // `shopctl new`, against the real core tree.
 
+/**
+ * The two defaults an AGENCY has and the CORE must not.
+ *
+ * Neither can be a literal in the source: `config:validate` fails on any core
+ * file containing a shop's domain, and a core that knows one agency cannot be
+ * sold to a second. An environment variable is the right home — visible in the
+ * shell that set it, unlike a configuration file nobody remembers writing.
+ */
+describe('the defaults an agency sets once', () => {
+  it('builds the domain from the suffix, and says where it came from', () => {
+    expect(resolveDomain('maestro-demo', undefined, { MINSHOP_DOMAIN_SUFFIX: 'studiomaestro.fr' })).toEqual({
+      domain: 'maestro-demo.studiomaestro.fr',
+      from: 'MINSHOP_DOMAIN_SUFFIX',
+    });
+  });
+
+  // The placeholder is RFC 2606 and can never be registered by anyone, so it
+  // stays loud: `new` keeps "replace this domain" in its next steps only while
+  // it is the one in use.
+  it('falls back to the documentation placeholder', () => {
+    expect(resolveDomain('maestro-demo', undefined, {})).toEqual({
+      domain: 'maestro-demo.example.com',
+      from: 'placeholder',
+    });
+  });
+
+  it('lets the flag win over the variable', () => {
+    expect(resolveDomain('x', 'boutique.fr', { MINSHOP_DOMAIN_SUFFIX: 'studiomaestro.fr' })).toEqual({
+      domain: 'boutique.fr',
+      from: '--domain',
+    });
+  });
+
+  // A suffix that is not a domain would produce a manifest that fails
+  // validation for a reason naming a field the operator never typed.
+  it('refuses a suffix that is not a domain, naming the variable', () => {
+    expect(() => resolveDomain('x', undefined, { MINSHOP_DOMAIN_SUFFIX: 'https://studiomaestro.fr/' })).toThrow(
+      /MINSHOP_DOMAIN_SUFFIX/,
+    );
+  });
+
+  // The same variable `provision`, `deploy` and `destroy` already read: one
+  // question, one answer.
+  it('takes the account from the environment when no flag names one', () => {
+    expect(resolveAccountId(undefined, { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32) })).toEqual({
+      accountId: 'a'.repeat(32),
+      from: 'CLOUDFLARE_ACCOUNT_ID',
+    });
+    expect(resolveAccountId(undefined, {})).toEqual({ accountId: null, from: null });
+    expect(resolveAccountId('b'.repeat(32), { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32) }).from).toBe('--account');
+  });
+});
+
+/**
+ * `npx --package=github:<owner>/<core> shopctl new …` — no clone, no checkout.
+ *
+ * npm hands the CLI an EXTRACTED TARBALL: the whole tree, minus `.git`. Every
+ * default that asks git a question has to have a second answer, and the one
+ * that matters is "where does the core live" — the operator running this has,
+ * by construction, never cloned the core.
+ */
+describe('running from an extracted tarball', () => {
+  /** The same tree npm would extract: tracked files, no `.git`, and a
+   *  `repository` field pointing wherever the caller says. */
+  function extractedCore(root, repository) {
+    const target = join(root, 'extracted');
+    mkdirSync(target, { recursive: true });
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
+    for (const file of tracked) {
+      mkdirSync(dirname(join(target, file)), { recursive: true });
+      cpSync(join(CORE, file), join(target, file));
+    }
+    const manifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+    manifest.repository = { type: 'git', url: repository };
+    writeFileSync(join(target, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    expect(existsSync(join(target, '.git'))).toBe(false);
+    return target;
+  }
+
+  it('normalises npm’s repository dialect into something git clones', () => {
+    expect(cloneableRepositoryUrl('git+https://github.com/agence/core.git')).toBe('https://github.com/agence/core.git');
+    expect(cloneableRepositoryUrl('git+ssh://git@github.com/agence/core.git#main')).toBe('ssh://git@github.com/agence/core.git');
+    // Already cloneable forms pass through untouched — including a local path.
+    expect(cloneableRepositoryUrl('git@github.com:agence/core.git')).toBe('git@github.com:agence/core.git');
+    expect(cloneableRepositoryUrl('/srv/cores/minshop')).toBe('/srv/cores/minshop');
+  });
+
+  // Without this field the npx invocation fails on its first step, and the
+  // failure names a git remote the operator was never told to create.
+  it('declares a repository in the core’s own package.json', () => {
+    const declared = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')).repository;
+    const url = typeof declared === 'string' ? declared : declared?.url;
+    expect(url, 'package.json must declare "repository" — npx has no remote to ask').toBeTruthy();
+    expect(cloneableRepositoryUrl(url)).toMatch(/^([a-z+]+:\/\/|git@|\/)/);
+  });
+
+  it('creates a shop with no --from and no remote to ask', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-'));
+    const source = createCoreRepository(root);
+    const work = join(root, 'work');
+    mkdirSync(work);
+
+    const result = spawnSync(
+      'node',
+      [join(extractedCore(root, source), 'shopctl/bin/shopctl.mjs'), 'new', 'boutique-du-port', '--core', CORE_TAG, '--no-install', '--json'],
+      { cwd: work, encoding: 'utf8', env: GIT_ENV },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.shop.slug).toBe('boutique-du-port');
+    // The clone came from what package.json declares, and the shop's `core`
+    // remote points back at it — the upgrade path survives the shortcut.
+    expect(report.core.repository).toBe(source);
+    expect(report.git.remotes.core).toBe(source);
+    expect(existsSync(join(work, 'shop-boutique-du-port/client/client.yaml'))).toBe(true);
+  });
+
+  // The fallback is a fallback: a fork, a mirror or a local path handed to
+  // --from is the core the operator is standing in, and it keeps winning.
+  it('still lets --from override what package.json declares', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-from-'));
+    const source = createCoreRepository(root);
+    const work = join(root, 'work');
+    mkdirSync(work);
+    const extracted = extractedCore(root, 'https://github.com/quelquun-dautre/core.git');
+
+    const result = spawnSync(
+      'node',
+      [join(extracted, 'shopctl/bin/shopctl.mjs'), 'new', 'boutique-du-port', '--from', source, '--core', CORE_TAG, '--no-install'],
+      { cwd: work, encoding: 'utf8', env: GIT_ENV },
+    );
+    expect(result.status, result.stderr).toBe(0);
+  });
+});
+
 describe('shopctl new', () => {
+  // `gh` is asked before the clone, not at the forge step: a missing or
+  // unauthenticated `gh` must cost a message, not five hundred cloned files and
+  // a directory to clean up.
+  it('refuses --create-repo without gh before touching the disk', () => {
+    const work = workspace();
+    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    symlinkSync(process.execPath, join(withoutGh, 'node'));
+
+    const result = spawnSync('node', [BIN, 'new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--create-repo'], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...GIT_ENV, PATH: withoutGh, HOME: process.env.HOME },
+    });
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/gh \(GitHub CLI\) est requis/);
+    expect(treeFiles(work)).toEqual([]);
+  });
+
+  /**
+   * The forge step is the last one, and the only one that is entirely
+   * re-runnable.
+   *
+   * When it fails — no `gh`, no session, a name already taken — the shop itself
+   * is finished: cloned, written, verified, committed. Throwing that away, or
+   * reporting success, would both be wrong. Exit 6 is the code that already
+   * means "produced, then a gate refused the result; the tree is left in place
+   * to inspect", and `shopctl repo` resumes exactly there.
+   */
+  it('keeps the shop when only the forge step fails', () => {
+    const work = workspace();
+    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    symlinkSync(process.execPath, join(withoutGh, 'node'));
+    symlinkSync(execFileSync('which', ['git'], { encoding: 'utf8' }).trim(), join(withoutGh, 'git'));
+
+    const result = spawnSync(
+      'node',
+      [BIN, 'new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--no-install', '--create-repo', '--origin', 'git@github.com:agence/shop-atelier-x.git', '--json'],
+      { cwd: work, encoding: 'utf8', env: { ...GIT_ENV, PATH: withoutGh, HOME: process.env.HOME } },
+    );
+
+    expect(result.status).toBe(EXIT_CODES.verification);
+    const report = JSON.parse(result.stdout);
+    expect(report.ok).toBe(false);
+    expect(report.forge).toBeNull();
+    expect(report.forgeError.kind).toBe('precondition');
+    // The shop is there, and the next step says how to finish it.
+    expect(treeFiles(join(work, 'shop-atelier-x'))).toContain('client/client.yaml');
+    expect(report.nextSteps.some((step) => step.startsWith('shopctl repo'))).toBe(true);
+  });
+
   it('refuses a slug the platform already uses', () => {
     const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
     expect(result.status).toBe(EXIT_CODES.input);

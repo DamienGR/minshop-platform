@@ -18,6 +18,10 @@ import { NEW_OPTIONS, newUsage, runNew } from './commands/new.mjs';
 import { doctorUsage, runDoctor } from './commands/doctor.mjs';
 import { configUsage, runConfig } from './commands/config.mjs';
 import { CATALOG_OPTIONS, catalogUsage, runCatalog } from './commands/catalog.mjs';
+import { PROVISION_OPTIONS, provisionUsage, runProvision } from './commands/provision.mjs';
+import { DEPLOY_OPTIONS, deployUsage, runDeploy } from './commands/deploy.mjs';
+import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
+import { DESTROY_OPTIONS, destroyUsage, runDestroy } from './commands/destroy.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -27,19 +31,23 @@ Usage: shopctl <commande> [options]
   doctor              Vérifier outils, arbre courant et prérequis
   config validate     Valider les manifestes de l'arbre courant
   catalog             Valider et importer le catalogue produit (CSV)
+  repo                Créer le dépôt GitHub, ses environnements et leurs secrets
+  provision           Créer ou confirmer les ressources Cloudflare d'un environnement
+  deploy              Vérifier, migrer, construire, téléverser et tester la boutique
+  destroy             Supprimer les ressources Cloudflare d'un environnement
 
 Options globales:
   --json              Sortie machine sur stdout (la progression passe sur stderr)
   -h, --help          Cette aide, ou celle d'une commande
   -v, --version       Version du socle qui livre cette CLI
 
-Les commandes de provisioning, de déploiement, de sauvegarde et de flotte sont
-décrites au plan §5 et arrivent aux jalons suivants.
+Les commandes de sauvegarde et de flotte sont décrites au plan §5 et arrivent
+aux jalons suivants.
 `;
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
 export const COMMANDS = {
-  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify'] },
+  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify', '--create-repo'] },
   doctor: { run: runDoctor, usage: doctorUsage, values: {}, flags: ['--offline'] },
   config: { run: runConfig, usage: configUsage, values: {}, flags: [] },
   catalog: {
@@ -48,6 +56,15 @@ export const COMMANDS = {
     values: CATALOG_OPTIONS,
     flags: ['--dry-run', '--remote', '--create-categories', '--allow-slug-change', '--allow-remove-variants'],
   },
+  repo: { run: runRepo, usage: repoUsage, values: REPO_OPTIONS, flags: ['--dry-run', '--public', '--no-push'] },
+  provision: { run: runProvision, usage: provisionUsage, values: PROVISION_OPTIONS, flags: ['--dry-run'] },
+  deploy: {
+    run: runDeploy,
+    usage: deployUsage,
+    values: DEPLOY_OPTIONS,
+    flags: ['--dry-run', '--yes', '--skip-verify', '--skip-build', '--skip-smoke'],
+  },
+  destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
 };
 
 /** Flags every command accepts. */
@@ -106,11 +123,17 @@ export function parseArguments(argv, spec) {
 /**
  * Run one invocation.
  *
+ * Async because ONE command needs it — `deploy` ends with a smoke test, which
+ * is network I/O — and the alternative was worse: a synchronous command that
+ * drained a promise through a subprocess, so that the other five could keep a
+ * signature none of them was using. A command may still return a plain number;
+ * `await` on a number is a number.
+ *
  * @param {string[]} argv arguments after `node shopctl`
  * @param {{ version: string, stdout?: NodeJS.WritableStream, stderr?: NodeJS.WritableStream }} context
- * @returns {number} exit code
+ * @returns {Promise<number>} exit code
  */
-export function main(argv, { version, stdout = process.stdout, stderr = process.stderr }) {
+export async function main(argv, { version, stdout = process.stdout, stderr = process.stderr }) {
   const json = argv.includes('--json');
   const reporter = new Reporter({ json, stdout, stderr });
 
@@ -136,7 +159,7 @@ export function main(argv, { version, stdout = process.stdout, stderr = process.
 
     const args = parseArguments(rest, command);
     if (json) args.values['--json'] = true;
-    return command.run(args, reporter) ?? EXIT_CODES.ok;
+    return (await command.run(args, reporter)) ?? EXIT_CODES.ok;
   } catch (error) {
     return report(error, reporter, stderr);
   }

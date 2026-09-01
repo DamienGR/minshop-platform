@@ -1,0 +1,164 @@
+# Deploying a shop, and the two things CI adds that a laptop cannot.
+#
+# The command is the same one an operator runs — `shopctl deploy --env <env>` —
+# and that is deliberate: a pipeline that assembled the deployment out of its
+# own wrangler invocations would be a second implementation of plan §5.5, and it
+# is the one nobody runs by hand and therefore nobody notices drifting. What
+# this file contributes is what a laptop has no way to provide:
+#
+#   1. A GITHUB ENVIRONMENT per target. `production` carries the required
+#      reviewers; a run that reaches it waits for a human to approve, and the
+#      approval is recorded against the commit rather than remembered by whoever
+#      typed the command. `staging` carries none — a staging deployment that
+#      needed a signature would be batched, and a staging environment that is
+#      deployed in batches stops resembling production.
+#
+#   2. CREDENTIALS THAT ARE NOT ON ANYONE'S MACHINE. The API token and account
+#      id are environment secrets, so the production token is unreachable from a
+#      staging run. That is the mechanical half of ADR 0002: the account belongs
+#      to the agency, and access to it is scoped by the environment being
+#      deployed rather than by who is at the keyboard.
+#
+# Manual dispatch only. Deploying on every push to main would mean the merge
+# button is the deploy button, and the shop takes money; §5.5 puts a full
+# verification and a bookmark in front of every production deployment, which is
+# not a thing to do implicitly. The shop to deploy is named because the core
+# repository carries witness manifests and no shop of its own.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      shop:
+        description: Slug de la boutique (voir `node scripts/prepare-client.mjs --list`)
+        required: true
+        type: string
+      environment:
+        description: Environnement cible
+        required: true
+        type: choice
+        options: [staging, production]
+      run-verify-job:
+        description: Lancer `npm run verify` dans un job dédié avant l'approbation
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# One deployment at a time per shop and environment, and NEVER cancelled in
+# flight: a run interrupted between the migrations and the upload leaves the new
+# schema under the old code. `shopctl provision` is written to be resumed;
+# a half-applied deployment is not something a queue should create on purpose.
+concurrency:
+  group: deploy-${{ inputs.shop }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  # The gate, before the approval rather than after it. A reviewer asked to
+  # approve a production deployment should be approving something that has
+  # already been proven to build and pass its suite — otherwise the approval is
+  # a rubber stamp on an unknown, and the run fails after the human has walked
+  # away.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ inputs.run-verify-job }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Run the verification suite
+        uses: ./.github/actions/run-verify
+
+  deploy:
+    name: Deploy ${{ inputs.shop }} (${{ inputs.environment }})
+    needs: verify
+    # `always()` so the job still runs when `verify` was skipped by the input;
+    # the second clause keeps a FAILED verification blocking, which is the
+    # distinction a bare `always()` would lose.
+    if: ${{ always() && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # The approval gate. Configure `production` in Settings → Environments with
+    # required reviewers and a deployment branch rule; this job then waits for a
+    # human before it runs, and the wait is recorded on the run.
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.origin }}
+
+    env:
+      # Scoped to the environment above: a staging run cannot read the
+      # production token. shopctl reads them through wrangler's own resolution,
+      # so nothing here has to know how a token becomes an account.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Read-only when the environment already exists, and it runs before the
+      # approval has been spent on anything else: it confirms the account, the
+      # jurisdiction and the private bucket, and it fails HERE rather than
+      # half-way through a deployment. On a first deployment it is also what
+      # creates the resources.
+      #
+      # The dispatch inputs travel as environment variables, never interpolated
+      # into the script: `${{ … }}` is substituted into the shell source before
+      # bash sees it, so a value containing a quote would run as a command.
+      - name: Provision or confirm the environment
+        env:
+          SHOP: ${{ inputs.shop }}
+          TARGET: ${{ inputs.environment }}
+        run: |
+          # pipefail, because the report is piped through `tee`: without it the
+          # step reads tee's exit status and a refused provisioning passes.
+          set -euo pipefail
+          node shopctl/bin/shopctl.mjs provision --env "$TARGET" --shop "$SHOP" --json | tee provision.json
+
+      - name: Deploy
+        id: deploy
+        env:
+          SHOP: ${{ inputs.shop }}
+          TARGET: ${{ inputs.environment }}
+          # --skip-verify only when the job above WAS that verification, on this
+          # exact commit. Turn the job off and shopctl runs `npm run verify`
+          # itself: the deployment path is never the one without a gate.
+          VERIFIED_ALREADY: ${{ inputs.run-verify-job }}
+        run: |
+          set -euo pipefail
+          args=(deploy --env "$TARGET" --shop "$SHOP" --yes --json)
+          if [ "$VERIFIED_ALREADY" = "true" ]; then args+=(--skip-verify); fi
+          node shopctl/bin/shopctl.mjs "${args[@]}" | tee deploy.json
+          origin="$(node -p "JSON.parse(require('node:fs').readFileSync('deploy.json','utf8')).origin || ''")"
+          echo "origin=$origin" >> "$GITHUB_OUTPUT"
+
+      # The reports, not the logs. They carry the resources, the jurisdiction
+      # verdicts, the Time Travel bookmark and every smoke-test result — which is
+      # what an incident review a month from now actually needs, and what a
+      # scrolled-past console does not preserve.
+      - name: Keep the deployment reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-${{ inputs.shop }}-${{ inputs.environment }}-${{ github.run_id }}
+          path: |
+            provision.json
+            deploy.json
+          retention-days: 90
+          if-no-files-found: warn

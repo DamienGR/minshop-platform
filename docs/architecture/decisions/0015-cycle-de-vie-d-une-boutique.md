@@ -1,0 +1,100 @@
+# ADR 0015 — Cycle de vie d'une boutique, de la construction à la livraison
+
+- **Statut** : Accepté
+- **Date** : 2026-08-31
+- **Jalon** : 6
+
+## Contexte
+
+L'ADR 0002 pose que le commerçant est propriétaire de tous ses comptes
+fournisseurs, et que l'agence conserve son propre compte Cloudflare pour la
+démonstration et les tests du socle. Il ne dit pas **quand**, dans la
+construction d'une boutique, on passe de l'un à l'autre.
+
+La séquence de travail réelle est : l'agence construit, le client regarde une
+preview, le client saisit ses contenus et ses produits, puis on met en ligne.
+La question est de savoir à quelle étape le compte du client devient
+nécessaire, et la réponse a un coût mesurable, parce que **Cloudflare ne
+transfère rien entre comptes** : ni une base D1, ni un bucket R2, ni un Worker.
+« Déplacer » une boutique est en réalité un reprovisionnement, une migration de
+données et une bascule DNS.
+
+Deux faits vérifiés dans le code encadrent la décision.
+
+Une **application Cloudflare Access se lie à un nom d'hôte**, et l'en-tête
+`Cf-Access-Jwt-Assertion` qu'elle injecte est falsifiable contre une origine
+`*.workers.dev` — `src/middleware.ts` le dit et vérifie la signature pour cette
+raison. Une preview privée exige donc un nom d'hôte réel **et** `workers.dev`
+fermé ; laisser les deux ouverts revient à ne rien fermer.
+
+Et `isProtected()` ne couvre que `/admin` et `/api/admin` : la vitrine est
+publique par construction. Fermer une preview est une affaire de bordure, pas
+de code.
+
+## Décision
+
+Le cycle de vie d'une boutique a **quatre étapes**, et la frontière entre les
+comptes tombe entre la deuxième et la troisième.
+
+1. **Construction** — `staging` sur le compte Cloudflare de l'agence. Rien n'est
+   encore au nom du client, et rien n'a besoin de l'être.
+2. **Preview privée** — `staging` sert sur `cloudflare.stagingDomain`, un nom
+   d'hôte d'une zone de l'agence, derrière une application Access. Déclarer ce
+   champ **ferme `workers.dev`** sur cet environnement, parce que les deux
+   ensemble ne ferment rien.
+3. **Saisie par le client** — sur **le compte du client**. Le compte Cloudflare
+   du client est le prérequis de cette étape, pas de la mise en ligne.
+4. **Mise en ligne** — `production` sur le même compte client, puis
+   `shopctl destroy --env staging` sur le compte de l'agence.
+
+## Conséquences
+
+- **il n'y a jamais de migration de données à écrire.** Le seul moment où des
+  données existent est l'étape 3, et elle a déjà lieu sur le compte définitif.
+  C'est la raison d'être de cette frontière : la placer à l'étape 4 rendrait
+  `shopctl backup`/`restore` (jalon 9) obligatoire avant toute mise en ligne ;
+- la dépendance au client se déclare plus tôt dans le planning, ce qui est une
+  contrainte commerciale et non une contrainte technique : elle était de toute
+  façon là, l'ADR 0002 en fait déjà « une dépendance de planning à afficher dès
+  le devis » ;
+- une preview qui n'a pas de `stagingDomain` sert sur `workers.dev` et **n'est
+  pas privée**. Le rapport de déploiement le dit plutôt que de le laisser
+  croire : le test de fumée d'un environnement déclaré privé pose la question
+  inverse d'un environnement public, et une réponse 200 à une requête non
+  authentifiée le fait échouer ;
+- l'agence n'héberge jamais durablement les données d'un client, ce qui est la
+  moitié opérationnelle de la promesse de réversibilité d'ADR 0002 ;
+- `shopctl destroy` existe et est irréversible. Il demande le slug **saisi**, et
+  `--yes` en plus en production.
+
+## Alternatives écartées
+
+- **Frontière à la mise en ligne** (construire ET faire saisir sur le compte de
+  l'agence, puis basculer) : la séquence la plus confortable commercialement, et
+  celle qui impose une migration de données à chaque livraison. Elle fait
+  arriver le jalon 9 avant le jalon 7 et met l'agence en possession des données
+  d'un client pendant toute la phase de saisie.
+- **Tout sur le compte du client dès l'étape 1** : bloque le démarrage sur une
+  action du client avant même qu'il ait vu quoi que ce soit.
+- **Une preview publique avec une URL non devinable** : une URL n'est pas un
+  contrôle d'accès. Elle est dans l'historique du navigateur, dans les en-têtes
+  `Referer` et dans les journaux de tout ce que la page appelle.
+- **Un mot de passe partagé dans le Worker pour la preview** : du code de
+  contrôle d'accès dans le cœur, à maintenir et à tester, pour reproduire moins
+  bien ce qu'Access fait à la bordure.
+- **Garder `staging` sur le compte de l'agence après la mise en ligne** :
+  demanderait un compte par environnement, contredirait la propriété unique
+  d'ADR 0002, et laisserait des données de test d'un client chez l'agence
+  indéfiniment.
+
+## Vérification
+
+- `cloudflare.stagingDomain` ferme `workers_dev` et rend la route en domaine
+  personnalisé (`test/scripts/manifest.test.mjs`) ;
+- un environnement déclaré privé qui répond 200 à une requête non authentifiée
+  fait échouer `shopctl deploy` (`test/scripts/deploy.test.mjs`) ;
+- deux boutiques ne peuvent pas revendiquer le même nom d'hôte, preview et
+  production confondues : `config:validate` les compare sous une seule clé ;
+- `shopctl destroy` refuse sans le slug saisi, refuse une production sans
+  `--yes`, supprime la base en dernier et relaie le refus d'un bucket non vide
+  sans le vider (`test/scripts/destroy.test.mjs`).

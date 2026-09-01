@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+/**
+ * A `gh` that answers like the real one, against a GitHub account kept in a
+ * JSON file.
+ *
+ * Same reasoning as the wrangler double: what has to be proven is the
+ * CONVERSATION with the forge — that a second run creates nothing, that a
+ * repository is private unless asked otherwise, that a refused protection rule
+ * is reported rather than swallowed, and above all that a token never appears
+ * in an argument vector. A mock would assert that shopctl calls the functions
+ * shopctl calls; this runs the real argument construction and the real output
+ * parsers, and only the account is imaginary.
+ *
+ * Literal about `gh`'s shapes: a non-zero exit for `repo view` on a repository
+ * that does not exist, `gh api` answering raw JSON, `gh secret set` reading its
+ * value from standard input.
+ *
+ * State lives at $GH_DOUBLE_STATE:
+ *
+ *   authenticated   boolean                 false makes `gh auth status` exit 1
+ *   login           string                  what `gh api user --jq .login` says
+ *   config          { git_protocol }        what `gh config get` answers
+ *   repos           { "owner/name": { visibility, environments, secrets } }
+ *   users           { login: id }
+ *   refuseReviewers boolean                 the free-plan private-repo refusal
+ *   calls           [{ argv, stdin }]       appended to on every invocation
+ */
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const STATE = process.env.GH_DOUBLE_STATE;
+if (!STATE) {
+  process.stderr.write('gh-double: GH_DOUBLE_STATE is not set\n');
+  process.exit(1);
+}
+
+const argv = process.argv.slice(2);
+const state = JSON.parse(readFileSync(STATE, 'utf8'));
+state.calls = state.calls ?? [];
+state.repos = state.repos ?? {};
+
+const flag = (name) => {
+  const index = argv.indexOf(name);
+  if (index !== -1 && argv[index + 1] !== undefined) return argv[index + 1];
+  const inline = argv.find((argument) => argument.startsWith(`${name}=`));
+  return inline ? inline.slice(name.length + 1) : null;
+};
+const has = (name) => argv.includes(name);
+
+/** `gh secret set` and `gh api --input -` are the only commands that read
+ *  stdin, and recording it is how a test proves the value arrived THERE. */
+const wantsStdin = (argv[0] === 'secret' && argv[1] === 'set') || argv.includes('-');
+const stdin = wantsStdin ? readStdin() : '';
+
+function readStdin() {
+  try {
+    return readFileSync(0, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+state.calls.push({ argv, stdin });
+const save = () => writeFileSync(STATE, JSON.stringify(state, null, 2));
+const done = (text = '') => {
+  save();
+  if (text) process.stdout.write(`${text}\n`);
+  process.exit(0);
+};
+const fail = (text, code = 1) => {
+  save();
+  process.stderr.write(`${text}\n`);
+  process.exit(code);
+};
+
+if (argv.includes('--version')) done('gh version 2.62.0 (double)');
+
+if (argv[0] === 'config' && argv[1] === 'get') {
+  done(String((state.config ?? {})[argv[2]] ?? ''));
+}
+
+if (argv[0] === 'auth' && argv[1] === 'status') {
+  if (state.authenticated === false) fail('You are not logged into any GitHub hosts. To log in, run: gh auth login');
+  done('github.com\n  ✓ Logged in to github.com account ops (keyring)');
+}
+
+if (argv[0] === 'repo' && argv[1] === 'view') {
+  const name = argv[2];
+  const repo = state.repos[name];
+  if (!repo) fail(`could not resolve to a Repository with the name '${name}'`);
+  done(JSON.stringify({
+    nameWithOwner: name,
+    visibility: (repo.visibility ?? 'private').toUpperCase(),
+    defaultBranchRef: repo.defaultBranch ? { name: repo.defaultBranch } : null,
+    isEmpty: (repo.branches ?? []).length === 0,
+  }));
+}
+
+if (argv[0] === 'repo' && argv[1] === 'create') {
+  const name = argv[2];
+  if (state.repos[name]) fail(`Name already exists on this account`);
+  state.repos[name] = {
+    visibility: has('--public') ? 'public' : 'private',
+    environments: {},
+    branches: [],
+    description: flag('--description'),
+  };
+  done(`✓ Created repository ${name} on github.com\n  https://github.com/${name}`);
+}
+
+if (argv[0] === 'api') {
+  const method = flag('--method') ?? 'GET';
+  const path = argv.find((argument, index) => !argument.startsWith('-') && index > 0 && argv[index - 1] !== '--method');
+
+  if (path === 'user') done(state.login ?? 'ops');
+
+  const users = path?.match(/^users\/(.+)$/);
+  if (users) {
+    const id = (state.users ?? {})[users[1]];
+    if (!id) fail('gh: Not Found (HTTP 404)');
+    done(String(id));
+  }
+
+  const environmentList = path?.match(/^repos\/([^/]+\/[^/]+)\/environments$/);
+  if (environmentList && method === 'GET') {
+    const repo = state.repos[environmentList[1]];
+    if (!repo) fail('gh: Not Found (HTTP 404)');
+    const names = Object.keys(repo.environments ?? {});
+    done(JSON.stringify({ total_count: names.length, environments: names.map((name) => ({ name })) }));
+  }
+
+  const environmentPut = path?.match(/^repos\/([^/]+\/[^/]+)\/environments\/(.+)$/);
+  if (environmentPut && method === 'PUT') {
+    const [, name, environment] = environmentPut;
+    const repo = state.repos[name];
+    if (!repo) fail('gh: Not Found (HTTP 404)');
+    const body = stdin.trim() ? JSON.parse(stdin) : {};
+    // The free-plan private-repository refusal, which is the case this whole
+    // fallback path exists for: the environment is accepted, the protection
+    // rule is not.
+    if (state.refuseReviewers && (body.reviewers ?? []).length > 0) {
+      fail('gh: Validation Failed (HTTP 422)\nDeployment protection rules are only available for public repositories, or with GitHub Pro.', 1);
+    }
+    repo.environments = repo.environments ?? {};
+    repo.environments[environment] = {
+      ...(repo.environments[environment] ?? { secrets: {} }),
+      reviewers: (body.reviewers ?? []).length,
+    };
+    repo.environments[environment].secrets = repo.environments[environment].secrets ?? {};
+    done(JSON.stringify({ name: environment }));
+  }
+
+  fail(`gh-double: unhandled api call "${argv.join(' ')}"`, 2);
+}
+
+if (argv[0] === 'secret' && argv[1] === 'list') {
+  const repo = state.repos[flag('--repo')];
+  const environment = flag('--env');
+  if (!repo) fail('gh: Not Found (HTTP 404)');
+  const secrets = repo.environments?.[environment]?.secrets ?? {};
+  if (has('--json')) done(JSON.stringify(Object.keys(secrets).map((name) => ({ name }))));
+  done(Object.keys(secrets).map((name) => `${name}\t2026-08-31`).join('\n'));
+}
+
+if (argv[0] === 'secret' && argv[1] === 'set') {
+  const name = argv[2];
+  const repo = state.repos[flag('--repo')];
+  const environment = flag('--env');
+  if (!repo) fail('gh: Not Found (HTTP 404)');
+  if (!repo.environments?.[environment]) fail(`gh: environment ${environment} not found (HTTP 404)`);
+  if (!stdin.trim()) fail('gh: a value is required');
+  // Stored so a test can assert WHAT was placed; the real gh encrypts it as a
+  // libsodium sealed box, which is precisely the step shopctl cannot do itself
+  // and the reason this command is wrapped rather than reimplemented.
+  repo.environments[environment].secrets[name] = stdin.trim();
+  done(`✓ Set Actions secret ${name} for ${flag('--repo')}`);
+}
+
+fail(`gh-double: unhandled command "${argv.join(' ')}"`, 2);

@@ -33,6 +33,16 @@ export function coreVersion(root = process.cwd()) {
 }
 
 /**
+ * The deployed environments of a shop, in the order they are promoted.
+ *
+ * Two, and no third: staging is where a change is proven and production is
+ * where it is sold from (plan §5.3). A `preview` or `qa` environment would cost
+ * a second set of real Cloudflare resources per shop and would be certified by
+ * nothing — the campaign of §8 runs against staging.
+ */
+export const ENVIRONMENTS = ['staging', 'production'];
+
+/**
  * Every Cloudflare resource of a shop, derived from one name.
  *
  * Derivation, not configuration. Letting a manifest name its D1 database
@@ -40,9 +50,23 @@ export function coreVersion(root = process.cwd()) {
  * relies on: that `<workerName>*` is the complete footprint of one shop,
  * and that destroy-cf.sh removes all of it (scripts/destroy-cf.sh keys on the
  * same suffixes).
+ *
+ * `env` qualifies the STEM rather than adding a suffix of its own, which is
+ * what plan §5.3 names: `minshop-<slug>-<env>` and then `-db`, `-images`,
+ * `-files`. One shop is still one name family, `<workerName>*` is still its
+ * whole footprint, and both environments are inside it.
+ *
+ * Omitting `env` gives the unqualified family, and that is not a third
+ * environment: it is the one the witness builds, the browser gate and local
+ * development render, none of which ever reach an account. A deployed resource
+ * always carries its environment, so an operator reading an account listing can
+ * never mistake staging data for production data.
  */
-export function resourceNames(manifest) {
-  const worker = manifest.cloudflare.workerName;
+export function resourceNames(manifest, { env = null } = {}) {
+  if (env !== null && !ENVIRONMENTS.includes(env)) {
+    throw new Error(`unknown environment "${env}"; expected one of: ${ENVIRONMENTS.join(', ')}.`);
+  }
+  const worker = env ? `${manifest.cloudflare.workerName}-${env}` : manifest.cloudflare.workerName;
   return {
     worker,
     database: `${worker}-db`,
@@ -115,16 +139,33 @@ export function loadManifest(file, { root = process.cwd(), core = coreVersion(ro
  * reads them.
  */
 export function fleetIdentifiers(manifest) {
-  const names = resourceNames(manifest);
-  return [
-    { kind: 'slug', value: manifest.client.slug },
-    { kind: 'worker', value: names.worker },
-    { kind: 'D1 database', value: names.database },
-    { kind: 'images bucket', value: names.images },
-    { kind: 'files bucket', value: names.files },
-    { kind: 'sessions KV', value: names.sessions },
-    { kind: 'production domain', value: manifest.cloudflare.productionDomain },
+  const claims = [
+    { kind: 'slug', env: null, value: manifest.client.slug },
+    // Hostnames, both of them: a staging preview and another shop's production
+    // domain colliding would put two shops on one name, and the one serving is
+    // whichever deployed last.
+    { kind: 'hostname', env: 'production', value: manifest.cloudflare.productionDomain },
+    ...(manifest.cloudflare.stagingDomain
+      ? [{ kind: 'hostname', env: 'staging', value: manifest.cloudflare.stagingDomain }]
+      : []),
   ];
+  // The deployed names too, and not as a formality: a suffix is a namespace
+  // only if nothing else can land in it. A shop slugged `acme-staging` derives
+  // `minshop-acme-staging-db`, which is exactly the staging database of the
+  // shop slugged `acme` — two customers, one set of orders, and no runtime
+  // separation to fall back on (ADR 0001). Claiming every environment's names
+  // makes the collision a `config:validate` failure instead of a discovery.
+  for (const env of [null, ...ENVIRONMENTS]) {
+    const names = resourceNames(manifest, { env });
+    claims.push(
+      { kind: 'worker', env, value: names.worker },
+      { kind: 'D1 database', env, value: names.database },
+      { kind: 'images bucket', env, value: names.images },
+      { kind: 'files bucket', env, value: names.files },
+      { kind: 'sessions KV', env, value: names.sessions },
+    );
+  }
+  return claims;
 }
 
 /**
@@ -168,15 +209,48 @@ export function renderWrangler(template, substitutions) {
 /** The `__…__` substitutions wrangler.template.jsonc expects for a shop.
  *  The database id is not a manifest value — provisioning learns it from
  *  Cloudflare — so callers pass the id they have, or the all-zero placeholder
- *  for a build that never talks to an account. */
-export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-0000-0000-000000000000' } = {}) {
-  const names = resourceNames(manifest);
+ *  for a build that never talks to an account.
+ *
+ *  The jurisdiction is one of them because an R2 binding must repeat it: a
+ *  bucket created in the `eu` jurisdiction is invisible to a binding that does
+ *  not name it, and the Worker would boot with a bucket that answers 404 to
+ *  everything rather than failing at deploy. ADR 0004 makes the jurisdiction a
+ *  manifest value; this is where the runtime learns it. */
+export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-0000-0000-000000000000', env = null } = {}) {
+  const names = resourceNames(manifest, { env });
+  // A custom domain and closing workers.dev are one decision, not two: a shop
+  // reachable on two origins is one the merchant never advertised, indexed by
+  // search engines and outside whatever sits in front of the real one.
+  //
+  // Production always has one. Staging has one only when the manifest names it,
+  // and then for the opposite reason — not to publish the shop but to HIDE it.
+  // A Cloudflare Access application binds to a hostname; the header it injects
+  // is forgeable against a `*.workers.dev` origin, so an Access app protecting
+  // a custom hostname is simply bypassed by the workers.dev URL. A staging
+  // environment a client previews before launch is therefore gated only if it
+  // has a hostname AND workers.dev is shut. Without `stagingDomain`, staging
+  // keeps workers.dev, because that is then the only way to reach it at all.
+  const host =
+    env === 'production'
+      ? manifest.cloudflare.productionDomain
+      : env === 'staging'
+        ? (manifest.cloudflare.stagingDomain ?? null)
+        : null;
+  const routes = host ? [{ pattern: host, custom_domain: true }] : [];
+  const imagesDomain = manifest.cloudflare.imagesDomain ?? null;
   return {
     __NAME__: names.worker,
     __DB_NAME__: names.database,
     __DB_ID__: databaseId,
     __BUCKET__: names.images,
     __FILES_BUCKET__: names.files,
+    __JURISDICTION__: manifest.cloudflare.jurisdiction,
+    __WORKERS_DEV__: host ? 'false' : 'true',
+    __ROUTES__: JSON.stringify(routes),
+    // Empty is the ordinary case and never wrong: the storefront reads
+    // `env.IMAGE_BASE_URL ?? ''` and serves images through the Worker, which is
+    // slower and always correct.
+    __IMAGE_BASE_URL__: imagesDomain ? `https://${imagesDomain}` : '',
   };
 }
 

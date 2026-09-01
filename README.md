@@ -171,17 +171,20 @@ qu'il n'existe un `node_modules` quelque part. Détail dans
 
 ```bash
 npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
+
+# La première boutique d'une machine n'a rien à cloner à la main. `--package=`
+# est obligatoire : le paquet s'appelle `minshop`, la commande `shopctl`.
+npx --package=github:DamienGR/minshop-platform#v1.0.0 shopctl new acme
 ```
 
-### Livré (jalon 2)
+### Livré
 
 ```bash
-# Créer le dépôt d'une boutique depuis un tag du socle
-shopctl new acme \
-  --core v1.0.0 \
-  --origin git@github.com:agence/shop-acme.git \
-  --name "Boutique Acme" \
-  --domain acme.fr
+# Créer le dépôt d'une boutique depuis un tag du socle (jalon 2)
+#   --core   défaut : la version du socle depuis lequel la CLI tourne
+#   --domain défaut : <slug>.example.com, ou <slug>.$MINSHOP_DOMAIN_SUFFIX
+#   --account défaut : $CLOUDFLARE_ACCOUNT_ID
+shopctl new acme --name "Boutique Acme" --create-repo
 
 cd shop-acme
 
@@ -190,7 +193,34 @@ shopctl doctor
 
 # Valider les manifestes de l'arbre courant
 shopctl config validate
+
+# Importer et vérifier le catalogue (jalon 4)
+shopctl catalog validate ./imports/catalog.csv
+shopctl catalog import ./imports/catalog.csv --dry-run
+shopctl catalog import ./imports/catalog.csv
+
+# Créer le dépôt GitHub, ses environnements et leurs secrets (jalon 6)
+shopctl repo --reviewer <login-github>
+
+# Provisionner des ressources isolées (jalon 6)
+shopctl provision --env staging --dry-run
+shopctl provision --env staging
+
+# Déployer, avec test de fumée (jalon 6)
+shopctl deploy --env staging
+shopctl deploy --env production --yes
+
+# Retirer un environnement d'un compte (jalon 6) — irréversible
+shopctl destroy --env staging --confirm <slug>
 ```
+
+Le cycle de vie d'une boutique compte quatre étapes, et la frontière entre le
+compte Cloudflare de l'agence et celui du client tombe **avant la saisie des
+contenus**, pas à la mise en ligne
+([ADR 0015](docs/architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)) :
+construction et preview privée chez l'agence, saisie et production chez le
+client. Cloudflare ne transfère rien entre comptes, donc placer la frontière
+plus tard imposerait une migration de données à chaque livraison.
 
 La locale, la devise, le marché et la juridiction n'ont pas d'option : chaque
 énumération n'accepte aujourd'hui qu'une valeur, et l'élargir est une décision
@@ -198,23 +228,28 @@ de version de schéma
 ([ADR 0008](docs/architecture/decisions/0008-format-du-manifeste-client.md)),
 pas un drapeau.
 
+Une boutique complète tient en trois commandes : `shopctl new <slug> --account
+<id> --create-repo`, puis `shopctl provision --env staging`, puis
+`shopctl deploy --env staging`. La première peut s'appeler par `npx` depuis une
+machine qui n'a jamais cloné le socle. Le dépôt est déduit — `<owner>/shop-<slug>` —
+quand `--origin` ne le nomme pas. La première enveloppe `gh` pour créer le dépôt
+— **privé** par défaut —, ses environnements et leurs secrets
+([ADR 0014](docs/architecture/decisions/0014-automatisation-de-la-forge.md)).
+
+Rien de ce qui touche un compte n'a de valeur par défaut. `provision` et
+`deploy` exigent `--env`, `deploy --env production` exige `--yes`, et le compte
+Cloudflare attendu doit être nommé — par `cloudflare.accountId` dans le
+manifeste, par `--account`, ou par `CLOUDFLARE_ACCOUNT_ID` — deux sources qui
+divergent arrêtant l'exécution
+([ADR 0013](docs/architecture/decisions/0013-environnements-de-deploiement.md)).
+
 ### Contrat cible des jalons suivants
 
 Les commandes ci-dessous ne sont pas encore implémentées.
 
 ```bash
-# Provisionner des ressources isolées
-shopctl provision --env staging --dry-run
-shopctl provision --env staging
-
-# Importer et vérifier le catalogue
-shopctl catalog import ./imports/catalog.csv --dry-run
-shopctl catalog import ./imports/catalog.csv
-
-# Tester et déployer
+# Vérifier une boutique déployée
 shopctl verify --env staging
-shopctl deploy --env staging
-shopctl deploy --env production
 
 # Exploiter la boutique
 shopctl backup --env production
@@ -244,7 +279,8 @@ Chaque boutique possède au minimum deux environnements indépendants :
 | `staging` | Recette et validation | Stripe test | Fictives |
 | `production` | Boutique publique | Stripe live | Réelles |
 
-Convention prévue pour les ressources :
+Convention des ressources
+([ADR 0013](docs/architecture/decisions/0013-environnements-de-deploiement.md)) :
 
 ```text
 minshop-{client}-{env}            Worker
@@ -253,9 +289,17 @@ minshop-{client}-{env}-images     R2 public
 minshop-{client}-{env}-files      R2 privé
 ```
 
-Le compte Cloudflare actif devra être comparé au manifeste avant toute
-opération. La CLI devra refuser de déployer lorsque le compte ou l'environnement
-ne correspond pas à la boutique.
+L'environnement qualifie la **souche** du nom : une boutique reste une seule
+famille `minshop-{client}*`, et `destroy-cf.sh` la retire d'un coup. La famille
+non qualifiée — `minshop-{client}-db` — n'est pas un troisième environnement :
+c'est celle que rendent les builds témoins et le développement local, dont aucun
+ne joint un compte.
+
+Le compte Cloudflare actif est comparé au manifeste avant toute opération, et
+`shopctl` refuse de provisionner ou de déployer quand il ne correspond pas — ou
+quand rien ne le nomme. La production porte le domaine personnalisé et ferme
+`workers.dev` au même moment ; staging garde `workers.dev`, qui est le seul
+moyen de l'atteindre.
 
 ## Stratégie de mise à jour
 

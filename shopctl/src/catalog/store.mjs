@@ -23,7 +23,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resourceNames } from '../../../scripts/manifest.mjs';
-import { capture } from '../process.mjs';
+import { wrangler } from '../cloudflare.mjs';
 import { externalError, preconditionError } from '../errors.mjs';
 
 /** The D1 binding the template declares. `wrangler d1 execute` accepts a binding
@@ -41,8 +41,21 @@ export const D1_BINDING = 'DB';
  * then have to carry. `config:validate` already refuses a manifest whose worker
  * name diverges from the convention, which is what makes the derivation safe.
  */
-export function imagesBucket(manifest) {
-  return resourceNames(manifest).images;
+export function imagesBucket(manifest, { env = null } = {}) {
+  return resourceNames(manifest, { env }).images;
+}
+
+/**
+ * The jurisdiction flag every REMOTE R2 call needs.
+ *
+ * A bucket created with `--jurisdiction eu` (ADR 0004) is not in the account's
+ * default namespace: `wrangler r2 object put` without `-J eu` reports the
+ * bucket as missing. Local calls have no jurisdiction to speak of — miniflare
+ * keys its buckets by name alone — so the flag is added only when the call
+ * leaves the machine.
+ */
+export function jurisdictionFlags(manifest, remote) {
+  return remote ? ['-J', manifest.cloudflare.jurisdiction] : [];
 }
 
 /**
@@ -69,13 +82,13 @@ export function assertWranglerNamesShop(root, bucket) {
   if (!existsSync(file)) {
     throw preconditionError(
       `${root} n'a pas de wrangler.jsonc ; wrangler ne saurait pas quelle base écrire.`,
-      'Rendez-le avec `node scripts/prepare-client.mjs <slug>`.',
+      'Rendez-le avec `node scripts/prepare-client.mjs <slug> [--env <staging|production>]`, ou laissez `shopctl provision --env <env>` le faire.',
     );
   }
   if (!readFileSync(file, 'utf8').includes(bucket)) {
     throw preconditionError(
       `wrangler.jsonc ne nomme pas « ${bucket} » : il décrit une autre boutique que ce manifeste.`,
-      'Rendez-le pour cette boutique — `node scripts/prepare-client.mjs <slug>` — avant d\'importer. Sans ce contrôle, l\'import écrirait dans la base d\'une autre boutique : la liaison D1 s\'appelle « DB » partout.',
+      'Rendez-le pour cette boutique ET cet environnement — `node scripts/prepare-client.mjs <slug> [--env <staging|production>]` — avant d\'importer. Sans ce contrôle, l\'import écrirait dans la base d\'une autre boutique, ou dans celle d\'un autre environnement : la liaison D1 s\'appelle « DB » partout.',
     );
   }
 }
@@ -122,11 +135,7 @@ export function extractJson(output) {
  */
 export function readCatalogue({ cwd, remote = false }) {
   const sql = READS.map(([, query]) => `${query};`).join('\n');
-  const result = capture(
-    'npx',
-    ['--no-install', 'wrangler', 'd1', 'execute', D1_BINDING, targetFlag(remote), '--json', '--command', sql],
-    { cwd },
-  );
+  const result = wrangler(['d1', 'execute', D1_BINDING, targetFlag(remote), '--json', '--command', sql], { cwd });
   const documents = extractJson(result.stdout);
   if (!Array.isArray(documents) || documents.length !== READS.length) {
     throw externalError(
@@ -155,7 +164,7 @@ export function applyStatements(statements, { cwd, remote = false }) {
   const file = join(directory, 'import.sql');
   try {
     writeFileSync(file, `${statements.join('\n')}\n`, 'utf8');
-    capture('npx', ['--no-install', 'wrangler', 'd1', 'execute', D1_BINDING, targetFlag(remote), '--file', file, '--yes'], { cwd });
+    wrangler(['d1', 'execute', D1_BINDING, targetFlag(remote), '--file', file, '--yes'], { cwd });
     return { statements: statements.length };
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -176,10 +185,6 @@ export function applyStatements(statements, { cwd, remote = false }) {
  * one is a no-op, since the key is the hash of the bytes going into it. A HEAD
  * per image would buy nothing and cost a wrangler process per image.
  */
-export function putObject({ key, path, mime_type: mimeType }, { cwd, bucket, remote = false }) {
-  capture(
-    'npx',
-    ['--no-install', 'wrangler', 'r2', 'object', 'put', `${bucket}/${key}`, '--file', path, '--content-type', mimeType, targetFlag(remote)],
-    { cwd },
-  );
+export function putObject({ key, path, mime_type: mimeType }, { cwd, bucket, remote = false, jurisdiction = [] }) {
+  wrangler(['r2', 'object', 'put', `${bucket}/${key}`, '--file', path, '--content-type', mimeType, targetFlag(remote), ...jurisdiction], { cwd });
 }

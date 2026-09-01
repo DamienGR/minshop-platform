@@ -33,3 +33,6 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve |
 | [0011](0011-langue-de-l-administration.md) | Langue de l'administration | Accepté |
 | [0012](0012-identite-du-catalogue-importe.md) | Identité du catalogue importé | Accepté |
+| [0013](0013-environnements-de-deploiement.md) | Environnements de déploiement | Accepté |
+| [0014](0014-automatisation-de-la-forge.md) | Automatisation de la forge | Accepté |
+| [0015](0015-cycle-de-vie-d-une-boutique.md) | Cycle de vie d'une boutique, de la construction à la livraison | Accepté |

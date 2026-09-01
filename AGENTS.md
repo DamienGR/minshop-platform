@@ -126,12 +126,27 @@ Every Cloudflare resource name is DERIVED from `cloudflare.workerName`
 and `destroy-cf.sh` removes all of it. Two manifests may never claim the same
 identifier: nothing at runtime separates two shops' data (ADR 0001).
 
+A DEPLOYED resource additionally carries its environment, which qualifies the
+STEM: `minshop-<slug>-staging-db`, `minshop-<slug>-production-images` (ADR 0013).
+The unqualified family is not a third environment — it is what witness builds,
+the browser gate and local development render, none of which reach an account.
+`config:validate` claims both environments' names, so a shop slugged
+`x-staging` colliding with the staging family of `x` is a gate failure rather
+than a discovery.
+
+Every field is required except two: `cloudflare.accountId` and
+`cloudflare.imagesDomain` are `optional` because a shop LEARNS them rather than
+deciding them — one exists only after provisioning has run, the other only if a
+domain was ever attached. A third optional field is a deliberate act;
+`test/scripts/manifest.test.mjs` pins the list by name.
+
 No credential ever goes in the manifest — the schema is closed and a
-`no-credentials` rule scans the values that are allowed.
+`no-credentials` rule scans the values that are allowed. An account id is not a
+credential: it is the first path segment of every dashboard URL.
 
 `node scripts/prepare-client.mjs <slug>` renders `wrangler.jsonc` and the theme
-selection for one shop; `--list` names the shops in the tree, `--out` writes
-elsewhere. The witness shops live in `test/fixtures/clients/` and CI builds
+selection for one shop; `--env <staging|production>` renders that environment's
+names, `--list` names the shops in the tree, `--out` writes elsewhere. The witness shops live in `test/fixtures/clients/` and CI builds
 both. The core must not name any of them: `config:validate` scans core-owned
 files for a shop's slug, display name, worker name, domain or sender, because a
 core that knows one customer is a condition the third one discovers in
@@ -151,9 +166,16 @@ npm run shopctl -- doctor            # tools, tree, provisioning prerequisites
 npm run shopctl -- config validate   # the manifest gate, through the CLI
 npm run shopctl -- catalog validate ./imports/catalog.csv
 npm run shopctl -- catalog import ./imports/catalog.csv --dry-run
+npm run shopctl -- repo                 # dépôt GitHub, environnements, secrets
+npm run shopctl -- new <slug> --account <id> --create-repo   # les trois d'un coup
+npm run shopctl -- provision --env staging --dry-run
+npm run shopctl -- provision --env staging
+npm run shopctl -- deploy --env staging
+npm run shopctl -- deploy --env production --yes
+npm run shopctl -- destroy --env staging --confirm <slug>
 ```
 
-Three rules hold for every command, present and future:
+Four rules hold for every command, present and future:
 
 - **wrap, never reimplement.** `config validate` calls
   `scripts/check-manifest.mjs`, `doctor` calls `scripts/check-toolchain.mjs`, and
@@ -165,7 +187,20 @@ Three rules hold for every command, present and future:
   changes meaning; a new failure mode takes a new code.
 - **no secret on the command line.** A credential-shaped argument is refused —
   it is already in the shell history and the CI log — and every relayed line
-  goes through `redact()` using the manifest's own patterns.
+  goes through `redact()` using the manifest's own patterns. Secrets the CLI
+  generates go to wrangler on STDIN and are never returned, logged or written.
+- **nothing that touches an account is defaulted.** `provision` and `deploy`
+  refuse to run without `--env`; `deploy --env production` refuses without
+  `--yes`; neither will guess the Cloudflare account (manifest `accountId`,
+  `--account`, or `CLOUDFLARE_ACCOUNT_ID`, and two that disagree stop the run).
+  `repo` creates a PRIVATE repository unless told otherwise, and never reopens
+  or recloses an existing one.
+
+`shopctl new` also runs from `npx --package=github:<owner>/<core>#<tag> shopctl
+new <slug>`, which is how the first shop on a machine gets made. npm hands it an
+extracted TARBALL — no `.git`, so no `origin` to ask — and the `--from` default
+falls back to `repository` in the core's package.json. A cloned tree still wins:
+a fork, a mirror or a path given to `--from` is the core the operator stands in.
 
 `shopctl new` clones a TAG with its history, renames the core remote to `core`,
 and DELETES NOTHING: a shop keeps receiving core tags by merge, so every file
@@ -173,9 +208,54 @@ removed at creation is a conflict to re-resolve at each upgrade that touches it.
 (`create-minshop/` is the public upstream scaffolder and does the opposite; the
 two share a verb, not a purpose.)
 
-Tests: `test/scripts/shopctl.test.mjs`, run by `npm test` and `npm run verify`.
-It builds a real core from this repository's index, tags it, and runs the real
-binary against it.
+`provision` is idempotent and resumable with NO state file: every step asks the
+account (`d1 list`, `r2 bucket list`, `secret list`) and then decides. A second
+run creates nothing; a killed run resumes by asking the same questions. An
+existing secret is KEPT, never rotated — `SECRETS_KEK` decrypts the payment keys
+already in D1, and a new one would break payments with no error anyone can read.
+
+A shop's LIFECYCLE has four steps, and the account boundary falls between the
+second and the third (ADR 0015): build on the agency account, private preview
+behind Access, **client enters content on the client's account**, go live and
+tear the agency copy down. The boundary is there because Cloudflare transfers
+nothing between accounts — putting it at go-live would make `backup`/`restore`
+(jalon 9) a prerequisite of every launch. Declaring `cloudflare.stagingDomain`
+renders the staging route AND closes workers.dev, because an Access app binds
+to a hostname and its header is forgeable against a `*.workers.dev` origin;
+leaving both open closes nothing. `deploy` then smoke-tests the inverse
+property: an unauthenticated 200 fails the run.
+
+`destroy` is irreversible and shaped by it: the shop's slug typed out (not
+`--yes`, which becomes a reflex), `--yes` on top in production, read-before-
+write, the database deleted LAST and only once everything else is gone, and a
+non-empty bucket's refusal relayed rather than worked around.
+
+`repo` wraps `gh`, and that is forced rather than preferred (ADR 0014): a GitHub
+environment secret is a libsodium sealed box (X25519 + Blake2b +
+XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
+CLI cannot encrypt one at all. It creates the repository — derived as `<owner>/shop-<slug>` when neither
+`--origin` nor the tree's remote names one, and announced before it is created
+— pushes, creates both environments and sets their Cloudflare secrets;
+idempotently, asking GitHub first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
+rule, because GitHub never returns a secret's value: "already there" cannot be
+read as "already correct".
+
+`deploy` follows plan §5.5 in order: resources, config, `npm run verify`,
+bookmark (production), migrations, build, upload, deferred secrets, smoke test.
+The smoke test can fail the command, and an unreachable site is a failure, never
+a pass. `.github/workflows/deploy.yml` runs the same commands behind a GitHub
+Environment so production waits for a reviewer.
+
+Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
+`provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
+environment, deployment, teardown), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
+tags it, and runs the real binary against it. The last two install
+`test/fixtures/wrangler-double.mjs` at `node_modules/.bin/wrangler` in a
+throwaway shop, and `test/fixtures/gh-double.mjs` on the PATH where `gh` would
+live, against a real git repository whose GitHub remote is rewritten to a local
+bare one by `url.<path>.insteadOf`. The real argument construction, the real
+output parsers and the real exit codes are exercised — only the accounts are
+imaginary.
 
 ## The catalogue import
 
