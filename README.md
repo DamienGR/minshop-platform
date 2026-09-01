@@ -171,6 +171,10 @@ qu'il n'existe un `node_modules` quelque part. Détail dans
 
 ```bash
 npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
+
+# La première boutique d'une machine n'a rien à cloner à la main. `--package=`
+# est obligatoire : le paquet s'appelle `minshop`, la commande `shopctl`.
+npx --package=github:DamienGR/minshop-platform#v1.0.0 shopctl new acme
 ```
 
 ### Livré
@@ -226,7 +230,8 @@ pas un drapeau.
 
 Une boutique complète tient en trois commandes : `shopctl new <slug> --account
 <id> --create-repo`, puis `shopctl provision --env staging`, puis
-`shopctl deploy --env staging`. Le dépôt est déduit — `<owner>/shop-<slug>` —
+`shopctl deploy --env staging`. La première peut s'appeler par `npx` depuis une
+machine qui n'a jamais cloné le socle. Le dépôt est déduit — `<owner>/shop-<slug>` —
 quand `--origin` ne le nomme pas. La première enveloppe `gh` pour créer le dépôt
 — **privé** par défaut —, ses environnements et leurs secrets
 ([ADR 0014](docs/architecture/decisions/0014-automatisation-de-la-forge.md)).

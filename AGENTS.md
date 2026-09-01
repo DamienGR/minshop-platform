@@ -196,6 +196,12 @@ Four rules hold for every command, present and future:
   `repo` creates a PRIVATE repository unless told otherwise, and never reopens
   or recloses an existing one.
 
+`shopctl new` also runs from `npx --package=github:<owner>/<core>#<tag> shopctl
+new <slug>`, which is how the first shop on a machine gets made. npm hands it an
+extracted TARBALL — no `.git`, so no `origin` to ask — and the `--from` default
+falls back to `repository` in the core's package.json. A cloned tree still wins:
+a fork, a mirror or a path given to `--from` is the core the operator stands in.
+
 `shopctl new` clones a TAG with its history, renames the core remote to `core`,
 and DELETES NOTHING: a shop keeps receiving core tags by merge, so every file
 removed at creation is a conflict to re-resolve at each upgrade that touches it.

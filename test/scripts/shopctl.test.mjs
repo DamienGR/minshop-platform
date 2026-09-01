@@ -9,7 +9,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { parseArguments } from '../../shopctl/src/cli.mjs';
-import { NEW_OPTIONS, displayNameFromSlug, resolveAccountId, resolveDomain, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
+import { NEW_OPTIONS, cloneableRepositoryUrl, displayNameFromSlug, resolveAccountId, resolveDomain, resolveThemeId, versionFromTag } from '../../shopctl/src/commands/new.mjs';
 import { buildManifest, renderManifest, yamlScalar } from '../../shopctl/src/manifest-template.mjs';
 import { assertNoCredentialsInArgv, classifyCredential, redact } from '../../shopctl/src/secrets.mjs';
 import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
@@ -289,6 +289,89 @@ describe('the defaults an agency sets once', () => {
     });
     expect(resolveAccountId(undefined, {})).toEqual({ accountId: null, from: null });
     expect(resolveAccountId('b'.repeat(32), { CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32) }).from).toBe('--account');
+  });
+});
+
+/**
+ * `npx --package=github:<owner>/<core> shopctl new …` — no clone, no checkout.
+ *
+ * npm hands the CLI an EXTRACTED TARBALL: the whole tree, minus `.git`. Every
+ * default that asks git a question has to have a second answer, and the one
+ * that matters is "where does the core live" — the operator running this has,
+ * by construction, never cloned the core.
+ */
+describe('running from an extracted tarball', () => {
+  /** The same tree npm would extract: tracked files, no `.git`, and a
+   *  `repository` field pointing wherever the caller says. */
+  function extractedCore(root, repository) {
+    const target = join(root, 'extracted');
+    mkdirSync(target, { recursive: true });
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
+    for (const file of tracked) {
+      mkdirSync(dirname(join(target, file)), { recursive: true });
+      cpSync(join(CORE, file), join(target, file));
+    }
+    const manifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+    manifest.repository = { type: 'git', url: repository };
+    writeFileSync(join(target, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    expect(existsSync(join(target, '.git'))).toBe(false);
+    return target;
+  }
+
+  it('normalises npm’s repository dialect into something git clones', () => {
+    expect(cloneableRepositoryUrl('git+https://github.com/agence/core.git')).toBe('https://github.com/agence/core.git');
+    expect(cloneableRepositoryUrl('git+ssh://git@github.com/agence/core.git#main')).toBe('ssh://git@github.com/agence/core.git');
+    // Already cloneable forms pass through untouched — including a local path.
+    expect(cloneableRepositoryUrl('git@github.com:agence/core.git')).toBe('git@github.com:agence/core.git');
+    expect(cloneableRepositoryUrl('/srv/cores/minshop')).toBe('/srv/cores/minshop');
+  });
+
+  // Without this field the npx invocation fails on its first step, and the
+  // failure names a git remote the operator was never told to create.
+  it('declares a repository in the core’s own package.json', () => {
+    const declared = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')).repository;
+    const url = typeof declared === 'string' ? declared : declared?.url;
+    expect(url, 'package.json must declare "repository" — npx has no remote to ask').toBeTruthy();
+    expect(cloneableRepositoryUrl(url)).toMatch(/^([a-z+]+:\/\/|git@|\/)/);
+  });
+
+  it('creates a shop with no --from and no remote to ask', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-'));
+    const source = createCoreRepository(root);
+    const work = join(root, 'work');
+    mkdirSync(work);
+
+    const result = spawnSync(
+      'node',
+      [join(extractedCore(root, source), 'shopctl/bin/shopctl.mjs'), 'new', 'boutique-du-port', '--core', CORE_TAG, '--no-install', '--json'],
+      { cwd: work, encoding: 'utf8', env: GIT_ENV },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.shop.slug).toBe('boutique-du-port');
+    // The clone came from what package.json declares, and the shop's `core`
+    // remote points back at it — the upgrade path survives the shortcut.
+    expect(report.core.repository).toBe(source);
+    expect(report.git.remotes.core).toBe(source);
+    expect(existsSync(join(work, 'shop-boutique-du-port/client/client.yaml'))).toBe(true);
+  });
+
+  // The fallback is a fallback: a fork, a mirror or a local path handed to
+  // --from is the core the operator is standing in, and it keeps winning.
+  it('still lets --from override what package.json declares', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-from-'));
+    const source = createCoreRepository(root);
+    const work = join(root, 'work');
+    mkdirSync(work);
+    const extracted = extractedCore(root, 'https://github.com/quelquun-dautre/core.git');
+
+    const result = spawnSync(
+      'node',
+      [join(extracted, 'shopctl/bin/shopctl.mjs'), 'new', 'boutique-du-port', '--from', source, '--core', CORE_TAG, '--no-install'],
+      { cwd: work, encoding: 'utf8', env: GIT_ENV },
+    );
+    expect(result.status, result.stderr).toBe(0);
   });
 });
 

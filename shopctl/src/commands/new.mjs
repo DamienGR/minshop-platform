@@ -228,23 +228,50 @@ function assertUsableTarget(target) {
   }
 }
 
-/** The core repository to clone from. Defaults to wherever THIS checkout came
- *  from, which is the agency core on an agency machine, and is what makes the
- *  generated shop's `core` remote point at something the whole team can fetch. */
+/**
+ * Strip npm's `git+` prefix and its `#ref` suffix from a repository URL.
+ *
+ * `repository.url` is written in npm's dialect — `git+https://…git` — and
+ * `git clone` does not accept it. Normalising here rather than writing a bare
+ * URL in package.json keeps the field valid for npm, which is the tool that
+ * actually reads it.
+ */
+export function cloneableRepositoryUrl(url) {
+  return String(url)
+    .replace(/^git\+/, '')
+    .replace(/#.*$/, '');
+}
+
+/**
+ * Where the core lives, for the clone.
+ *
+ * The `origin` remote of the checkout shopctl is running from, when there is
+ * one. There is not always: `npx --package=github:owner/core shopctl new …`
+ * extracts a TARBALL, which has no remote to ask — and that invocation is the
+ * one an operator uses on a machine that has never cloned anything, which is
+ * exactly when this answer matters most.
+ *
+ * `repository` in package.json is the same answer written down, in npm's own
+ * field for the question. It is a fallback rather than the primary source
+ * because a fork, a mirror or a local path passed as `--from` must keep
+ * winning: the core a shop is cloned from is the core the operator is standing
+ * in, not the one the package was published from.
+ */
 function defaultCoreRepository() {
   const result = capture('git', ['remote', 'get-url', 'origin'], { cwd: CORE_ROOT, allowFailure: true });
   const url = result.stdout.trim();
-  if (result.status !== 0 || !url) {
-    throw preconditionError(
-      'this checkout has no "origin" remote, so shopctl cannot tell where the core lives.',
-      'Pass --from <url|path> with the core repository.',
-    );
-  }
-  return url;
+  if (result.status === 0 && url) return url;
+
+  const declared = corePackage().repository;
+  const fallback = typeof declared === 'string' ? declared : (declared?.url ?? '');
+  if (fallback) return cloneableRepositoryUrl(fallback);
+
+  throw preconditionError(
+    'this checkout has no "origin" remote and its package.json declares no repository, so shopctl cannot tell where the core lives.',
+    'Pass --from <url|path> with the core repository.',
+  );
 }
 
-/** Does this ref exist as a TAG in that repository? Asked over the wire before
- *  anything is created, so a typo costs a message and not a half-clone. */
 /**
  * The repository a slug implies, when `--origin` says nothing.
  *
@@ -257,6 +284,8 @@ function deriveOriginUrl(slug, owner) {
   return repositoryUrl(owner ?? defaultOwner(), repositoryNameFor(slug), gitProtocol());
 }
 
+/** Does this ref exist as a TAG in that repository? Asked over the wire before
+ *  anything is created, so a typo costs a message and not a half-clone. */
 function assertTagExists(repository, tag) {
   const listed = capture('git', ['ls-remote', '--tags', '--refs', repository], { allowFailure: true });
   if (listed.status !== 0) {

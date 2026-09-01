@@ -13,6 +13,27 @@ node shopctl/bin/shopctl.mjs <commande>     # sans passer par npm
 Aucune dépendance, aucune étape de build : `shopctl new` tourne avant qu'il n'y
 ait un `node_modules` où que ce soit.
 
+### Sans cloner le socle
+
+La première boutique d'une machine n'a rien à cloner à la main :
+
+```sh
+npx --package=github:DamienGR/minshop-platform#v1.0.0 shopctl new acme
+```
+
+`--package=` est obligatoire : le paquet s'appelle `minshop` et la commande
+`shopctl`, et npx ne devine pas l'un depuis l'autre. Le `#<tag>` est le tag du
+socle — npx et `--core` répondent alors à la même question, ce qui est la
+propriété qu'on veut (ADR 0009) : la CLI qui écrit le manifeste est celle que
+le tag cloné transporte. Comptez une minute au premier appel, le temps du
+clone ; les suivants sortent du cache de npx en quelques secondes.
+
+npm livre ici un **tarball**, pas un dépôt : il n'y a pas de remote `origin` à
+qui demander où vit le socle. `--from` retombe donc sur le champ `repository`
+du `package.json` du socle, et un dépôt cloné garde la priorité — c'est un
+recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
+`--from` continue de gagner.
+
 ## Commandes livrées
 
 | Commande | Jalon | Rôle |

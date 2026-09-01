@@ -322,6 +322,21 @@ Les écrire en dur serait impossible de toute façon — `config:validate` écho
 tout fichier du cœur contenant le domaine d'une boutique — et ce serait surtout
 un socle qui connaît une agence, donc invendable à la seconde.
 
+`shopctl new` s'appelle aussi **sans cloner le socle**, ce qui est la forme que
+prend la toute première boutique d'une machine :
+
+```bash
+npx --package=github:<owner>/<socle>#v1.0.0 shopctl new <slug>
+```
+
+`--package=` est obligatoire — le paquet et la commande n'ont pas le même nom —
+et le `#<tag>` répond à la même question que `--core`, ce qui est exactement la
+propriété d'ADR 0009 : la CLI qui écrit le manifeste est celle que le tag cloné
+transporte. npm livre un **tarball**, sans remote `origin` : le défaut de
+`--from` retombe alors sur le champ `repository` du `package.json` du socle. Un
+arbre cloné garde la priorité, parce qu'une bifurcation ou un miroir est le
+socle devant lequel l'exploitant se tient.
+
 `shopctl new` doit :
 
 1. [x] valider le slug et les options ;
