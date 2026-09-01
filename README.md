@@ -175,6 +175,9 @@ npm run shopctl -- <commande>     # ou node shopctl/bin/shopctl.mjs <commande>
 # La première boutique d'une machine n'a rien à cloner à la main. `--package=`
 # est obligatoire : le paquet s'appelle `minshop`, la commande `shopctl`.
 npx --package=github:DamienGR/minshop-platform#v1.0.0 shopctl new acme
+
+# npx n'installe rien de durable : dans la boutique, la CLI est celle du clone.
+cd shop-acme && npm run shopctl -- doctor
 ```
 
 ### Livré
