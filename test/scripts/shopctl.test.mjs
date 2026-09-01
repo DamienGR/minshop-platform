@@ -357,6 +357,36 @@ describe('running from an extracted tarball', () => {
     expect(existsSync(join(work, 'shop-boutique-du-port/client/client.yaml'))).toBe(true);
   });
 
+  /**
+   * Every next step is a line that runs.
+   *
+   * npx exposes `shopctl` for the length of ONE command and keeps nothing, so
+   * an operator who created their first shop that way has no `shopctl` on their
+   * PATH at all — and the report used to hand them `shopctl doctor`. The shop
+   * carries its own CLI; `npm run shopctl --` reaches it, before `npm ci` and
+   * without a global install (which ADR 0009 rules out anyway: one shop's CLI
+   * must never drive another's).
+   */
+  it('names its next steps as they must be typed, not as a bare shopctl', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shopctl-steps-'));
+    const source = createCoreRepository(root);
+    const work = join(root, 'work');
+    mkdirSync(work);
+
+    const result = spawnSync(
+      'node',
+      [join(extractedCore(root, source), 'shopctl/bin/shopctl.mjs'), 'new', 'boutique-du-port', '--core', CORE_TAG, '--no-install', '--json'],
+      { cwd: work, encoding: 'utf8', env: GIT_ENV },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const { nextSteps } = JSON.parse(result.stdout);
+
+    expect(nextSteps[0]).toBe('cd shop-boutique-du-port');
+    expect(nextSteps).toContain('npm run shopctl -- doctor');
+    // Nothing tells the operator to type a word their shell does not have.
+    expect(nextSteps.filter((step) => /^shopctl /.test(step))).toEqual([]);
+  });
+
   // The fallback is a fallback: a fork, a mirror or a local path handed to
   // --from is the core the operator is standing in, and it keeps winning.
   it('still lets --from override what package.json declares', () => {
@@ -423,7 +453,7 @@ describe('shopctl new', () => {
     expect(report.forgeError.kind).toBe('precondition');
     // The shop is there, and the next step says how to finish it.
     expect(treeFiles(join(work, 'shop-atelier-x'))).toContain('client/client.yaml');
-    expect(report.nextSteps.some((step) => step.startsWith('shopctl repo'))).toBe(true);
+    expect(report.nextSteps.some((step) => step.startsWith('npm run shopctl -- repo'))).toBe(true);
   });
 
   it('refuses a slug the platform already uses', () => {

@@ -28,6 +28,19 @@ propriété qu'on veut (ADR 0009) : la CLI qui écrit le manifeste est celle que
 le tag cloné transporte. Comptez une minute au premier appel, le temps du
 clone ; les suivants sortent du cache de npx en quelques secondes.
 
+`npx` expose la commande le temps d'**un seul appel** et ne garde rien : après
+le `cd` dans la boutique, `shopctl` n'existe pas dans votre shell. C'est normal
+et voulu — la boutique transporte sa propre CLI, celle de son tag (ADR 0009),
+et une installation globale ferait piloter une boutique par la CLI d'une autre.
+Depuis la boutique :
+
+```sh
+npm run shopctl -- doctor          # fonctionne avant même npm ci : zéro dépendance
+node shopctl/bin/shopctl.mjs doctor
+```
+
+C'est la forme que le rapport de `new` imprime dans ses prochaines actions.
+
 npm livre ici un **tarball**, pas un dépôt : il n'y a pas de remote `origin` à
 qui demander où vit le socle. `--from` retombe donc sur le champ `repository`
 du `package.json` du socle, et un dépôt cloné garde la priorité — c'est un
