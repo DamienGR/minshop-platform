@@ -152,7 +152,7 @@ export function runDestroy(args, reporter) {
     });
     if (!json) {
       reporter.section(
-        `Simulation. Pour supprimer : shopctl destroy --env ${env} --confirm ${manifest.client.slug}${env === 'production' ? ' --yes' : ''}`,
+        `Simulation. Pour supprimer : npm run shopctl -- destroy --env ${env} --confirm ${manifest.client.slug}${env === 'production' ? ' --yes' : ''}`,
       );
     }
     return 0;

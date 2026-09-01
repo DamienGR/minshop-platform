@@ -550,28 +550,41 @@ export function runNew(args, reporter) {
       reporter.fail(error.message, error.hint);
       reporter.warn(
         `la boutique est complète dans ${relative(cwd, target) || target} ; seule la création du dépôt a échoué.`,
-        'Corrigez ce que la ligne ✗ ci-dessus nomme, puis relancez `shopctl repo` depuis la boutique : rien n\'est à refaire.',
+        'Corrigez ce que la ligne ✗ ci-dessus nomme, puis relancez `npm run shopctl -- repo` depuis la boutique : rien n\'est à refaire.',
       );
     }
   }
 
   // --------------------------------------------------------- 11. what's next
+  //
+  // Every step is printed AS IT MUST BE TYPED, from inside the shop.
+  //
+  // `shopctl doctor` would be a lie: nothing put `shopctl` on the operator's
+  // PATH. `npx` least of all — it exposes the bin for the length of one command
+  // and keeps nothing — which is exactly the path someone creating their first
+  // shop took, and exactly when a wrong next step costs the most.
+  //
+  // `npm run shopctl --` is also the only form that stays correct with a second
+  // shop on the same machine: a shop is operated by the CLI ITS OWN tag carries
+  // (ADR 0009), and a global install would have one shop's CLI drive another's.
   const names = resourceNames(manifest);
+  const enter = relative(cwd, target);
   const nextSteps = [
+    ...(enter ? [`cd ${enter}`] : []),
     ...(installed ? [] : ['npm ci', 'npm ci --prefix mcp']),
-    'shopctl doctor',
+    'npm run shopctl -- doctor',
     ...(domainFrom === 'placeholder' ? [`remplacer le domaine placeholder ${domain} dans client/client.yaml`] : []),
     ...(accountId ? [] : ['ajouter cloudflare.accountId au manifeste (ou relancer avec --account)']),
     ...(forgeError !== null
-      ? ['shopctl repo   # reprend la création du dépôt là où elle a échoué']
+      ? ['npm run shopctl -- repo   # reprend la création du dépôt là où elle a échoué']
       : forge !== null
       ? []
       : originUrl
-        ? [`shopctl repo   # crée le dépôt, les environnements et leurs secrets`, `git push -u origin ${branch}`]
-        : ['git remote add origin <url> && shopctl repo']),
+        ? [`npm run shopctl -- repo   # crée le dépôt, les environnements et leurs secrets`, `git push -u origin ${branch}`]
+        : ['git remote add origin <url> && npm run shopctl -- repo']),
     'npm run verify',
-    'shopctl provision --env staging',
-    'shopctl deploy --env staging',
+    'npm run shopctl -- provision --env staging',
+    'npm run shopctl -- deploy --env staging',
   ];
 
   reporter.section(`Boutique ${displayName} prête dans ${relative(cwd, target) || target}`);

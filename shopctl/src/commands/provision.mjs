@@ -355,7 +355,7 @@ export function runProvision(args, reporter) {
     reporter.section(
       dryRun
         ? `Simulation terminée. Relancez sans --dry-run pour appliquer.`
-        : `${env} provisionné pour ${manifest.client.slug}. Suite : shopctl deploy --env ${env}.`,
+        : `${env} provisionné pour ${manifest.client.slug}. Suite : npm run shopctl -- deploy --env ${env}.`,
     );
   }
   return 0;
