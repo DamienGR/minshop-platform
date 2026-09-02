@@ -64,6 +64,27 @@ function createCoreRepository(root, { tag = CORE_TAG } = {}) {
   git(['add', '-A'], core);
   git(['commit', '--quiet', '-m', `Core ${tag}`], core);
   git(['tag', tag], core);
+  // Pack before anyone clones this, and leave no loose object behind.
+  //
+  // A local `git clone` does not negotiate a pack: it walks the source's
+  // `objects/` directory and hardlinks or copies each file it finds. Against
+  // ~700 loose objects that is ~700 chances for the file git just listed to be
+  // gone by the time it opens it, and the failure is fatal rather than skipped:
+  //   fatal: failed to copy file to '…/.git/objects/5f/4d7c…': No such file or
+  //   directory
+  // — which is the source vanishing, not the destination, because copy_file()
+  // reports the destination path whichever end failed to open.
+  //
+  // It is rare and it is real: the same clone died on CI on this commit's base
+  // (`Generated shop`, 2026-09-01) and on the pull request that followed, each
+  // time on a different test in this file — whichever one happened to lose the
+  // race. It has not reproduced on a developer machine; CI runs git 2.55.
+  //
+  // Packing first leaves NO loose object for anything to prune later: 752 of
+  // them become one packfile and its index, five files in all, written before
+  // the clone starts and never rewritten. There is no per-fanout directory left
+  // for the clone to create either, and it copies five files instead of 752.
+  git(['gc', '--quiet', '--prune=now'], core);
   return core;
 }
 

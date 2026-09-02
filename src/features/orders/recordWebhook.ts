@@ -50,7 +50,7 @@ export async function recordPaidWebhookOrder(
     await markInventoryReservationTerminal(
       env.DB,
       result.releaseReservationId,
-      'failed',
+      result.releaseReason ?? 'failed',
       purgeStockProductCache,
     );
   }
