@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  REAL_IMAGES,
+  PNG_1X1,
+  SVG_WITH_SCRIPT,
+  HTML_PAGE,
+  fileOf,
+} from '../../../test/helpers/image-bytes.mjs';
+import {
   onDemandImageDeliveryAvailable,
   productEmailImageUrl,
   productImageSources,
@@ -146,21 +153,31 @@ describe('productImageSources', () => {
 });
 
 function file(type: string, bytes: number): File {
-  return new File([new Uint8Array(bytes)], 'x', { type });
+  const padded = new Uint8Array(bytes);
+  padded.set(PNG_1X1.subarray(0, Math.min(PNG_1X1.length, bytes)));
+  return new File([padded], 'x', { type });
 }
 
 describe('validateImage', () => {
-  it('accepts the supported image types under the size limit', () => {
-    for (const type of ['image/jpeg', 'image/png', 'image/webp', 'image/gif']) {
-      expect(validateImage(file(type, 1024))).toBeNull();
+  it('accepts the supported image types under the size limit', async () => {
+    for (const [type, bytes] of Object.entries(REAL_IMAGES)) {
+      expect(await validateImage(fileOf(bytes, { type }))).toBeNull();
     }
   });
 
-  it('rejects a non-image type', () => {
-    expect(validateImage(file('application/pdf', 1024))).toMatch(/JPEG|PNG|WebP|GIF/);
+  it('rejects a non-image type', async () => {
+    expect(await validateImage(fileOf(HTML_PAGE, { type: 'application/pdf' }))).toMatch(
+      /JPEG|PNG|WebP|GIF/,
+    );
   });
 
-  it('rejects files larger than 5 MB', () => {
-    expect(validateImage(file('image/png', 5 * 1024 * 1024 + 1))).toMatch(/5 MB/);
+  it('rejects an image whose bytes are something else', async () => {
+    expect(await validateImage(fileOf(SVG_WITH_SCRIPT, { type: 'image/png' }))).toMatch(
+      /JPEG|PNG|WebP|GIF/,
+    );
+  });
+
+  it('rejects files larger than 5 MB', async () => {
+    expect(await validateImage(file('image/png', 5 * 1024 * 1024 + 1))).toMatch(/5 MB/);
   });
 });

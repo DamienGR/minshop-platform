@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   if (action === 'add') {
     const files = form.getAll('images').filter((f): f is File => f instanceof File && f.size > 0);
     for (const file of files) {
-      const imgErr = validateImage(file);
+      const imgErr = await validateImage(file);
       if (imgErr) return back(imgErr);
     }
     for (const file of files) {

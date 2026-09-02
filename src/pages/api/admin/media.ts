@@ -120,7 +120,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   // Validate everything before storing anything, so a bad file in a multi-select
   // doesn't leave half the batch uploaded.
   for (const file of files) {
-    const err = validateUpload(file);
+    const err = await validateUpload(file);
     if (err) return fail(err);
   }
 

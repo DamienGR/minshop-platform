@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { sweepStaleNotifications } from './features/email/outbox';
 import { releaseExpiredReservations } from './features/orders/reservations';
 import { getSetting } from './features/settings/db';
+import { logSafe } from './features/observability/logSafe.ts';
 
 /**
  * Worker entrypoint.
@@ -32,7 +33,7 @@ async function runScheduledSweeps(): Promise<void> {
   try {
     await releaseExpiredReservations(db, 50);
   } catch (err) {
-    console.error('Scheduled reservation sweep failed:', err);
+    console.error('Scheduled reservation sweep failed:', logSafe(err));
   }
 
   // Notification retry needs an origin to build order links with, and a cron
@@ -46,7 +47,7 @@ async function runScheduledSweeps(): Promise<void> {
       await sweepStaleNotifications(db, origin);
     }
   } catch (err) {
-    console.error('Scheduled notification sweep failed:', err);
+    console.error('Scheduled notification sweep failed:', logSafe(err));
   }
 }
 

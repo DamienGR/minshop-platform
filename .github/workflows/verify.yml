@@ -213,6 +213,8 @@ jobs:
           npm run theme:check
           npx astro build
           node scripts/check-built-css.mjs
+          npm run check:secrets:artifacts
+          npm run test:security
           npm run check:deploy
 
   # Which shops exist is a property of the TREE, for the same reason the theme

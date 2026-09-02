@@ -1,0 +1,15 @@
+# Hardening for the STATIC half of the store.
+#
+# src/middleware.ts adds these to every response the Worker produces. Static
+# assets are not among them: Workers Assets serves /favicon.svg, /placeholder.*
+# and everything under /_astro/ ahead of the Worker, so the middleware never
+# sees the request and the response left bare. This file is how the asset
+# server is told the same rules — same three headers, same referrer floor.
+#
+# The adapter appends its own /_astro/* immutable Cache-Control rule to this
+# file at build time; keep that path out of here so the two do not compete.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin

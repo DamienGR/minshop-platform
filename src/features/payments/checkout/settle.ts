@@ -12,6 +12,7 @@ import { deliverOrderNotifications } from '../../email/outbox';
 import type { StoreSettings } from '../../settings/db';
 import { purgeStockProductCache } from '../../cache/purge';
 import { t } from '../../i18n/index.ts';
+import { logSafe } from '../../observability/logSafe.ts';
 
 // Settlement logic for the self-rendered /pay page, one function per method. Kept
 // here (beside the views) so the route stays a thin dispatcher.
@@ -96,7 +97,7 @@ export async function settleLightningOnLoad(
   // it doesn't dispatch the outbox rows nothing else reliably will (the sweep
   // needs a later sale). Backgrounded when the page has an execution context.
   const deliver = () => deliverOrderNotifications(env.DB, settledOrderId!, origin, settings);
-  if (waitUntil) waitUntil(deliver().catch((err) => console.error('Notification delivery failed:', err)));
+  if (waitUntil) waitUntil(deliver().catch((err) => console.error('Notification delivery failed:', logSafe(err))));
   else await deliver();
   return true;
 }

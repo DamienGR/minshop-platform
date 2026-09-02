@@ -154,7 +154,7 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   let uploadedMediaId: number | null = null;
   const file = form.get('image');
   if (file instanceof File && file.size > 0) {
-    const imgErr = validateImage(file);
+    const imgErr = await validateImage(file);
     if (imgErr) return fail(imgErr);
     const media = await uploadMedia(env.DB, storage, await optimizeUpload(file), file.name);
     uploadedMediaId = media.id;

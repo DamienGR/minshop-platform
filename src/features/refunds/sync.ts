@@ -12,6 +12,7 @@ import type { RefundSyncInput } from '../payments/provider';
 // extensionless relative paths. allowImportingTsExtensions is on, so Vite and
 // astro check both accept it.
 import { syncProviderRefund, openRefundReview, openReviewIfOverRefunded } from './db.ts';
+import { logSafe } from '../observability/logSafe.ts';
 
 export type SyncOutcome =
   /** Applied; `deltaCents` is how much the provider total advanced by. */
@@ -134,7 +135,7 @@ export async function applyRefundEvent(
       }
     } catch (err) {
       // A provider outage must not lose the event. It stays queued for Retry.
-      console.error('Refund correlation lookup failed:', err);
+      console.error('Refund correlation lookup failed:', logSafe(err));
     }
   }
 

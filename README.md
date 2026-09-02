@@ -340,6 +340,7 @@ npm run test:tenant-isolation
 npm run theme:check
 npm run test:storefront-contract
 npm run test:browser
+npm run test:security
 npm run test:restore
 npm run verify
 ```
@@ -352,6 +353,23 @@ sous forme de signature du design calculé plutôt que de comparaison de pixels
 (voir AGENTS.md → « The browser gate »). Elle n'est pas dans `npm run verify` :
 c'est la seule porte qui demande un navigateur, et la CI lui donne son propre
 job par thème.
+
+`npm run test:security` est la porte du jalon 8. Elle démarre le Worker
+**construit** en processus, sur une base issue des vraies migrations, et lui
+pose les questions qu'aucun test unitaire ne peut poser parce qu'elles portent
+sur la chaîne assemblée plutôt que sur une fonction : une requête anonyme
+atteint-elle l'administration, un formulaire d'une autre origine est-il refusé,
+une session expirée ouvre-t-elle encore, un fichier ment-il sur son type, et ce
+que le Worker imprime contient-il l'adresse d'un client. Les routes
+d'administration éprouvées sont **dérivées** de l'arborescence, donc un endpoint
+ajouté demain est couvert sans que personne ait à penser à cette suite. Elle est
+incluse dans `npm run verify`, et la CI la fait aussi passer à la boutique
+générée.
+
+`npm run check:secrets:artifacts` complète le scan de secrets de l'arbre suivi
+en relisant `dist/` : Vite fige `import.meta.env.*` à la construction, donc une
+valeur qui n'existe que dans un `.dev.vars` non suivi peut se retrouver compilée
+dans un bundle dont la moitié est servie aux navigateurs.
 
 Une boutique ne pourra pas être déployée lorsque :
 

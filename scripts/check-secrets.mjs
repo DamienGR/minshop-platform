@@ -26,10 +26,20 @@
  * A false positive is silenced by putting `secret-scan:ignore` on the line (or
  * the line above it), which leaves a reviewable marker in the diff instead of a
  * silent exclusion list.
+ *
+ * `--artifacts` scans the BUILD OUTPUT as well, and the reason it is a separate
+ * flag is that it needs a build. The tracked tree is not the only place a
+ * credential can end up: Vite inlines `import.meta.env.*` at build time, so a
+ * value that only ever lived in an untracked `.dev.vars` can be compiled into
+ * the bundle — and half of that bundle is served to browsers. Nothing in the
+ * repository would show it. So the artifacts are read the same way, plus one
+ * check the tracked tree cannot have: the literal values in the local
+ * `.dev.vars`, which are real credentials by definition, must appear nowhere
+ * in `dist/`.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -79,6 +89,11 @@ const RULES = [
   },
 ];
 
+const scanArtifacts = process.argv.includes('--artifacts');
+
+/** A bundle is one file where the sources were many, so it gets its own bound. */
+const ARTIFACT_MAX_BYTES = 20_000_000;
+
 const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
   .split('\0')
   .filter(Boolean);
@@ -104,25 +119,39 @@ function redact(match) {
   return match.length <= 12 ? match : `${match.slice(0, 8)}…${match.slice(-4)}`;
 }
 
-for (const file of tracked) {
-  if (SKIP_CONTENT.some((pattern) => pattern.test(file))) continue;
+/**
+ * Apply the content rules to one file.
+ *
+ * `ignoreMarkers` is off for build output: a `secret-scan:ignore` comment there
+ * is not a reviewed decision, it is whatever survived minification from a
+ * source file that already had its own review. `maxBytes` is larger there for
+ * the same reason — a bundle is one file where the sources were many, and the
+ * server bundle here is already megabytes.
+ */
+function scanContent(file, { ignoreMarkers = true, maxBytes = 2_000_000 } = {}) {
+  if (SKIP_CONTENT.some((pattern) => pattern.test(file))) return;
 
   const path = resolve(root, file);
   let stats;
   try {
     stats = statSync(path);
   } catch {
-    continue; // Tracked but absent from the working tree (e.g. a sparse checkout).
+    return; // Tracked but absent from the working tree (e.g. a sparse checkout).
   }
-  if (!stats.isFile() || stats.size > 2_000_000) continue;
+  if (!stats.isFile() || stats.size > maxBytes) return;
 
-  const source = readFileSync(path, 'utf8');
-  if (source.includes('\0')) continue; // Binary without a known extension.
+  let source;
+  try {
+    source = readFileSync(path, 'utf8');
+  } catch {
+    return;
+  }
+  if (source.includes('\0')) return; // Binary without a known extension.
 
   const lines = source.split('\n');
   lines.forEach((line, index) => {
-    if (line.includes(IGNORE_MARKER)) return;
-    if (index > 0 && lines[index - 1].includes(IGNORE_MARKER)) return;
+    if (ignoreMarkers && line.includes(IGNORE_MARKER)) return;
+    if (ignoreMarkers && index > 0 && lines[index - 1].includes(IGNORE_MARKER)) return;
 
     for (const { name, pattern, allowValue } of RULES) {
       const match = pattern.exec(line);
@@ -131,6 +160,67 @@ for (const file of tracked) {
       findings.push({ file, line: index + 1, rule: name, excerpt: redact(match[0]) });
     }
   });
+}
+
+for (const file of tracked) scanContent(file);
+
+// ---------------------------------------------------------------------------
+// 4. The build output (--artifacts).
+
+/** Every file under a directory, as paths relative to the repository root. */
+function walk(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else out.push(relative(root, full));
+  }
+  return out;
+}
+
+let artifacts = [];
+if (scanArtifacts) {
+  const dist = resolve(root, 'dist');
+  if (!existsSync(dist)) {
+    console.error(
+      '✗ secret scan: --artifacts asked for the build output and dist/ is not there.\n' +
+        '  Run `npm run build` first (`npm run verify` builds before it gets here).',
+    );
+    process.exit(1);
+  }
+  artifacts = walk(dist);
+  for (const file of artifacts) scanContent(file, { ignoreMarkers: false, maxBytes: ARTIFACT_MAX_BYTES });
+
+  // The one check only the artifacts can fail: a value that exists nowhere in
+  // the repository, because it lives in the untracked local `.dev.vars`, and
+  // was compiled into a bundle. Every value there is a real credential.
+  const devVars = resolve(root, '.dev.vars');
+  if (existsSync(devVars)) {
+    const values = readFileSync(devVars, 'utf8')
+      .split('\n')
+      .map((line) => line.replace(/^\s*(?:export\s+)?[A-Za-z0-9_]+\s*=\s*/, '').trim())
+      .map((value) => value.replace(/^["']|["']$/g, ''))
+      .filter((value) => value.length >= 8 && !value.startsWith('#'));
+    for (const file of artifacts) {
+      const path = resolve(root, file);
+      const stats = statSync(path);
+      if (!stats.isFile() || stats.size > ARTIFACT_MAX_BYTES) continue;
+      let source;
+      try {
+        source = readFileSync(path, 'utf8');
+      } catch {
+        continue;
+      }
+      for (const value of values) {
+        if (!source.includes(value)) continue;
+        findings.push({
+          file,
+          line: 0,
+          rule: 'local .dev.vars value compiled into the build output',
+          excerpt: redact(value),
+        });
+      }
+    }
+  }
 }
 
 if (findings.length) {
@@ -145,4 +235,8 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`✓ secret scan: ${tracked.length} tracked files, no credential found`);
+console.log(
+  `✓ secret scan: ${tracked.length} tracked files` +
+    (scanArtifacts ? ` + ${artifacts.length} build artifacts` : '') +
+    ', no credential found',
+);

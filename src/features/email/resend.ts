@@ -30,8 +30,15 @@ export function createResendEmail(
         }),
       });
       if (!res.ok) {
-        const detail = await res.text().catch(() => '');
-        throw new Error(`Resend send failed (${res.status}): ${detail}`);
+        // The status, and only the status. Resend's error body is free text it
+        // writes about the message it refused, and it names the recipient in it
+        // ("… is not a valid email"). Every consumer of this error logs it, so
+        // appending that body put a customer's address in the store's logs on
+        // the ordinary path where an address is mistyped. The status is the
+        // actionable half: 4xx is this message, 5xx is Resend, and the outbox
+        // retries on both. features/observability/logSafe.ts is the second
+        // layer for adapters that have not had this read done on them.
+        throw new Error(`Resend send failed (${res.status})`);
       }
     },
   };

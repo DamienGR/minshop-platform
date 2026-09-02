@@ -6,6 +6,7 @@ import { guestOrderUrl } from '../orders/guestAccess.ts';
 import { shouldSendCustomerOrderEmail } from '../email/orderPolicy';
 import { getConfig } from '../../config';
 import { getSetting } from '../settings/db';
+import { logSafe } from '../observability/logSafe.ts';
 
 /**
  * Tell the customer about a refund we just recognised.
@@ -42,6 +43,6 @@ export async function sendRefundNotice(
         await guestOrderUrl(env.DB, order.public_id, origin)),
     );
   } catch (err) {
-    console.error('Refund email failed:', err);
+    console.error('Refund email failed:', logSafe(err));
   }
 }

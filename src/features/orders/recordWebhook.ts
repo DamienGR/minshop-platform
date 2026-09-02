@@ -13,6 +13,7 @@ import {
 } from './reservations';
 import { markPendingSettled } from '../payments/lightning/pending';
 import { purgeStockProductCache } from '../cache/purge';
+import { logSafe } from '../observability/logSafe.ts';
 
 /**
  * Persist a verified paid-webhook order (idempotent on the provider session id)
@@ -73,7 +74,7 @@ export async function recordPaidWebhookOrder(
       const provider = await getPaymentProvider(paymentMethod as PaymentMethod);
       findSessionIdForPayment = provider.findSessionIdForPayment?.bind(provider);
     } catch (err) {
-      console.error('Refund correlation provider unavailable:', err);
+      console.error('Refund correlation provider unavailable:', logSafe(err));
     }
     const outcome = await applyRefundEvent(env.DB, paymentMethod, result.refundSync, {
       findSessionIdForPayment,
@@ -150,6 +151,6 @@ export async function recordPaidWebhookOrder(
     await deliverOrderNotifications(env.DB, orderId, origin, settings);
     await sweepStaleNotifications(env.DB, origin);
   };
-  if (waitUntil) waitUntil(deliver().catch((err) => console.error('Notification delivery failed:', err)));
+  if (waitUntil) waitUntil(deliver().catch((err) => console.error('Notification delivery failed:', logSafe(err))));
   else await deliver();
 }
