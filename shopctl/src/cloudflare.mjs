@@ -46,9 +46,9 @@ export function wranglerCommand(cwd = process.cwd()) {
   return existsSync(local) ? { command: local, prefix: [] } : { command: 'npx', prefix: ['--no-install', 'wrangler'] };
 }
 
-export function wrangler(args, { cwd = process.cwd(), input, allowFailure = false, env = process.env } = {}) {
+export function wrangler(args, { cwd = process.cwd(), input, allowFailure = false, env = process.env, maxBuffer } = {}) {
   const { command, prefix } = wranglerCommand(cwd);
-  return capture(command, [...prefix, ...args], { cwd, input, allowFailure, env });
+  return capture(command, [...prefix, ...args], { cwd, input, allowFailure, env, maxBuffer });
 }
 
 /**

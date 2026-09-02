@@ -12,7 +12,7 @@
  * them, and the shape of a generated tree is already pinned by jalon 2's suite.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -44,7 +44,7 @@ export const OTHER_ACCOUNT = { id: '0123456789abcdef0123456789abcdef', name: 'Co
  * running it — and what is under test is the conversation with the account, not
  * the shape of a generated tree, which jalon 2's suite already pins.
  */
-export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = false, forge = false } = {}) {
+export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = false, forge = false, migrations = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'shopctl-provision-'));
   const core = JSON.parse(readFileSync(resolve(CORE, 'package.json'), 'utf8'));
 
@@ -55,6 +55,12 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
   // `--skip-build` refuses to run without one, which is the point of the flag:
   // reusing a build that is not there would upload the previous shop's bundle.
   if (built) mkdirSync(join(root, 'dist/server'), { recursive: true });
+
+  // The REAL migrations, for the suites whose subject is the schema itself:
+  // the backup derives its table list from `sqlite_master`, so a hand-written
+  // subset would be a second schema to keep in step — the drift ADR 0005 and
+  // the settlement suite both refuse.
+  if (migrations) cpSync(resolve(CORE, 'migrations'), join(root, 'migrations'), { recursive: true });
 
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'shop', version: core.version, private: true }, null, 2));
   cpSync(resolve(CORE, 'wrangler.template.jsonc'), join(root, 'wrangler.template.jsonc'));
@@ -160,6 +166,46 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
     },
     read() {
       return JSON.parse(readFileSync(statePath, 'utf8'));
+    },
+    /**
+     * Talk to the imaginary account's D1 directly, through the double's own
+     * code path rather than around it.
+     *
+     * A test that seeded rows with its own `node:sqlite` handle would be
+     * writing to a second opinion of where the database is; this runs the same
+     * binary shopctl runs, so the rows land wherever shopctl will look for
+     * them. `wrangler.jsonc` has to be rendered first — `provision` does that.
+     */
+    wrangler(args) {
+      const result = spawnSync(shim, args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, ...GIT_ENV, WRANGLER_DOUBLE_STATE: statePath },
+      });
+      return { ...result, stdout: stripAnsi(result.stdout ?? ''), stderr: stripAnsi(result.stderr ?? '') };
+    },
+    /** Apply the tree's migrations to the environment's database. */
+    migrate() {
+      return this.wrangler(['d1', 'migrations', 'apply', 'DB', '--remote']);
+    },
+    /** Run SQL against the environment's database, as a file, like shopctl does. */
+    sql(statements) {
+      const file = join(root, 'seed.sql');
+      writeFileSync(file, Array.isArray(statements) ? `${statements.join('\n')}\n` : statements);
+      try {
+        const result = this.wrangler(['d1', 'execute', 'DB', '--remote', '--file', file, '--yes']);
+        if (result.status !== 0) throw new Error(`seed failed: ${result.stderr || result.stdout}`);
+        return result;
+      } finally {
+        rmSync(file, { force: true });
+      }
+    },
+    /** One query's rows, as the double's D1 answers them. */
+    query(sql) {
+      const result = this.wrangler(['d1', 'execute', 'DB', '--remote', '--json', '--command', sql]);
+      if (result.status !== 0) throw new Error(`query failed: ${result.stderr || result.stdout}`);
+      const start = result.stdout.search(/[[{]/);
+      return JSON.parse(result.stdout.slice(start))[0].results;
     },
     /** What the imaginary GitHub holds. */
     github(patch) {

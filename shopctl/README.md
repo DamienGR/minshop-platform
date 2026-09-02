@@ -59,9 +59,12 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl provision --env <env>` | 6 | Crée ou confirme les ressources Cloudflare d'un environnement. |
 | `shopctl destroy --env <env>` | 6 | Supprime les ressources Cloudflare d'un environnement. Irréversible. |
 | `shopctl deploy --env <env>` | 6 | Vérifie, migre, construit, téléverse, puis teste la boutique déployée. |
+| `shopctl backup --env <env>` | 8 | Prend une sauvegarde chiffrée : données, schéma, objets R2, sommes de contrôle. |
+| `shopctl backup list \| verify \| prune \| keygen` | 8 | Lister, contrôler, faire expirer une archive ; écrire la clé. |
+| `shopctl restore --env <env> --from <id>` | 8 | Restaure une archive et compare la base obtenue à ce qu'elle portait. |
 
-Les commandes `verify`, `backup`, `restore`, `core` et `fleet` sont décrites au
-plan §5 et arrivent aux jalons suivants.
+Les commandes `core` et `fleet` sont décrites au plan §5.7 et arrivent au
+jalon 9.
 
 ## `shopctl new`
 
@@ -259,6 +262,79 @@ jamais un bucket** — R2 refuse d'en supprimer un qui porte encore des objets, 
 ce refus est relayé tel quel, parce qu'un teardown qui vide un bucket à votre
 place est un teardown qui supprime ce que personne ne voulait perdre.
 
+## `shopctl backup` et `shopctl restore`
+
+```sh
+npm run shopctl -- backup keygen                       # une fois, avant tout
+npm run shopctl -- backup --env production
+npm run shopctl -- backup list
+npm run shopctl -- backup verify <id>
+npm run shopctl -- backup prune --keep 30 --keep-days 90
+npm run shopctl -- restore --env staging --from <id>
+```
+
+**La sauvegarde est applicative, table par table**
+([ADR 0005](../docs/architecture/decisions/0005-strategie-de-sauvegarde.md)).
+Les deux raccourcis évidents sont écartés pour de bon : le Time Travel de D1 est
+un filet court terme dans un seul compte — pas de R2, pas de conservation
+longue, pas de sortie vers un autre compte — et `wrangler d1 export` **échoue**
+sur une base qui porte des tables virtuelles FTS5, ce que celle-ci fait depuis
+la migration 0003.
+
+**La liste des tables est déduite, jamais écrite.** `sqlite_master` dit ce que
+la base contient. Une liste écrite cesse d'être complète à la première migration
+que personne n'a pensé à y reporter, et la table absente de la liste est la
+table absente de l'archive — silencieusement, jusqu'à une restauration. Sont
+laissés de côté : les tables de SQLite et de la plateforme, `d1_migrations` (qui
+est le schéma, pas la donnée), et l'index FTS5, que les déclencheurs de la
+migration 0003 reconstruisent au fur et à mesure que les lignes reviennent.
+
+**Une archive est un répertoire de fichiers ordinaires** — un manifeste en
+clair, un corps chiffré, un fichier par objet R2 :
+
+```
+backups/<id>/manifest.json         version du schéma, lignes, empreintes, inventaire R2
+backups/<id>/data.bin              le dump, compressé puis chiffré (AES-256-GCM)
+backups/<id>/objects/<empreinte>.bin  un objet R2, chiffré
+```
+
+C'est ce qui rend vraies les deux promesses de l'ADR : une archive se **contrôle
+sans être restaurée** — `backup list` et `backup verify` lisent le manifeste,
+sans déchiffrer cent corps pour trouver le bon — et elle se **relit sans
+Cloudflare**, donc dans un autre compte, ce qui est la condition d'une sortie
+propre du client.
+
+**Le manifeste en clair est authentifié avec le corps.** Il est passé à AES-GCM
+comme donnée additionnelle : une archive ne peut pas être ré-étiquetée pour
+prétendre appartenir à une autre boutique, à un autre environnement ou à un
+autre schéma — elle cesse simplement de s'ouvrir. Deux champs sont produits
+*par* le scellement et restent donc hors de cette couverture : `cipher`, et
+`data.digest`, qui est un contrôle de corruption pour un lecteur sans clé,
+jamais une authentification.
+
+**La clé ne passe jamais par la ligne de commande.** Elle vient de
+`.shopctl/backup.key` (que `backup keygen` écrit en 0600 sans jamais l'afficher)
+ou de `SHOPCTL_BACKUP_KEY`. `keygen` **ne remplace pas** une clé existante :
+c'est elle qui ouvre les archives déjà prises, et « régénérer » les détruirait
+en silence.
+
+**La restauration se prouve.** Une restauration ne peut pas être « presque »
+testée : la commande relit la base qu'elle vient d'écrire et compare, table par
+table, aux empreintes que l'archive portait. Une différence fait échouer la
+commande et dit laquelle.
+
+**Elle ne devine rien.** La cible par défaut est staging ; la production exige
+l'option dédiée `--allow-production` **et** le slug saisi. Une base où la
+boutique a déjà écrit exige `--overwrite` — « vide » voulant dire *rien que la
+boutique ait écrit*, pas *zéro ligne* : les migrations sèment les quatre pages
+légales françaises, et les tables que le schéma remplit sont déduites des
+migrations plutôt que listées ici.
+
+**La conservation est bornée et les deux bornes doivent être d'accord.**
+`backup prune` ne supprime une archive que si elle dépasse **à la fois** le
+nombre conservé et l'âge maximal : une boutique qu'on a cessé de sauvegarder ne
+doit pas voir sa dernière archive expirer sur un critère d'âge.
+
 ## Conventions
 
 **Enveloppe, ne réimplémente pas.** `config validate` appelle
@@ -292,6 +368,13 @@ Exécutés par `npm test` et par `npm run verify`.
 
 `test/scripts/shopctl.test.mjs` construit un socle réel depuis l'index de ce
 dépôt, le tague, et fait tourner le vrai binaire contre lui.
+
+`test/scripts/backup.test.mjs` et `restore.test.mjs` font le tour complet contre
+le **vrai schéma** : le double de wrangler applique les quarante-trois
+migrations dans une base `node:sqlite` et exécute les instructions que la CLI
+produit. Ce qui est éprouvé, ce sont donc les vraies contraintes, les vrais
+déclencheurs et les vraies colonnes générées — un dump qui oublie une colonne
+échoue ici, pas en production.
 
 `test/scripts/repo.test.mjs`, `provision.test.mjs` et `deploy.test.mjs`
 installent `test/fixtures/wrangler-double.mjs` et `test/fixtures/gh-double.mjs`

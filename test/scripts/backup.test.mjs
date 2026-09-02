@@ -1,0 +1,412 @@
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
+// .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
+// node builtins have no declarations in a .ts file here.
+import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
+import { canonical } from '../../shopctl/src/backup/dump.mjs';
+import { classifyTables, objectInventory, orderTables, references, seededTables } from '../../shopctl/src/backup/schema.mjs';
+import { planPrune } from '../../shopctl/src/backup/archive.mjs';
+import { HOSTILE, IMAGE_KEY, seededShop, takeBackup } from '../helpers/backup-shop.mjs';
+
+const CORE = new URL('../../', import.meta.url).pathname;
+
+const archive = (target, id) => JSON.parse(readFileSync(join(target.root, 'backups', id, 'manifest.json'), 'utf8'));
+
+vi.setConfig({ testTimeout: 60_000 });
+
+describe('the backup pipeline', () => {
+  /**
+   * The list of tables is DERIVED. A written list stops being complete at the
+   * first migration nobody thought to update it for, and the table missing from
+   * the list is the table missing from the archive — silently, until a restore.
+   */
+  describe('table selection', () => {
+    it('takes ordinary tables and leaves the platform’s own', () => {
+      const { tables, skipped } = classifyTables([
+        { type: 'table', name: 'orders', sql: 'CREATE TABLE orders (id INTEGER)' },
+        { type: 'table', name: 'sqlite_sequence', sql: null },
+        { type: 'table', name: '_cf_KV', sql: 'CREATE TABLE _cf_KV (k)' },
+        { type: 'table', name: 'd1_migrations', sql: 'CREATE TABLE d1_migrations (id)' },
+        { type: 'index', name: 'idx_orders', sql: 'CREATE INDEX idx_orders ON orders(id)' },
+      ]);
+      expect(tables.map((table) => table.name)).toEqual(['orders']);
+      expect(skipped.map((entry) => entry.reason).sort()).toEqual(['cloudflare', 'migrations', 'sqlite']);
+    });
+
+    /**
+     * An FTS5 index is not data: migration 0003's triggers rebuild it from
+     * `products` as the rows go back in. Carrying it would double the archive to
+     * store something the data determines, and restoring it would fight the
+     * triggers for the right to write it.
+     */
+    it('leaves a virtual table and every shadow table behind it', () => {
+      const { virtual, skipped } = classifyTables([
+        { type: 'table', name: 'products_fts', sql: "CREATE VIRTUAL TABLE products_fts USING fts5(name, content='products')" },
+        { type: 'table', name: 'products_fts_data', sql: 'CREATE TABLE products_fts_data(id, block)' },
+        { type: 'table', name: 'products_fts_docsize', sql: 'CREATE TABLE products_fts_docsize(id, sz)' },
+        { type: 'table', name: 'products', sql: 'CREATE TABLE products (id INTEGER)' },
+      ]);
+      expect(virtual).toEqual(['products_fts']);
+      expect(skipped.map((entry) => entry.name)).toEqual(['products_fts', 'products_fts_data', 'products_fts_docsize']);
+    });
+
+    // Read off the real schema rather than a fixture of it: the point of the
+    // derivation is that it keeps up with the migrations directory.
+    it('reads every spelling of REFERENCES the schema uses', () => {
+      expect([...references('CREATE TABLE t (a REFERENCES orders(id), b REFERENCES "products" (id), c REFERENCES `media`(id))')].sort())
+        .toEqual(['media', 'orders', 'products']);
+    });
+  });
+
+  /**
+   * Rows go back in an order no foreign key ever dangles in. Deferring the
+   * constraint would paper over an ordering mistake; ordering the statements
+   * means the mistake cannot be made.
+   */
+  describe('insert order', () => {
+    it('puts a table after everything it points at', () => {
+      const { order, cycle } = orderTables([
+        { name: 'order_items', sql: 'CREATE TABLE order_items (o REFERENCES orders(id), p REFERENCES products(id))' },
+        { name: 'orders', sql: 'CREATE TABLE orders (id)' },
+        { name: 'products', sql: 'CREATE TABLE products (m REFERENCES media(id))' },
+        { name: 'media', sql: 'CREATE TABLE media (id)' },
+      ]);
+      expect(cycle).toEqual([]);
+      expect(order.indexOf('media')).toBeLessThan(order.indexOf('products'));
+      expect(order.indexOf('products')).toBeLessThan(order.indexOf('order_items'));
+      expect(order.indexOf('orders')).toBeLessThan(order.indexOf('order_items'));
+    });
+
+    // A category's parent is one row pointing at another row of the same table.
+    // There is no order between two tables to find, and treating it as one would
+    // report a cycle on a schema that has none.
+    it('ignores a self-reference', () => {
+      expect(orderTables([{ name: 'categories', sql: 'CREATE TABLE categories (parent REFERENCES categories(id))' }]).cycle).toEqual([]);
+    });
+
+    // SQLite allows a cycle, this schema has none, and a restore that quietly
+    // picked a starting point would fail on some databases and not others.
+    it('reports a cycle rather than guessing at it', () => {
+      const { cycle } = orderTables([
+        { name: 'a', sql: 'CREATE TABLE a (x REFERENCES b(id))' },
+        { name: 'b', sql: 'CREATE TABLE b (x REFERENCES a(id))' },
+      ]);
+      expect(cycle).toEqual(['a', 'b']);
+    });
+
+    it('orders the repository’s own schema without a cycle', () => {
+      const sql = readdirSync(join(CORE, 'migrations'))
+        .filter((name) => name.endsWith('.sql'))
+        .sort()
+        .map((name) => readFileSync(join(CORE, 'migrations', name), 'utf8'))
+        .join('\n');
+      const tables = [...sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? ([A-Za-z_][A-Za-z0-9_]*)\s*\(([^;]*)\)\s*;/g)]
+        .map((match) => ({ name: match[1], sql: match[0] }));
+      expect(tables.length).toBeGreaterThan(15);
+      expect(orderTables(tables).cycle).toEqual([]);
+    });
+  });
+
+  /**
+   * A freshly migrated database is NOT empty — 0040 writes the four French legal
+   * pages — so the restore's emptiness guard has to know which tables the schema
+   * fills. Derived from the migrations, so a seed added tomorrow is covered.
+   */
+  it('knows which tables the migrations themselves fill', () => {
+    const texts = readdirSync(join(CORE, 'migrations'))
+      .filter((name) => name.endsWith('.sql'))
+      .map((name) => readFileSync(join(CORE, 'migrations', name), 'utf8'));
+    expect(seededTables(texts)).toContain('pages');
+    expect(seededTables(texts)).not.toContain('orders');
+  });
+
+  /** The inventory comes from the ROWS: `media` owns a stored image (invariant
+   *  10), and a private deliverable is named by the product that sells it. */
+  describe('the R2 inventory', () => {
+    const dump = {
+      media: { columns: ['image_key'], rows: [{ image_key: 'media/a.jpg' }, { image_key: 'media/b.jpg' }] },
+      products: { columns: ['image_key', 'file_key'], rows: [{ image_key: 'media/a.jpg', file_key: 'files/manual.pdf' }] },
+      product_images: { columns: ['image_key'], rows: [{ image_key: 'media/orpheline.jpg' }] },
+      order_items: { columns: ['file_key'], rows: [{ file_key: 'files/manual.pdf' }] },
+      page_media: { columns: ['page_id', 'media_id'], rows: [{ page_id: 1, media_id: 1 }] },
+    };
+
+    it('names every image the media table owns, once', () => {
+      expect(objectInventory(dump).images).toEqual(['media/a.jpg', 'media/b.jpg']);
+      expect(objectInventory(dump).files).toEqual(['files/manual.pdf']);
+    });
+
+    // Reported rather than repaired: a key with no media row behind it is an
+    // image the merchant already sees broken, and a backup is a good moment to
+    // learn about it.
+    it('reports a key nothing owns rather than inventing a row for it', () => {
+      expect(objectInventory(dump).orphans).toEqual(['media/orpheline.jpg']);
+    });
+  });
+
+  /** Two dumps of unchanged rows must produce the same bytes, or verification
+   *  cries wolf and people stop running it. */
+  describe('the digest', () => {
+    it('does not depend on the order the driver hands keys back in', () => {
+      expect(canonical({ b: 1, a: 2 })).toBe(canonical({ a: 2, b: 1 }));
+    });
+
+    it('does depend on the values', () => {
+      expect(canonical({ a: 1 })).not.toBe(canonical({ a: 2 }));
+    });
+  });
+
+  /**
+   * Retention is bounded, and both bounds have to agree. A shop that stopped
+   * being backed up for a month must not have its last archive expired by an
+   * age rule: the archive being old is the reason to keep it.
+   */
+  describe('retention', () => {
+    const at = (iso) => ({ id: iso, path: `/tmp/${iso}`, broken: null, manifest: { createdAt: iso } });
+    const now = new Date('2026-09-02T00:00:00.000Z');
+    const entries = ['2026-01-01T00:00:00.000Z', '2026-08-25T00:00:00.000Z', '2026-09-01T00:00:00.000Z'].map(at);
+
+    it('drops only what BOTH bounds condemn', () => {
+      expect(planPrune(entries, { keep: 2, keepDays: 30, now }).remove.map((entry) => entry.id)).toEqual(['2026-01-01T00:00:00.000Z']);
+    });
+
+    it('keeps the last one however old it is', () => {
+      const stale = [at('2020-01-01T00:00:00.000Z')];
+      expect(planPrune(stale, { keep: 30, keepDays: 30, now }).remove).toEqual([]);
+    });
+
+    // An interrupted `backup` leaves a directory with no manifest. It protects
+    // nothing and is the one thing a prune can drop on its own.
+    it('drops an incomplete directory', () => {
+      const plan = planPrune([...entries, { id: 'interrompue', path: '/tmp/x', broken: 'manifeste absent', manifest: null }], { keep: 30, keepDays: 365, now });
+      expect(plan.remove.map((entry) => entry.reason)).toEqual(['incomplète']);
+    });
+  });
+});
+
+describe('shopctl backup', () => {
+  it('refuses to take one without --env', () => {
+    const target = seededShop({ object: false, seed: [] });
+    const result = target.run(['backup']);
+    expect(result.status).toBe(EXIT_CODES.usage);
+    expect(result.stderr).toMatch(/--env est obligatoire/);
+  });
+
+  /**
+   * The key comes FIRST, before a row is read. A run that reads the whole
+   * database and then discovers it has nowhere safe to put it has already put it
+   * somewhere: in this process's memory, and in whatever the operator does next.
+   */
+  it('refuses to read anything without a key', () => {
+    const target = seededShop();
+    const before = target.read().calls.length;
+    const result = target.run(['backup', '--env', 'staging', '--key-file', 'absente.key']);
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/absente\.key n'existe pas/);
+    expect(target.read().calls.length).toBe(before);
+  });
+
+  it('writes a key nobody else can read, and never prints it', () => {
+    const target = seededShop({ object: false, seed: [] });
+    const result = target.run(['backup', 'keygen', '--key-file', '.shopctl/second.key']);
+    expect(result.status).toBe(EXIT_CODES.ok);
+    const key = readFileSync(join(target.root, '.shopctl/second.key'), 'utf8').trim();
+    expect(Buffer.from(key, 'base64')).toHaveLength(32);
+    expect(result.stdout).not.toContain(key);
+  });
+
+  // The key that is there is the only thing that opens the archives taken with
+  // it; "regenerate" would destroy them silently.
+  it('never overwrites an existing key', () => {
+    const target = seededShop({ object: false, seed: [] });
+    const before = readFileSync(join(target.root, '.shopctl/backup.key'), 'utf8');
+    const result = target.run(['backup', 'keygen']);
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(readFileSync(join(target.root, '.shopctl/backup.key'), 'utf8')).toBe(before);
+  });
+
+  describe('an archive', () => {
+    it('records every table of the real schema, and no index', () => {
+      const target = seededShop();
+      const manifest = archive(target, takeBackup(target));
+
+      expect(manifest.tables.map((table) => table.name)).toContain('orders');
+      expect(manifest.tables.map((table) => table.name)).toContain('settings');
+      expect(manifest.tables.map((table) => table.name)).not.toContain('products_fts');
+      expect(manifest.tables.map((table) => table.name)).not.toContain('d1_migrations');
+      expect(manifest.schema.version).toMatch(/^\d{4}_/);
+      expect(manifest.schema.migrations.length).toBeGreaterThan(40);
+    });
+
+    /** A backup is every order and every address the shop has taken. It is the
+     *  one copy that leaves the account, and it has to be worth nothing to
+     *  whoever finds it. */
+    it('leaves no customer data in cleartext anywhere in the directory', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const directory = join(target.root, 'backups', id);
+      const files = readdirSync(directory, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => readFileSync(join(entry.parentPath ?? entry.path, entry.name)));
+
+      for (const bytes of files) {
+        expect(bytes.includes(Buffer.from('client@example.fr'))).toBe(false);
+        expect(bytes.includes(Buffer.from('Atelier témoin'))).toBe(false);
+      }
+    });
+
+    // The counts, the schema version and the inventory are in the clear so a
+    // listing does not have to decrypt a hundred archives to find one — which is
+    // exactly what makes them worth altering, and why they are the GCM
+    // additional data.
+    it('cannot be re-labelled: an edited header stops opening', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const file = join(target.root, 'backups', id, 'manifest.json');
+      const manifest = JSON.parse(readFileSync(file, 'utf8'));
+      manifest.env = 'production';
+      writeFileSync(file, JSON.stringify(manifest, null, 2));
+
+      const result = target.run(['backup', 'verify', id]);
+      expect(result.status).toBe(EXIT_CODES.verification);
+      expect(result.stdout).toMatch(/le corps ne s'ouvre pas/);
+    });
+
+    it('carries the object bytes its rows reference', () => {
+      const target = seededShop();
+      const manifest = archive(target, takeBackup(target));
+      const images = manifest.r2.buckets.find((bucket) => bucket.binding === 'BUCKET');
+
+      expect(images.inventory.map((object) => object.key)).toEqual([IMAGE_KEY]);
+      expect(images.stored).toBe(true);
+      expect(existsSync(join(target.root, 'backups', manifest.id, images.inventory[0].file))).toBe(true);
+    });
+
+    it('takes the inventory alone when asked, and says what that costs', () => {
+      const target = seededShop();
+      const result = target.run(['backup', '--env', 'staging', '--no-media']);
+      expect(result.status).toBe(EXIT_CODES.ok);
+      expect(result.stdout).toMatch(/n'aura pas les images/);
+
+      const [id] = readdirSync(join(target.root, 'backups'));
+      const manifest = archive(target, id);
+      expect(manifest.r2.buckets.every((bucket) => bucket.stored === false)).toBe(true);
+      expect(manifest.r2.buckets[0].inventory[0].key).toBe(IMAGE_KEY);
+    });
+
+    it('writes nothing under --dry-run', () => {
+      const target = seededShop();
+      const { report, status } = target.json(['backup', '--env', 'staging', '--dry-run']);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.dryRun).toBe(true);
+      expect(existsSync(join(target.root, 'backups'))).toBe(false);
+    });
+
+    // The hostile description is the one a naive SQL writer breaks on, and it
+    // has to survive being read, canonicalised, compressed, encrypted and
+    // digested.
+    it('holds the merchant’s text exactly, apostrophes and semicolons included', () => {
+      const target = seededShop();
+      const manifest = archive(target, takeBackup(target));
+      const products = manifest.tables.find((table) => table.name === 'products');
+      expect(products.rows).toBe(1);
+      expect(target.query('SELECT description FROM products')[0].description).toBe(HOSTILE);
+    });
+  });
+
+  describe('list', () => {
+    it('names each archive with what a reader needs before opening it', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const { report, status } = target.json(['backup', 'list']);
+
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.backups).toHaveLength(1);
+      expect(report.backups[0]).toMatchObject({ id, env: 'staging', broken: null, media: true });
+      expect(report.backups[0].rows).toBeGreaterThan(0);
+    });
+
+    // An interrupted `backup` leaves exactly this. A listing that hid it would
+    // leave the operator with a directory taking up space that nothing admits to.
+    it('shows an incomplete directory rather than hiding it', () => {
+      const target = seededShop();
+      takeBackup(target);
+      mkdirSync(join(target.root, 'backups', 'atelier-test-staging-20200101T000000Z'), { recursive: true });
+
+      const { report } = target.json(['backup', 'list']);
+      expect(report.backups.some((entry) => entry.broken)).toBe(true);
+    });
+  });
+
+  describe('verify', () => {
+    it('passes a sound archive and says what it opened', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const { report, status } = target.json(['backup', 'verify', id]);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.checks.some((check) => check.level === 'contenu' && check.name === 'ouverture')).toBe(true);
+      expect(report.failures).toBe(0);
+    });
+
+    it('catches a truncated body without needing the key', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const body = join(target.root, 'backups', id, 'data.bin');
+      writeFileSync(body, readFileSync(body).subarray(0, 40));
+
+      const result = target.json(['backup', 'verify', id], { SHOPCTL_BACKUP_KEY: '' });
+      expect(result.status).toBe(EXIT_CODES.verification);
+      expect(result.report.checks.filter((check) => !check.ok).map((check) => check.name)).toContain('taille du corps');
+    });
+
+    /**
+     * A key that is absent and a key that belongs to another archive are the
+     * same situation: the body stays closed, and neither is evidence the
+     * archive is bad. Both are said loudly and both leave the exit code at ok —
+     * but "we could not open it" must never render as a clean pass, which is
+     * what `opened` in the report is for.
+     */
+    it('says the content was not checked when the key is not this archive’s', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const other = seededShop({ object: false, seed: [] });
+      const result = other.json(['backup', 'verify', id, '--out', join(target.root, 'backups')]);
+
+      expect(result.status).toBe(EXIT_CODES.ok);
+      expect(result.report.opened).toBe(false);
+      expect(result.stderr).toMatch(/n'est pas celle de cette archive/);
+    });
+
+    it('refuses an identifier that is not one', () => {
+      const target = seededShop({ object: false, seed: [] });
+      const result = target.run(['backup', 'verify', '../../etc/passwd']);
+      expect(result.status).toBe(EXIT_CODES.input);
+    });
+  });
+
+  describe('prune', () => {
+    it('applies the policy and reports what it kept', () => {
+      const target = seededShop();
+      takeBackup(target);
+      const { report, status } = target.json(['backup', 'prune', '--keep', '1', '--keep-days', '0']);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.removed).toEqual([]);
+      expect(report.kept).toHaveLength(1);
+    });
+
+    it('removes nothing under --dry-run', () => {
+      const target = seededShop();
+      const id = takeBackup(target);
+      const { report } = target.json(['backup', 'prune', '--keep', '0', '--keep-days', '0', '--dry-run']);
+      expect(report.wouldRemove).toEqual([id]);
+      expect(existsSync(join(target.root, 'backups', id))).toBe(true);
+    });
+
+    it('refuses a bound that is not a number', () => {
+      const target = seededShop({ object: false, seed: [] });
+      expect(target.run(['backup', 'prune', '--keep', 'beaucoup']).status).toBe(EXIT_CODES.input);
+    });
+  });
+});

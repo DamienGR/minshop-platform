@@ -22,6 +22,8 @@ import { PROVISION_OPTIONS, provisionUsage, runProvision } from './commands/prov
 import { DEPLOY_OPTIONS, deployUsage, runDeploy } from './commands/deploy.mjs';
 import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
 import { DESTROY_OPTIONS, destroyUsage, runDestroy } from './commands/destroy.mjs';
+import { BACKUP_FLAGS, BACKUP_OPTIONS, backupUsage, runBackup } from './commands/backup.mjs';
+import { RESTORE_FLAGS, RESTORE_OPTIONS, restoreUsage, runRestore } from './commands/restore.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -34,6 +36,8 @@ Usage: shopctl <commande> [options]
   repo                Créer le dépôt GitHub, ses environnements et leurs secrets
   provision           Créer ou confirmer les ressources Cloudflare d'un environnement
   deploy              Vérifier, migrer, construire, téléverser et tester la boutique
+  backup              Sauvegarder, lister, contrôler et faire expirer les archives
+  restore             Restaurer une sauvegarde dans un environnement
   destroy             Supprimer les ressources Cloudflare d'un environnement
 
 Options globales:
@@ -41,8 +45,7 @@ Options globales:
   -h, --help          Cette aide, ou celle d'une commande
   -v, --version       Version du socle qui livre cette CLI
 
-Les commandes de sauvegarde et de flotte sont décrites au plan §5 et arrivent
-aux jalons suivants.
+Les commandes de flotte sont décrites au plan §5.7 et arrivent au jalon 9.
 `;
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
@@ -64,6 +67,8 @@ export const COMMANDS = {
     values: DEPLOY_OPTIONS,
     flags: ['--dry-run', '--yes', '--skip-verify', '--skip-build', '--skip-smoke'],
   },
+  backup: { run: runBackup, usage: backupUsage, values: BACKUP_OPTIONS, flags: BACKUP_FLAGS },
+  restore: { run: runRestore, usage: restoreUsage, values: RESTORE_OPTIONS, flags: RESTORE_FLAGS },
   destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
 };
 

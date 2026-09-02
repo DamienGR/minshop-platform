@@ -213,9 +213,26 @@ shopctl provision --env staging
 shopctl deploy --env staging
 shopctl deploy --env production --yes
 
+# Sauvegarder, contrôler, restaurer (jalon 8)
+shopctl backup keygen                    # une fois : la clé, jamais affichée
+shopctl backup --env production
+shopctl backup list
+shopctl backup verify <id>
+shopctl backup prune --keep 30 --keep-days 90
+shopctl restore --env staging --from <id>
+
 # Retirer un environnement d'un compte (jalon 6) — irréversible
 shopctl destroy --env staging --confirm <slug>
 ```
+
+La sauvegarde est **applicative**, table par table, chiffrée, et lisible sans
+Cloudflare — donc restaurable dans un autre compte, ce qui est la condition
+d'une sortie propre du client
+([ADR 0005](docs/architecture/decisions/0005-strategie-de-sauvegarde.md)). Elle
+n'a pas le choix : le Time Travel de D1 ne couvre ni R2 ni un autre compte, et
+`wrangler d1 export` échoue sur les tables virtuelles FTS5 de la recherche. Une
+restauration se termine par une comparaison table à table avec ce que l'archive
+portait ; une différence fait échouer la commande.
 
 Le cycle de vie d'une boutique compte quatre étapes, et la frontière entre le
 compte Cloudflare de l'agence et celui du client tombe **avant la saisie des
@@ -254,9 +271,7 @@ Les commandes ci-dessous ne sont pas encore implémentées.
 # Vérifier une boutique déployée
 shopctl verify --env staging
 
-# Exploiter la boutique
-shopctl backup --env production
-shopctl restore --env staging --from <backup-id>
+# Suivre et faire évoluer le socle
 shopctl core status
 shopctl core upgrade --to 1.1.0
 ```
