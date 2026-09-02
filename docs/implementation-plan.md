@@ -1899,11 +1899,11 @@ Durée indicative : 5 à 6 jours.
 
 #### Livrables
 
-- [ ] Cloudflare Access ;
-- [ ] Turnstile ;
-- [ ] rate limits ;
-- [ ] en-têtes de sécurité ;
-- [ ] logs sans PII ;
+- [x] Cloudflare Access ;
+- [x] Turnstile ;
+- [x] rate limits ;
+- [x] en-têtes de sécurité ;
+- [x] logs sans PII ;
 - [ ] supervision ;
 - [ ] exports ;
 - [ ] politique de conservation ;
@@ -1912,17 +1912,17 @@ Durée indicative : 5 à 6 jours.
 
 #### Tests
 
-- [ ] admin anonyme refusé ;
-- [ ] API admin anonyme refusée ;
-- [ ] CSRF ;
-- [ ] expiration de session ;
-- [ ] brute force ;
-- [ ] téléchargement non autorisé ;
-- [ ] upload SVG ;
-- [ ] faux MIME ;
-- [ ] traversée de chemin ;
-- [ ] absence de secrets dans logs et artefacts ;
-- [ ] absence d'adresse et d'e-mail dans les logs ;
+- [x] admin anonyme refusé ;
+- [x] API admin anonyme refusée ;
+- [x] CSRF ;
+- [x] expiration de session ;
+- [x] brute force ;
+- [x] téléchargement non autorisé ;
+- [x] upload SVG ;
+- [x] faux MIME ;
+- [x] traversée de chemin ;
+- [x] absence de secrets dans logs et artefacts ;
+- [x] absence d'adresse et d'e-mail dans les logs ;
 - [ ] restauration complète en staging ;
 - [ ] comparaison avant/après restauration ;
 - [ ] export et anonymisation d'un client.
@@ -1931,6 +1931,104 @@ Durée indicative : 5 à 6 jours.
 
 - [ ] La boutique peut être restaurée dans un nouvel environnement en moins
   d'une heure à partir d'une sauvegarde documentée.
+
+#### État
+
+Le jalon se coupe en deux moitiés qui ne partagent rien : **la porte**, qui est
+du code déjà écrit et jamais éprouvé, et **l'exploitation** — sauvegarde,
+restauration, conservation, export d'un client, supervision, runbooks —, qui
+est du code à écrire. La première est faite ; la seconde tient encore les
+trois derniers tests et le critère de sortie, et fera son propre passage.
+
+**La porte existait ; personne ne l'avait poussée.** Le gate, la vérification
+Access, la signature de session, le limiteur, la garde d'origine, les en-têtes :
+tout était écrit, et chaque pièce avait son test unitaire. Aucun test n'avait
+jamais posé la seule question qui compte — *le middleware les appelle-t-il, sur
+les routes qui existent, dans l'ordre où il faut ?* — parce qu'aucun ne parlait
+au Worker construit. `test/integration/security.mjs` le fait : trente-six
+vérifications sur le bundle de production, la vraie base issue des 43
+migrations, le vrai limiteur, le vrai routeur.
+
+**Le harnais est Miniflare en processus, et c'est un choix, pas un raccourci.**
+Les deux autres suites qui pilotent le Worker construit ouvrent une session
+`wrangler dev` et lui parlent par un port. Celle-ci ne le pouvait pas, pour deux
+raisons. La première est qu'elle déclenche le limiteur exprès, et que le proxy
+de développement perd des connexions sous exactement ce genre de rafale — la
+panne que `run-d1-integration.sh` existe pour rejouer. La seconde est qu'elle a
+besoin de deux choses qu'un port ne donne pas : lire ce que le Worker imprime,
+et répondre à sa place aux fournisseurs qu'il appelle. Sans la seconde, la
+section sur les logs n'aurait rien prouvé.
+
+**Les routes d'administration sont dérivées, pas listées.** Une liste écrite à
+la main cesse d'être complète au premier endpoint ajouté, et l'endpoint que
+personne n'a pensé à ajouter à la liste est précisément celui qui part sans
+garde. La suite lit `src/pages/admin` et `src/pages/api/admin`, en déduit
+trente-sept routes et leurs verbes depuis les `export const GET|POST|…`, et
+exige de chacune un refus. Un fichier ajouté demain est couvert au prochain
+passage, par quelqu'un qui n'aura pas eu à savoir que cette suite existe.
+
+**Quatre défauts trouvés, tous réels, aucun théorique.**
+
+- **L'adresse du client dans les logs de la boutique.** L'adaptateur Resend
+  levait `Resend send failed (422): <corps>`, et le corps d'erreur de Resend est
+  du texte libre où le fournisseur *cite le destinataire qu'il refuse*. Cette
+  erreur est journalisée par l'outbox, par la notification d'expédition, par le
+  lien magique et par l'avis de remboursement : une adresse mal saisie — le cas
+  ordinaire — déposait le nom, la rue et le code postal de l'acheteur dans les
+  Workers Logs, qui survivent à la commande. Deux couches de correction. Au
+  point d'origine, l'adaptateur ne garde que le statut : c'est la moitié
+  actionnable, et c'est la seule qui ne soit pas rédigée par un tiers. En
+  défense, `features/observability/logSafe.ts` masque ce qui a une forme — les
+  adresses e-mail, et les jetons d'accès invité, dont `redactAccessTokens` se
+  disait « l'autorité de rédaction applicative » sans avoir un seul appelant en
+  production. La suite le prouve dans le bon sens : en remettant le corps
+  d'erreur, la rue, le nom et le code postal réapparaissent, l'adresse et le
+  jeton non — les deux couches font bien deux travaux différents.
+- **Une erreur non rattrapée ne passait par aucun contrat.** Tout ce que fait le
+  middleware — la liste blanche de `cache-control`, les étiquettes de purge, les
+  en-têtes — décrit les réponses qu'il *retourne*. Un `throw` n'en retourne
+  aucune : Astro l'attrape plus loin et répond un 500 nu. C'était la seule
+  classe de réponse à partir sans `no-store`, sur une plateforme dont le cache
+  stocke les réponses sans en-tête, et sans le durcissement que porte tout le
+  reste. Et il est atteignable sans authentification : un `POST` dont le
+  `Content-Type` n'est ni l'un ni l'autre de ce que `formData()` sait lire
+  suffit. Le `throw` est maintenant attrapé là où le reste du contrat
+  s'applique.
+- **La moitié statique de la boutique ne portait rien.** Le serveur d'assets de
+  Cloudflare répond `/favicon.svg`, `/placeholder.*` et tout `/_astro/` *avant*
+  le Worker : le middleware ne voit jamais ces requêtes, et elles partaient sans
+  en-tête. `public/_headers` les couvre. Deux listes dans deux fichiers dérivent
+  toujours, alors la liste vit désormais dans
+  `src/features/http/securityHeaders.ts`, le middleware la lit, et
+  `test/scripts/security-headers.test.mjs` relit `public/_headers` et refuse la
+  différence. Le fichier est **core**, malgré son emplacement sous `public/` :
+  c'est un contrôle de sécurité, pas un actif de marque.
+- **Le type déclaré d'un téléversement venait du téléverseur.** `validateUpload`
+  lisait `File.type`, que le client choisit :
+  `-F 'files=@charge.svg;type=image/png'` est à un drapeau de distance. Rien ne
+  s'exécute depuis un objet téléversé aujourd'hui — la bibliothèque refuse le
+  SVG par son type, `/images` ressert ce que R2 a stocké, et `nosniff` est sur
+  toute réponse —, donc ce n'était pas une entrée. C'était un fichier dont la
+  boutique croyait quelque chose de faux, et toute couche ajoutée par-dessus en
+  héritait. `features/media/sniff.ts` lit les seize premiers octets ; quatre
+  comparaisons.
+
+**Un cinquième point, laissé ouvert et nommé.** Il n'y a pas de
+`Content-Security-Policy`. Les gabarits Astro portent des scripts et des styles
+en ligne, et une CSP utile demanderait des nonces sur toute la chaîne de rendu :
+c'est une modification du rendu, pas un durcissement d'en-tête, et elle
+appartient à son propre passage plutôt qu'à celui-ci. Le plancher
+`referrer-policy` posé ici prend soin de ne jamais écraser le `no-referrer`
+qu'une page à URL-capacité s'est donné — l'inverse aurait dégradé la seule
+protection qui garde le jeton d'une commande hors des journaux d'un tiers.
+
+**Ce que le jalon 8 ne gate toujours pas.** Les trois tests restants et le
+critère de sortie tiennent tous à la même chose absente : `shopctl backup` et
+`shopctl restore` (plan §5.6, ADR 0005). L'export et l'anonymisation d'un
+client, la politique de conservation, la supervision et les runbooks partent
+avec eux. La suite de sécurité, elle, tourne déjà sur la **boutique générée**
+en CI, au même titre que sur le socle : c'est la campagne réutilisable du §1,
+et une boutique nouvelle la passe le jour de sa création.
 
 ### Jalon 9 — Mise à jour de flotte
 
@@ -1987,11 +2085,11 @@ Durée indicative : 3 à 4 jours.
 
 ### 7.1 À chaque commit
 
-Les noms ci-dessous sont ceux du dépôt. `npm run verify` enchaîne les treize
+Les noms ci-dessous sont ceux du dépôt. `npm run verify` enchaîne les quinze
 premiers ; les autres sont des jobs distincts du workflow `Verify`.
 
 - [x] chaîne d'outils (`npm run check:toolchain`) ;
-- [x] scan de secrets (`npm run check:secrets`) ;
+- [x] scan de secrets de l'arbre suivi (`npm run check:secrets`) ;
 - [x] manifestes, identifiants de flotte, neutralité du cœur
   (`npm run config:validate`) ;
 - [x] propriété des chemins et dérive de `CODEOWNERS` (`npm run check:paths`) ;
@@ -2001,13 +2099,24 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] diagnostics TypeScript et `.astro` (`astro check`) ;
 - [x] frontière du storefront (`npm run theme:check`) ;
 - [x] build de production et vérification du CSS compilé ;
+- [x] scan de secrets des artefacts de build (`npm run check:secrets:artifacts`) —
+  Vite fige `import.meta.env.*` à la construction, donc une valeur qui n'a
+  jamais existé que dans un `.dev.vars` non suivi peut se retrouver compilée
+  dans un bundle dont la moitié est servie aux navigateurs ;
 - [x] dry run de déploiement et budgets de taille (`npm run check:deploy`) ;
+- [x] porte de sécurité sur le Worker construit (`npm run test:security`, incluse
+  dans `npm run test:integration`) — porte d'administration, Access, Turnstile,
+  origine des formulaires, sessions, force brute, téléchargements, téléversements,
+  traversée de chemin, en-têtes, absence de données personnelles dans les logs ;
 - [x] intégration D1 en boîte noire (`npm run test:integration`) ;
 - [x] pays Stripe cohérents avec le SDK épinglé ;
 - [x] Worker MCP, typecheck et dry run (`npm run mcp:check`) ;
 - [x] paquet `create-minshop` (`npm run scaffold:check`) ;
 - [x] porte de propriété des chemins sur la pull request (job « File ownership ») ;
-- [x] construction des boutiques témoins (job « Build shop ») ;
+- [x] construction des boutiques témoins (job « Build shop »), qui fait aussi
+  passer la porte de sécurité et le scan d'artefacts à la boutique **générée** :
+  la campagne de certification du §1 s'exécute donc sur une boutique neuve le
+  jour de sa création ;
 - [x] construction de chaque thème que le job principal ne couvre pas
   (job « Verify theme ») ;
 - [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
@@ -2129,6 +2238,13 @@ est un filet court terme, pas la sauvegarde, et le rapport le dit avec ces mots.
 - [ ] CSP et en-têtes présents ;
 - [ ] aucune donnée de carte traitée par l'application ;
 - [ ] aucune PII inutile dans les logs.
+
+Sept de ces neuf lignes sont désormais gatées à chaque commit par
+`npm run test:security` et `npm run check:secrets:artifacts` (jalon 8) ; elles
+restent ouvertes ici parce que la campagne finale les rejoue sur une boutique
+**déployée**, ce qu'aucune porte locale ne remplace. Les deux exceptions se
+nomment : l'audit de vulnérabilités n'a pas de porte, et il n'y a pas de CSP —
+la raison est au jalon 8, section « État ».
 
 ### 8.5 Accessibilité et navigateurs
 

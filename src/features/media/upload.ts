@@ -4,6 +4,7 @@ import type { StorageProvider } from '../storage';
 // stripping, which does not resolve extensionless relative imports.
 import { createMediaRecord, type Media } from './db.ts';
 import { readImageDimensions } from './dimensions.ts';
+import { sniffImageMime, SNIFF_BYTES } from './sniff.ts';
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -18,8 +19,13 @@ const ALLOWED = new Map([
   ['image/gif', 'gif'],
 ]);
 
-/** Returns a user-facing error string if the upload is invalid, else null. */
-export function validateUpload(file: File): string | null {
+/**
+ * Returns a user-facing error string if the upload's DECLARED type or size is
+ * invalid, else null. Cheap, synchronous, and not sufficient on its own: the
+ * declared type comes from the client. Callers storing the file use
+ * `validateUpload`, which also reads the bytes.
+ */
+export function validateUploadMetadata(file: File): string | null {
   if (!ALLOWED.has(file.type)) {
     return 'Image must be JPEG, PNG, WebP, or GIF.';
   }
@@ -27,6 +33,26 @@ export function validateUpload(file: File): string | null {
     return 'Image must be 5 MB or smaller.';
   }
   return null;
+}
+
+/**
+ * The rule for a file about to be stored: the right declared type, the right
+ * size, and bytes that agree with the declaration.
+ *
+ * The bytes are the part that was missing. `file.type` is client-supplied, so
+ * the previous check asked the uploader whether the uploader was telling the
+ * truth. Only the header is read (`SNIFF_BYTES`), so this stays a slice rather
+ * than a second full read of a five-megabyte file.
+ *
+ * A mismatch and an unrecognized file get the SAME message as a plainly wrong
+ * type. There is one rule to state — these four formats — and stating it once
+ * keeps the answer from doubling as a description of what the store checks.
+ */
+export async function validateUpload(file: File): Promise<string | null> {
+  const declared = validateUploadMetadata(file);
+  if (declared) return declared;
+  const header = new Uint8Array(await file.slice(0, SNIFF_BYTES).arrayBuffer());
+  return sniffImageMime(header) === file.type ? null : 'Image must be JPEG, PNG, WebP, or GIF.';
 }
 
 /**

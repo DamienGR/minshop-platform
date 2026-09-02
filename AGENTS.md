@@ -21,6 +21,9 @@ change holds together. Run it after every meaningful edit, not just at the end.
 Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
 `npm run check:deploy` (Wrangler dry run + bundle budgets, needs a build),
 `npm run check:secrets` (tracked-tree credential scan),
+`npm run check:secrets:artifacts` (the same rules over `dist/`, plus the local
+`.dev.vars` values, which Vite can freeze into the bundle — needs a build),
+`npm run test:security` (the security gate below, needs a build),
 `npm run config:validate` (client manifests, fleet identifiers, core
 neutrality), `npm run check:paths` (file-ownership map + CODEOWNERS drift).
 `npm run check:clean-clone`
@@ -350,6 +353,49 @@ Chromium comes from `npx playwright install chromium`. On a machine that already
 has one and cannot download another, `test/browser/chromium.mjs` falls back to
 whatever is under `PLAYWRIGHT_BROWSERS_PATH` and says so.
 
+## The security gate
+
+`npm run test:security` (inside `npm run verify`, via `test:integration`) runs
+`test/integration/security.mjs` against the BUILT Worker on a database made from
+the real migrations. Thirty-six checks: the admin door, Cloudflare Access,
+Turnstile, form origin, sessions, brute force, unauthorized downloads,
+uploads, path traversal, response headers, and what the Worker prints.
+
+Three things about it are worth knowing before you touch it.
+
+**It boots the Worker IN PROCESS, with Miniflare** (`test/helpers/built-worker.mjs`),
+where the storefront-baselines and D1 gates open a `wrangler dev` session and
+talk to it over a port. Two reasons, both load-bearing. The suite trips the rate
+limiter on purpose, and the dev proxy loses connections under exactly that kind
+of burst — the fault `run-d1-integration.sh` exists to re-run around. And it
+needs two things a port cannot give: `handleRuntimeStdio`, so the log assertions
+can read what the Worker printed, and `outboundService`, so a provider can be
+made to answer with a customer's own address in its error body. Without the
+second, the PII section would assert over an empty log.
+
+**The admin routes are DERIVED, not listed.** The suite walks
+`src/pages/admin` and `src/pages/api/admin`, turns the file paths into URLs and
+reads the `export const GET|POST|…` lines for the verbs. Add an endpoint and it
+is covered by the next run. Do not replace that with a list.
+
+**The PII assertions have guards against passing vacuously.** They assert that a
+delivery was actually attempted and that the failure was actually logged BEFORE
+they assert that the customer is absent from the log. If you change the e-mail
+configuration the section sets up, those guards are what will tell you.
+
+Two rules the gate enforces that are easy to break by accident:
+
+- `public/_headers` and `src/features/http/securityHeaders.ts` are one list in
+  two places. Cloudflare's asset server answers `/favicon.svg`, `/placeholder.*`
+  and `/_astro/*` ahead of the Worker, so the middleware never sees them. Add a
+  header to one and `test/scripts/security-headers.test.mjs` will make you add
+  it to the other.
+- An error that reaches a log goes through `logSafe()`
+  (`src/features/observability/logSafe.ts`) on any path that touches a customer.
+  It masks e-mail addresses and guest access tokens. It is NOT a general PII
+  detector — a street address has no shape — so free-form provider text is kept
+  out of the message at the source instead (see `features/email/resend.ts`).
+
 ## Architecture in one screen
 
 **Feature folders (vertical slices).** Each owns its data access, types, and
@@ -491,6 +537,16 @@ total, never per line.
     parsed, so a page body can never inject script — including from a
     compromised admin session. The storefront and the admin preview call the
     SAME server-side `renderMarkdown()`; do not add a client-side parser.
+12. **A log line is written, never forwarded.** Structured events with fields
+    you chose; an error from a provider goes through `logSafe()`. A provider's
+    error body is text it wrote about a customer — Resend's names the
+    recipient — so never interpolate one into a message, and never
+    `console.error('…', err)` on a path that touches an order, an address or an
+    account. Logs outlive the order.
+13. **A stored file is what its bytes say it is.** `File.type` comes from
+    whoever posted the multipart body. Every upload path validates through
+    `validateUpload()`, which reads the header (`features/media/sniff.ts`);
+    `validateUploadMetadata()` alone is the cheap pre-check, not the rule.
 
 ## Recipes — how to add X
 
@@ -581,6 +637,11 @@ These cost afternoons. Most are in the README "Gotchas" section too.
   (`features/products/search.ts`).
 - **`wrangler d1 export` fails with FTS5 virtual tables** — drop `products_fts`,
   export, recreate (re-run migration `0003`).
+- **Static assets never reach the middleware.** Cloudflare's asset server answers
+  `/favicon.svg`, `/placeholder.*` and `/_astro/*` before the Worker runs, so a
+  header added in `src/middleware.ts` does not apply to them. `public/_headers`
+  is the other half; `test/scripts/security-headers.test.mjs` keeps the two in
+  step.
 - **The `mcp/` Worker has its OWN `package.json` + `node_modules`.** Never add
   `agents` / `@modelcontextprotocol/sdk` to the ROOT package.json — the Agents SDK
   pulls in workerd/miniflare deps that silently break the storefront's Astro build

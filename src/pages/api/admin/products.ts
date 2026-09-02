@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   let mediaId: number | null = null;
   const file = form.get('image');
   if (file instanceof File && file.size > 0) {
-    const imgErr = validateImage(file);
+    const imgErr = await validateImage(file);
     if (imgErr) return redirect(fail(imgErr), 303);
     // Every upload becomes a library item, whichever screen it came from.
     const media = await uploadMedia(env.DB, getStorage(), await optimizeUpload(file), file.name);

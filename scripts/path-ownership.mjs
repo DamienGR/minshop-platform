@@ -89,6 +89,16 @@ export const OWNERSHIP_RULES = [
     codeowners: '/src/styles/overrides.css',
   },
   {
+    pattern: 'public/_headers',
+    owner: 'core',
+    why:
+      'Response hardening for the assets Cloudflare serves ahead of the Worker. ' +
+      'Sits under public/ because that is where the asset server reads it, but it ' +
+      'is a security control, not a brand asset: src/features/http/securityHeaders.ts ' +
+      'and test/scripts/security-headers.test.mjs hold it to the middleware\'s list.',
+    codeowners: '/public/_headers',
+  },
+  {
     pattern: 'public/**',
     owner: 'client',
     why: 'Favicon and static brand assets.',

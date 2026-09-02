@@ -20,6 +20,7 @@ import { orderConfirmationEmail, orderNotificationEmail, orderShippedEmail } fro
 import { guestLinkReissueEmail } from './guestLinkReissue';
 import { guestOrderUrl, getGuestAccess, sweepAbandonedGuestAccess } from '../orders/guestAccess.ts';
 import { shouldSendCustomerOrderEmail } from './orderPolicy';
+import { logSafe } from '../observability/logSafe.ts';
 
 /**
  * Transactional-email outbox (see migration 0032). recordPaidOrder commits one
@@ -60,7 +61,7 @@ export async function rememberStoreUrl(db: D1Database, origin: string): Promise<
     await setSetting(db, 'store_url', origin);
   } catch (err) {
     // Never let bookkeeping break a delivery.
-    console.error('Recording store_url failed:', err);
+    console.error('Recording store_url failed:', logSafe(err));
   }
 }
 
@@ -192,7 +193,10 @@ export async function deliverOrderNotifications(
       await emailer.send({ ...msg, idempotencyKey: `${kind}/${order.public_id ?? orderId}` });
       await markSent(db, orderId, kind, attempts);
     } catch (err) {
-      console.error(`Order notification ${kind}/${order?.public_id ?? '(unresolved order)'} failed:`, err);
+      console.error(
+        `Order notification ${kind}/${order?.public_id ?? '(unresolved order)'} failed:`,
+        logSafe(err),
+      );
       await markFailed(db, orderId, kind, attempts, err);
     }
   }
@@ -211,7 +215,7 @@ export async function sweepStaleNotifications(db: D1Database, origin: string): P
   try {
     await sweepAbandonedGuestAccess(db);
   } catch (err) {
-    console.error('Guest-access sweep failed:', err);
+    console.error('Guest-access sweep failed:', logSafe(err));
   }
   const { results } = await db
     .prepare(

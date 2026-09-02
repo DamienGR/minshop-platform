@@ -27,6 +27,11 @@ import {
 import { addCacheTags, responseCacheTags } from './features/cache/tags';
 import { normalizeSearchQuery } from './features/search/query';
 import { isForbiddenFormOrigin } from './features/auth/formOrigin';
+import { logSafe } from './features/observability/logSafe.ts';
+import {
+  SECURITY_HEADERS,
+  DEFAULT_REFERRER_POLICY,
+} from './features/http/securityHeaders.ts';
 
 /**
  * Admin auth gate. Protects BOTH the admin UI (`/admin/*`) and the admin API
@@ -272,18 +277,17 @@ async function route(context: APIContext, next: MiddlewareNext): Promise<Respons
   return response;
 }
 
-// Response hardening for a store on a real domain. Applied to EVERY response.
-const SECURITY_HEADERS: Record<string, string> = {
-  'x-content-type-options': 'nosniff', // don't MIME-sniff responses
-  'x-frame-options': 'DENY', // block framing (clickjacking) — nothing here is meant to be embedded
-  'strict-transport-security': 'max-age=31536000; includeSubDomains', // force HTTPS for a year
-};
-
 /** Add the security headers, rebuilding when the response's headers are immutable
  *  (e.g. a Response.redirect to a payment provider, or a Cache API hit). */
 function withSecurityHeaders(res: Response): Response {
+  const apply = (target: Response): void => {
+    for (const [k, v] of Object.entries(SECURITY_HEADERS)) target.headers.set(k, v);
+    if (!target.headers.has('referrer-policy')) {
+      target.headers.set('referrer-policy', DEFAULT_REFERRER_POLICY);
+    }
+  };
   try {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
+    apply(res);
     return res;
   } catch {
     const rebuilt = new Response(res.body, {
@@ -291,11 +295,50 @@ function withSecurityHeaders(res: Response): Response {
       statusText: res.statusText,
       headers: new Headers(res.headers),
     });
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) rebuilt.headers.set(k, v);
+    apply(rebuilt);
     return rebuilt;
   }
 }
 
+/**
+ * The response an unhandled error becomes.
+ *
+ * Everything above — the cache-control allowlist, the purge tags, the security
+ * headers — describes responses this middleware RETURNS. A throw returns
+ * nothing: Astro catches it further out and answers with a bare 500 that has
+ * been through none of it. That is the one response class that left without
+ * `no-store`, on a platform whose cache heuristically stores a headerless
+ * response, and without the headers every other response carries.
+ *
+ * So the throw is caught here, at the same place the rest of the contract is
+ * applied. The body says nothing about the failure: what an operator needs is
+ * in the log line, and what a stack trace would give an attacker is a map of
+ * the code. `logSafe` because an error raised while handling a customer's order
+ * can carry the customer in it.
+ */
+function serverError(path: string, error: unknown): Response {
+  console.error(JSON.stringify({ event: 'unhandled_error', path, message: logSafe(error) }));
+  const api = path.startsWith('/api/');
+  return new Response(api ? JSON.stringify({ error: 'Internal error.' }) : 'Internal error.', {
+    status: 500,
+    headers: {
+      'cache-control': 'private, no-store',
+      'content-type': api ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+    },
+  });
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
-  return withSecurityHeaders(await route(context, next));
+  let response: Response;
+  try {
+    response = await route(context, next);
+  } catch (error) {
+    // Not under `astro dev`: there, the throw belongs to Astro's error overlay,
+    // which is how the failure gets read at all. Swallowing it into a silent
+    // "Internal error." would trade a debuggable stack for a gate that already
+    // runs against the built Worker.
+    if (import.meta.env.DEV) throw error;
+    response = serverError(context.url.pathname, error);
+  }
+  return withSecurityHeaders(response);
 });

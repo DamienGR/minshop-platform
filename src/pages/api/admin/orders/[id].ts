@@ -50,6 +50,7 @@ import { shouldSendCustomerOrderEmail } from '../../../../features/email/orderPo
 import { getPaymentProvider, type PaymentMethod } from '../../../../features/payments';
 import { formatPrice } from '../../../../config';
 import { parseOrderOrLegacyPublicId, parsePublicId } from '../../../../features/ids/publicId';
+import { logSafe } from '../../../../features/observability/logSafe.ts';
 
 export const prerender = false;
 
@@ -129,7 +130,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
       await deliverOrderNotifications(env.DB, id, new URL(request.url).origin);
     } catch (err) {
       // The row stays queued; the piggyback sweep will retry it.
-      console.error('Guest-link reissue delivery failed:', err);
+      console.error('Guest-link reissue delivery failed:', logSafe(err));
     }
     return notice(
       'The old order links no longer work. A new link is being emailed to the customer.',
@@ -310,7 +311,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
         await deliverOrderNotifications(env.DB, orderId, new URL(request.url).origin, settings);
       } catch (err) {
         // Row stays queued; the piggyback sweep retries it.
-        console.error('Shipped-notification delivery failed:', err);
+        console.error('Shipped-notification delivery failed:', logSafe(err));
       }
     }
     return willEmail;
@@ -609,7 +610,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   try {
     await deliverOrderNotifications(env.DB, id, new URL(request.url).origin);
   } catch (err) {
-    console.error('Shipped-notification delivery failed:', err);
+    console.error('Shipped-notification delivery failed:', logSafe(err));
   }
 
   return back;

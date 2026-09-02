@@ -36,6 +36,8 @@
 /imports/
 # client: Favicon and static brand assets.
 /public/
+# core: Response hardening for the assets Cloudflare serves ahead of the Worker. Sits under public/ because that is where the asset server reads it, but it is a security control, not a brand asset: src/features/http/securityHeaders.ts and test/scripts/security-headers.test.mjs hold it to the middleware's list.
+/public/_headers @DamienGR
 # client: The post-theme override layer, normally empty upstream.
 /src/styles/overrides.css
 # client: Build-time shop settings. Upstream never edits it, so an upgrade never conflicts here.

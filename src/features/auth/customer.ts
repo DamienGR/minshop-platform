@@ -5,6 +5,7 @@ import { getSetting } from '../settings/db';
 import { getEmailProvider } from '../email';
 import { loginLinkEmail } from '../email/loginLink';
 import { signToken, verifyToken } from './token';
+import { logSafe } from '../observability/logSafe.ts';
 
 /**
  * Passwordless customer auth (magic-link). Default adapter for the storefront
@@ -57,7 +58,7 @@ export async function requestLogin(email: string, origin: string): Promise<void>
       const storeName = (await getSetting(env.DB, 'store_name')) || getConfig().storeName;
       await emailer.send(loginLinkEmail(addr, link, storeName));
     } catch (err) {
-      console.error('Login email failed:', err);
+      console.error('Login email failed:', logSafe(err));
     }
   }
 }
