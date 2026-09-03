@@ -16,6 +16,9 @@ import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
 import { parseManifestYaml } from '../../scripts/manifest-yaml.mjs';
 import { CREDENTIAL_PATTERNS, RESERVED_SLUGS, validateManifest } from '../../scripts/manifest-schema.mjs';
 import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
+// The core fixture and the git identity live in a helper: the fleet suite
+// (jalon 9) creates the same "core at a tag" and a second copy would drift.
+import { GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -27,66 +30,6 @@ const CORE_TAG = 'v0.1.0';
 // machine is, and a suite that fails on a busy laptop is a suite people learn
 // to re-run instead of read.
 vi.setConfig({ testTimeout: 60_000 });
-
-/** Git needs an identity to commit, and a test must not depend on the one the
- *  developer happens to have configured. */
-const GIT_ENV = {
-  ...process.env,
-  GIT_AUTHOR_NAME: 'Minshop Tests',
-  GIT_AUTHOR_EMAIL: 'tests@example.com',
-  GIT_COMMITTER_NAME: 'Minshop Tests',
-  GIT_COMMITTER_EMAIL: 'tests@example.com',
-};
-
-function git(args, cwd) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: GIT_ENV });
-  if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
-  return result.stdout.trim();
-}
-
-/**
- * A core repository, tagged, built from the files THIS tree tracks.
- *
- * Copied from the index rather than mocked, because the properties under test
- * are about the real tree: that the shop `shopctl new` produces passes the real
- * gates, carries the real themes, and adds exactly the files it claims to. A
- * stand-in template would pass while the real one broke.
- */
-function createCoreRepository(root, { tag = CORE_TAG } = {}) {
-  const core = join(root, 'core');
-  mkdirSync(core, { recursive: true });
-  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
-  for (const file of tracked) {
-    mkdirSync(dirname(join(core, file)), { recursive: true });
-    cpSync(join(CORE, file), join(core, file));
-  }
-  git(['init', '--quiet', '--initial-branch=main'], core);
-  git(['add', '-A'], core);
-  git(['commit', '--quiet', '-m', `Core ${tag}`], core);
-  git(['tag', tag], core);
-  // Pack before anyone clones this, and leave no loose object behind.
-  //
-  // A local `git clone` does not negotiate a pack: it walks the source's
-  // `objects/` directory and hardlinks or copies each file it finds. Against
-  // ~700 loose objects that is ~700 chances for the file git just listed to be
-  // gone by the time it opens it, and the failure is fatal rather than skipped:
-  //   fatal: failed to copy file to '…/.git/objects/5f/4d7c…': No such file or
-  //   directory
-  // — which is the source vanishing, not the destination, because copy_file()
-  // reports the destination path whichever end failed to open.
-  //
-  // It is rare and it is real: the same clone died on CI on this commit's base
-  // (`Generated shop`, 2026-09-01) and on the pull request that followed, each
-  // time on a different test in this file — whichever one happened to lose the
-  // race. It has not reproduced on a developer machine; CI runs git 2.55.
-  //
-  // Packing first leaves NO loose object for anything to prune later: 752 of
-  // them become one packfile and its index, five files in all, written before
-  // the clone starts and never rewritten. There is no per-fanout directory left
-  // for the clone to create either, and it copies five files instead of 752.
-  git(['gc', '--quiet', '--prune=now'], core);
-  return core;
-}
 
 function shopctl(args, cwd) {
   return spawnSync('node', [BIN, ...args], { cwd, encoding: 'utf8', env: GIT_ENV });

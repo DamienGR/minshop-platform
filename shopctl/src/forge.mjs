@@ -297,3 +297,57 @@ function firstLine(text) {
       .find(Boolean) ?? null
   );
 }
+
+/**
+ * The pull request an upgrade opens, or null when there is none.
+ *
+ * Asked before one is created, like everything else here: a fleet upgrade that
+ * is re-run — after a network failure, after a conflict was resolved by hand —
+ * must report the pull request it already opened rather than fail on GitHub's
+ * "a pull request already exists" or, worse, open a second one against the same
+ * branch.
+ */
+export function pullRequestFor(cwd, branch) {
+  const result = gh(['pr', 'list', '--head', branch, '--state', 'all', '--json', 'number,url,state', '--limit', '1'], {
+    cwd,
+    allowFailure: true,
+  });
+  if (result.status !== 0) return null;
+  try {
+    const document = JSON.parse(result.stdout.slice(result.stdout.search(/[[{]/)));
+    const [first] = Array.isArray(document) ? document : [];
+    return first ? { number: first.number, url: first.url, state: first.state } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Open the pull request that carries a core upgrade.
+ *
+ * NEVER merged, never auto-merged, and that is the exit criterion of jalon 9 in
+ * one line: a core version can be proposed to a shop without a manual copy of
+ * files and without an unapproved deployment. The pull request is where a human
+ * reads the merge, the CI result and the migration notes before anything is
+ * deployed; a `--merge` here would delete the only step that makes a fleet
+ * upgrade safe.
+ *
+ * The body goes on STDIN. A migration note is prose, with quotes and newlines
+ * in it, and an argument vector is the wrong place for either.
+ */
+export function openPullRequest(cwd, { branch, base, title, body }) {
+  const existing = pullRequestFor(cwd, branch);
+  if (existing) return { ...existing, created: false };
+  const result = gh(
+    ['pr', 'create', '--head', branch, '--base', base, '--title', title, '--body-file', '-'],
+    { cwd, input: body, allowFailure: true },
+  );
+  if (result.status !== 0) {
+    throw externalError(
+      `GitHub a refusé d'ouvrir la pull request de ${branch}.`,
+      firstLine(result.stderr) ?? firstLine(result.stdout) ?? null,
+    );
+  }
+  const url = firstLine(result.stdout.split('\n').filter((line) => line.includes('http')).join('\n'));
+  return { number: null, url, state: 'OPEN', created: true };
+}

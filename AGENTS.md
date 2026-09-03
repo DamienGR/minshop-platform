@@ -176,6 +176,10 @@ npm run shopctl -- provision --env staging
 npm run shopctl -- deploy --env staging
 npm run shopctl -- deploy --env production --yes
 npm run shopctl -- destroy --env staging --confirm <slug>
+npm run shopctl -- core status          # quelle version cette boutique porte
+npm run shopctl -- core upgrade --to v1.1.0 --open-pr
+npm run shopctl -- fleet status         # depuis l'espace de travail de l'agence
+npm run shopctl -- fleet upgrade --to v1.1.0 --open-pr
 ```
 
 Four rules hold for every command, present and future:
@@ -252,7 +256,29 @@ Environment so production waits for a reviewer.
 `backup` and `restore` are the operations half of jalon 8 (plan §5.6, ADR 0005),
 and the section below is the whole story.
 
+`core` and `fleet` are the upgrade path (jalon 9, ADR 0016). A shop's version is
+read from its GIT HISTORY — the newest `v<semver>` tag merged into HEAD — never
+from `coreVersion`, which is a claim `core status` exists to check. An upgrade
+fetches the tag, branches `socle/<tag>`, merges, bumps the manifest, re-renders
+the generated files, runs the gates the shop now carries, and with `--open-pr`
+opens the pull request. It never deploys and never merges a pull request:
+production stays behind the GitHub Environment. It refuses a dirty tree, a
+downgrade, and a version that rewrites a published migration (ADR 0006); a
+conflict is named file by file WITH its ownership and left in the tree, because
+resolving it is git work there. The fleet is DECLARED in `fleet.json` next to
+the shops — never discovered by scanning, because the command writes — and one
+failing shop does not stop the others.
+
+Publishing a core version is a gate, not a convention: the version lives in
+`package.json`, in the witness manifests AND in `docs/migrations/v<x>.md`, and
+bumping one alone produces a shop that merges the tag and then fails its own
+manifest gate. `npm run check:release` holds the three together on every commit;
+`node scripts/check-release.mjs --set <version>` writes all three; the `Release`
+workflow tags after the full suite and a clean-clone build.
+
 Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
+`fleet.test.mjs` (core upgrade, fleet, pull requests) and `release.test.mjs`
+(the publication gate),
 `provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
 environment, deployment, teardown), `backup.test.mjs` and `restore.test.mjs`
 (the archive and the round trip), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,

@@ -10,18 +10,31 @@ import { resolve } from 'node:path';
 import { ENVIRONMENTS, discoverManifests, findManifestBySlug, loadManifest } from '../../scripts/manifest.mjs';
 import { inputError, preconditionError, usageError, verificationError } from './errors.mjs';
 
-/** The tree being operated, and the manifest that describes it. */
-export function resolveShop(cwd, slug) {
+/**
+ * The tree being operated, and the manifest that describes it.
+ *
+ * `allowInvalid` exists for ONE caller and is worth the option: `core status`
+ * is the command whose job is to report a manifest that disagrees with the
+ * history — a `coreVersion` edited by hand, a merge that took the core without
+ * the bump. Refusing to run there would leave the operator with a shop the
+ * tooling declines to describe, which is the opposite of a status command. The
+ * errors travel with the manifest so the caller reports them; a file that does
+ * not PARSE is still a refusal, because there is nothing to describe.
+ */
+export function resolveShop(cwd, slug, { allowInvalid = false } = {}) {
+  const accept = (loaded, what) => {
+    if (loaded.errors.length > 0 && !(allowInvalid && loaded.manifest)) {
+      throw verificationError(`le manifeste ${what} n'est pas valide.`, 'Lancez `shopctl config validate`.');
+    }
+    return { root: cwd, manifest: loaded.manifest, file: loaded.file, errors: loaded.errors };
+  };
   if (slug) {
     const found = findManifestBySlug(slug, { root: cwd });
     if (!found) throw inputError(`aucun manifeste pour « ${slug} » dans ${cwd}.`);
-    if (found.errors.length > 0) throw verificationError(`le manifeste de « ${slug} » n'est pas valide.`, 'Lancez `shopctl config validate`.');
-    return { root: cwd, manifest: found.manifest, file: found.file };
+    return accept(found, `de « ${slug} »`);
   }
   if (existsSync(resolve(cwd, 'client/client.yaml'))) {
-    const loaded = loadManifest('client/client.yaml', { root: cwd });
-    if (loaded.errors.length > 0) throw verificationError('le manifeste de la boutique n\'est pas valide.', 'Lancez `shopctl config validate`.');
-    return { root: cwd, manifest: loaded.manifest, file: loaded.file };
+    return accept(loadManifest('client/client.yaml', { root: cwd }), 'de la boutique');
   }
   // A core checkout carries the witness manifests and no shop of its own, so
   // naming one is the only unambiguous answer. Guessing would import a

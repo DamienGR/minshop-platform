@@ -24,6 +24,8 @@ import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
 import { DESTROY_OPTIONS, destroyUsage, runDestroy } from './commands/destroy.mjs';
 import { BACKUP_FLAGS, BACKUP_OPTIONS, backupUsage, runBackup } from './commands/backup.mjs';
 import { RESTORE_FLAGS, RESTORE_OPTIONS, restoreUsage, runRestore } from './commands/restore.mjs';
+import { CORE_FLAGS, CORE_OPTIONS, coreUsage, runCore } from './commands/core.mjs';
+import { FLEET_FLAGS, FLEET_OPTIONS, fleetUsage, runFleet } from './commands/fleet.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -39,13 +41,13 @@ Usage: shopctl <commande> [options]
   backup              Sauvegarder, lister, contrôler et faire expirer les archives
   restore             Restaurer une sauvegarde dans un environnement
   destroy             Supprimer les ressources Cloudflare d'un environnement
+  core                Version du socle de cette boutique, et sa mise à niveau
+  fleet               État et mise à niveau de la flotte déclarée
 
 Options globales:
   --json              Sortie machine sur stdout (la progression passe sur stderr)
   -h, --help          Cette aide, ou celle d'une commande
   -v, --version       Version du socle qui livre cette CLI
-
-Les commandes de flotte sont décrites au plan §5.7 et arrivent au jalon 9.
 `;
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
@@ -70,6 +72,8 @@ export const COMMANDS = {
   backup: { run: runBackup, usage: backupUsage, values: BACKUP_OPTIONS, flags: BACKUP_FLAGS },
   restore: { run: runRestore, usage: restoreUsage, values: RESTORE_OPTIONS, flags: RESTORE_FLAGS },
   destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
+  core: { run: runCore, usage: coreUsage, values: CORE_OPTIONS, flags: CORE_FLAGS },
+  fleet: { run: runFleet, usage: fleetUsage, values: FLEET_OPTIONS, flags: FLEET_FLAGS },
 };
 
 /** Flags every command accepts. */

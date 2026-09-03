@@ -1,0 +1,127 @@
+# Publishing a core version, which is the only thing a shop can be built from.
+#
+# A shop is created from an immutable `v<semver>` tag and upgraded by merging
+# the next one (ADR 0003). Nothing else in this repository produces a tag, so
+# this workflow is the fleet's supply: `shopctl new --core v1.1.0`,
+# `shopctl core upgrade --to v1.1.0` and `shopctl fleet upgrade` all resolve to
+# a tag that was pushed here.
+#
+# Three properties, and each is a step below rather than a convention:
+#
+#   1. A TAG IS PROVEN BEFORE IT EXISTS. The complete suite runs on the exact
+#      commit being tagged — not on "main this morning" — and a clean-clone
+#      build runs with it, because a tag is what somebody clones. A red suite
+#      cannot produce a tag.
+#
+#   2. A TAG IS NEVER MOVED. `scripts/release.mjs --publish` refuses a version
+#      whose tag already exists, and the push below is a plain `git push`, not a
+#      `--force`. A faulty version is corrected by the next version; a tag that
+#      moved would silently change what a shop created last month was built
+#      from.
+#
+#   3. A TAG CARRIES ITS NOTES. The same gate refuses a version with no
+#      `docs/migrations/v<version>.md`, and the GitHub release is created FROM
+#      that file — so the note an operator reads on the release page and the one
+#      `shopctl core upgrade` prints are the same bytes.
+#
+# Manual dispatch only. Tagging on every push to main would make the merge
+# button the release button, and the fleet's next upgrade proposal would be
+# whatever landed last.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Tapez la version à publier (ex. 0.2.0) — doit égaler package.json
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publier le tag du socle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          # Tags and full history: the release gate compares the migrations of
+          # this commit to those of the previous tag (ADR 0006), which a shallow
+          # clone cannot see.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+
+      # The typed version is a confirmation, not a source: the version lives in
+      # package.json and in the witness manifests, and a dispatch input that
+      # could disagree with them would be a fourth place to keep in step.
+      - name: Confirmer la version
+        id: version
+        run: |
+          set -euo pipefail
+          declared=$(node -p "require('./package.json').version")
+          if [ "$declared" != "${{ inputs.confirm }}" ]; then
+            echo "::error::le dépôt déclare $declared et la demande dit ${{ inputs.confirm }}."
+            echo "::error::La version se change par \`node scripts/check-release.mjs --set <version>\`, pas ici."
+            exit 1
+          fi
+          echo "version=$declared" >> "$GITHUB_OUTPUT"
+          echo "tag=v$declared" >> "$GITHUB_OUTPUT"
+
+      - name: Contrôler la publication
+        run: node scripts/check-release.mjs --publish
+
+      - name: Vérification complète
+        uses: ./.github/actions/run-verify
+
+      # A tag is what somebody clones, so it is proven the way somebody clones
+      # it: from scratch, with no working-tree state.
+      - name: Construire depuis un clone vierge
+        run: npm run check:clean-clone
+
+      - name: Poser et pousser le tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Socle $TAG"
+          git push origin "$TAG"
+
+      - name: Publier la release et ses notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "$TAG" --title "Socle $TAG" --notes-file "docs/migrations/$TAG.md" --verify-tag
+
+      - name: Dire à la flotte quoi faire de cette version
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          {
+            echo "## Socle $TAG publié"
+            echo
+            echo '```sh'
+            echo "shopctl fleet status                  # qui est en retard"
+            echo "shopctl fleet upgrade --to $TAG --open-pr"
+            echo '```'
+            echo
+            echo "Rien n'est déployé : chaque boutique prend la version quand sa pull request est approuvée."
+          } >> "$GITHUB_STEP_SUMMARY"

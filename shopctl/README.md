@@ -62,9 +62,10 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl backup --env <env>` | 8 | Prend une sauvegarde chiffrée : données, schéma, objets R2, sommes de contrôle. |
 | `shopctl backup list \| verify \| prune \| keygen` | 8 | Lister, contrôler, faire expirer une archive ; écrire la clé. |
 | `shopctl restore --env <env> --from <id>` | 8 | Restaure une archive et compare la base obtenue à ce qu'elle portait. |
-
-Les commandes `core` et `fleet` sont décrites au plan §5.7 et arrivent au
-jalon 9.
+| `shopctl core status` | 9 | Version déclarée, version réellement fusionnée, retard, dérive du cœur. |
+| `shopctl core upgrade --to <tag>` | 9 | Fusionne un tag du socle sur une branche et ouvre sa pull request. |
+| `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
+| `shopctl fleet upgrade --to <tag>` | 9 | La même mise à niveau, boutique par boutique, sans jamais déployer. |
 
 ## `shopctl new`
 
@@ -335,6 +336,69 @@ migrations plutôt que listées ici.
 nombre conservé et l'âge maximal : une boutique qu'on a cessé de sauvegarder ne
 doit pas voir sa dernière archive expirer sur un critère d'âge.
 
+## `shopctl core` et `shopctl fleet`
+
+Une boutique est un clone d'un tag immuable du socle et reçoit les versions
+suivantes **par fusion** (ADR 0003). Ces deux commandes sont ce chemin.
+
+```sh
+npm run shopctl -- core status                    # dans une boutique
+npm run shopctl -- core upgrade --to v1.1.0 --open-pr
+npm run shopctl -- fleet status                   # dans l'espace de travail
+npm run shopctl -- fleet upgrade --to v1.1.0 --open-pr
+npm run shopctl -- fleet report --format json
+```
+
+**La version d'une boutique se lit dans son historique**, jamais dans son
+manifeste : le tag `v<semver>` le plus récent fusionné dans `HEAD` fait foi.
+`coreVersion` est une déclaration, et `core status` existe pour dire quand les
+deux ne coïncident plus — un manifeste édité à la main, une fusion prise sans le
+bump qui va avec.
+
+**Une mise à niveau propose, elle ne déploie pas.** Elle récupère le tag, crée
+`socle/<tag>`, fusionne, met `coreVersion` à jour, rend les fichiers générés,
+exécute les portes que la boutique transporte — celles de la **nouvelle**
+version — et, avec `--open-pr`, pousse et ouvre la pull request. Elle n'appelle
+jamais `shopctl deploy` et ne fusionne aucune pull request : la mise en
+production reste derrière l'approbation du GitHub Environment (jalon 6).
+
+**Trois refus sont durs** : un arbre de travail modifié, un retour vers une
+version antérieure, une version qui réécrit une migration déjà publiée
+(ADR 0006). **Un conflit** est nommé fichier par fichier avec la propriété de
+chacun et **laissé dans l'arbre** — le résoudre est un travail git à cet
+endroit ; `--abort-on-conflict` défait la fusion pour l'appelant qui préfère.
+
+**La flotte est déclarée**, jamais découverte. `fleet.json`, dans l'espace de
+travail de l'agence, à côté des boutiques :
+
+```json
+{
+  "schemaVersion": 1,
+  "core": { "repository": "git@github.com:agence/socle.git" },
+  "shops": [
+    { "slug": "premiere-boutique", "path": "shop-premiere-boutique" },
+    { "slug": "seconde-boutique", "path": "shop-seconde-boutique" }
+  ]
+}
+```
+
+Une boutique que personne n'y a inscrite n'est pas dans la flotte : la commande
+qui lit cette liste écrit. Une boutique en défaut n'arrête pas les autres — son
+échec est rapporté contre elle, et le code de sortie est non nul à la fin.
+
+**Côté socle**, publier une version passe par une porte :
+
+```sh
+node scripts/check-release.mjs --set 1.1.0   # version + manifestes témoins + notes
+npm run check:release                        # cohérence, à chaque commit
+npm run check:release -- --publish           # …et le tag est encore libre
+```
+
+Une version est écrite à trois endroits — `package.json`, les manifestes témoins
+et `docs/migrations/v<version>.md` —, et n'en bumper qu'un produit une boutique
+qui fusionne le tag puis échoue à ses propres portes. Le workflow `Release` pose
+le tag après la suite complète et une construction depuis un clone vierge.
+
 ## Conventions
 
 **Enveloppe, ne réimplémente pas.** `config validate` appelle
@@ -375,6 +439,13 @@ migrations dans une base `node:sqlite` et exécute les instructions que la CLI
 produit. Ce qui est éprouvé, ce sont donc les vraies contraintes, les vrais
 déclencheurs et les vraies colonnes générées — un dump qui oublie une colonne
 échoue ici, pas en production.
+
+`test/scripts/fleet.test.mjs` met à niveau deux boutiques témoins créées par le
+vrai `shopctl new` depuis un socle réel tagué deux fois : thème et manifeste
+inchangés (hors `coreVersion`), conflit volontaire signalé fichier par fichier,
+migration additive appliquée aux quarante-trois vraies migrations et écriture de
+l'ancienne version toujours acceptée par le nouveau schéma. `release.test.mjs`
+tient la porte de publication.
 
 `test/scripts/repo.test.mjs`, `provision.test.mjs` et `deploy.test.mjs`
 installent `test/fixtures/wrangler-double.mjs` et `test/fixtures/gh-double.mjs`

@@ -163,3 +163,27 @@ export function renderManifest(manifest, { header } = {}) {
 
   return `${lines.join('\n')}\n`;
 }
+
+/**
+ * The same manifest, declaring another core version.
+ *
+ * A LINE REWRITE rather than a re-render, and the difference matters after an
+ * upgrade: re-rendering would return the file this CLI would have written,
+ * dropping whatever comment the merchant added next to their own domain and
+ * reordering anything they moved. The only field an upgrade changes is
+ * `coreVersion`, so the only line it touches is that one.
+ *
+ * Refuses a file with no `coreVersion` line rather than adding one: a manifest
+ * without it is not a manifest this core reads, and appending a field to a file
+ * nobody has validated is how a shop ends up claiming a version it never took.
+ *
+ * @param {string} text current client.yaml
+ * @param {string} version the version now merged, e.g. "1.1.0"
+ */
+export function withCoreVersion(text, version) {
+  const line = /^coreVersion:[ \t]*.*$/m;
+  if (!line.test(text)) {
+    throw new Error('client.yaml has no coreVersion line to update.');
+  }
+  return text.replace(line, `coreVersion: ${yamlScalar(String(version))}`);
+}
