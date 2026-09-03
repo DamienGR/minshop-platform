@@ -28,8 +28,23 @@
  *   failAt          "d1 create" | …          one command that dies, for the
  *                                            interrupted-run test
  *   calls           [{ argv, stdin }]        appended to on every invocation
+ *
+ * D1 IS REAL. `d1 migrations apply` and `d1 execute` run against a `node:sqlite`
+ * database kept beside the state file, one per D1 name, and the migrations come
+ * from the tree the command was run in. That is what makes the backup and
+ * restore suites worth anything: the statements shopctl generates are applied to
+ * the repository's own schema, with its own triggers and its own foreign keys,
+ * and a dump that forgot a column fails here rather than in production. R2 is
+ * real in the same sense — an object put is a file, and a get reads it back.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+
+// node:sqlite is experimental on the certified Node line and says so on stderr.
+// A parser reading wrangler's output has no business seeing that, and neither
+// does an assertion about a failure's first line.
+process.removeAllListeners('warning');
+const { DatabaseSync } = await import('node:sqlite');
 
 const STATE = process.env.WRANGLER_DOUBLE_STATE;
 if (!STATE) {
@@ -137,9 +152,207 @@ if (command.startsWith('d1 info')) {
   done(JSON.stringify(payload));
 }
 
+/** The tree's wrangler.jsonc, comments stripped exactly as a JSONC reader would. */
+function configuration() {
+  if (!existsSync('wrangler.jsonc')) fail('No wrangler configuration file found.');
+  return readFileSync('wrangler.jsonc', 'utf8')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+}
+
+/** Which database a binding names, the way the real wrangler resolves it. */
+function databaseNameFor(binding) {
+  const config = configuration();
+  const entry = config.match(new RegExp(`\\{[^{}]*"binding"\\s*:\\s*"${binding}"[^{}]*\\}`, 's'));
+  const name = entry?.[0].match(/"database_name"\s*:\s*"([^"]+)"/)?.[1];
+  if (!name) fail(`Couldn't find a D1 binding named "${binding}" in wrangler.jsonc.`);
+  return name;
+}
+
+/** Where one database's bytes live: beside the state, one file per D1 name. */
+function databaseFile(name) {
+  return join(dirname(resolve(STATE)), `d1-${name.replace(/[^A-Za-z0-9._-]/g, '_')}.sqlite`);
+}
+
+function openDatabase(binding) {
+  const name = databaseNameFor(binding);
+  if (!(state.d1 ?? []).some((entry) => entry.name === name)) fail(`Couldn't find DB with name '${name}'`);
+  return { name, db: new DatabaseSync(databaseFile(name)) };
+}
+
+/**
+ * Split a script into statements.
+ *
+ * Quote-aware, because it has to be: the restore inlines every value, and a
+ * product description with a semicolon in it is an ordinary Tuesday. A naive
+ * splitter here would make the double STRICTER than the platform — the
+ * catalogue import has been sending `wrangler d1 execute --file` inlined text
+ * since jalon 4 — and the suite would fail on data that works in production.
+ *
+ * The one place it is deliberately as blunt as the platform is a trigger body,
+ * which closes on `END;` and nothing else. That is wrangler's own remote rule,
+ * and `migrations-remote-safe.test.mjs` holds the repository to it.
+ */
+function splitStatements(sql) {
+  const statements = [];
+  let buffer = '';
+  // The statement's opening CODE, comments and blank lines removed. A migration
+  // explains itself before it declares anything, and `CREATE TRIGGER` sits
+  // under a paragraph of prose in this repository — matching the raw buffer
+  // would miss every one of them and cut the trigger at its first inner `;`.
+  let head = '';
+  let index = 0;
+  let inTrigger = false;
+
+  const push = () => {
+    if (buffer.trim()) statements.push(buffer.trim());
+    buffer = '';
+    head = '';
+  };
+
+  while (index < sql.length) {
+    const character = sql[index];
+
+    if (character === "'") {
+      buffer += character;
+      index += 1;
+      while (index < sql.length) {
+        buffer += sql[index];
+        if (sql[index] === "'") {
+          if (sql[index + 1] === "'") {
+            buffer += sql[index + 1];
+            index += 2;
+            continue;
+          }
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === '-' && sql[index + 1] === '-') {
+      while (index < sql.length && sql[index] !== '\n') {
+        buffer += sql[index];
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === ';') {
+      buffer += character;
+      index += 1;
+      if (inTrigger) {
+        if (/\bEND\s*;\s*$/i.test(buffer)) {
+          push();
+          inTrigger = false;
+        }
+        continue;
+      }
+      push();
+      continue;
+    }
+
+    buffer += character;
+    index += 1;
+    // Tested only over the head of a statement, so this stays linear over a
+    // restore file that can be megabytes of INSERTs.
+    if (!inTrigger && head.length < 80) {
+      head += character;
+      if (/^\s*CREATE\s+(OR\s+REPLACE\s+)?(TEMP\w*\s+)?TRIGGER\b/i.test(head)) inTrigger = true;
+    }
+  }
+  push();
+  // The tail of a file is usually a comment with no statement under it. Tested
+  // line by line rather than with a repeated group over the whole chunk: a
+  // `(--[^\n]*\n?)+$` that fails backtracks through every way of splitting the
+  // block, which is exponential in the number of lines and hangs on the first
+  // migration that explains itself at length.
+  return statements.filter((statement) => !statement.split('\n').every((line) => line.trim() === '' || line.trim().startsWith('--')));
+}
+
+function runScript(db, sql) {
+  for (const statement of splitStatements(sql)) db.exec(statement);
+}
+
 if (command === 'd1 migrations apply' || command.startsWith('d1 migrations')) {
   state.migrationsApplied = (state.migrationsApplied ?? 0) + 1;
-  done('🌀 Executing on remote database: 0 migrations to apply.');
+  const { db } = openDatabase(positionals[3] ?? 'DB');
+  db.exec('CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP))');
+  const applied = new Set(db.prepare('SELECT name FROM d1_migrations').all().map((row) => row.name));
+  const files = existsSync('migrations')
+    ? readdirSync('migrations').filter((name) => name.endsWith('.sql')).sort()
+    : [];
+  let count = 0;
+  for (const file of files) {
+    if (applied.has(file)) continue;
+    runScript(db, readFileSync(join('migrations', file), 'utf8'));
+    db.prepare('INSERT INTO d1_migrations (name) VALUES (?)').run(file);
+    count += 1;
+  }
+  db.close();
+  done(`🌀 Executing on remote database: ${count} migrations to apply.`);
+}
+
+if (command.startsWith('d1 execute')) {
+  const { db } = openDatabase(positionals[2] ?? 'DB');
+  const sql = flag('--file') ? readFileSync(flag('--file'), 'utf8') : flag('--command');
+  if (!sql) fail('Provide --command or --file.');
+  const documents = [];
+  try {
+    for (const statement of splitStatements(sql)) {
+      const prepared = db.prepare(statement);
+      // node:sqlite refuses .all() on a statement that returns nothing, which is
+      // exactly the split D1 reports as `results: []`.
+      const results = /^\s*(SELECT|PRAGMA|WITH)\b/i.test(statement) ? prepared.all() : (prepared.run(), []);
+      documents.push({ results, success: true, meta: { changes: 0, duration: 0 } });
+    }
+  } catch (error) {
+    db.close();
+    fail(`✘ [ERROR] ${error.message}`);
+  }
+  db.close();
+  if (argv.includes('--json')) done(JSON.stringify(documents));
+  done('🌀 Executed successfully.');
+}
+
+/** Where one bucket's objects live. Keyed by the hex of the object key, so a
+ *  key with slashes in it is still one file. */
+function objectPath(bucket, key) {
+  return join(dirname(resolve(STATE)), 'r2', bucket, `${Buffer.from(key, 'utf8').toString('hex')}.bin`);
+}
+
+function bucketEntry(name) {
+  const wanted = jurisdictionOf();
+  return (state.r2 ?? []).find((candidate) => candidate.name === name && (candidate.jurisdiction ?? null) === (wanted ?? null));
+}
+
+if (command.startsWith('r2 object ') && ['get', 'put', 'delete'].includes(positionals[2])) {
+  const [bucketName, ...rest] = String(positionals[3] ?? '').split('/');
+  const key = rest.join('/');
+  const bucket = bucketEntry(bucketName);
+  if (!bucket) fail('The specified bucket does not exist.');
+  const path = objectPath(bucketName, key);
+
+  if (positionals[2] === 'put') {
+    mkdirSync(dirname(path), { recursive: true });
+    const existed = existsSync(path);
+    writeFileSync(path, readFileSync(flag('--file')));
+    if (!existed) bucket.objects = (bucket.objects ?? 0) + 1;
+    done(`Creating object "${key}" in bucket "${bucketName}".\nUpload complete.`);
+  }
+  if (positionals[2] === 'delete') {
+    if (existsSync(path)) {
+      rmSync(path);
+      bucket.objects = Math.max(0, (bucket.objects ?? 0) - 1);
+    }
+    done(`Deleting object "${key}" from bucket "${bucketName}".\nDelete complete.`);
+  }
+  if (!existsSync(path)) fail(`The specified key does not exist.`);
+  writeFileSync(flag('--file'), readFileSync(path));
+  done(`Downloading "${key}" from "${bucketName}".\nDownload complete.`);
 }
 
 if (command === 'r2 bucket list') {
@@ -211,6 +424,10 @@ if (command.startsWith('d1 delete')) {
   const index = (state.d1 ?? []).findIndex((entry) => entry.name === name);
   if (index === -1) fail(`Couldn't find DB with name '${name}'`);
   state.d1.splice(index, 1);
+  // The bytes go with the record. Leaving the file would make a database
+  // deleted and re-created under the same name come back with its old rows —
+  // which is exactly the thing a teardown is meant to make impossible.
+  rmSync(databaseFile(name), { force: true });
   done(`✅ Deleted '${name}' successfully.`);
 }
 

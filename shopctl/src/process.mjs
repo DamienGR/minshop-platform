@@ -25,13 +25,18 @@ export function describe(command, args) {
 /**
  * Run a command and capture its output.
  *
+ * `maxBuffer` is an explicit option rather than a raised default. Node truncates
+ * a child's output at 1 MiB and reports it as ENOBUFS, which reads like a
+ * crashed command rather than a lost answer — the backup's table reads are the
+ * one caller whose output is the merchant's whole database, and they say so.
+ *
  * @param {string} command
  * @param {string[]} args
- * @param {{ cwd?: string, input?: string, allowFailure?: boolean, env?: NodeJS.ProcessEnv }} [options]
+ * @param {{ cwd?: string, input?: string, allowFailure?: boolean, env?: NodeJS.ProcessEnv, maxBuffer?: number }} [options]
  * @returns {{ status: number, stdout: string, stderr: string }}
  */
-export function capture(command, args, { cwd, input, allowFailure = false, env = process.env } = {}) {
-  const result = spawnSync(command, args, { cwd, input, env, encoding: 'utf8' });
+export function capture(command, args, { cwd, input, allowFailure = false, env = process.env, maxBuffer } = {}) {
+  const result = spawnSync(command, args, { cwd, input, env, encoding: 'utf8', ...(maxBuffer ? { maxBuffer } : {}) });
   if (result.error) {
     if (result.error.code === 'ENOENT') {
       throw preconditionError(

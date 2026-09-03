@@ -54,6 +54,17 @@ confirmation saisie par l'opérateur.
 - un rollback applicatif ne restaure pas le schéma : c'est ce qui impose la
   politique de migrations additives (ADR 0006).
 
+### Note d'implémentation (jalon 8)
+
+L'inventaire R2 seul laisserait une boutique restaurée avec des images cassées,
+alors que le critère de sortie du jalon 8 parle d'un **nouvel** environnement.
+`shopctl backup` emporte donc, par défaut, **les octets des objets en plus de
+leur inventaire** ; `--no-media` revient au strict inventaire, l'archive dit
+alors ce qu'elle ne porte pas, et une restauration depuis une telle archive
+refuse de s'exécuter sans `--allow-missing-media`. Cette extension ne change
+aucune décision ci-dessus : elle ajoute au contenu énuméré, et l'inventaire
+reste ce qui rend `backup verify` possible sans la clé.
+
 ## Alternatives écartées
 
 - **Time Travel D1 seul** : fenêtre limitée, périmètre restreint à D1, aucune

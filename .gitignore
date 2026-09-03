@@ -20,6 +20,13 @@ wrangler.jsonc.bak
 # restores it on exit. Keep real deployed-instance configs OUTSIDE the repo.
 /mcp/wrangler.jsonc
 
+# Backups and their key (shopctl backup / restore, ADR 0005).
+# An archive is the merchant's orders, addresses and e-mails — encrypted, and
+# still not something a repository holds. The key is what opens every archive
+# taken with it: it belongs in the operator's vault, never in a clone.
+backups/
+.shopctl/
+
 # Environment & local overrides
 .env
 .env.*

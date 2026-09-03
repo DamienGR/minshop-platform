@@ -518,10 +518,20 @@ shopctl restore --env staging --from <backup-id>
 Une restauration vers la production nécessite une option dédiée et une
 confirmation saisie par l'opérateur.
 
-- [ ] Exiger cette option et cette confirmation, sans jamais faire de la
+- [x] Exiger cette option et cette confirmation, sans jamais faire de la
   production le comportement par défaut. La même posture s'applique déjà au
   déploiement : `shopctl deploy --env production` refuse de s'exécuter sans
-  `--yes`, et la production n'est le défaut de rien.
+  `--yes`, et la production n'est le défaut de rien. `restore --env production`
+  exige `--allow-production` **et** `--confirm <slug>` ; une base où la boutique
+  a déjà écrit exige `--overwrite` en plus.
+
+Deux commandes s'ajoutent à celles du plan initial, parce que l'ADR 0005 les
+appelle sans les nommer :
+
+```bash
+shopctl backup keygen            # la clé, écrite une fois, jamais affichée
+shopctl backup prune             # la politique de conservation, appliquée
+```
 
 ### 5.7 Gestion du socle et de la flotte
 
@@ -1906,8 +1916,8 @@ Durée indicative : 5 à 6 jours.
 - [x] logs sans PII ;
 - [ ] supervision ;
 - [ ] exports ;
-- [ ] politique de conservation ;
-- [ ] sauvegarde et restauration ;
+- [x] politique de conservation ;
+- [x] sauvegarde et restauration ;
 - [ ] runbooks d'incident.
 
 #### Tests
@@ -1923,14 +1933,16 @@ Durée indicative : 5 à 6 jours.
 - [x] traversée de chemin ;
 - [x] absence de secrets dans logs et artefacts ;
 - [x] absence d'adresse et d'e-mail dans les logs ;
-- [ ] restauration complète en staging ;
-- [ ] comparaison avant/après restauration ;
+- [x] restauration complète en staging ;
+- [x] comparaison avant/après restauration ;
 - [ ] export et anonymisation d'un client.
 
 #### Critère de sortie
 
 - [ ] La boutique peut être restaurée dans un nouvel environnement en moins
-  d'une heure à partir d'une sauvegarde documentée.
+  d'une heure à partir d'une sauvegarde documentée. La procédure existe, elle
+  est éprouvée de bout en bout contre le vrai schéma, et il lui manque le seul
+  passage qu'aucun double ne remplace : un compte Cloudflare réel, chronométré.
 
 #### État
 
@@ -2022,13 +2034,128 @@ appartient à son propre passage plutôt qu'à celui-ci. Le plancher
 qu'une page à URL-capacité s'est donné — l'inverse aurait dégradé la seule
 protection qui garde le jeton d'une commande hors des journaux d'un tiers.
 
-**Ce que le jalon 8 ne gate toujours pas.** Les trois tests restants et le
-critère de sortie tiennent tous à la même chose absente : `shopctl backup` et
-`shopctl restore` (plan §5.6, ADR 0005). L'export et l'anonymisation d'un
-client, la politique de conservation, la supervision et les runbooks partent
-avec eux. La suite de sécurité, elle, tourne déjà sur la **boutique générée**
-en CI, au même titre que sur le socle : c'est la campagne réutilisable du §1,
-et une boutique nouvelle la passe le jour de sa création.
+**La suite de sécurité tourne déjà sur la boutique générée** en CI, au même
+titre que sur le socle : c'est la campagne réutilisable du §1, et une boutique
+nouvelle la passe le jour de sa création.
+
+#### La seconde moitié : sauvegarde, restauration, conservation
+
+**Les deux raccourcis évidents sont écartés, et c'est ce qui donne sa forme à
+tout le reste.** Le Time Travel de D1 est un filet court terme dans un seul
+compte : pas de R2, pas de conservation longue, aucune restauration vers un
+autre compte — et c'est cette dernière qui décide, puisqu'elle est la condition
+d'une sortie propre du client (ADR 0005, ADR 0002). Et `wrangler d1 export`
+**échoue** sur une base portant des tables virtuelles FTS5, ce que celle-ci fait
+depuis la migration 0003. La sauvegarde est donc applicative, table par table,
+et le pipeline se coupe comme celui du catalogue : `schema`, `dump`, `crypto` et
+`archive` sont purs, `store` est le seul fichier qui atteint wrangler — ce qui
+fait de `--dry-run` le même chemin de code que la vraie prise, et non une
+seconde implémentation de celle-ci.
+
+**La liste des tables est déduite, jamais écrite.** `sqlite_master` dit ce que
+la base contient. Une liste écrite dans un fichier source cesse d'être complète
+à la première migration que personne n'y reporte, et la table absente de la
+liste est la table absente de l'archive — silencieusement, jusqu'à une
+restauration. C'est le raisonnement que la suite de sécurité applique aux routes
+d'administration, appliqué à un schéma. Sont laissées de côté quatre familles,
+chacune pour sa raison : `sqlite_*` et `_cf_*` appartiennent au moteur et à la
+plateforme ; `d1_migrations` est le **schéma**, que la restauration obtient en
+appliquant les migrations de l'arbre plutôt qu'en recopiant des lignes ; et
+l'index FTS5 avec ses tables fantômes est un **index**, que les déclencheurs de
+la migration 0003 reconstruisent au fur et à mesure que les lignes reviennent.
+La suite le prouve dans le bon sens : après restauration, une recherche sur
+`products_fts` rend le produit, depuis un index qu'aucune archive n'a porté.
+
+**Une archive est un répertoire, pas un conteneur, et c'est la décision
+structurante.** Un manifeste en clair, un corps chiffré, un fichier par objet
+R2. Les deux promesses de l'ADR en découlent directement : une archive se
+**contrôle sans être restaurée** — le manifeste porte la version du schéma, le
+compte de lignes et l'empreinte de chaque table, et l'inventaire R2, si bien
+qu'une agence qui tient cent archives n'en déchiffre pas cent pour trouver la
+bonne — et elle se **relit sans Cloudflare**, donc dans un autre compte, sur un
+autre fournisseur, sur un disque.
+
+**Le manifeste en clair est authentifié avec le corps.** Ce qui est lisible sans
+la clé est exactement ce qu'il devient intéressant de modifier, alors il est
+passé à AES-GCM comme donnée additionnelle : une archive ne peut pas être
+ré-étiquetée pour prétendre appartenir à une autre boutique, à un autre
+environnement ou à un autre schéma — elle cesse simplement de s'ouvrir. Deux
+champs restent hors de cette couverture parce qu'ils sont produits *par* le
+scellement : `cipher`, et `data.digest`, qui est un contrôle de corruption pour
+un lecteur sans clé et jamais une authentification. Le rapport de `verify` dit
+lequel des deux niveaux il a atteint plutôt que de rendre un vert unique.
+
+**L'inventaire R2 vient des lignes, pas du bucket.** wrangler n'a pas de
+commande qui liste un bucket, donc une CLI sans dépendance ne peut pas
+l'interroger — mais ce n'est pas le motif principal. Ce qu'une restauration doit
+reproduire, c'est l'ensemble des objets dont les **lignes** ont besoin : `media`
+est le seul propriétaire d'une image stockée (invariant 10) et un livrable
+numérique est nommé par le produit qui le vend. Un objet que plus rien ne
+référence n'est pas la boutique. La direction inverse est signalée plutôt que
+réparée : une clé portée par un produit sans ligne `media` derrière est une
+image déjà cassée, et une sauvegarde est un bon moment pour l'apprendre.
+
+**Les octets accompagnent l'inventaire, et c'est un ajout assumé à l'ADR.**
+L'ADR 0005 énumère « l'inventaire des objets R2 » ; une restauration qui ne
+rendrait que l'inventaire laisserait une boutique aux images cassées, et le
+critère de sortie parle d'un **nouvel** environnement. `--no-media` reste
+disponible et l'archive dit alors ce qu'elle ne porte pas ; une restauration
+depuis une telle archive refuse de s'exécuter sans `--allow-missing-media`.
+
+**Une restauration ne peut pas être « presque » testée, alors elle se prouve
+elle-même.** La commande relit la base qu'elle vient d'écrire et la compare,
+table par table, aux empreintes que l'archive portait ; une différence fait
+échouer la commande et nomme la table. C'est la « comparaison avant/après » du
+jalon, pas un rapport annexe : elle est dans le chemin.
+
+**Deux défauts trouvés en écrivant la suite, tous deux réels.**
+
+- **une colonne que SQLite calcule ne se réinsère pas.**
+  `orders.refunded_cents` est `GENERATED ALWAYS AS (…)` depuis la migration
+  0025 : `SELECT *` la rend comme les autres, et un INSERT qui la nomme est
+  refusé net. Une restauration qui ne le savait pas échouait sur la première
+  boutique ayant une commande — c'est-à-dire sur toutes sauf celle des tests
+  d'origine. La valeur est **capturée et comparée** quand même, et ce que la
+  comparaison affirme devient plus fort : c'est l'expression de la cible qui a
+  reproduit le même nombre ;
+- **« vide » ne veut pas dire « zéro ligne ».** La migration 0040 sème les
+  quatre pages légales françaises : une base provisionnée il y a cinq minutes
+  en porte déjà. Une garde qui exigeait une base littéralement vide aurait
+  réclamé `--overwrite` à **chaque** première restauration, et une option
+  toujours obligatoire est une option que personne ne lit. Les tables que le
+  schéma remplit lui-même sont donc déduites des migrations, comme la liste des
+  tables l'est de `sqlite_master`.
+
+**La conservation est bornée, et les deux bornes doivent être d'accord.**
+`backup prune` ne supprime une archive que si elle dépasse **à la fois** le
+nombre conservé et l'âge maximal. Une boutique qu'on a cessé de sauvegarder ne
+doit pas voir sa dernière archive expirer sur un critère d'âge : que l'archive
+soit vieille est la raison de la garder, pas celle de la supprimer. Un
+répertoire incomplet — ce qu'une prise interrompue laisse — est la seule chose
+qu'un âge seul emporte : il ne protège rien.
+
+**Le double de wrangler porte maintenant une vraie base.** `d1 migrations
+apply` applique les quarante-trois migrations du dépôt dans une base
+`node:sqlite`, et `d1 execute` y exécute les instructions que la CLI produit.
+Ce qui est éprouvé, ce sont donc les vraies contraintes, les vrais
+déclencheurs, les vraies colonnes générées et le vrai découpeur d'instructions —
+qui doit rester *aussi permissif que la plateforme*, apostrophes et
+points-virgules compris dans une description produit, sous peine de faire
+échouer la suite sur des données qui passent en production.
+
+**Ce qui n'est PAS gaté, et pourquoi.** Trois choses, nommées plutôt qu'omises :
+
+- **le chronomètre du critère de sortie.** La procédure existe et le tour
+  complet est éprouvé ; ce qu'aucun double ne remplace, c'est une restauration
+  minutée sur un compte Cloudflare réel. Cette ligne rejoint celles des jalons 6
+  et 7 : les trois attendent le même premier passage réel ;
+- **l'export et l'anonymisation d'un client.** Ils s'appuient sur la même carte
+  des tables et sur le même chiffrement, et ils feront leur propre passage avec
+  la supervision et les runbooks ;
+- **la rotation d'une clé.** `keygen` refuse d'écraser une clé existante — c'est
+  elle qui ouvre les archives déjà prises — mais rien ne rechiffre un dépôt d'un
+  jeu de clés vers un autre. Une agence qui doit tourner sa clé garde
+  l'ancienne le temps que la rétention emporte les archives qu'elle ferme.
 
 ### Jalon 9 — Mise à jour de flotte
 
@@ -2122,9 +2249,11 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
 - [x] porte navigateur par thème — axe, clavier, zoom, sans JavaScript,
   signature du design (job « Browser », `npm run test:browser`).
-- [x] tests de la CLI — livrés aux jalons 2, 4 et 6 : `test/scripts/shopctl.test.mjs`
-  (création), `catalog.test.mjs` (import), `provision.test.mjs` et
-  `deploy.test.mjs` (compte, environnement, déploiement). Ils tournent dans
+- [x] tests de la CLI — livrés aux jalons 2, 4, 6 et 8 :
+  `test/scripts/shopctl.test.mjs` (création), `catalog.test.mjs` (import),
+  `provision.test.mjs` et `deploy.test.mjs` (compte, environnement,
+  déploiement), `backup.test.mjs` et `restore.test.mjs` (archive et tour
+  complet, contre les quarante-trois migrations réelles). Ils tournent dans
   `vitest run`, donc dans `npm run verify`, donc dans le job principal ;
 - [ ] contrôle de formatage — voir ci-dessous.
 
