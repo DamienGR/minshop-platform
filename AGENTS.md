@@ -274,7 +274,10 @@ Publishing a core version is a gate, not a convention: the version lives in
 bumping one alone produces a shop that merges the tag and then fails its own
 manifest gate. `npm run check:release` holds the three together on every commit;
 `node scripts/check-release.mjs --set <version>` writes all three; the `Release`
-workflow tags after the full suite and a clean-clone build.
+workflow tags after the full suite and a clean-clone build. "Is this tag free?"
+is asked of ORIGIN, not of the clone, and the answer says which: a checkout made
+without tags answers "no such tag" for a tag the repository publishes, and a
+gate built on that frees a version number that is taken.
 
 Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
 `fleet.test.mjs` (core upgrade, fleet, pull requests) and `release.test.mjs`

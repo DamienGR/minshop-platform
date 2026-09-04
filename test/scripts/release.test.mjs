@@ -6,7 +6,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { destructiveStatements, notesTemplate, releaseFindings, setVersion, versionLocations } from '../../scripts/release.mjs';
+import { spawnSync } from 'node:child_process';
+
+import { destructiveStatements, notesTemplate, releaseFindings, setVersion, tagIsTaken, versionLocations } from '../../scripts/release.mjs';
 
 /** A tree with the three places a core version is written, and nothing else.
  *  The gate reads files; it does not need five hundred of them. */
@@ -110,5 +112,48 @@ describe('what a migration may not do', () => {
   it('reads SQL, not prose', () => {
     expect(destructiveStatements('-- we will DROP TABLE orders in v2\nALTER TABLE orders ADD COLUMN x TEXT;')).toEqual([]);
     expect(destructiveStatements('/* DROP TABLE orders */\nSELECT 1;')).toEqual([]);
+  });
+});
+
+describe('whether a version number is still free', () => {
+  /** A repository with an `origin` that is a local bare one, and a tag on it. */
+  function published(tags = []) {
+    const remote = mkdtempSync(join(tmpdir(), 'release-remote-'));
+    const clone = mkdtempSync(join(tmpdir(), 'release-clone-'));
+    const git = (args, cwd) => spawnSync('git', args, { cwd, encoding: 'utf8', env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Minshop Tests', GIT_AUTHOR_EMAIL: 'tests@example.com',
+      GIT_COMMITTER_NAME: 'Minshop Tests', GIT_COMMITTER_EMAIL: 'tests@example.com',
+    } });
+    git(['init', '--bare', '--quiet', remote], undefined);
+    git(['init', '--quiet', '--initial-branch=main'], clone);
+    writeFileSync(join(clone, 'README.md'), '# t\n');
+    git(['add', '-A'], clone);
+    git(['commit', '--quiet', '-m', 'premier'], clone);
+    git(['remote', 'add', 'origin', remote], clone);
+    git(['push', '--quiet', 'origin', 'main'], clone);
+    for (const tag of tags) {
+      git(['tag', tag], clone);
+      git(['push', '--quiet', 'origin', tag], clone);
+    }
+    // The clone forgets what it pushed: this is the state a hosted checkout
+    // hands you — a working tree with no tags — and the state that made the
+    // first release run of this repository propose a version that existed.
+    for (const tag of tags) git(['tag', '-d', tag], clone);
+    return clone;
+  }
+
+  it('asks origin, not the clone, and says so', () => {
+    const root = published(['v0.1.0']);
+    expect(tagIsTaken('v0.1.0', root)).toEqual({ taken: true, source: 'origin' });
+    expect(tagIsTaken('v0.2.0', root)).toEqual({ taken: false, source: 'origin' });
+  });
+
+  // An empty listing is an ANSWER — "origin does not publish it" — and a failed
+  // command is not. Conflating them frees a version number that is taken.
+  it('falls back to the clone when there is no origin, and marks the answer local', () => {
+    const root = mkdtempSync(join(tmpdir(), 'release-noremote-'));
+    spawnSync('git', ['init', '--quiet', '--initial-branch=main'], { cwd: root });
+    expect(tagIsTaken('v0.1.0', root)).toEqual({ taken: false, source: 'local' });
   });
 });

@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { compareVersions, isBreakingStep, latestVersion, versionsBetween } from '../../shopctl/src/version.mjs';
 import { readRegistry, selectShops } from '../../shopctl/src/fleet.mjs';
-import { GIT_ENV, cloneCoreTemplate, git, publishVersion } from '../helpers/core-repository.mjs';
+import { CORE_TAG, CORE_VERSION, GIT_ENV, cloneCoreTemplate, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -21,6 +21,20 @@ const GH_DOUBLE = resolve(CORE, 'test/fixtures/gh-double.mjs');
 // would only measure how loaded the machine is.
 vi.setConfig({ testTimeout: 120_000 });
 
+/**
+ * The step under test: from the version THIS tree declares, to the next minor.
+ *
+ * Derived rather than written down. Literals here would have to be edited at
+ * every release, and the release that forgot would build a fixture whose tag
+ * and whose package.json disagree — the state a shop's own manifest gate
+ * refuses. Publishing v0.2.0 is what taught this file the lesson.
+ */
+const FROM = CORE_VERSION;
+const FROM_TAG = CORE_TAG;
+const TO = nextMinor();
+const TO_TAG = `v${TO}`;
+const UPGRADE_BRANCH = `socle/${TO_TAG}`;
+
 /** The migration a new core version brings: additive, as ADR 0006 requires. */
 const ADDITIVE_MIGRATION = [
   '-- Ajout additif : une boutique restée sur la version précédente continue de',
@@ -29,8 +43,8 @@ const ADDITIVE_MIGRATION = [
   '',
 ].join('\n');
 
-const NOTES_0_2_0 = [
-  '# Socle v0.2.0',
+const NOTES_NEXT = [
+  `# Socle ${TO_TAG}`,
   '',
   '## Ce qui change',
   '',
@@ -43,7 +57,7 @@ const NOTES_0_2_0 = [
 ].join('\n');
 
 /**
- * An agency's workspace: one core at v0.1.0, its shops, and a fleet registry.
+ * An agency's workspace: one core at its own tag, its shops, and a registry.
  *
  * Built with the REAL commands — the core is this tree's own index, committed
  * and tagged, and `shopctl new` creates each shop from that tag. What is under test is a
@@ -67,7 +81,7 @@ function workspace({ shops = ['boutique-un'], forge = false, registry = true } =
   for (const slug of shops) {
     const result = spawnSync(
       'node',
-      [BIN, 'new', slug, '--core', 'v0.1.0', '--from', core, '--no-install', '--no-verify'],
+      [BIN, 'new', slug, '--core', FROM_TAG, '--from', core, '--no-install', '--no-verify'],
       { cwd: root, encoding: 'utf8', env: GIT_ENV },
     );
     if (result.status !== 0) throw new Error(`shopctl new ${slug}: ${result.stderr || result.stdout}`);
@@ -115,8 +129,8 @@ function workspace({ shops = ['boutique-un'], forge = false, registry = true } =
     /** Publish the next core version, with an additive migration and its notes. */
     publish(options = {}) {
       return publishVersion(core, {
-        version: '0.2.0',
-        notes: NOTES_0_2_0,
+        version: TO,
+        notes: NOTES_NEXT,
         files: { 'migrations/0044_gift_message.sql': ADDITIVE_MIGRATION },
         ...options,
       });
@@ -225,7 +239,7 @@ describe('shopctl core status', () => {
   it('reads the version from the history, not from the manifest', () => {
     const agency = workspace();
     const { report } = agency.json(['core', 'status', '--offline'], { cwd: agency.shop() });
-    expect(report.core).toMatchObject({ declared: '0.1.0', merged: '0.1.0', mergedTag: 'v0.1.0', declaresMerged: true });
+    expect(report.core).toMatchObject({ declared: FROM, merged: FROM, mergedTag: FROM_TAG, declaresMerged: true });
     expect(report.shop.slug).toBe('boutique-un');
   });
 
@@ -237,14 +251,14 @@ describe('shopctl core status', () => {
     const shop = agency.shop();
     writeFileSync(
       join(shop, 'client/client.yaml'),
-      read(shop, 'client/client.yaml').replace('coreVersion: 0.1.0', 'coreVersion: 0.9.0'),
+      read(shop, 'client/client.yaml').replace(`coreVersion: ${FROM}`, 'coreVersion: 99.0.0'),
     );
     const { status, report, stderr } = agency.json(['core', 'status', '--offline'], { cwd: shop });
     // Reported, not refused: the manifest no longer validates — it is ahead of
     // the core it sits on — and a status command that declined to describe the
     // shop would leave the operator with nothing to act on.
     expect(status, stderr).toBe(EXIT_CODES.ok);
-    expect(report.core).toMatchObject({ declared: '0.9.0', merged: '0.1.0', declaresMerged: false });
+    expect(report.core).toMatchObject({ declared: '99.0.0', merged: FROM, declaresMerged: false });
     expect(report.manifestErrors[0].path).toBe('coreVersion');
     // The verdict travels in the document; the exit code says the read worked.
     expect(report.ok).toBe(false);
@@ -255,8 +269,8 @@ describe('shopctl core status', () => {
     const agency = workspace();
     agency.publish();
     const { report } = agency.json(['core', 'status'], { cwd: agency.shop() });
-    expect(report.core.behind).toEqual(['0.2.0']);
-    expect(report.core.latest).toBe('0.2.0');
+    expect(report.core.behind).toEqual([TO]);
+    expect(report.core.latest).toBe(TO);
   });
 
   // The tree is built here rather than reused from the fixture, and the reason
@@ -284,20 +298,20 @@ describe('shopctl core upgrade', () => {
     const before = read(shop, 'client/client.yaml');
     const theme = treeFiles(join(shop, 'src/themes/boutique-un'));
 
-    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop });
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
     expect(status, stderr).toBe(EXIT_CODES.ok);
-    expect(report).toMatchObject({ ok: true, from: '0.1.0', to: '0.2.0', changed: true, branch: 'socle/v0.2.0' });
+    expect(report).toMatchObject({ ok: true, from: FROM, to: TO, changed: true, branch: UPGRADE_BRANCH });
     expect(report.migrations).toEqual(['migrations/0044_gift_message.sql']);
-    expect(report.notes).toEqual([{ version: '0.2.0', file: 'docs/migrations/v0.2.0.md' }]);
+    expect(report.notes).toEqual([{ version: TO, file: `docs/migrations/${TO_TAG}.md` }]);
 
     // The migration arrived, and the shop is on the branch the report names.
     expect(existsSync(join(shop, 'migrations/0044_gift_message.sql'))).toBe(true);
-    expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe('socle/v0.2.0');
+    expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe(UPGRADE_BRANCH);
 
     // The manifest changed in exactly one line, and the theme not at all: the
     // two properties jalon 9 asks for by name.
     const after = read(shop, 'client/client.yaml');
-    expect(after).toBe(before.replace('coreVersion: 0.1.0', 'coreVersion: 0.2.0'));
+    expect(after).toBe(before.replace(`coreVersion: ${FROM}`, `coreVersion: ${TO}`));
     expect(treeFiles(join(shop, 'src/themes/boutique-un'))).toEqual(theme);
 
     // And the shop still passes its own gates, with the NEW core's copy of them.
@@ -316,7 +330,7 @@ describe('shopctl core upgrade', () => {
     const agency = workspace();
     agency.publish();
     const shop = agency.shop();
-    expect(agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop }).status).toBe(EXIT_CODES.ok);
+    expect(agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: shop }).status).toBe(EXIT_CODES.ok);
 
     const db = migrate(shop);
     const legacyWrite = db.exec(
@@ -333,7 +347,7 @@ describe('shopctl core upgrade', () => {
 
   it('says there is nothing to do when the shop is already there', () => {
     const agency = workspace();
-    const { status, report } = agency.json(['core', 'upgrade', '--to', 'v0.1.0'], { cwd: agency.shop() });
+    const { status, report } = agency.json(['core', 'upgrade', '--to', FROM_TAG], { cwd: agency.shop() });
     expect(status).toBe(EXIT_CODES.ok);
     expect(report).toMatchObject({ changed: false, upToDate: true });
   });
@@ -345,8 +359,8 @@ describe('shopctl core upgrade', () => {
     const agency = workspace();
     agency.publish();
     const shop = agency.shop();
-    agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop });
-    const result = agency.run(['core', 'upgrade', '--to', 'v0.1.0'], { cwd: shop });
+    agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    const result = agency.run(['core', 'upgrade', '--to', FROM_TAG], { cwd: shop });
     expect(result.status).toBe(EXIT_CODES.input);
     expect(result.stderr).toMatch(/antérieur/);
   });
@@ -363,7 +377,7 @@ describe('shopctl core upgrade', () => {
     agency.publish();
     const shop = agency.shop();
     writeFileSync(join(shop, 'src/store.config.ts'), '// travail en cours\n');
-    const result = agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop });
+    const result = agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
     expect(result.status).toBe(EXIT_CODES.precondition);
     expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe('main');
   });
@@ -374,9 +388,9 @@ describe('shopctl core upgrade', () => {
     const shop = agency.shop();
     const head = git(['rev-parse', 'HEAD'], shop);
 
-    const { status, report } = agency.json(['core', 'upgrade', '--to', 'v0.2.0', '--dry-run'], { cwd: shop });
+    const { status, report } = agency.json(['core', 'upgrade', '--to', TO_TAG, '--dry-run'], { cwd: shop });
     expect(status).toBe(EXIT_CODES.ok);
-    expect(report).toMatchObject({ dryRun: true, changed: false, branch: 'socle/v0.2.0' });
+    expect(report).toMatchObject({ dryRun: true, changed: false, branch: UPGRADE_BRANCH });
     expect(report.migrations).toEqual(['migrations/0044_gift_message.sql']);
     expect(git(['rev-parse', 'HEAD'], shop)).toBe(head);
     expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe('main');
@@ -394,14 +408,14 @@ describe('shopctl core upgrade', () => {
     git(['commit', '--quiet', '-m', 'Corriger un fichier du cœur en urgence'], shop);
     agency.publish({ files: { 'scripts/check-toolchain.mjs': '// correctif du socle\n' } });
 
-    const result = agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop });
+    const result = agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
     expect(result.status).toBe(EXIT_CODES.verification);
     expect(result.stderr).toMatch(/conflit/);
     // Named WITH its ownership: a conflict in a core file is the agency's to
     // resolve, and the label is what says so without opening the file.
     expect(result.stderr).toContain('scripts/check-toolchain.mjs (core)');
     // Left mid-merge, with the markers, on the upgrade branch.
-    expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe('socle/v0.2.0');
+    expect(git(['symbolic-ref', '--short', 'HEAD'], shop)).toBe(UPGRADE_BRANCH);
     expect(read(shop, 'scripts/check-toolchain.mjs')).toContain('<<<<<<<');
   });
 
@@ -417,17 +431,17 @@ describe('shopctl core upgrade', () => {
     git(['add', '-A'], shop);
     git(['commit', '--quiet', '-m', 'Corriger un fichier du cœur en urgence'], shop);
     agency.publish({ files: { 'scripts/check-toolchain.mjs': '// correctif du socle\n' } });
-    expect(agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: shop }).status).toBe(EXIT_CODES.verification);
+    expect(agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: shop }).status).toBe(EXIT_CODES.verification);
 
     // Resolved the way an operator resolves it: keep both decisions, commit.
     writeFileSync(join(shop, 'scripts/check-toolchain.mjs'), '// correctif urgent de la boutique\n// correctif du socle\n');
     git(['add', '-A'], shop);
     git(['commit', '--quiet', '--no-edit'], shop);
 
-    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', 'v0.2.0', '--open-pr'], { cwd: shop });
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG, '--open-pr'], { cwd: shop });
     expect(status, stderr).toBe(EXIT_CODES.ok);
-    expect(report).toMatchObject({ from: '0.1.0', to: '0.2.0', changed: true, base: 'main' });
-    expect(read(shop, 'client/client.yaml')).toContain('coreVersion: 0.2.0');
+    expect(report).toMatchObject({ from: FROM, to: TO, changed: true, base: 'main' });
+    expect(read(shop, 'client/client.yaml')).toContain(`coreVersion: ${TO}`);
     expect(agency.github().repos['agence/shop-boutique-un'].pulls).toHaveLength(1);
   });
 
@@ -439,7 +453,7 @@ describe('shopctl core upgrade', () => {
     git(['commit', '--quiet', '-m', 'Corriger un fichier du cœur en urgence'], shop);
     agency.publish({ files: { 'scripts/check-toolchain.mjs': '// correctif du socle\n' } });
 
-    const result = agency.run(['core', 'upgrade', '--to', 'v0.2.0', '--abort-on-conflict'], { cwd: shop });
+    const result = agency.run(['core', 'upgrade', '--to', TO_TAG, '--abort-on-conflict'], { cwd: shop });
     expect(result.status).toBe(EXIT_CODES.verification);
     expect(read(shop, 'scripts/check-toolchain.mjs')).not.toContain('<<<<<<<');
     expect(git(['status', '--porcelain'], shop)).toBe('');
@@ -453,7 +467,7 @@ describe('shopctl core upgrade', () => {
     const existing = readdirSync(join(agency.core, 'migrations')).sort()[0];
     agency.publish({ files: { [`migrations/${existing}`]: '-- réécrite\nSELECT 1;\n' } });
 
-    const result = agency.run(['core', 'upgrade', '--to', 'v0.2.0'], { cwd: agency.shop() });
+    const result = agency.run(['core', 'upgrade', '--to', TO_TAG], { cwd: agency.shop() });
     expect(result.status).toBe(EXIT_CODES.verification);
     expect(result.stderr).toMatch(/réécrit/);
     expect(result.stderr).toContain(existing);
@@ -466,20 +480,20 @@ describe('shopctl core upgrade', () => {
     agency.publish();
     const shop = agency.shop();
 
-    const first = agency.json(['core', 'upgrade', '--to', 'v0.2.0', '--open-pr'], { cwd: shop });
+    const first = agency.json(['core', 'upgrade', '--to', TO_TAG, '--open-pr'], { cwd: shop });
     expect(first.status, first.stderr).toBe(EXIT_CODES.ok);
     expect(first.report.pullRequest).toMatchObject({ created: true, state: 'OPEN' });
 
     const pulls = agency.github().repos['agence/shop-boutique-un'].pulls;
     expect(pulls).toHaveLength(1);
     expect(pulls[0].base).toBe('main');
-    expect(pulls[0].head).toBe('socle/v0.2.0');
+    expect(pulls[0].head).toBe(UPGRADE_BRANCH);
     // The reviewer reads the migration notes without opening the diff, and
     // reads that nothing was deployed.
     expect(pulls[0].body).toContain('migrations/0044_gift_message.sql');
     expect(pulls[0].body).toContain('Rien n\'a été déployé');
 
-    const again = agency.json(['core', 'upgrade', '--to', 'v0.2.0', '--open-pr'], { cwd: shop });
+    const again = agency.json(['core', 'upgrade', '--to', TO_TAG, '--open-pr'], { cwd: shop });
     expect(again.status).toBe(EXIT_CODES.ok);
     expect(agency.github().repos['agence/shop-boutique-un'].pulls).toHaveLength(1);
   });
@@ -543,8 +557,8 @@ describe('shopctl fleet', () => {
     const { status, report } = agency.json(['fleet', 'status']);
     expect(status).toBe(EXIT_CODES.ok);
     expect(report.shops.map((shop) => shop.slug)).toEqual(['boutique-un', 'boutique-deux']);
-    expect(report.core.latest).toBe('0.2.0');
-    expect(report.spread).toEqual([{ version: '0.1.0', shops: ['boutique-un', 'boutique-deux'] }]);
+    expect(report.core.latest).toBe(TO);
+    expect(report.spread).toEqual([{ version: FROM, shops: ['boutique-un', 'boutique-deux'] }]);
   });
 
   // Plan §5.7 names this one by its flag: `shopctl fleet report --format json`
@@ -556,7 +570,7 @@ describe('shopctl fleet', () => {
     expect(result.status).toBe(EXIT_CODES.ok);
     const document = JSON.parse(result.stdout);
     expect(document.shops.map((shop) => shop.slug)).toEqual(['boutique-un', 'boutique-deux']);
-    expect(document.spread).toEqual([{ version: '0.1.0', shops: ['boutique-un', 'boutique-deux'] }]);
+    expect(document.spread).toEqual([{ version: FROM, shops: ['boutique-un', 'boutique-deux'] }]);
   });
 
   it('refuses a report format it does not write', () => {
@@ -613,16 +627,16 @@ describe('shopctl fleet', () => {
       theme: treeFiles(join(shop.root, 'src/themes', shop.slug)),
     }));
 
-    const { status, report, stderr } = agency.json(['fleet', 'upgrade', '--to', 'v0.2.0']);
+    const { status, report, stderr } = agency.json(['fleet', 'upgrade', '--to', TO_TAG]);
     expect(status, stderr).toBe(EXIT_CODES.ok);
     expect(report.results.map((result) => [result.slug, result.ok, result.to])).toEqual([
-      ['boutique-un', true, '0.2.0'],
-      ['boutique-deux', true, '0.2.0'],
+      ['boutique-un', true, TO],
+      ['boutique-deux', true, TO],
     ]);
 
     for (const shop of agency.shops) {
       const expected = before.find((entry) => entry.slug === shop.slug);
-      expect(read(shop.root, 'client/client.yaml')).toBe(expected.manifest.replace('coreVersion: 0.1.0', 'coreVersion: 0.2.0'));
+      expect(read(shop.root, 'client/client.yaml')).toBe(expected.manifest.replace(`coreVersion: ${FROM}`, `coreVersion: ${TO}`));
       expect(treeFiles(join(shop.root, 'src/themes', shop.slug))).toEqual(expected.theme);
       expect(existsSync(join(shop.root, 'migrations/0044_gift_message.sql'))).toBe(true);
     }
@@ -636,11 +650,11 @@ describe('shopctl fleet', () => {
     agency.publish();
     const behind = agency.shop('boutique-deux');
 
-    const { status } = agency.json(['fleet', 'upgrade', '--to', 'v0.2.0', '--only', 'boutique-un']);
+    const { status } = agency.json(['fleet', 'upgrade', '--to', TO_TAG, '--only', 'boutique-un']);
     expect(status).toBe(EXIT_CODES.ok);
 
     const state = agency.json(['core', 'status', '--offline'], { cwd: behind });
-    expect(state.report.core).toMatchObject({ declared: '0.1.0', merged: '0.1.0', declaresMerged: true });
+    expect(state.report.core).toMatchObject({ declared: FROM, merged: FROM, declaresMerged: true });
     expect(existsSync(join(behind, 'migrations/0044_gift_message.sql'))).toBe(false);
 
     const gates = agency.run(['config', 'validate'], { cwd: behind });
@@ -656,7 +670,7 @@ describe('shopctl fleet', () => {
     // upgraded anyway.
     writeFileSync(join(agency.shop('boutique-un'), 'src/store.config.ts'), '// travail en cours\n');
 
-    const { status, report } = agency.json(['fleet', 'upgrade', '--to', 'v0.2.0']);
+    const { status, report } = agency.json(['fleet', 'upgrade', '--to', TO_TAG]);
     expect(status).toBe(EXIT_CODES.verification);
     expect(report.results.find((result) => result.slug === 'boutique-un')).toMatchObject({ ok: false, kind: 'precondition' });
     expect(report.results.find((result) => result.slug === 'boutique-deux')).toMatchObject({ ok: true, changed: true });
@@ -666,7 +680,7 @@ describe('shopctl fleet', () => {
     const agency = workspace({ shops: ['boutique-un', 'boutique-deux'], forge: true });
     agency.publish();
 
-    const { status, report, stderr } = agency.json(['fleet', 'upgrade', '--to', 'v0.2.0', '--open-pr']);
+    const { status, report, stderr } = agency.json(['fleet', 'upgrade', '--to', TO_TAG, '--open-pr']);
     expect(status, stderr).toBe(EXIT_CODES.ok);
     expect(report.results.every((result) => result.pullRequest?.url)).toBe(true);
 

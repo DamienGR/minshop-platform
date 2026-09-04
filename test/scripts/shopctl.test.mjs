@@ -18,11 +18,10 @@ import { CREDENTIAL_PATTERNS, RESERVED_SLUGS, validateManifest } from '../../scr
 import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
 // The core fixture and the git identity live in a helper: the fleet suite
 // (jalon 9) creates the same "core at a tag" and a second copy would drift.
-import { GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
+import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
-const CORE_TAG = 'v0.1.0';
 
 // Every test in this file spawns real processes — a git clone of the whole
 // tree, the gates the shop carries, `wrangler --version`. Vitest's five-second
@@ -140,11 +139,11 @@ describe('the generated manifest', () => {
     domain: 'boutique-du-port.example.com',
     email: 'commandes@boutique-du-port.example.com',
     theme: 'boutique-du-port',
-    coreVersion: '0.1.0',
+    coreVersion: CORE_VERSION,
   };
 
   it('passes the same validator the CI gate runs', () => {
-    expect(validateManifest(buildManifest(values), { coreVersion: '0.1.0' }).errors).toEqual([]);
+    expect(validateManifest(buildManifest(values), { coreVersion: CORE_VERSION }).errors).toEqual([]);
   });
 
   // A generator and a parser that disagree about quoting produce a shop whose
@@ -467,7 +466,7 @@ describe('shopctl new', () => {
     const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', 'v9.9.9'], work);
     expect(result.status).toBe(EXIT_CODES.input);
     expect(result.stderr).toMatch(/has no tag "v9\.9\.9"/);
-    expect(result.stderr).toMatch(new RegExp(CORE_TAG.replace('.', '\\.')));
+    expect(result.stderr).toMatch(new RegExp(CORE_TAG.replaceAll('.', '\\.')));
     expect(treeFiles(work)).toEqual([]);
   });
 
@@ -560,11 +559,11 @@ describe('shopctl new', () => {
 
     expect(readFileSync(join(shop, 'client/client.yaml'), 'utf8')).toBe(
       `# Manifeste de la boutique Boutique Du Port.
-# Généré par \`shopctl new boutique-du-port\` depuis le socle v0.1.0.
+# Généré par \`shopctl new boutique-du-port\` depuis le socle ${CORE_TAG}.
 # Source de vérité non sensible : aucune clé, aucun secret, jamais.
 schemaVersion: 1
 # Version du socle clonée. Mise à jour par \`shopctl core upgrade\`.
-coreVersion: 0.1.0
+coreVersion: ${CORE_VERSION}
 
 # Qui est la boutique.
 client:
@@ -633,7 +632,7 @@ theme:
     // The tag is an ancestor: the shop is a descendant of the core, not a copy.
     expect(git(['merge-base', '--is-ancestor', CORE_TAG, 'HEAD'], shop)).toBe('');
     expect(git(['log', '--format=%s'], shop).split('\n')).toEqual([
-      'Initialiser la boutique boutique-du-port depuis le socle v0.1.0',
+      `Initialiser la boutique boutique-du-port depuis le socle ${CORE_TAG}`,
       `Core ${CORE_TAG}`,
     ]);
     expect(git(['status', '--porcelain'], shop)).toBe('');

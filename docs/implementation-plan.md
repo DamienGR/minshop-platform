@@ -2274,10 +2274,18 @@ la version partout et dépose le squelette des notes. Le workflow `Release`
 exécute la suite complète **et** la construction depuis un clone vierge avant de
 poser le tag — un tag est ce que quelqu'un clone.
 
-**Ce dépôt ne publiait aucun tag.** C'est le défaut que le jalon rend visible :
-`shopctl new --core v0.1.0` ne pouvait fonctionner contre lui, faute de tag à
-cloner. Les notes de la première version sont écrites, la porte est verte, et
-`Release` attend d'être déclenché.
+**La porte a refusé la première publication, et elle avait raison.** Le premier
+`Release` a été lancé pour `v0.1.0` ; ce tag existe depuis le jalon 6, et un tag
+publié ne se déplace pas (ADR 0003). Ce qui avait fait croire le contraire est
+plus intéressant que l'erreur : la porte ne consultait que les **tags du clone**,
+et un clone fait sans tags — ce que rendent plusieurs hébergeurs de checkout —
+répond « ce tag n'existe pas » pour un tag que le dépôt publie. Elle interroge
+maintenant `origin` d'abord, et dit de quelle source vient sa réponse ; hors
+ligne, elle annonce que la réponse ne vaut que localement plutôt que de la faire
+passer pour celle du dépôt. Le socle est donc publié en **`v0.2.0`** : trois
+jalons — paiement, exploitation, flotte — séparent `main` du jalon 6, et
+`docs/migrations/v0.2.0.md` dit ce que le pas demande à une boutique (rien : ni
+migration, ni binding, ni secret).
 
 **Ce qui n'est PAS gaté, et pourquoi.**
 

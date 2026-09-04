@@ -399,6 +399,12 @@ et `docs/migrations/v<version>.md` —, et n'en bumper qu'un produit une boutiqu
 qui fusionne le tag puis échoue à ses propres portes. Le workflow `Release` pose
 le tag après la suite complète et une construction depuis un clone vierge.
 
+« Le tag est-il libre ? » est demandé à **origin**, pas au clone, et la réponse
+dit de quelle source elle vient. Un clone fait sans tags — ce que rendent
+plusieurs hébergeurs de checkout — répond « ce tag n'existe pas » pour un tag
+que le dépôt publie ; hors ligne, la porte annonce que sa réponse ne vaut que
+localement plutôt que de la faire passer pour celle du dépôt.
+
 ## Conventions
 
 **Enveloppe, ne réimplémente pas.** `config validate` appelle

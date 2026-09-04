@@ -45,7 +45,10 @@ describe('manifest YAML reader', () => {
   it('reads the manifest shape: nested sections, scalars, comments', () => {
     const parsed = base();
     expect(parsed.schemaVersion).toBe(1);
-    expect(parsed.coreVersion).toBe('0.1.0');
+    // The core's own version, not a literal: the witness fixtures are bumped at
+    // every release (scripts/release.mjs keeps the three places in step), and a
+    // number written here would fail on the release rather than on the reader.
+    expect(parsed.coreVersion).toBe(coreVersion());
     expect(parsed.client.slug).toBe('pilot-fr');
     expect(parsed.commerce.pricesIncludeTax).toBe(true);
     expect(parsed.commerce.defaultVatRate).toBe(20);
