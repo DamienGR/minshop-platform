@@ -19,7 +19,9 @@ Il doit livrer :
 - [ ] un socle Minshop français versionné ;
 - [ ] une architecture permettant de gérer plusieurs clients ;
 - [ ] une CLI de génération et d'exploitation ;
-- [ ] des procédures testées de mise à jour, sauvegarde, restauration et sortie ;
+- [ ] des procédures testées de mise à jour, sauvegarde, restauration et sortie —
+  mise à jour (jalon 9), sauvegarde et restauration (jalon 8) sont éprouvées ;
+  la sortie d'un client reste à écrire ;
 - [ ] une campagne de certification réutilisable pour chaque nouvelle boutique.
 
 L'architecture est multi-client au niveau du code et de l'exploitation, mais
@@ -102,8 +104,10 @@ Le plan de contrôle comprend :
 - [x] les schémas de configuration ;
 - [x] les templates de boutique — trois designs livrés par le socle, plus le
   thème propre à une boutique que `pilot-fr` démontre depuis le jalon 5 ;
-- [ ] le registre privé de flotte ;
-- [ ] les workflows de mise à jour ;
+- [x] le registre privé de flotte — `fleet.json`, déclaré dans l'espace de
+  travail de l'agence ([ADR 0016](architecture/decisions/0016-registre-et-mise-a-niveau-de-la-flotte.md)) ;
+- [x] les workflows de mise à jour — `shopctl core upgrade`,
+  `shopctl fleet upgrade`, et le workflow `Release` qui publie les tags ;
 - [ ] les tests génériques propres à la plateforme multi-client.
 
 Il ne contient aucune donnée de commande et aucun secret client.
@@ -117,14 +121,15 @@ Chaque boutique dispose de ses propres :
 - [x] bucket R2 d'images ;
 - [x] bucket R2 de fichiers privés ;
 - [x] secrets ;
-- [ ] sauvegardes ;
+- [x] sauvegardes ;
 - [x] domaine ;
 - [ ] comptes Stripe et Resend.
 
 Créés par ressource et par environnement au jalon 6, sous la souche
 `minshop-<slug>-<env>` ([ADR 0013](architecture/decisions/0013-environnements-de-deploiement.md)).
-Les sauvegardes sont un livrable du jalon 9 (§5.6) ; les comptes Stripe et
-Resend restent des opérations humaines, listées par `shopctl doctor`.
+Les sauvegardes sont un livrable du jalon 8 (§5.6, `shopctl backup` /
+`shopctl restore`) ; les comptes Stripe et Resend restent des opérations
+humaines, listées par `shopctl doctor`.
 
 Les boutiques européennes utilisent la juridiction Cloudflare `eu` pour D1 et
 R2.
@@ -177,13 +182,19 @@ branche flottante comme `main`.
 
 Une mise à niveau :
 
-1. [ ] récupère un tag ;
-2. [ ] crée une branche ;
-3. [ ] merge le tag ;
-4. [ ] exécute les tests ;
+1. [x] récupère un tag ;
+2. [x] crée une branche ;
+3. [x] merge le tag ;
+4. [x] exécute les tests ;
 5. [ ] déploie en staging ;
-6. [ ] ouvre une pull request ;
-7. [ ] attend une validation humaine avant la production.
+6. [x] ouvre une pull request ;
+7. [x] attend une validation humaine avant la production.
+
+Les six étapes cochées sont `shopctl core upgrade --to <tag> --open-pr`
+(jalon 9). La cinquième reste une commande qu'un humain tape — `shopctl deploy
+--env staging` —, listée dans la checklist que porte la pull request :
+l'automatiser reviendrait à déployer sans approbation, ce que le critère de
+sortie du jalon 9 interdit.
 
 ## 4. Configuration d'une boutique
 
@@ -537,12 +548,20 @@ shopctl backup prune             # la politique de conservation, appliquée
 
 ```bash
 shopctl core status
-shopctl core upgrade --to 1.1.0
+shopctl core upgrade --to v1.1.0
 shopctl fleet status
 shopctl fleet verify
-shopctl fleet upgrade --to 1.1.0 --open-pr
+shopctl fleet upgrade --to v1.1.0 --open-pr
 shopctl fleet report --format json
 ```
+
+Livrées au jalon 9. La flotte est déclarée dans un `fleet.json` de l'espace de
+travail de l'agence — jamais découverte par balayage — et une mise à niveau
+fusionne un tag sur une branche puis ouvre une pull request : elle ne déploie
+rien ([ADR 0016](architecture/decisions/0016-registre-et-mise-a-niveau-de-la-flotte.md)).
+Côté socle, `npm run check:release` tient d'accord la version, les manifestes
+témoins et les notes de migration, et le workflow `Release` pose le tag après la
+suite complète.
 
 ## 6. Jalons détaillés
 
@@ -2163,30 +2182,121 @@ Durée indicative : 3 à 4 jours.
 
 #### Livrables
 
-- [ ] tags du socle ;
-- [ ] `shopctl core upgrade` ;
-- [ ] `shopctl fleet status` ;
-- [ ] `shopctl fleet upgrade` ;
-- [ ] pull requests automatiques ;
-- [ ] rapport de versions ;
-- [ ] détection du drift ;
-- [ ] notes de migration.
+- [x] tags du socle (`npm run check:release`, workflow `Release`) ;
+- [x] `shopctl core upgrade` ;
+- [x] `shopctl fleet status` ;
+- [x] `shopctl fleet upgrade` ;
+- [x] pull requests automatiques (`--open-pr`) ;
+- [x] rapport de versions (`shopctl fleet report --format json`) ;
+- [x] détection du drift ;
+- [x] notes de migration (`docs/migrations/`).
 
 #### Tests
 
-- [ ] mise à jour des deux boutiques témoins ;
-- [ ] thème inchangé ;
-- [ ] manifeste inchangé ;
-- [ ] conflit volontaire signalé ;
-- [ ] migration D1 additive ;
-- [ ] ancien Worker compatible avec le nouveau schéma ;
+- [x] mise à jour des deux boutiques témoins ;
+- [x] thème inchangé ;
+- [x] manifeste inchangé ;
+- [x] conflit volontaire signalé ;
+- [x] migration D1 additive ;
+- [x] ancien Worker compatible avec le nouveau schéma — au niveau du schéma :
+  l'écriture que la version précédente exécute est rejouée contre la base
+  migrée ; ce qu'aucun double ne remplace est nommé plus bas ;
 - [ ] rollback applicatif ;
-- [ ] boutique conservée sur l'ancienne version toujours fonctionnelle.
+- [x] boutique conservée sur l'ancienne version toujours fonctionnelle.
 
 #### Critère de sortie
 
-- [ ] Une version du socle peut être proposée à plusieurs boutiques sans copie
+- [x] Une version du socle peut être proposée à plusieurs boutiques sans copie
   manuelle de fichiers et sans déploiement automatique non approuvé.
+  `shopctl fleet upgrade --to <tag> --open-pr` fusionne un tag immuable dans
+  chaque boutique déclarée, met son manifeste à jour, exécute ses portes et
+  ouvre sa pull request ; aucune commande de ce chemin n'appelle
+  `shopctl deploy`, et aucune ne fusionne une pull request. Éprouvé contre des
+  dépôts git réels ; seule la forge est un double.
+
+#### État
+
+Le jalon tient en une phrase : **une version du socle se propose, elle ne
+s'impose pas.** Tout le reste en découle, y compris ce qui a été refusé.
+
+**Une flotte n'est pas découvrable, donc elle est déclarée.** `fleet.json` liste
+les boutiques exploitées et le dépôt du socle dont elles prennent les versions,
+et il vit dans l'espace de travail de l'agence — ni dans le socle, qui doit
+rester neutre et que chaque client clone, ni dans une boutique. Balayer le
+disque à la recherche de `client/client.yaml` aurait ramassé un essai
+abandonné, le clone d'un collègue et la boutique d'un client parti ; la commande
+qui lit cette liste **écrit**. Le registre est en JSON parce que le lecteur de
+manifeste refuse les séquences délibérément (ADR 0008), et qu'un registre est
+une liste : l'élargir pour servir un fichier que le commerçant ne voit jamais
+aurait affaibli celui qui lit le fichier dont les valeurs deviennent des noms de
+ressources Cloudflare.
+
+**La version d'une boutique se lit dans son historique.** Le tag `v<semver>` le
+plus récent fusionné dans `HEAD` fait foi ; `coreVersion` est une déclaration
+que quelqu'un peut éditer. `shopctl core status` compare les deux et rapporte le
+désaccord — c'est ce que l'ADR 0003 lui demande — et il le rapporte **même quand
+le manifeste ne valide plus**, ce qui est le cas le plus fréquent : un manifeste
+en avance sur son socle est refusé par la porte, et une commande d'état qui
+refuserait de décrire la boutique laisserait l'exploitant sans rien.
+
+**La dérive utile n'est pas la différence.** Une boutique diffère de son tag par
+construction : son thème, son manifeste, ses contenus. Ce qui compte est ce
+qu'elle a changé dans les fichiers que le **cœur** maintient, parce que c'est là
+que la fusion devra choisir. Les fichiers **générés** sont comptés à part :
+`wrangler.jsonc` est rendu depuis le manifeste, donc toutes les boutiques en
+diffèrent depuis le jour de leur création, et une alerte toujours vraie
+n'apprend qu'à ne plus la lire.
+
+**Un conflit est laissé dans l'arbre.** La commande nomme chaque fichier et sa
+propriété, s'arrête en code 6, et laisse les marqueurs : résoudre est un travail
+git dans cet arbre, et un `--abort` automatique aurait détruit le seul
+exemplaire de l'état à trois voies dont l'exploitant a besoin.
+`--abort-on-conflict` existe pour l'appelant qui préfère l'inverse. Une boutique
+en conflit n'arrête pas la flotte : l'échec est rapporté contre sa boutique et
+la suivante est traitée.
+
+**Trois refus sont durs, et chacun a coûté quelque chose ailleurs.** Un arbre de
+travail modifié — la fusion mêlerait un travail en cours à un commit qui prétend
+être une version du socle. Un retour en arrière — un tag publié est immuable
+(ADR 0003). Une version qui réécrit une migration publiée — une base qui l'a
+déjà exécutée ne la rejouera pas (ADR 0006), et la flotte diverge en silence.
+
+**Publier une version est devenu une porte, parce que la première tentative a
+échoué.** Une version du socle est écrite à **trois** endroits : `package.json`,
+les manifestes témoins, et les notes de migration. Bumper le premier seul
+produit une boutique qui fusionne le tag et **échoue à ses propres portes** —
+`config:validate` compare chaque manifeste de l'arbre à la version du cœur, et
+les témoins voyagent avec le socle. C'est arrivé au premier essai de bout en
+bout de ce jalon. `npm run check:release` tient donc les trois d'accord à chaque
+commit, refuse un tag déjà publié, refuse une migration réécrite et refuse une
+migration destructive ; `node scripts/check-release.mjs --set <version>` écrit
+la version partout et dépose le squelette des notes. Le workflow `Release`
+exécute la suite complète **et** la construction depuis un clone vierge avant de
+poser le tag — un tag est ce que quelqu'un clone.
+
+**Ce dépôt ne publiait aucun tag.** C'est le défaut que le jalon rend visible :
+`shopctl new --core v0.1.0` ne pouvait fonctionner contre lui, faute de tag à
+cloner. Les notes de la première version sont écrites, la porte est verte, et
+`Release` attend d'être déclenché.
+
+**Ce qui n'est PAS gaté, et pourquoi.**
+
+- **le rollback applicatif.** La propriété qui le rend sûr est éprouvée — une
+  migration additive est appliquée aux quarante-trois vraies migrations, puis
+  l'écriture que la version précédente exécute est rejouée et acceptée ; une
+  colonne arrivée `NOT NULL` sans défaut fait échouer ce test. Ce qui manque est
+  le geste lui-même : redéployer la version d'avant sur un Worker réel, ce qui
+  demande le même premier passage sur un compte Cloudflare que les jalons 6, 7
+  et 8 attendent ;
+- **la forge.** `gh pr create` et `gh pr list` sont joués par le double
+  `test/fixtures/gh-double.mjs`, contre un dépôt git réel dont le remote GitHub
+  est réécrit vers un dépôt nu local. La construction des arguments, l'analyse
+  des réponses et le corps de la pull request — notes de migration comprises —
+  sont les vrais ; le service ne l'est pas ;
+- **le déploiement en staging après une fusion.** L'étape 5 du §3.4 reste une
+  commande qu'un humain tape, listée dans la checklist que porte la pull
+  request. L'automatiser reviendrait à déployer sans approbation, ce que le
+  critère de sortie interdit.
 
 ### Jalon 10 — Certification finale
 
@@ -2220,6 +2330,9 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] manifestes, identifiants de flotte, neutralité du cœur
   (`npm run config:validate`) ;
 - [x] propriété des chemins et dérive de `CODEOWNERS` (`npm run check:paths`) ;
+- [x] cohérence de la version publiable — version, manifestes témoins et notes
+  de migration d'accord, aucune migration publiée réécrite ou destructive
+  (`npm run check:release`) ;
 - [x] tests unitaires, de contrat storefront et d'import de catalogue
   (`vitest run` ; la porte catalogue s'adresse seule par
   `npm run test:catalog`) ;
@@ -2249,12 +2362,14 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
 - [x] construction depuis un clone vierge (job « Build from a clean clone ») ;
 - [x] porte navigateur par thème — axe, clavier, zoom, sans JavaScript,
   signature du design (job « Browser », `npm run test:browser`).
-- [x] tests de la CLI — livrés aux jalons 2, 4, 6 et 8 :
+- [x] tests de la CLI — livrés aux jalons 2, 4, 6, 8 et 9 :
   `test/scripts/shopctl.test.mjs` (création), `catalog.test.mjs` (import),
   `provision.test.mjs` et `deploy.test.mjs` (compte, environnement,
   déploiement), `backup.test.mjs` et `restore.test.mjs` (archive et tour
-  complet, contre les quarante-trois migrations réelles). Ils tournent dans
-  `vitest run`, donc dans `npm run verify`, donc dans le job principal ;
+  complet, contre les quarante-trois migrations réelles),
+  `fleet.test.mjs` (mise à niveau d'un socle réel, flotte, pull requests) et
+  `release.test.mjs` (porte de publication). Ils tournent dans `vitest run`,
+  donc dans `npm run verify`, donc dans le job principal ;
 - [ ] contrôle de formatage — voir ci-dessous.
 
 Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
@@ -2310,9 +2425,13 @@ smoke test public et le fait échouer s'il ne passe pas, et les deux rapports
 JSON — ressources, verdicts de juridiction, bookmark, résultats du smoke test —
 sont conservés quatre-vingt-dix jours en artefacts.
 
-`sauvegarde verte` reste ouvert : la sauvegarde applicative est un livrable du
-jalon 9 (plan §5.6, ADR 0005). Le bookmark Time Travel pris avant les migrations
-est un filet court terme, pas la sauvegarde, et le rapport le dit avec ces mots.
+`sauvegarde verte` reste ouvert, mais plus pour la même raison : la sauvegarde
+applicative existe depuis le jalon 8 (`shopctl backup`, plan §5.6, ADR 0005) et
+son tour complet est éprouvé contre le vrai schéma. Ce qui manque est son
+enchaînement automatique devant un déploiement de production, et le premier
+passage sur un compte Cloudflare réel. Le bookmark Time Travel pris avant les
+migrations est un filet court terme, pas la sauvegarde, et le rapport le dit
+avec ces mots.
 
 ## 8. Campagne finale de tests
 
@@ -2353,8 +2472,11 @@ est un filet court terme, pas la sauvegarde, et le rapport le dit avec ces mots.
 - [ ] quatre buckets par paire d'environnements ;
 - [ ] aucun secret partagé ;
 - [ ] aucune donnée croisée ;
-- [ ] versions du socle indépendantes ;
-- [ ] mise à niveau commune réussie.
+- [x] versions du socle indépendantes — une boutique non sélectionnée reste sur
+  sa version et passe toujours ses propres portes (`fleet.test.mjs`) ;
+- [x] mise à niveau commune réussie — les deux boutiques témoins prennent le même
+  tag, thème et manifeste inchangés (`fleet.test.mjs`). Les deux lignes restent à
+  rejouer sur des boutiques **déployées** dans la campagne finale.
 
 ### 8.4 Sécurité
 

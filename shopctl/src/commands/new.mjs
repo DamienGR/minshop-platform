@@ -32,13 +32,18 @@ import { RESERVED_THEME_IDS, THEMES_DIR, isValidThemeId, normalizeThemeId } from
 import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { EXIT_CODES, ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { capture, run } from '../process.mjs';
+import { describeGateFailure, runShopGates } from '../gates.mjs';
 import { buildManifest, renderManifest } from '../manifest-template.mjs';
 import { COLUMNS } from '../catalog/contract.mjs';
 import { DELIVERY_MAX_WIDTH } from '../catalog/media.mjs';
 import { parseManifestYaml } from '../../../scripts/manifest-yaml.mjs';
+import { CORE_TAG, versionFromTag } from '../version.mjs';
 
-/** ADR 0003: a core version is an immutable `v<semver>` tag. */
-const CORE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+// Re-exported: the creation suite pins the tag reading here, where a shop is
+// created from one. It is defined once, in version.mjs, next to the ordering
+// the upgrade path needs.
+export { versionFromTag };
+
 const SLUG = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
 /** Documentation domain (RFC 2606) — a placeholder that is unmistakably one,
@@ -179,18 +184,6 @@ export function resolveThemeId(requested, slug) {
   // error: the operator did not choose the collision, and the shop still needs
   // a directory of its own.
   return RESERVED_THEME_IDS.includes(derived) ? `${derived}-shop` : derived;
-}
-
-/** The core version a tag declares. */
-export function versionFromTag(tag) {
-  const match = CORE_TAG.exec(tag);
-  if (!match) {
-    throw inputError(
-      `"${tag}" is not a core version tag.`,
-      'A shop is created from an immutable `v<major>.<minor>.<patch>` tag (ADR 0003). A branch would leave the shop riding an uncertified core.',
-    );
-  }
-  return tag.slice(1);
 }
 
 /**
@@ -459,15 +452,13 @@ export function runNew(args, reporter) {
     reporter.section('Vérification minimale');
     // --json on the manifest gate, because its report is structured and this
     // command needs to tell two very different failures apart (see below).
-    const manifestGate = capture('node', ['scripts/check-manifest.mjs', '--json'], { cwd: target, allowFailure: true });
-    checks.push({ check: 'manifeste', ok: manifestGate.status === 0, status: manifestGate.status });
+    const gates = runShopGates(target);
+    const manifestGate = gates.manifest;
+    checks.push(...gates.checks);
     if (manifestGate.status === 0) reporter.ok('manifeste');
     else reporter.fail(`manifeste — ${describeGateFailure(manifestGate)}`);
-
-    const pathsGate = capture('node', ['scripts/check-paths.mjs'], { cwd: target, allowFailure: true });
-    checks.push({ check: 'propriété des chemins', ok: pathsGate.status === 0, status: pathsGate.status });
-    if (pathsGate.status === 0) reporter.ok('propriété des chemins');
-    else reporter.fail(`propriété des chemins — ${(pathsGate.stderr || pathsGate.stdout).trim().split('\n').slice(0, 6).join('\n    ')}`);
+    if (gates.paths.status === 0) reporter.ok('propriété des chemins');
+    else reporter.fail(`propriété des chemins — ${describeGateFailure(gates.paths)}`);
 
     if (checks.some((check) => !check.ok)) {
       // A neutrality finding on THIS shop's own slug is not a core bug, it is a
@@ -643,19 +634,6 @@ function ownSlugCollisions(gate, slug) {
   if (manifestErrors || (report?.collisions ?? []).length > 0) return [];
   if (!findings.every((finding) => finding.slug === slug)) return [];
   return [...new Set(findings.map((finding) => finding.path))];
-}
-
-/** The first line worth showing from a gate that failed. */
-function describeGateFailure(gate) {
-  const collisions = (() => {
-    try {
-      return JSON.parse(gate.stdout)?.coreNeutrality?.findings ?? [];
-    } catch {
-      return [];
-    }
-  })();
-  if (collisions.length > 0) return `le cœur nomme déjà "${collisions[0].value}" (${collisions[0].path})`;
-  return (gate.stderr || gate.stdout).trim().split('\n').slice(0, 6).join('\n    ');
 }
 
 /** The README `shopctl new` drops in a shop's imports/ directory.

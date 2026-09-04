@@ -221,8 +221,18 @@ shopctl backup verify <id>
 shopctl backup prune --keep 30 --keep-days 90
 shopctl restore --env staging --from <id>
 
+# Suivre et prendre les versions du socle (jalon 9)
+shopctl core status                      # déclaré, fusionné, retard, dérive
+shopctl core upgrade --to v1.1.0 --open-pr
+
 # Retirer un environnement d'un compte (jalon 6) — irréversible
 shopctl destroy --env staging --confirm <slug>
+
+# Depuis l'espace de travail de l'agence, sur la flotte déclarée (jalon 9)
+shopctl fleet status
+shopctl fleet verify
+shopctl fleet upgrade --to v1.1.0 --open-pr
+shopctl fleet report --format json
 ```
 
 La sauvegarde est **applicative**, table par table, chiffrée, et lisible sans
@@ -263,30 +273,27 @@ manifeste, par `--account`, ou par `CLOUDFLARE_ACCOUNT_ID` — deux sources qui
 divergent arrêtant l'exécution
 ([ADR 0013](docs/architecture/decisions/0013-environnements-de-deploiement.md)).
 
+Une mise à niveau **propose** une version, elle ne l'impose pas : elle fusionne
+un tag immuable sur une branche, met le manifeste à jour, exécute les portes que
+la boutique transporte et ouvre une pull request. Elle n'appelle jamais
+`shopctl deploy` et ne fusionne aucune pull request — la mise en production
+reste derrière l'approbation du GitHub Environment
+([ADR 0016](docs/architecture/decisions/0016-registre-et-mise-a-niveau-de-la-flotte.md)).
+La flotte est **déclarée** dans un `fleet.json` de l'espace de travail de
+l'agence, jamais découverte par balayage : la commande qui lit cette liste
+écrit.
+
 ### Contrat cible des jalons suivants
 
-Les commandes ci-dessous ne sont pas encore implémentées.
+La commande ci-dessous n'est pas encore implémentée.
 
 ```bash
 # Vérifier une boutique déployée
 shopctl verify --env staging
-
-# Suivre et faire évoluer le socle
-shopctl core status
-shopctl core upgrade --to 1.1.0
 ```
 
-Gestion de la flotte :
-
-```bash
-shopctl fleet status
-shopctl fleet verify
-shopctl fleet upgrade --to 1.1.0 --open-pr
-shopctl fleet report --format json
-```
-
-La CLI devra être idempotente, compatible `--dry-run` et `--json`, et ne jamais
-recevoir ni afficher de secret dans les arguments ou les logs.
+La CLI devra rester idempotente, compatible `--dry-run` et `--json`, et ne
+jamais recevoir ni afficher de secret dans les arguments ou les logs.
 
 ## Environnements
 
@@ -340,6 +347,19 @@ Une mise à niveau suit le flux suivant :
 
 Les migrations de base doivent être additives et rétrocompatibles. Un rollback
 du Worker ne restaure pas automatiquement l'ancien schéma D1.
+
+Les étapes 1 à 4 et 7 sont outillées depuis le jalon 9 : le workflow `Release`
+publie le tag après la suite complète et une construction depuis un clone
+vierge, et `shopctl core upgrade --to <tag> --open-pr` fait le reste dans une
+boutique — `shopctl fleet upgrade` le fait sur la flotte déclarée. Les étapes 5,
+6, 8 et 9 restent des gestes qu'un humain déclenche, dans cet ordre, avec la
+checklist que porte la pull request : automatiser un déploiement derrière une
+fusion reviendrait à mettre en production sans approbation.
+
+La version qu'une boutique porte se lit dans son **historique** — le tag le plus
+récent fusionné dans `HEAD` — et jamais dans son manifeste : `coreVersion` est
+une déclaration, et `shopctl core status` existe pour dire quand les deux ne
+coïncident plus.
 
 ## Qualité et tests
 

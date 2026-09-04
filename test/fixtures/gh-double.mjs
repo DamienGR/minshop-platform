@@ -20,11 +20,12 @@
  *   authenticated   boolean                 false makes `gh auth status` exit 1
  *   login           string                  what `gh api user --jq .login` says
  *   config          { git_protocol }        what `gh config get` answers
- *   repos           { "owner/name": { visibility, environments, secrets } }
+ *   repos           { "owner/name": { visibility, environments, secrets, pulls } }
  *   users           { login: id }
  *   refuseReviewers boolean                 the free-plan private-repo refusal
  *   calls           [{ argv, stdin }]       appended to on every invocation
  */
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const STATE = process.env.GH_DOUBLE_STATE;
@@ -173,6 +174,58 @@ if (argv[0] === 'secret' && argv[1] === 'set') {
   // and the reason this command is wrapped rather than reimplemented.
   repo.environments[environment].secrets[name] = stdin.trim();
   done(`✓ Set Actions secret ${name} for ${flag('--repo')}`);
+}
+
+/**
+ * Pull requests.
+ *
+ * The repository is resolved the way the real `gh` resolves it — from the
+ * checkout's own `origin` — rather than from a flag shopctl does not pass. That
+ * keeps the property under test real: an upgrade opens the pull request of the
+ * shop it is standing in, and a shop with no origin gets an error rather than
+ * somebody else's repository.
+ */
+function currentRepo() {
+  const named = flag('--repo');
+  if (named) return named;
+  const url = spawnSync('git', ['config', '--get', 'remote.origin.url'], { encoding: 'utf8' }).stdout?.trim() ?? '';
+  const match = url.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+if (argv[0] === 'pr' && (argv[1] === 'list' || argv[1] === 'create')) {
+  const name = currentRepo();
+  const repo = name ? state.repos[name] : null;
+  if (!repo) fail('gh: no git remote found for the current directory');
+  repo.pulls = repo.pulls ?? [];
+
+  if (argv[1] === 'list') {
+    const head = flag('--head');
+    const found = repo.pulls.filter((pull) => !head || pull.head === head);
+    if (has('--json')) done(JSON.stringify(found.map(({ number, url, state: pullState }) => ({ number, url, state: pullState }))));
+    done(found.map((pull) => `${pull.number}\t${pull.title}\t${pull.head}`).join('\n'));
+  }
+
+  const head = flag('--head');
+  // The real gh refuses a second pull request for one branch, and shopctl is
+  // written to ask before it creates. Refusing here is what proves it does.
+  if (repo.pulls.some((pull) => pull.head === head && pull.state === 'OPEN')) {
+    fail(`a pull request for branch "${head}" into branch "${flag('--base')}" already exists`);
+  }
+  const number = repo.pulls.length + 1;
+  const pull = {
+    number,
+    url: `https://github.com/${name}/pull/${number}`,
+    state: 'OPEN',
+    head,
+    base: flag('--base'),
+    title: flag('--title'),
+    // `--body-file -` reads stdin: a migration note is prose with quotes and
+    // newlines in it, and recording it here is how a test proves it arrived.
+    body: stdin,
+  };
+  repo.pulls.push(pull);
+  done(pull.url);
 }
 
 fail(`gh-double: unhandled command "${argv.join(' ')}"`, 2);
