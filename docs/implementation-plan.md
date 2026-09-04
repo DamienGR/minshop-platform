@@ -81,7 +81,12 @@ Deux boutiques fictives doivent exister dès le début du développement :
 
 #### `canary-minimal`
 
-- [ ] cinq produits ;
+- [x] cinq produits — `catalogue/catalog.csv`, la contre-épreuve du format : le
+  fichier du pilote remplit les quatorze colonnes, donc un import devenu
+  exigeant sur l'une des dix facultatives y resterait vert et casserait sur le
+  premier fichier du marchand suivant. Celui-ci remplit les trois obligatoires
+  et la seule dont sa boutique a une opinion — aucune catégorie, aucune image,
+  aucune variante, aucun poids ;
 - [x] thème différent ;
 - [x] fonctionnalités minimales ;
 - [x] utilisée pour vérifier l'absence de configuration codée en dur pour le pilote.

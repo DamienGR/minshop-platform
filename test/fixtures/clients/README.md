@@ -34,6 +34,19 @@ format, le volume et le partage d'une même image entre deux produits ; de vraie
 photographies coûteraient un mégaoctet au dépôt sans rien ajouter à cela. Le
 jalon 5 a donné au pilote son thème, pas ses images.
 
+## `canary-minimal/catalogue/`
+
+Cinq produits et rien d'autre : ni catégorie, ni image, ni variante, ni poids.
+Le fichier ne porte que les trois colonnes que le contrat rend obligatoires —
+`sku`, `price`, `stock` — plus `requires_shipping`, la seule dont cette boutique
+a une opinion, puisqu'elle coupe la livraison.
+
+C'est la contre-épreuve du **format**, comme la boutique est celle du cœur. Le
+fichier du pilote remplit les quatorze colonnes, donc un import qui serait
+devenu exigeant sur l'une des dix facultatives y resterait vert et casserait sur
+le premier fichier du marchand suivant. Les trois états de stock y tiennent
+aussi, en cinq lignes.
+
 `coreVersion` suit la version du socle dans `package.json`. Une version du socle
 qui oublie de les mettre à jour fait échouer `npm run config:validate`, ce qui
 est la répétition en miniature de la mise à niveau d'une vraie boutique.
