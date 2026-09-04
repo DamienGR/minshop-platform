@@ -259,10 +259,18 @@ describe('shopctl core status', () => {
     expect(report.core.latest).toBe('0.2.0');
   });
 
+  // The tree is built here rather than reused from the fixture, and the reason
+  // is a CI job: « Generated shop » runs this whole suite INSIDE a shop created
+  // by `shopctl new`, and the fixture core is a copy of whatever tree is under
+  // test — so there, the "core" carries a client/client.yaml and `core status`
+  // legitimately describes it. What the command refuses is a tree that is
+  // neither, and that is what this builds.
   it('refuses to run outside a shop', () => {
-    const agency = workspace();
-    const result = agency.run(['core', 'status'], { cwd: agency.core });
+    const elsewhere = mkdtempSync(join(tmpdir(), 'shopctl-not-a-shop-'));
+    git(['init', '--quiet', '--initial-branch=main'], elsewhere);
+    const result = spawnSync('node', [BIN, 'core', 'status'], { cwd: elsewhere, encoding: 'utf8', env: GIT_ENV });
     expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/n'est pas une boutique/);
   });
 });
 
