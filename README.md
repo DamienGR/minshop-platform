@@ -389,6 +389,20 @@ sous forme de signature du design calculé plutôt que de comparaison de pixels
 c'est la seule porte qui demande un navigateur, et la CI lui donne son propre
 job par thème.
 
+`npm run test:tenant-isolation` est la porte multi-client du plan §8.3. Elle
+monte les deux boutiques témoins **dans un seul compte Cloudflare et une seule
+forge** — la seule disposition où la faute est possible — puis vérifie ce qui
+n'existe qu'à deux boutiques : deux dépôts, deux thèmes, deux Workers, deux
+bases, quatre buckets par paire d'environnements, aucun secret partagé, aucune
+donnée croisée. Toutes les autres suites du dépôt éprouvent **une** boutique, et
+le défaut visé ici est celui d'une boutique juste seule et fausse à côté d'une
+autre : un nom de ressource qui ne porte pas le slug, un identifiant lu dans
+l'environnement plutôt que dans la boutique, un `wrangler.jsonc` rendu pour l'une
+et laissé en place pendant qu'une commande écrit pour l'autre. Le compte et la
+forge sont des doubles ; les commandes, les rendus, les quarante-trois
+migrations et l'import du catalogue témoin sont les vrais. Elle est dans
+`npm run verify`.
+
 `npm run test:security` est la porte du jalon 8. Elle démarre le Worker
 **construit** en processus, sur une base issue des vraies migrations, et lui
 pose les questions qu'aucun test unitaire ne peut poser parce qu'elles portent

@@ -43,14 +43,37 @@ export const OTHER_ACCOUNT = { id: '0123456789abcdef0123456789abcdef', name: 'Co
  * files per assertion would make the suite slow enough that someone would stop
  * running it — and what is under test is the conversation with the account, not
  * the shape of a generated tree, which jalon 2's suite already pins.
+ *
+ * @param options.manifest raw `client/client.yaml`, when the subject is a
+ *   PARTICULAR shop rather than any shop — the witnesses of plan §2.3, whose
+ *   slug, theme, domains and features are the point. Omitted, a generic one is
+ *   generated from `slug` and `accountId`.
+ * @param options.account the state file of an EXISTING imaginary Cloudflare
+ *   account, so two shops can be built inside ONE account. That is the only
+ *   arrangement in which isolation means anything: separate accounts would
+ *   prove nothing that separate temporary directories did not already.
+ * @param options.forgeAccount the same, for the imaginary GitHub `forge` opens.
  */
-export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = false, forge = false, migrations = false } = {}) {
+export function shop({
+  accountId = ACCOUNT.id,
+  slug = 'atelier-test',
+  built = false,
+  forge = false,
+  migrations = false,
+  manifest: manifestYaml = null,
+  account: sharedState = null,
+  forgeAccount: sharedForge = null,
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'shopctl-provision-'));
   const core = JSON.parse(readFileSync(resolve(CORE, 'package.json'), 'utf8'));
+  if (manifestYaml) slug = manifestYaml.match(/^\s{2}slug:\s*(\S+)/m)?.[1] ?? slug;
+  // A build reads the selected theme's directory; a provisioned shop never
+  // builds, but `config:validate` and the theme resolver both want it there.
+  const themeId = (manifestYaml ?? '').match(/^\s{2}id:\s*([A-Za-z0-9_-]+)/m)?.[1] ?? 'atelier';
 
   mkdirSync(join(root, 'client'), { recursive: true });
   mkdirSync(join(root, 'migrations'), { recursive: true });
-  mkdirSync(join(root, 'src/themes/atelier'), { recursive: true });
+  mkdirSync(join(root, `src/themes/${themeId}`), { recursive: true });
   mkdirSync(join(root, 'node_modules/.bin'), { recursive: true });
   // `--skip-build` refuses to run without one, which is the point of the flag:
   // reusing a build that is not there would upload the previous shop's bundle.
@@ -66,6 +89,7 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
   cpSync(resolve(CORE, 'wrangler.template.jsonc'), join(root, 'wrangler.template.jsonc'));
   writeFileSync(
     join(root, 'client/client.yaml'),
+    manifestYaml ??
     [
       'schemaVersion: 1',
       `coreVersion: ${core.version}`,
@@ -108,11 +132,15 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
   writeFileSync(shim, `#!/usr/bin/env node\nimport('${DOUBLE}');\n`);
   chmodSync(shim, 0o755);
 
-  const statePath = join(root, 'cf-state.json');
-  writeFileSync(
-    statePath,
-    JSON.stringify({ authenticated: true, accounts: [ACCOUNT], d1: [], r2: [], workers: [], calls: [] }, null, 2),
-  );
+  // One state file is one Cloudflare account. Sharing it is how two shops come
+  // to live in the same one; a fresh one is the ordinary case.
+  const statePath = sharedState ?? join(root, 'cf-state.json');
+  if (!sharedState) {
+    writeFileSync(
+      statePath,
+      JSON.stringify({ authenticated: true, accounts: [ACCOUNT], d1: [], r2: [], workers: [], calls: [] }, null, 2),
+    );
+  }
 
   /**
    * The forge side: a real git repository, a real remote, and a `gh` that
@@ -125,7 +153,9 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
    * parsing, the push, the "is the branch already on the remote" question —
    * rather than stubbing the one command whose behaviour matters.
    */
-  const ghState = join(root, 'gh-state.json');
+  // One state file is one GitHub account, for the same reason as the account
+  // above: two shops in one forge is the arrangement that can be wrong.
+  const ghState = sharedForge ?? join(root, 'gh-state.json');
   const bin = join(root, '.bin');
   let remote = null;
   const nameWithOwner = `agence/shop-${slug}`;
@@ -146,7 +176,9 @@ export function shop({ accountId = ACCOUNT.id, slug = 'atelier-test', built = fa
     git(['commit', '--quiet', '-m', 'Initialiser la boutique']);
     spawnSync('git', ['init', '--bare', '--quiet', remote], { encoding: 'utf8' });
 
-    writeFileSync(ghState, JSON.stringify({ authenticated: true, repos: {}, users: { damien: 17449459 }, calls: [] }, null, 2));
+    if (!sharedForge) {
+      writeFileSync(ghState, JSON.stringify({ authenticated: true, repos: {}, users: { damien: 17449459 }, calls: [] }, null, 2));
+    }
   }
 
   return {

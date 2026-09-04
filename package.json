@@ -29,6 +29,7 @@
     "test:storefront-equivalence": "astro build && bash test/integration/storefront-baselines.sh",
     "test:storefront-contract": "vitest run test/storefront",
     "test:catalog": "vitest run test/scripts/catalog.test.mjs",
+    "test:tenant-isolation": "vitest run test/scripts/tenant-isolation.test.mjs",
     "test:security": "node --experimental-strip-types test/integration/security.mjs",
     "theme:check": "node scripts/check-themes.mjs",
     "test:browser": "astro build && playwright test",

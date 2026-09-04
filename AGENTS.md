@@ -25,7 +25,8 @@ Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
 `.dev.vars` values, which Vite can freeze into the bundle — needs a build),
 `npm run test:security` (the security gate below, needs a build),
 `npm run config:validate` (client manifests, fleet identifiers, core
-neutrality), `npm run check:paths` (file-ownership map + CODEOWNERS drift).
+neutrality), `npm run check:paths` (file-ownership map + CODEOWNERS drift),
+`npm run test:tenant-isolation` (two shops in one account — see below).
 `npm run check:clean-clone`
 is NOT in `verify` — it re-clones HEAD into a scratch directory and builds there,
 proving the commit stands without any working-tree state. CI runs it as its own
@@ -492,6 +493,44 @@ Two rules the gate enforces that are easy to break by accident:
   It masks e-mail addresses and guest access tokens. It is NOT a general PII
   detector — a street address has no shape — so free-form provider text is kept
   out of the message at the source instead (see `features/email/resend.ts`).
+
+## The tenant-isolation gate
+
+`npm run test:tenant-isolation` (`test/scripts/tenant-isolation.test.mjs`, and
+inside `vitest run`, so inside `npm run verify`) builds the two witness shops of
+plan §2.3 **in one imaginary Cloudflare account and one imaginary forge**, then
+asserts plan §8.3: two repositories, two themes, two Workers, two databases,
+four buckets per pair of environments, no shared secret, no crossed data.
+
+The arrangement is the point. Every other suite here tests ONE shop, and the
+defect this gate exists for is a shop that is correct alone and wrong beside
+another: a resource name that does not carry the slug, a credential read from
+the environment instead of from the shop, a `wrangler.jsonc` rendered for one
+shop and left on disk while a command writes for the other. None of those fail a
+single-shop suite. Two accounts, or two temporary directories, would prove only
+that two directories are separate — so `shop()` takes `account:` and
+`forgeAccount:` (`test/helpers/provisioned-shop.mjs`) and both shops join one.
+
+Two things follow from that when you edit it:
+
+- **the witnesses are read from their real manifests**
+  (`test/fixtures/clients/`), not invented in the test. Their asymmetry is what
+  makes them worth having: one declares an account id, a staging domain and a
+  theme the core does not own; the other declares none of the three, so its
+  account arrives by flag. A value only one of them declares is where a
+  hard-coded assumption hides.
+- **the D1 binding is `DB` in every shop of the fleet**, which is exactly why
+  cross-tenant writes are possible at all: the rendered `wrangler.jsonc` on disk
+  is what decides which database a write lands in. The gate therefore also
+  asserts a REFUSAL — `shopctl catalog import` stops when the tree's
+  configuration names another shop or another environment — and not only the
+  absence of rows afterwards.
+
+The Cloudflare account and the forge are doubles. What runs for real is
+everything else: the commands, the renderers, the forty-three migrations and the
+witness catalogue. The §8.3 lines about DEPLOYED shops are re-run on real
+accounts in the final campaign; this gate holds the half that regresses, at
+every commit.
 
 ## Architecture in one screen
 
