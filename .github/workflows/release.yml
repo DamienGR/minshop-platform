@@ -13,11 +13,11 @@
 #      build runs with it, because a tag is what somebody clones. A red suite
 #      cannot produce a tag.
 #
-#   2. A TAG IS NEVER MOVED. `scripts/release.mjs --publish` refuses a version
-#      whose tag already exists, and the push below is a plain `git push`, not a
-#      `--force`. A faulty version is corrected by the next version; a tag that
-#      moved would silently change what a shop created last month was built
-#      from.
+#   2. A TAG IS NEVER MOVED. `scripts/check-release.mjs --publish` refuses a
+#      version whose tag already exists, and the push below is a plain
+#      `git push`, not a `--force`. A faulty version is corrected by the next
+#      version; a tag that moved would silently change what a shop created last
+#      month was built from.
 #
 #   3. A TAG CARRIES ITS NOTES. The same gate refuses a version with no
 #      `docs/migrations/v<version>.md`, and the GitHub release is created FROM
