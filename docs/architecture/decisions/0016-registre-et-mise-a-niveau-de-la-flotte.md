@@ -80,6 +80,11 @@ publié, refuse une migration réécrite et refuse une migration destructive. Le
 workflow `Release` exécute la suite complète et la construction depuis un clone
 vierge **avant** de poser le tag.
 
+Qu'un tag soit déjà publié se demande à **origin**, jamais au seul clone, et la
+réponse porte sa source. Un clone sans tags répond « ce tag n'existe pas » pour
+un tag que le dépôt publie ; c'est ce qui a fait proposer `v0.1.0` à la
+publication alors que ce tag existait depuis le jalon 6.
+
 ## Conséquences
 
 - une agence peut proposer une version à toute sa flotte d'une commande, et

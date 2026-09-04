@@ -56,13 +56,29 @@ const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
  *  three files, and a gate that ignored it would answer about this repository
  *  instead. */
 function git(args, cwd = ROOT) {
+  return gitTry(args, cwd).out;
+}
+
+/**
+ * The same call, with the one distinction `git()` throws away: whether the
+ * command RAN.
+ *
+ * Empty output and a failed command are the same string, and conflating them
+ * is how a gate reads "origin does not publish this tag" out of "origin could
+ * not be reached". One of those two answers frees a version number and the
+ * other must not.
+ *
+ * stderr is discarded rather than inherited: git's "not a repository" is an
+ * answer here — a tree with no history has no previous tag — and printing it
+ * would make a passing run look broken.
+ *
+ * @returns {{ ok: boolean, out: string }}
+ */
+function gitTry(args, cwd = ROOT) {
   try {
-    // stderr is discarded rather than inherited: git's "not a repository" is an
-    // ANSWER here — a tree with no history has no previous tag — and printing
-    // it would make a passing run look broken.
-    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return { ok: true, out: execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() };
   } catch {
-    return '';
+    return { ok: false, out: '' };
   }
 }
 
@@ -159,6 +175,32 @@ function lastTag(root) {
 }
 
 /**
+ * Is this tag already taken, and who was asked?
+ *
+ * ORIGIN first, the clone second, because the two can disagree and the
+ * disagreement is silent. A clone made without tags — which is what several
+ * hosted checkouts hand you — answers "no such tag" for a tag the repository
+ * has published, and a gate built on that answer says a version is free when
+ * moving it would rewrite what a shop was built from. That is not a
+ * hypothetical: it is how the first release run of this repository was
+ * proposed for a version that already existed, and the run failed on this very
+ * check because CI fetches the tags.
+ *
+ * `--tags --refs` drops the `^{}` peeled entries an annotated tag adds. When
+ * origin cannot be reached — offline, no remote — the local answer is returned
+ * WITH its provenance, so the caller can say that it only holds locally rather
+ * than pass it off as the repository's answer.
+ *
+ * @returns {{ taken: boolean, source: 'origin'|'local' }}
+ */
+export function tagIsTaken(tag, root = ROOT) {
+  const remote = gitTry(['ls-remote', '--tags', '--refs', 'origin', `refs/tags/${tag}`], root);
+  // Answered, empty included: an empty listing IS "origin does not publish it".
+  if (remote.ok) return { taken: remote.out.includes(`refs/tags/${tag}`), source: 'origin' };
+  return { taken: lines(git(['tag', '--list', tag], root)).length > 0, source: 'local' };
+}
+
+/**
  * Is this tree publishable as `v<version>`?
  *
  * @returns {{ ok: boolean, version: string, tag: string, checks: Array<{ check: string, ok: boolean, message: string }> }}
@@ -196,14 +238,15 @@ export function releaseFindings(root = ROOT, { publish = false } = {}) {
   });
 
   if (publish) {
-    const published = lines(git(['tag', '--list', tag], root));
+    const { taken, source } = tagIsTaken(tag, root);
     checks.push({
       check: 'tag non publié',
-      ok: published.length === 0,
-      message:
-        published.length === 0
-          ? `${tag} reste à créer`
-          : `${tag} existe déjà : un tag publié ne se déplace pas (ADR 0003), la correction est une version suivante`,
+      ok: !taken,
+      message: taken
+        ? `${tag} existe déjà ${source === 'origin' ? 'sur origin' : 'dans ce clone'} : un tag publié ne se déplace pas (ADR 0003), la correction est une version suivante`
+        : source === 'origin'
+          ? `${tag} reste à créer — origin ne le publie pas`
+          : `${tag} n'est pas dans ce clone ; origin n'a pas pu être interrogé, donc la réponse ne vaut que localement`,
     });
   }
 

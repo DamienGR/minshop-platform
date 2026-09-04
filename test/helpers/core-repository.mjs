@@ -17,6 +17,26 @@ import { dirname, join, resolve } from 'node:path';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 
+/**
+ * The version THIS tree declares, and the tag the fixture core is published
+ * under.
+ *
+ * Derived, never written down. A literal `v0.1.0` here would have to be edited
+ * at every release, and the suites that forgot would build a core whose tag and
+ * whose package.json disagree — which is exactly the state the manifest gate
+ * refuses, so they would fail on the fixture rather than on what they test.
+ * That is not hypothetical: publishing v0.2.0 broke twenty tests this way.
+ */
+export const CORE_VERSION = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')).version;
+export const CORE_TAG = `v${CORE_VERSION}`;
+
+/** The version a release after this one would take: the next minor, which is
+ *  what `checkCoreCompatibility` reads as a breaking step before 1.0. */
+export function nextMinor(version = CORE_VERSION) {
+  const [major, minor] = String(version).split('.').map(Number);
+  return `${major}.${minor + 1}.0`;
+}
+
 /** Git needs an identity to commit, and a test must not depend on the one the
  *  developer happens to have configured. */
 export const GIT_ENV = {
@@ -38,7 +58,7 @@ export function git(args, cwd) {
  * @param {{ tag?: string, dir?: string }} [options]
  * @returns {string} path to the core repository
  */
-export function createCoreRepository(root, { tag = 'v0.1.0', dir = 'core' } = {}) {
+export function createCoreRepository(root, { tag = CORE_TAG, dir = 'core' } = {}) {
   const core = join(root, dir);
   mkdirSync(core, { recursive: true });
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
