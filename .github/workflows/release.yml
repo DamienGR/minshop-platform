@@ -6,7 +6,7 @@
 # `shopctl core upgrade --to v1.1.0` and `shopctl fleet upgrade` all resolve to
 # a tag that was pushed here.
 #
-# Three properties, and each is a step below rather than a convention:
+# Three properties, and each is a job below rather than a convention:
 #
 #   1. A TAG IS PROVEN BEFORE IT EXISTS. The complete suite runs on the exact
 #      commit being tagged — not on "main this morning" — and a clean-clone
@@ -14,15 +14,25 @@
 #      cannot produce a tag.
 #
 #   2. A TAG IS NEVER MOVED. `scripts/check-release.mjs --publish` refuses a
-#      version whose tag already exists, and the push below is a plain
-#      `git push`, not a `--force`. A faulty version is corrected by the next
-#      version; a tag that moved would silently change what a shop created last
-#      month was built from.
+#      version whose tag already exists — asked of origin, not of the clone —
+#      and the push below is a plain `git push`, not a `--force`. A faulty
+#      version is corrected by the next version; a tag that moved would silently
+#      change what a shop created last month was built from.
 #
 #   3. A TAG CARRIES ITS NOTES. The same gate refuses a version with no
 #      `docs/migrations/v<version>.md`, and the GitHub release is created FROM
 #      that file — so the note an operator reads on the release page and the one
 #      `shopctl core upgrade` prints are the same bytes.
+#
+# TWO RUNNERS FOR THE SUITE, exactly as `Verify` does, and for the same fault:
+# `wrangler dev` dies under the D1 gate on cloudflare/workers-sdk#15317, and the
+# deaths are per-runner rather than independent — run-d1-integration.sh re-runs
+# in place, which clears the runners that recover, and leaves about 5% that die
+# on every attempt. Running the suite ONCE here made a release a coin flip
+# against that residual: the first dispatch of v0.2.0 died on `wrangler dev died
+# on all 4 runs`, having proven nothing about the commit. A second runner is a
+# fresh draw and takes the residual to roughly one run in four hundred. A REAL
+# failure still fails both, so a red suite still cannot produce a tag.
 #
 # Manual dispatch only. Tagging on every push to main would make the merge
 # button the release button, and the fleet's next upgrade proposal would be
@@ -45,10 +55,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Publier le tag du socle
+  # Cheap and first: a wrong version or a taken tag must cost fifteen seconds,
+  # not the fifteen minutes the suite takes.
+  gate:
+    name: Contrôler la publication
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
 
     steps:
       - name: Check out repository
@@ -63,10 +78,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            mcp/package-lock.json
 
       # The typed version is a confirmation, not a source: the version lives in
       # package.json and in the witness manifests, and a dispatch input that
@@ -87,17 +98,89 @@ jobs:
       - name: Contrôler la publication
         run: node scripts/check-release.mjs --publish
 
-      - name: Vérification complète
+  # The first draw. Tolerated, and reports nothing but its outcome.
+  suite-first-runner:
+    name: suite (premier runner, toléré)
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      outcome: ${{ steps.suite.outcome }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Run the verification suite
+        id: suite
+        continue-on-error: true
         uses: ./.github/actions/run-verify
 
-      # A tag is what somebody clones, so it is proven the way somebody clones
-      # it: from scratch, with no working-tree state.
+  # The verdict. A pass on the first runner is accepted; anything else is drawn
+  # again on a fresh one, and this job's result is what the tag depends on.
+  suite:
+    name: suite
+    needs: [gate, suite-first-runner]
+    if: ${{ always() && needs.gate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Accept the first runner's pass
+        if: needs.suite-first-runner.outputs.outcome == 'success'
+        run: echo "The suite passed on the first runner; nothing to re-run."
+
+      # Anything other than a pass lands here, an empty outcome included: a
+      # first attempt that was cancelled or never reported must not be read as
+      # a pass.
+      - name: Check out repository
+        if: needs.suite-first-runner.outputs.outcome != 'success'
+        uses: actions/checkout@v6
+
+      - name: Run the verification suite on a fresh runner
+        if: needs.suite-first-runner.outputs.outcome != 'success'
+        uses: ./.github/actions/run-verify
+
+  # A tag is what somebody clones, so it is proven the way somebody clones it:
+  # from scratch, with no working-tree state. Its own job, in parallel with the
+  # suite — it takes under a minute and shares nothing with it.
+  clean-clone:
+    name: Construire depuis un clone vierge
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
       - name: Construire depuis un clone vierge
         run: npm run check:clean-clone
 
+  publish:
+    name: Poser le tag du socle
+    needs: [gate, suite, clean-clone]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Poser et pousser le tag
         env:
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -108,12 +191,12 @@ jobs:
       - name: Publier la release et ses notes
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
         run: gh release create "$TAG" --title "Socle $TAG" --notes-file "docs/migrations/$TAG.md" --verify-tag
 
       - name: Dire à la flotte quoi faire de cette version
         env:
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
         run: |
           {
             echo "## Socle $TAG publié"
