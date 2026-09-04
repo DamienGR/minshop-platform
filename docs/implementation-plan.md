@@ -788,7 +788,12 @@ morte en échec de certification :
   rejoue les vraies régressions n'est plus une porte ;
 - la CI exécute `verify` sur un **second runner** quand le premier n'a pas
   abouti, parce que la panne se répète sur une même machine et pas sur une
-  autre ;
+  autre. Le workflow `Release` fait de même depuis qu'il a été pris à son
+  propre piège : il exécutait la suite **une seule fois**, et la première
+  publication de la v0.2.0 est morte sur `wrangler dev died on all 4 runs` —
+  cinq pour cent de chance de perdre une publication qui n'avait rien prouvé
+  sur le commit. Une porte qui ne survit pas au défaut que le dépôt documente
+  n'est pas une porte, c'est un tirage ;
 - le journal de débogage de wrangler est écrit dans le répertoire d'état et
   affiché à la mort, au lieu de rester dans `~/.config/.wrangler/logs` que
   personne n'archive. C'est là que se trouve la trace que le `✘ [ERROR]` vide
