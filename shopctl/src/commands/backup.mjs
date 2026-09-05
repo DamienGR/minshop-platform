@@ -30,12 +30,11 @@
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { listDatabases, resolveAccount, whoami } from '../cloudflare.mjs';
-import { ShopctlError, preconditionError, usageError, verificationError } from '../errors.mjs';
+import { ShopctlError, usageError, verificationError } from '../errors.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
+import { openEnvironment } from '../environment.mjs';
 import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
 import { corePackage } from '../paths.mjs';
-import { renderEnvironmentConfig } from './provision.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
 import { canonical, digest, tableDigest } from '../backup/dump.mjs';
 import { classifyTables, objectInventory, orderTables } from '../backup/schema.mjs';
@@ -149,31 +148,14 @@ function createBackup(args, reporter) {
   reporter.section('Clé');
   reporter.ok(`${source} — clé ${keyId(key)}`);
 
-  reporter.section('Compte Cloudflare');
-  const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: args.values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
-    whoami({ cwd: root }),
-  );
-  reporter.ok(`${account.name} (${account.id})`);
-
-  const database = listDatabases({ cwd: root }).find((entry) => entry.name === names.database);
-  if (!database) {
-    throw preconditionError(
-      `${names.database} n'existe pas sur ce compte.`,
-      `Il n'y a rien à sauvegarder en ${env}. \`shopctl provision --env ${env}\` crée les ressources.`,
-    );
-  }
-  const databaseId = database.uuid ?? database.database_id;
-
-  // Rendered before anything reads: `d1 execute DB` resolves the binding through
-  // wrangler.jsonc, and a configuration left over from the other environment
-  // would back up the other environment under this one's name.
-  renderEnvironmentConfig({ root, manifest, env, databaseId });
-  reporter.ok(`wrangler.jsonc rendu pour ${names.worker}`);
+  const { account } = openEnvironment({
+    values: args.values,
+    manifest,
+    root,
+    env,
+    reporter,
+    missing: `Il n'y a rien à sauvegarder en ${env}.`,
+  });
 
   // ── The schema, as the database describes it ──────────────────────────────
   reporter.section('Schéma');

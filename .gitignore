@@ -27,6 +27,13 @@ wrangler.jsonc.bak
 backups/
 .shopctl/
 
+# An RGPD export (shopctl privacy export). One person's orders, addresses and
+# e-mail, in the clear — that is what article 20 asks for, and it is the last
+# thing a repository should hold. It is written for one requester and deleted
+# once it has been sent to them. Anchored: `shopctl/src/privacy/` is the code
+# that writes one, and an unanchored rule would quietly untrack it.
+/privacy/
+
 # Environment & local overrides
 .env
 .env.*

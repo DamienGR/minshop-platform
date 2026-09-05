@@ -37,3 +37,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0014](0014-automatisation-de-la-forge.md) | Automatisation de la forge | Accepté |
 | [0015](0015-cycle-de-vie-d-une-boutique.md) | Cycle de vie d'une boutique, de la construction à la livraison | Accepté |
 | [0016](0016-registre-et-mise-a-niveau-de-la-flotte.md) | Registre de flotte et forme d'une mise à niveau | Accepté |
+| [0017](0017-effacement-et-portabilite.md) | Effacement et portabilité des données d'un acheteur | Accepté |

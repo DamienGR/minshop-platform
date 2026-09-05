@@ -55,8 +55,16 @@ export function extractJson(output, what) {
   }
 }
 
-/** Run N statements in one process and return their result sets, positionally. */
-function query(statements, { cwd, remote, what }) {
+/**
+ * Run N statements in one process and return their result sets, positionally.
+ *
+ * Exported for the one caller outside this file that asks the database a
+ * question of its own shape: `privacy` selects one buyer's rows by a predicate
+ * rather than whole tables. It goes through here so there is one place that
+ * knows how to start wrangler, how big an answer may be, and how to find the
+ * JSON inside the banner.
+ */
+export function query(statements, { cwd, remote, what }) {
   const result = wrangler(
     ['d1', 'execute', D1_BINDING, targetFlag(remote), '--json', '--command', statements.join('\n')],
     { cwd, maxBuffer: MAX_BUFFER },

@@ -221,6 +221,10 @@ shopctl backup verify <id>
 shopctl backup prune --keep 30 --keep-days 90
 shopctl restore --env staging --from <id>
 
+# Répondre à une demande RGPD (jalon 8)
+shopctl privacy export --env production --email <adresse>
+shopctl privacy anonymize --env production --email <adresse> --confirm <slug>
+
 # Suivre et prendre les versions du socle (jalon 9)
 shopctl core status                      # déclaré, fusionné, retard, dérive
 shopctl core upgrade --to v1.1.0 --open-pr
@@ -243,6 +247,14 @@ n'a pas le choix : le Time Travel de D1 ne couvre ni R2 ni un autre compte, et
 `wrangler d1 export` échoue sur les tables virtuelles FTS5 de la recherche. Une
 restauration se termine par une comparaison table à table avec ce que l'archive
 portait ; une différence fait échouer la commande.
+
+`shopctl privacy` répond aux deux droits que le RGPD exerce contre la base :
+l'export est du JSON en clair destiné à la personne (article 20), et
+l'effacement est une **anonymisation** — les montants, la TVA et les dates
+restent, parce qu'une commande payée est une pièce comptable que le Code de
+commerce garde dix ans ; c'est l'identité qui est réécrite, avec un pseudonyme
+tiré au hasard dont rien ne conserve la correspondance
+([ADR 0017](docs/architecture/decisions/0017-effacement-et-portabilite.md)).
 
 Le cycle de vie d'une boutique compte quatre étapes, et la frontière entre le
 compte Cloudflare de l'agence et celui du client tombe **avant la saisie des
