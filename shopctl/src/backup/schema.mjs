@@ -125,13 +125,47 @@ export function orderTables(tables) {
  * than the one that made the table is still found here.
  */
 export function generatedColumns(sql) {
+  const generated = new Set();
+  for (const { name, definition } of columnDefinitions(sql)) {
+    if (/\bGENERATED\s+ALWAYS\s+AS\s*\(/i.test(definition) || /^\S+\s+AS\s*\(/i.test(definition)) generated.add(name);
+  }
+  return generated;
+}
+
+/** The name a CREATE TABLE clause opens with, in any of SQLite's spellings. */
+const leadingName = (definition) => {
+  const match = definition.match(/^(?:"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/);
+  return match ? (match[1] ?? match[2] ?? match[3] ?? match[4]) : null;
+};
+
+/**
+ * A CREATE TABLE's clauses, split on its TOP-LEVEL commas.
+ *
+ * A generated column's expression has commas of its own — `MIN(a, b + c)` —
+ * and splitting on all of them would read `b + c` as a column definition. Table
+ * constraints come back too, with a null name: `FOREIGN KEY (a, b) REFERENCES …`
+ * is a clause a reader may want and never a column.
+ *
+ * COMMENTS ARE DROPPED AS THEY ARE SCANNED, and that is not a tidying step.
+ * SQLite stores the CREATE TABLE text as it was typed, and this schema
+ * documents itself inside its tables: `status TEXT DEFAULT 'active', -- active
+ * | released` puts a trailing comment where the NEXT column's definition
+ * begins, which reads as a clause with no name at all — the column disappears.
+ * Worse, a comment with an apostrophe in it (`-- a total we didn't have`) opens
+ * a string literal that swallows everything to the next quote. Both were live
+ * in `migrations/`: this is why the reader is a scanner and not a `split(',')`.
+ *
+ * `ALTER TABLE ADD COLUMN` rewrites the stored text, so a column added by a
+ * later migration than the one that made the table is in here as well — which
+ * is what lets the whole schema be read without a single extra query.
+ *
+ * @returns {Array<{ name: string|null, definition: string }>}
+ */
+export function columnDefinitions(sql) {
   const text = String(sql);
   const open = text.indexOf('(');
-  if (open === -1) return new Set();
+  if (open === -1) return [];
 
-  // Split the column list on its TOP-LEVEL commas: a generated column's
-  // expression has commas of its own — `MIN(a, b + c)` — and splitting on all
-  // of them would read `b + c` as a column definition.
   const parts = [];
   let buffer = '';
   let depth = 0;
@@ -141,6 +175,20 @@ export function generatedColumns(sql) {
     if (quote) {
       buffer += character;
       if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '-' && text[index + 1] === '-') {
+      const end = text.indexOf('\n', index);
+      if (end === -1) break;
+      index = end;
+      buffer += '\n';
+      continue;
+    }
+    if (character === '/' && text[index + 1] === '*') {
+      const end = text.indexOf('*/', index + 2);
+      if (end === -1) break;
+      index = end + 1;
+      buffer += ' ';
       continue;
     }
     if (character === "'" || character === '"' || character === '`') {
@@ -162,16 +210,46 @@ export function generatedColumns(sql) {
   }
   parts.push(buffer);
 
-  const generated = new Set();
-  for (const part of parts) {
-    const definition = part.trim();
-    const name = definition.match(/^(?:"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/);
-    if (!name) continue;
-    if (/\bGENERATED\s+ALWAYS\s+AS\s*\(/i.test(definition) || /^\S+\s+AS\s*\(/i.test(definition)) {
-      generated.add(name[1] ?? name[2] ?? name[3] ?? name[4]);
+  return parts
+    .map((part) => part.trim())
+    .filter((definition) => definition !== '')
+    .map((definition) => ({
+      name: /^(?:CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN)\b/i.test(definition) ? null : leadingName(definition),
+      definition,
+    }));
+}
+
+/** Every column a table declares, in declaration order. */
+export function columnNames(sql) {
+  return columnDefinitions(sql).map((entry) => entry.name).filter((name) => name !== null);
+}
+
+/**
+ * The columns of one table that point at another.
+ *
+ * Both spellings SQLite accepts: on the column — `order_id INTEGER REFERENCES
+ * orders(id)` — and as a table constraint — `FOREIGN KEY (order_id) REFERENCES
+ * orders(id)`. A composite constraint contributes every column it names.
+ */
+export function referencingColumns(sql, target) {
+  const points = (definition) =>
+    [...references(definition)].includes(target);
+  const found = [];
+  for (const { name, definition } of columnDefinitions(sql)) {
+    if (!points(definition)) continue;
+    if (name !== null) {
+      found.push(name);
+      continue;
+    }
+    const columns = definition.match(/^FOREIGN\s+KEY\s*\(([^)]*)\)/i);
+    if (columns) {
+      for (const column of columns[1].split(',')) {
+        const cleaned = leadingName(column.trim());
+        if (cleaned) found.push(cleaned);
+      }
     }
   }
-  return generated;
+  return [...new Set(found)];
 }
 
 /**

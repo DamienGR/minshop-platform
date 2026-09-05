@@ -554,6 +554,31 @@ shopctl backup keygen            # la clé, écrite une fois, jamais affichée
 shopctl backup prune             # la politique de conservation, appliquée
 ```
 
+### 5.6 bis Droits des personnes
+
+```bash
+shopctl privacy export --env production --email <adresse>
+shopctl privacy anonymize --env production --email <adresse> --confirm <slug>
+```
+
+Deux droits du RGPD s'exercent contre la base de la boutique : l'accès et la
+portabilité (articles 15 et 20), l'effacement (article 17). Le second entre en
+conflit avec les dix ans de conservation qu'impose le Code de commerce à une
+commande payée, et c'est ce conflit qui donne sa forme à la commande.
+
+- [x] **Un effacement est une anonymisation.** Les montants, la TVA, les dates
+  et l'identifiant public d'une commande restent ; l'identité est remplacée.
+  Le pseudonyme est tiré au hasard, une valeur par ligne, et rien ne conserve
+  la correspondance — un condensat de l'adresse se réidentifie par énumération.
+  La seule ligne supprimée est un jeton d'accès invité, qui ouvre encore la
+  page d'une commande anonymisée.
+- [x] **L'export est en clair, en JSON, et destiné à la personne.** C'est le
+  format que l'article 20 demande. Il ne porte ni jeton, ni identité d'opérateur
+  de la boutique : un export est une divulgation.
+- [x] **La carte des colonnes personnelles est déclarée et gatée** ; la
+  découverte des lignes est dérivée des clés étrangères. Voir
+  [ADR 0017](architecture/decisions/0017-effacement-et-portabilite.md).
+
 ### 5.7 Gestion du socle et de la flotte
 
 ```bash
@@ -1949,7 +1974,8 @@ Durée indicative : 5 à 6 jours.
 - [x] en-têtes de sécurité ;
 - [x] logs sans PII ;
 - [ ] supervision ;
-- [ ] exports ;
+- [x] exports — `shopctl privacy export`, l'accès et la portabilité (RGPD
+  articles 15 et 20) ;
 - [x] politique de conservation ;
 - [x] sauvegarde et restauration ;
 - [ ] runbooks d'incident.
@@ -1969,7 +1995,9 @@ Durée indicative : 5 à 6 jours.
 - [x] absence d'adresse et d'e-mail dans les logs ;
 - [x] restauration complète en staging ;
 - [x] comparaison avant/après restauration ;
-- [ ] export et anonymisation d'un client.
+- [x] export et anonymisation d'un client — `test/scripts/privacy.test.mjs`
+  exporte puis anonymise une personne dans une base issue des quarante-trois
+  migrations, et constate que la commande d'une **autre** personne est intacte.
 
 #### Critère de sortie
 
@@ -1983,8 +2011,9 @@ Durée indicative : 5 à 6 jours.
 Le jalon se coupe en deux moitiés qui ne partagent rien : **la porte**, qui est
 du code déjà écrit et jamais éprouvé, et **l'exploitation** — sauvegarde,
 restauration, conservation, export d'un client, supervision, runbooks —, qui
-est du code à écrire. La première est faite ; la seconde tient encore les
-trois derniers tests et le critère de sortie, et fera son propre passage.
+est du code à écrire. La première est faite ; la seconde l'est aux trois quarts.
+Il lui reste la supervision, les runbooks d'incident, et le critère de sortie —
+un chronomètre sur un compte réel.
 
 **La porte existait ; personne ne l'avait poussée.** Le gate, la vérification
 Access, la signature de session, le limiteur, la garde d'origine, les en-têtes :
@@ -2168,6 +2197,88 @@ soit vieille est la raison de la garder, pas celle de la supprimer. Un
 répertoire incomplet — ce qu'une prise interrompue laisse — est la seule chose
 qu'un âge seul emporte : il ne protège rien.
 
+**Effacer une personne, c'est écrire, pas supprimer.** Une commande payée est
+une pièce comptable que le Code de commerce garde dix ans ; l'article 17 du RGPD
+demande que la personne disparaisse. `shopctl privacy anonymize` tient les deux :
+le montant, la TVA, la date, le statut et l'identifiant public de la commande ne
+bougent pas, et ce qui est réécrit est l'identité — l'e-mail devient un
+pseudonyme, l'adresse de livraison est réduite au **pays**, qui est ce qui
+justifie le taux de TVA appliqué, et tout ce qui désigne un colis chez un
+transporteur passe à NULL. Une seule ligne est réellement supprimée, et c'est la
+plus facile à oublier : un jeton d'accès invité dont la commande a été anonymisée
+reste une clé qui ouvre la page de cette commande.
+
+**Un condensat de l'adresse n'est pas un effacement.** L'ensemble des adresses
+qu'une clientèle peut avoir s'énumère : un marchand qui possède sa liste de
+diffusion condense chaque entrée et relit ses commandes anonymisées. Le
+pseudonyme vient donc du CSPRNG, et il est tiré **une fois par ligne** — un
+pseudonyme unique par personne aurait gardé ses commandes groupées, et un groupe
+de commandes reste un profil même quand plus personne ne peut le nommer. Rien,
+nulle part, ne conserve la correspondance ; c'est la seule valeur de toute la
+CLI qui est faite pour être irrécupérable, et c'est pourquoi la commande exige le
+slug saisi dans **tous** les environnements — une base de staging est le plus
+souvent une copie restaurée de la production, avec les mêmes personnes dedans.
+
+**La carte est déclarée parce qu'aucun schéma ne la porte, et elle est gatée
+parce qu'une déclaration se périme.** `orders.email` et `products.name` sont tous
+deux `TEXT NOT NULL` : la dérivation qui rend la sauvegarde complète n'existe pas
+ici. Le compromis tient en une phrase : une heuristique sur le **nom** des
+colonnes ne décide de rien, mais elle **refuse qu'une décision ne soit pas
+prise** — toute colonne dont le nom peut porter une personne doit figurer dans la
+carte, avec une action ou avec la raison de n'en avoir aucune, sans quoi la suite
+échoue. Trente-six colonnes des quarante-trois migrations passent par là.
+L'autre moitié, en revanche, est entièrement dérivée : quelles **lignes** sont
+celles de la personne, ce sont les clés étrangères vers `orders` qui le disent, et
+les quatre tables qui s'indexent sur un identifiant public au lieu du rowid sont
+déclarées — sous un test qui refuse toute table portant une clé de commande sans
+lien déclaré.
+
+**Deux défauts sont sortis du lecteur de schéma, et aucun ne se voyait.** Les
+deux dérivations lisent le texte du `CREATE TABLE` que porte `sqlite_master`,
+pour s'épargner un processus wrangler par table sur une base distante. Ce marché
+ne vaut que si le lecteur dit la même chose que SQLite — et il ne le disait pas.
+Un commentaire de fin de ligne placé après une virgule (`status TEXT DEFAULT
+'active', -- active | released`) tombe là où commence la colonne **suivante**, qui
+se lit alors comme une clause sans nom : `checkout_reservations.expires_at`
+disparaissait. Et un commentaire portant une apostrophe (`-- a total we didn't
+have`, dans `refunds`) ouvrait un littéral qui avalait tout jusqu'au guillemet
+suivant. Les deux étaient dans `migrations/`. Le test qui les a trouvés compare,
+table par table, ce que le lecteur voit et ce que `PRAGMA table_xinfo` répond —
+`table_xinfo` et non `table_info`, parce que celui-ci **cache** une colonne
+générée virtuelle, et `orders.refunded_cents` en est une depuis la migration
+0025. `generatedColumns`, dont dépend la restauration, lisait le même texte par
+le même chemin.
+
+**L'export est en clair, et c'est la décision.** Une sauvegarde est chiffrée
+parce qu'elle est tous les acheteurs de la boutique et qu'elle est faite pour
+dormir dans un dépôt. Un export est **une** personne, produit parce qu'elle l'a
+demandé, et l'article 20 veut un format structuré et lisible par machine qu'elle
+puisse effectivement utiliser : c'est du JSON, écrit en 0600, dans un répertoire
+que Git ignore, et la commande dit que le fichier est à supprimer une fois
+transmis. Le chiffrer n'aurait fait que déplacer le problème sur l'envoi de la
+clé. Ce qu'il ne porte pas est nommé plutôt qu'omis : les jetons d'accès, parce
+qu'un export voyage par e-mail et que celui-là est un mot de passe, et l'identité
+de l'opérateur qui a examiné un remboursement, parce qu'un export est une
+**divulgation** et que cette personne-là n'a rien demandé.
+
+**Ce qui reste est laissé à un humain, et dit comme tel.** Le motif et la note
+d'un remboursement sont du texte libre : une carte classe une colonne, elle ne
+lit pas une phrase. La commande les compte, dit **où** ils sont — par
+identifiant public, jamais en recopiant leur contenu, puisque le rapport finit
+dans un ticket — et les laisse en place, parce qu'ils justifient un mouvement
+comptable. Les identifiants Stripe restent pour la même raison inversée : les
+effacer supprimerait le seul moyen de demander à Stripe le même effacement, et
+la commande les liste comme une demande distincte à faire.
+
+**Une anonymisation se vérifie en reposant la question.** Après l'écriture, les
+mêmes prédicats sont réévalués : les racines ne doivent plus rien trouver, et
+chaque colonne réécrite est relue. C'est ce qui rattrape le seul cas qu'aucun
+soin dans le script ne peut couvrir — une commande passée par la même personne
+entre la lecture et l'écriture. `restore` finit de la même façon et pour la même
+raison (ADR 0005) : une restauration ne se teste pas « presque », et un
+effacement encore moins, puisqu'il est le seul geste de cette CLI que rien ne
+défait.
+
 **Le double de wrangler porte maintenant une vraie base.** `d1 migrations
 apply` applique les quarante-trois migrations du dépôt dans une base
 `node:sqlite`, et `d1 execute` y exécute les instructions que la CLI produit.
@@ -2183,9 +2294,10 @@ points-virgules compris dans une description produit, sous peine de faire
   complet est éprouvé ; ce qu'aucun double ne remplace, c'est une restauration
   minutée sur un compte Cloudflare réel. Cette ligne rejoint celles des jalons 6
   et 7 : les trois attendent le même premier passage réel ;
-- **l'export et l'anonymisation d'un client.** Ils s'appuient sur la même carte
-  des tables et sur le même chiffrement, et ils feront leur propre passage avec
-  la supervision et les runbooks ;
+- **la supervision et les runbooks d'incident.** Une alerte se pose sur un
+  compte Cloudflare, et un runbook décrit une procédure que quelqu'un a exécutée
+  au moins une fois ; les deux attendent le même premier passage réel que les
+  jalons 6 et 7 ;
 - **la rotation d'une clé.** `keygen` refuse d'écraser une clé existante — c'est
   elle qui ouvre les archives déjà prises — mais rien ne rechiffre un dépôt d'un
   jeu de clés vers un autre. Une agence qui doit tourner sa clé garde

@@ -24,6 +24,7 @@ import { REPO_OPTIONS, repoUsage, runRepo } from './commands/repo.mjs';
 import { DESTROY_OPTIONS, destroyUsage, runDestroy } from './commands/destroy.mjs';
 import { BACKUP_FLAGS, BACKUP_OPTIONS, backupUsage, runBackup } from './commands/backup.mjs';
 import { RESTORE_FLAGS, RESTORE_OPTIONS, restoreUsage, runRestore } from './commands/restore.mjs';
+import { PRIVACY_FLAGS, PRIVACY_OPTIONS, privacyUsage, runPrivacy } from './commands/privacy.mjs';
 import { CORE_FLAGS, CORE_OPTIONS, coreUsage, runCore } from './commands/core.mjs';
 import { FLEET_FLAGS, FLEET_OPTIONS, fleetUsage, runFleet } from './commands/fleet.mjs';
 
@@ -40,6 +41,7 @@ Usage: shopctl <commande> [options]
   deploy              Vérifier, migrer, construire, téléverser et tester la boutique
   backup              Sauvegarder, lister, contrôler et faire expirer les archives
   restore             Restaurer une sauvegarde dans un environnement
+  privacy             Exporter ou anonymiser les données d'une personne
   destroy             Supprimer les ressources Cloudflare d'un environnement
   core                Version du socle de cette boutique, et sa mise à niveau
   fleet               État et mise à niveau de la flotte déclarée
@@ -71,6 +73,7 @@ export const COMMANDS = {
   },
   backup: { run: runBackup, usage: backupUsage, values: BACKUP_OPTIONS, flags: BACKUP_FLAGS },
   restore: { run: runRestore, usage: restoreUsage, values: RESTORE_OPTIONS, flags: RESTORE_FLAGS },
+  privacy: { run: runPrivacy, usage: privacyUsage, values: PRIVACY_OPTIONS, flags: PRIVACY_FLAGS },
   destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
   core: { run: runCore, usage: coreUsage, values: CORE_OPTIONS, flags: CORE_FLAGS },
   fleet: { run: runFleet, usage: fleetUsage, values: FLEET_OPTIONS, flags: FLEET_FLAGS },

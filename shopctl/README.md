@@ -62,6 +62,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl backup --env <env>` | 8 | Prend une sauvegarde chiffrée : données, schéma, objets R2, sommes de contrôle. |
 | `shopctl backup list \| verify \| prune \| keygen` | 8 | Lister, contrôler, faire expirer une archive ; écrire la clé. |
 | `shopctl restore --env <env> --from <id>` | 8 | Restaure une archive et compare la base obtenue à ce qu'elle portait. |
+| `shopctl privacy export \| anonymize` | 8 | Exporte ce qu'une boutique détient sur une personne, ou l'en efface. |
 | `shopctl core status` | 9 | Version déclarée, version réellement fusionnée, retard, dérive du cœur. |
 | `shopctl core upgrade --to <tag>` | 9 | Fusionne un tag du socle sur une branche et ouvre sa pull request. |
 | `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
@@ -335,6 +336,48 @@ migrations plutôt que listées ici.
 `backup prune` ne supprime une archive que si elle dépasse **à la fois** le
 nombre conservé et l'âge maximal : une boutique qu'on a cessé de sauvegarder ne
 doit pas voir sa dernière archive expirer sur un critère d'âge.
+
+## `shopctl privacy`
+
+```sh
+npm run shopctl -- privacy export --env production --email <adresse>
+npm run shopctl -- privacy anonymize --env production --email <adresse> --confirm <slug>
+```
+
+Les deux droits que le RGPD exerce contre la base d'une boutique : l'accès et la
+portabilité (articles 15 et 20), l'effacement (article 17). Un seul jeu de
+règles les sert, parce qu'ils posent la même question — *quelles lignes sont
+celles de cette personne ?* — et que deux réponses finiraient par diverger
+([ADR 0017](../docs/architecture/decisions/0017-effacement-et-portabilite.md)).
+
+**Un effacement est une anonymisation.** Une commande payée est une pièce
+comptable que la loi garde dix ans : les montants, la TVA, les dates et
+l'identifiant public restent, et c'est l'identité qui est réécrite — l'e-mail
+devient un pseudonyme, l'adresse de livraison est réduite au pays (ce qui
+justifie le taux de TVA), le suivi de colis passe à NULL. La seule ligne
+supprimée est un jeton d'accès invité : anonymiser la commande n'aurait pas
+fermé la porte qu'il ouvre.
+
+**Le pseudonyme est tiré au hasard, une valeur par ligne**, et rien ne conserve
+la correspondance. Un condensat de l'adresse se réidentifie par énumération, et
+un pseudonyme unique par personne garderait ses commandes groupées. L'opération
+est irréversible : elle exige `--confirm <slug>` dans **tous** les
+environnements, et elle se relit elle-même après écriture — une ligne qui porte
+encore l'adresse fait échouer la commande en code 6.
+
+**L'export est en clair, en JSON, écrit en 0600 dans `privacy/`** (que Git
+ignore). C'est le format que l'article 20 demande, et il est destiné à la
+personne : le chiffrer aurait déplacé le problème sur l'envoi de la clé.
+Supprimez-le une fois transmis. Il ne porte ni jeton d'accès — un export voyage
+par e-mail, celui-là est un mot de passe — ni identité d'opérateur de la
+boutique, et il dit ce qu'il retient plutôt que de l'omettre.
+
+**Ce que la commande ne décide pas, elle le signale.** Le motif et la note d'un
+remboursement sont du texte libre : ils sont conservés, comptés, situés par
+identifiant public — jamais recopiés dans un rapport qui finit dans un ticket —
+et relus par un humain. Les identifiants Stripe restent aussi : les effacer
+supprimerait le seul moyen de demander à Stripe le même effacement, et le
+rapport les liste comme une demande distincte.
 
 ## `shopctl core` et `shopctl fleet`
 
