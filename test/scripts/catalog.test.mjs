@@ -19,6 +19,7 @@ import { slugify as storeSlugify } from '../../src/features/products/slug.ts';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const WITNESS = resolve(ROOT, 'test/fixtures/clients/pilot-fr/catalogue/catalog.csv');
+const CANARY = resolve(ROOT, 'test/fixtures/clients/canary-minimal/catalogue/catalog.csv');
 const RUNNER = resolve(ROOT, 'test/helpers/catalog-sqlite.mjs');
 
 // Every SQLite scenario applies forty-two migrations before it does any work,
@@ -365,6 +366,40 @@ describe('un import réel, contre les migrations du dépôt', () => {
     expect(units.some((unit) => unit.stock > 5)).toBe(true);
     expect(new Set(shop.flatMap((product) => product.categories)).size).toBe(4);
     expect(shop.filter((product) => product.variant_label)).toHaveLength(3);
+  });
+
+  // The counter-witness of plan §2.3. The pilot's file fills all fourteen
+  // columns, so an import that had quietly come to REQUIRE one of the ten
+  // optional ones would still be green there and broken on the next merchant's
+  // first file. This one fills the three the contract makes mandatory plus the
+  // one its shop has an opinion about, and nothing else.
+  it('importe la contre-épreuve : cinq produits, rien d\'autre (plan §2.3)', () => {
+    const result = scenario({ csv: CANARY, options: {}, runs: 2 });
+
+    expect(result.runs[0].summary).toMatchObject({
+      productsCreated: 5, variantsCreated: 0, categoriesCreated: 0, mediaUploaded: 0,
+    });
+    // No --create-categories was passed, and none was needed: a file that names
+    // no category must not need the flag that creates them.
+    expect(result.runs[1].summary).toMatchObject({ productsCreated: 0, productsUnchanged: 5 });
+    expect(result.runs[1].statements).toBe(0);
+
+    expect(result.catalogue).toHaveLength(5);
+    for (const product of result.catalogue) {
+      expect(product.variants).toHaveLength(0);
+      expect(product.categories).toEqual([]);
+      expect(product.image_key).toBeNull();
+      // The shop has no shipping feature, and its file says so on every row.
+      expect(product.requires_shipping).toBe(0);
+      // Absent is not zero (migration 0030): an unstated weight stays unknown.
+      expect(product.weight_grams).toBeNull();
+    }
+    expect(result.state.media).toHaveLength(0);
+    // The three stock states the storefront distinguishes, in five rows.
+    const stocks = result.catalogue.map((product) => product.stock);
+    expect(stocks.some((stock) => stock === 0)).toBe(true);
+    expect(stocks.some((stock) => stock > 0 && stock <= 5)).toBe(true);
+    expect(stocks.some((stock) => stock > 5)).toBe(true);
   });
 
   it('met à jour un produit sans toucher aux autres', () => {

@@ -81,7 +81,12 @@ Deux boutiques fictives doivent exister dès le début du développement :
 
 #### `canary-minimal`
 
-- [ ] cinq produits ;
+- [x] cinq produits — `catalogue/catalog.csv`, la contre-épreuve du format : le
+  fichier du pilote remplit les quatorze colonnes, donc un import devenu
+  exigeant sur l'une des dix facultatives y resterait vert et casserait sur le
+  premier fichier du marchand suivant. Celui-ci remplit les trois obligatoires
+  et la seule dont sa boutique a une opinion — aucune catégorie, aucune image,
+  aucune variante, aucun poids ;
 - [x] thème différent ;
 - [x] fonctionnalités minimales ;
 - [x] utilisée pour vérifier l'absence de configuration codée en dur pour le pilote.
@@ -108,7 +113,12 @@ Le plan de contrôle comprend :
   travail de l'agence ([ADR 0016](architecture/decisions/0016-registre-et-mise-a-niveau-de-la-flotte.md)) ;
 - [x] les workflows de mise à jour — `shopctl core upgrade`,
   `shopctl fleet upgrade`, et le workflow `Release` qui publie les tags ;
-- [ ] les tests génériques propres à la plateforme multi-client.
+- [x] les tests génériques propres à la plateforme multi-client —
+  `npm run test:tenant-isolation` monte les deux boutiques témoins dans un
+  seul compte Cloudflare et une seule forge, et tient les sept premières
+  lignes du §8.3. Toutes les autres suites du dépôt éprouvent **une**
+  boutique ; le défaut visé ici est celui d'une boutique juste seule et
+  fausse à côté d'une autre.
 
 Il ne contient aucune donnée de commande et aucun secret client.
 
@@ -2383,6 +2393,10 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
   `fleet.test.mjs` (mise à niveau d'un socle réel, flotte, pull requests) et
   `release.test.mjs` (porte de publication). Ils tournent dans `vitest run`,
   donc dans `npm run verify`, donc dans le job principal ;
+- [x] isolation multi-client (`npm run test:tenant-isolation`) — deux boutiques
+  témoins dans un seul compte et une seule forge, §8.3. Dans `vitest run` pour la
+  même raison que les précédents : un défaut d'isolation qui n'est vu qu'à la
+  campagne finale a déjà voyagé dans un tag ;
 - [ ] contrôle de formatage — voir ci-dessous.
 
 Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
@@ -2403,10 +2417,26 @@ réellement : la décision d'adopter un formateur, ou celle de s'en passer.
 - [ ] `npm run verify` ;
 - [ ] `npm run test:catalog` — le script existe depuis le jalon 4 ; ce qui
   manque ici est la CI du dépôt d'une boutique, pas la porte ;
-- [ ] `npm run test:tenant-isolation` ;
+- [x] `npm run test:tenant-isolation` — la porte existe et tourne déjà dans
+  `vitest run`, donc dans `npm run verify`, donc à chaque commit du socle. La
+  nommer séparément sert le dépôt d'une boutique, qui a besoin de la désigner
+  seule ;
 - [ ] `npm run test:e2e` ;
 - [ ] `npm run test:a11y` ;
 - [ ] `npm run test:visual`.
+
+Les trois derniers noms ne désignent aucun script, comme les quatre du §7.1
+avant eux, et pour la même raison : ils ont été écrits avant le dépôt. Ce qu'ils
+décrivent existe et tourne — `npm run test:browser` les remplace toutes les
+trois, ce que le README dit déjà : une seule suite Playwright contre le Worker
+construit couvre le parcours, axe et la signature du design, par thème, dans son
+propre job. Les découper en trois scripts qui construisent trois fois le même
+Worker coûterait trois builds pour un signal identique.
+
+Ce qui manque à cette section n'est donc pas une porte : c'est son sujet. Une
+pull request client se fait dans le dépôt d'une **boutique**, et aucune n'existe
+encore. Le socle porte les portes ; il ne peut pas porter la pull request de
+quelqu'un d'autre. Les cases restent ouvertes et désignent cela.
 
 ### 7.3 Chaque nuit
 
@@ -2478,18 +2508,49 @@ avec ces mots.
 
 ### 8.3 Isolation multi-client
 
-- [ ] deux dépôts ;
-- [ ] deux thèmes ;
-- [ ] deux Workers ;
-- [ ] deux bases ;
-- [ ] quatre buckets par paire d'environnements ;
-- [ ] aucun secret partagé ;
-- [ ] aucune donnée croisée ;
+- [x] deux dépôts — une boutique, un dépôt, une histoire : chacune pousse la
+  sienne sur son propre remote, et aucun des deux remotes ne répond pour le
+  commit de l'autre. C'est ce que la mise à niveau du §3.4 fusionne dans, donc
+  deux boutiques qui partageraient une histoire prendraient le thème de l'autre
+  à la prochaine version du socle ;
+- [x] deux thèmes — `pilot-fr` sélectionne `atelier`, que le cœur ne possède
+  pas ; `canary-minimal` sélectionne `market`, livré par le socle ;
+- [x] deux Workers ;
+- [x] deux bases — noms **et** identifiants distincts : la liaison D1 s'appelle
+  `DB` dans toute la flotte, donc c'est l'identifiant rendu qui décide où une
+  écriture atterrit ;
+- [x] quatre buckets par paire d'environnements — images et fichiers, staging et
+  production. C'est un **compte** parce que la panne est un bucket *manquant* :
+  un bucket de fichiers privés qu'une deuxième boutique réutilise remet les
+  factures d'un commerçant à l'autre ;
+- [x] aucun secret partagé — les secrets internes sont tirés par boutique et par
+  environnement, chacun posé sur son seul Worker ; chaque dépôt reçoit son propre
+  jeton Cloudflare par environnement — quatre jetons, aucun partagé — et aucune
+  de ces valeurs n'apparaît dans un vecteur d'arguments ;
+- [x] aucune donnée croisée — le catalogue témoin est importé dans **une** base
+  et dans **un** bucket ; les trois autres bases du compte et les sept autres
+  buckets sont vides. Et l'isolation est tenue par un **refus**, pas seulement
+  par une observation : l'import s'arrête si le `wrangler.jsonc` de l'arbre
+  décrit une autre boutique ou un autre environnement que celui demandé ;
 - [x] versions du socle indépendantes — une boutique non sélectionnée reste sur
   sa version et passe toujours ses propres portes (`fleet.test.mjs`) ;
 - [x] mise à niveau commune réussie — les deux boutiques témoins prennent le même
-  tag, thème et manifeste inchangés (`fleet.test.mjs`). Les deux lignes restent à
-  rejouer sur des boutiques **déployées** dans la campagne finale.
+  tag, thème et manifeste inchangés (`fleet.test.mjs`).
+
+Les sept premières lignes sont tenues par `npm run test:tenant-isolation`
+(`test/scripts/tenant-isolation.test.mjs`), qui monte les deux boutiques témoins
+**dans un seul compte Cloudflare et une seule forge** : c'est la seule
+disposition où la faute est possible. Deux comptes, ou deux répertoires
+temporaires, ne prouveraient que la séparation de deux répertoires.
+
+Ce que la porte ne remplace pas. Les commandes, les rendus et le SQL sont les
+vrais — les quarante-trois migrations du dépôt, l'import du catalogue témoin,
+`shopctl repo` et `shopctl deploy` —, mais le compte Cloudflare et la forge sont
+des doubles (`test/fixtures/wrangler-double.mjs`, `gh-double.mjs`). Les lignes
+qui parlent de boutiques **déployées** — deux Workers répondant sur deux
+origines, avec deux bases derrière — sont à rejouer telles quelles dans la
+campagne finale, sur des comptes réels. La porte tient la moitié qui régresse,
+et elle la tient à chaque commit.
 
 ### 8.4 Sécurité
 

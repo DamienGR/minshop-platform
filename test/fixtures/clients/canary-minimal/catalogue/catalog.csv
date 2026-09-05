@@ -1,0 +1,6 @@
+sku;name;price;stock;requires_shipping
+CAN-01;Café de la semaine;7,50;12;non
+CAN-02;Thé vert sencha;9,00;4;non
+CAN-03;Chocolat noir 70 %;4,20;0;non
+CAN-04;Miel de printemps;8,90;6;non
+CAN-05;Confiture d'abricot;5,40;25;non
