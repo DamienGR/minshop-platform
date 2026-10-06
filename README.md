@@ -405,7 +405,7 @@ job par thème.
 monte les deux boutiques témoins **dans un seul compte Cloudflare et une seule
 forge** — la seule disposition où la faute est possible — puis vérifie ce qui
 n'existe qu'à deux boutiques : deux dépôts, deux thèmes, deux Workers, deux
-bases, quatre buckets par paire d'environnements, aucun secret partagé, aucune
+bases, six buckets par paire d'environnements, aucun secret partagé, aucune
 donnée croisée. Toutes les autres suites du dépôt éprouvent **une** boutique, et
 le défaut visé ici est celui d'une boutique juste seule et fausse à côté d'une
 autre : un nom de ressource qui ne porte pas le slug, un identifiant lu dans

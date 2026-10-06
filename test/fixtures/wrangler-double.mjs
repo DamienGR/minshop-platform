@@ -381,6 +381,29 @@ if (command === 'r2 bucket dev-url' && positionals[3] === 'get') {
   done(bucket.devUrl ? `Public access is enabled at '${bucket.devUrl}'.` : 'Public access via the r2.dev URL is disabled.');
 }
 
+// Lifecycle rules: the real listing prints one `name:` line per rule, then
+// its fields. The double keeps the rules on the bucket record so a second
+// provisioning can find the one the first added.
+if (command === 'r2 bucket lifecycle' && positionals[3] === 'list') {
+  const bucket = bucketEntry(positionals[4]);
+  if (!bucket) fail('The specified bucket does not exist.');
+  const rules = bucket.lifecycle ?? [];
+  if (rules.length === 0) done(`Listing lifecycle rules for bucket '${bucket.name}'...\nThere are no lifecycle rules for bucket '${bucket.name}'.`);
+  done(
+    `Listing lifecycle rules for bucket '${bucket.name}'...\n` +
+      rules.map((rule) => `name:      ${rule.name}\nenabled:   Yes\nprefix:    (all prefixes)\naction:    Expire objects after ${rule.days} days`).join('\n\n'),
+  );
+}
+
+if (command === 'r2 bucket lifecycle' && positionals[3] === 'add') {
+  const bucket = bucketEntry(positionals[4]);
+  if (!bucket) fail('The specified bucket does not exist.');
+  const name = positionals[5];
+  if ((bucket.lifecycle ?? []).some((rule) => rule.name === name)) fail(`A lifecycle rule named '${name}' already exists.`);
+  bucket.lifecycle = [...(bucket.lifecycle ?? []), { name, days: Number(flag('--expire-days')) }];
+  done(`✨ Added lifecycle rule '${name}' to bucket '${bucket.name}'.`);
+}
+
 if (command === 'r2 bucket domain' && positionals[3] === 'list') {
   const name = positionals[4];
   const wanted = jurisdictionOf();

@@ -126,8 +126,10 @@ it for editors. Never hand-edit the generated schema — run
 `npm run config:validate -- --write`.
 
 Every Cloudflare resource name is DERIVED from `cloudflare.workerName`
-(`<name>-db`, `-images`, `-files`, `-session`), so one shop is one name family
-and `destroy-cf.sh` removes all of it. Two manifests may never claim the same
+(`<name>-db`, `-images`, `-files`, `-backups`, `-session`), so one shop is one
+name family and `shopctl destroy` removes all of it. `-backups` is the one no
+Worker binds: it holds the CI's encrypted archives, private, in the shop's
+jurisdiction (ADR 0005, note of 2026-10-06). Two manifests may never claim the same
 identifier: nothing at runtime separates two shops' data (ADR 0001).
 
 A DEPLOYED resource additionally carries its environment, which qualifies the
@@ -347,6 +349,17 @@ Six properties hold, and each one is a test:
   archive only when it is BOTH older than `--keep-days` and beyond `--keep`: a
   shop that stopped being backed up must not lose its last archive to an age rule.
 
+What CI takes does not stay on the runner. `backup --upload` copies the sealed
+files into the environment's private `-backups` bucket (manifest last, so a
+half-copied archive has no manifest), and `backup pull <id>` brings one back and
+checks it as `verify` would. `deploy --env production` takes one, uploads it and
+only then migrates (plan §9) — no flag skips that. The bucket's lifecycle rule is
+`--keep-days`' 90, and it is an AGE rule only: R2 cannot count, so the "never
+lose the last one" half of `prune` does not hold there. What holds it instead is
+the nightly run failing loudly — a nightly that stopped is an incident, not a
+quiet week. The CI's key is the operator's, placed by `shopctl repo` and KEPT
+when already there: archives are encrypted with it.
+
 Gotchas that cost an afternoon:
 
 - **"empty" is not "zero rows".** Migration 0040 seeds the four French legal
@@ -562,7 +575,7 @@ Two rules the gate enforces that are easy to break by accident:
 inside `vitest run`, so inside `npm run verify`) builds the two witness shops of
 plan §2.3 **in one imaginary Cloudflare account and one imaginary forge**, then
 asserts plan §8.3: two repositories, two themes, two Workers, two databases,
-four buckets per pair of environments, no shared secret, no crossed data.
+six buckets per pair of environments, no shared secret, no crossed data.
 
 The arrangement is the point. Every other suite here tests ONE shop, and the
 defect this gate exists for is a shop that is correct alone and wrong beside

@@ -227,6 +227,7 @@ describe('fleet identifiers', () => {
       database: 'minshop-pilot-fr-db',
       images: 'minshop-pilot-fr-images',
       files: 'minshop-pilot-fr-files',
+      backups: 'minshop-pilot-fr-backups',
       sessions: 'minshop-pilot-fr-session',
     });
   });
@@ -285,6 +286,7 @@ describe('fleet identifiers', () => {
       database: 'minshop-pilot-fr-staging-db',
       images: 'minshop-pilot-fr-staging-images',
       files: 'minshop-pilot-fr-staging-files',
+      backups: 'minshop-pilot-fr-staging-backups',
       sessions: 'minshop-pilot-fr-staging-session',
     });
   });
@@ -324,16 +326,19 @@ describe('fleet identifiers', () => {
       'minshop-pilot-fr-db',
       'minshop-pilot-fr-images',
       'minshop-pilot-fr-files',
+      'minshop-pilot-fr-backups',
       'minshop-pilot-fr-session',
       'minshop-pilot-fr-staging',
       'minshop-pilot-fr-staging-db',
       'minshop-pilot-fr-staging-images',
       'minshop-pilot-fr-staging-files',
+      'minshop-pilot-fr-staging-backups',
       'minshop-pilot-fr-staging-session',
       'minshop-pilot-fr-production',
       'minshop-pilot-fr-production-db',
       'minshop-pilot-fr-production-images',
       'minshop-pilot-fr-production-files',
+      'minshop-pilot-fr-production-backups',
       'minshop-pilot-fr-production-session',
     ]);
     expect(collisions[0].files).toEqual(['a.yaml', 'b.yaml']);

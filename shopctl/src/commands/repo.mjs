@@ -13,7 +13,8 @@
  *   1. the repository exists (created PRIVATE if not);
  *   2. the branch is on the remote;
  *   3. `staging` and `production` exist as GitHub Environments;
- *   4. each carries CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+ *   4. each carries CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, and the
+ *      backup key the CI encrypts its archives with (SHOPCTL_BACKUP_KEY).
  *
  * The tokens come from the ENVIRONMENT, never from an argument: `shopctl` has
  * refused credential-shaped arguments since jalon 2 (secrets.mjs), and a
@@ -31,6 +32,7 @@
  */
 import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
 import { ShopctlError, preconditionError } from '../errors.mjs';
+import { KEY_ENV, keyId, loadKey } from '../backup/crypto.mjs';
 import { capture } from '../process.mjs';
 import { resolveShop } from '../shop.mjs';
 import {
@@ -289,6 +291,20 @@ export function setupRepository({
     );
   }
 
+  // The operator's own key, so that what the CI seals the operator can open:
+  // `backup pull` then `restore` on a laptop is the way back from a bad night.
+  // Its absence is said, not fatal — the repository is still worth creating.
+  let backupKey = null;
+  try {
+    backupKey = loadKey({ root, env });
+  } catch (error) {
+    if (!(error instanceof ShopctlError)) throw error;
+    reporter.warn(
+      `aucune clé de sauvegarde à poser (${KEY_ENV}).`,
+      'Créez-la avec `shopctl backup keygen` puis relancez `shopctl repo` : sans elle, le déploiement de production et le run nocturne refusent de démarrer.',
+    );
+  }
+
   const secretReport = [];
   const missingTokens = [];
   for (const name of ENVIRONMENTS) {
@@ -315,10 +331,24 @@ export function setupRepository({
     // nobody can diagnose from the outside.
     setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_API_TOKEN', token.value, { cwd: root });
     setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_ACCOUNT_ID', accountId, { cwd: root });
-    secretReport.push({ env: name, set: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'], from: token.from, replaced: present });
+    const set = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'];
     reporter.ok(
       `${name} — CLOUDFLARE_API_TOKEN (depuis ${token.from}) et CLOUDFLARE_ACCOUNT_ID posés${present.length > 0 ? ' (remplacés)' : ''}`,
     );
+
+    // The one secret KEPT when present, and for the reason the tokens are not:
+    // archives are encrypted with it. A second operator whose laptop holds a
+    // different key would otherwise switch the CI to a key the first one cannot
+    // open, with nothing anywhere saying so. Replacing it is a deliberate act —
+    // delete it in GitHub, then re-run.
+    if (backupKey && present.includes(KEY_ENV)) {
+      reporter.ok(`${name} — ${KEY_ENV} déjà posé, conservé (clé locale ${keyId(backupKey.key)} ; GitHub ne relit pas une valeur)`);
+    } else if (backupKey) {
+      setEnvironmentSecret(target.nameWithOwner, name, KEY_ENV, backupKey.key.toString('base64'), { cwd: root });
+      set.push(KEY_ENV);
+      reporter.ok(`${name} — ${KEY_ENV} posé (clé ${keyId(backupKey.key)}, depuis ${backupKey.source})`);
+    }
+    secretReport.push({ env: name, set, from: token.from, replaced: present.filter((secret) => set.includes(secret)) });
   }
 
   const report = {

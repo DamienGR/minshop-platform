@@ -372,6 +372,23 @@ describe('shopctl deploy', () => {
       expect(read).toBeGreaterThan(-1);
       expect(read).toBeLessThan(migrated);
       expect(target.run(['backup', 'verify', report.backup.id]).status).toBe(EXIT_CODES.ok);
+
+      // And it outlives the runner: the archive is in the environment's own
+      // private bucket before the first migration runs.
+      const upload = calls.findIndex((call) => call.startsWith(`r2 object put ${names(target.slug, 'production').backups}/`));
+      expect(report.backup.uploaded.bucket).toBe(names(target.slug, 'production').backups);
+      expect(upload).toBeGreaterThan(read);
+      expect(upload).toBeLessThan(migrated);
+    });
+
+    it('refuses production when the backups bucket is missing', () => {
+      const target = provisioned('production');
+      const bucket = names(target.slug, 'production').backups;
+      target.account({ r2: target.read().r2.filter((entry) => entry.name !== bucket) });
+      const result = target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(result.status).toBe(EXIT_CODES.precondition);
+      expect(result.stderr).toContain(bucket);
+      expect(target.read().deploys ?? []).toEqual([]);
     });
 
     // Asked before the verification suite, not after it: a run that cannot

@@ -96,6 +96,7 @@ describe('shopctl provision', () => {
         `create ${names(target.slug, 'staging').database}`,
         `create ${names(target.slug, 'staging').images}`,
         `create ${names(target.slug, 'staging').files}`,
+        `create ${names(target.slug, 'staging').backups}`,
       ]);
 
       const state = target.read();
@@ -127,7 +128,21 @@ describe('shopctl provision', () => {
       expect(state.r2.map(({ name, jurisdiction }) => ({ name, jurisdiction }))).toEqual([
         { name: expected.images, jurisdiction: 'eu' },
         { name: expected.files, jurisdiction: 'eu' },
+        { name: expected.backups, jurisdiction: 'eu' },
       ]);
+    });
+
+    // ADR 0005: a backup carries personal data, so its conservation is
+    // bounded. The bucket can only say it with an age, and it says it once.
+    it('bounds the backups bucket with one retention rule, added once', () => {
+      const target = shop();
+      const expected = names(target.slug, 'staging');
+      const first = target.json(['provision', '--env', 'staging']);
+      expect(first.report.retention).toEqual({ days: 90, action: 'create' });
+      const second = target.json(['provision', '--env', 'staging']);
+      expect(second.report.retention).toEqual({ days: 90, action: 'keep' });
+      const bucket = target.read().r2.find((entry) => entry.name === expected.backups);
+      expect(bucket.lifecycle).toEqual([{ name: 'shopctl-retention', days: 90 }]);
     });
 
     it('renders the environment configuration with the id Cloudflare assigned', () => {
@@ -243,7 +258,7 @@ describe('shopctl provision', () => {
     target.account({ failAt: null });
     const { report, status } = target.json(['provision', '--env', 'staging']);
     expect(status).toBe(EXIT_CODES.ok);
-    expect(report.steps.map((step) => step.action)).toEqual(['keep', 'create', 'create']);
+    expect(report.steps.map((step) => step.action)).toEqual(['keep', 'create', 'create', 'create']);
     expect(report.databaseId).toBe(halfway.d1[0].uuid);
   });
 
@@ -316,6 +331,24 @@ describe('shopctl provision', () => {
 
     // The images bucket is the one that MAY be public: a custom domain in front
     // of it is how product images bypass the Worker. Reported, never refused.
+    // Encrypted, and still never public: a key leaks more easily than a bucket
+    // nobody can list.
+    it('fails the run when the backups bucket is public', () => {
+      const target = shop();
+      const expected = names(target.slug, 'staging');
+      target.account({
+        r2: [
+          { name: expected.images, jurisdiction: 'eu', devUrl: null, domains: [] },
+          { name: expected.files, jurisdiction: 'eu', devUrl: null, domains: [] },
+          { name: expected.backups, jurisdiction: 'eu', devUrl: 'https://pub-def.r2.dev', domains: [] },
+        ],
+      });
+      const result = target.run(['provision', '--env', 'staging']);
+      expect(result.status).toBe(EXIT_CODES.verification);
+      expect(result.stdout + result.stderr).toMatch(/-backups est accessible publiquement/);
+      expect(target.read().migrationsApplied ?? 0).toBe(0);
+    });
+
     it('reports an images domain without refusing it', () => {
       const target = shop();
       const expected = names(target.slug, 'staging');

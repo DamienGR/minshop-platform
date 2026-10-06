@@ -325,6 +325,30 @@ export function deleteDatabase(name, { cwd }) {
   return removal(wrangler(['d1', 'delete', name, '--skip-confirmation'], { cwd, allowFailure: true }), name);
 }
 
+/** The lifecycle rule that bounds a backups bucket. Named, so a second
+ *  provisioning finds it rather than adding a twin. */
+export const RETENTION_RULE = 'shopctl-retention';
+
+/**
+ * Does this bucket already expire its objects under our rule?
+ *
+ * `null` when the account could not be asked: "unknown" is reported as such and
+ * never read as "absent", which would add a rule on every run, or as "present",
+ * which would leave a bucket that keeps customer data forever.
+ */
+export function hasRetentionRule(name, { cwd, jurisdiction }) {
+  const result = wrangler(['r2', 'bucket', 'lifecycle', 'list', name, '-J', jurisdiction], { cwd, allowFailure: true });
+  if (result.status !== 0) return null;
+  return stripAnsi(`${result.stdout}\n${result.stderr}`).includes(RETENTION_RULE);
+}
+
+export function addRetentionRule(name, days, { cwd, jurisdiction }) {
+  wrangler(
+    ['r2', 'bucket', 'lifecycle', 'add', name, RETENTION_RULE, '--expire-days', String(days), '-J', jurisdiction, '--force'],
+    { cwd },
+  );
+}
+
 /** R2 refuses to delete a bucket that still holds objects. That refusal is
  *  relayed rather than worked around: emptying a bucket on the operator's
  *  behalf is how a teardown deletes something nobody meant to lose. */

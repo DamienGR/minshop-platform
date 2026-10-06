@@ -55,7 +55,7 @@ import { ShopctlError, preconditionError, verificationError } from '../errors.mj
 import { run } from '../process.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { INTERNAL_SECRETS, generateSecret, renderEnvironmentConfig } from './provision.mjs';
-import { captureBackup } from './backup.mjs';
+import { captureBackup, uploadArchive } from './backup.mjs';
 import { repositoryPath } from '../backup/archive.mjs';
 import { keyId, loadKey } from '../backup/crypto.mjs';
 import { originFromDeployOutput, runSmoke } from '../smoke.mjs';
@@ -183,6 +183,9 @@ export async function runDeploy(args, reporter) {
     database ? null : names.database,
     buckets.includes(names.images) ? null : names.images,
     buckets.includes(names.files) ? null : names.files,
+    // Production backs up before it migrates, and the backup has to outlive the
+    // machine that took it — a CI runner is gone ten minutes later.
+    env === 'production' && !buckets.includes(names.backups) ? names.backups : null,
   ].filter(Boolean);
 
   if (missing.length > 0) {
@@ -242,10 +245,11 @@ export async function runDeploy(args, reporter) {
   if (env === 'production') {
     reporter.section('Sauvegarde préalable');
     const repository = repositoryPath(root, args.values['--backup-dir']);
-    if (dryRun) reporter.todo(`une sauvegarde chiffrée serait écrite dans ${repository}`);
+    if (dryRun) reporter.todo(`une sauvegarde chiffrée serait écrite dans ${repository} puis copiée dans ${names.backups}`);
     else {
       const taken = captureBackup({ manifest, root, env, account, key: backupKey, repository, reporter });
-      backup = { id: taken.id, path: taken.path, bytes: taken.bytes, schema: taken.schema.version };
+      const uploaded = uploadArchive({ manifest, root, env, path: taken.path, id: taken.id, reporter });
+      backup = { id: taken.id, path: taken.path, bytes: taken.bytes, schema: taken.schema.version, uploaded };
     }
   }
 

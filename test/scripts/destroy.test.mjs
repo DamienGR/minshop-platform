@@ -70,10 +70,10 @@ describe('shopctl destroy', () => {
       const { report, status } = target.json(['destroy', '--env', 'staging', '--dry-run']);
 
       expect(status).toBe(EXIT_CODES.ok);
-      expect(report.wouldRemove).toEqual([expected.images, expected.files, expected.database]);
+      expect(report.wouldRemove).toEqual([expected.images, expected.files, expected.backups, expected.database]);
       const state = target.read();
       expect(state.d1).toHaveLength(1);
-      expect(state.r2).toHaveLength(2);
+      expect(state.r2).toHaveLength(3);
     });
 
     // A preview costs nothing and refusing it would only teach people to skip
@@ -92,12 +92,12 @@ describe('shopctl destroy', () => {
 
       const { report, status } = target.json(['destroy', '--env', 'staging', ...CONFIRM(target)]);
       expect(status).toBe(EXIT_CODES.ok);
-      expect(report.removed).toEqual([staging.images, staging.files, staging.database]);
+      expect(report.removed).toEqual([staging.images, staging.files, staging.backups, staging.database]);
 
       // Production is untouched: one environment is one name family.
       const state = target.read();
       expect(state.d1.map((entry) => entry.name)).toEqual([production.database]);
-      expect(state.r2.map((bucket) => bucket.name)).toEqual([production.images, production.files]);
+      expect(state.r2.map((bucket) => bucket.name)).toEqual([production.images, production.files, production.backups]);
     });
 
     it('deletes the Worker before anything else', () => {
@@ -179,6 +179,23 @@ describe('shopctl destroy', () => {
       expect(status).toBe(EXIT_CODES.ok);
       expect(report.removed).toEqual([expected.files, expected.database]);
       expect(target.read().d1).toEqual([]);
+    });
+
+    // The archives are the way back from a teardown that should not have
+    // happened, so a backups bucket that still holds them keeps the database
+    // too, and the advice is to copy them out before emptying anything.
+    it('keeps the database while the archives are still there', () => {
+      const target = provisioned();
+      const expected = names(target.slug, 'staging');
+      target.account({
+        r2: target.read().r2.map((bucket) => (bucket.name === expected.backups ? { ...bucket, objects: 4 } : bucket)),
+      });
+      const result = target.run(['destroy', '--env', 'staging', ...CONFIRM(target)]);
+
+      expect(result.status).toBe(EXIT_CODES.verification);
+      expect(result.stdout).toMatch(/backup pull <id> --env staging/);
+      expect(target.read().d1.map((entry) => entry.name)).toEqual([expected.database]);
+      expect(target.read().r2.map((bucket) => bucket.name)).toEqual([expected.backups]);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +8,7 @@ import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { canonical } from '../../shopctl/src/backup/dump.mjs';
 import { classifyTables, objectInventory, orderTables, references, seededTables } from '../../shopctl/src/backup/schema.mjs';
 import { planPrune } from '../../shopctl/src/backup/archive.mjs';
-import { HOSTILE, IMAGE_KEY, seededShop, takeBackup } from '../helpers/backup-shop.mjs';
+import { HOSTILE, IMAGE_KEY, names, seededShop, takeBackup } from '../helpers/backup-shop.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 
@@ -383,6 +383,71 @@ describe('shopctl backup', () => {
       const target = seededShop({ object: false, seed: [] });
       const result = target.run(['backup', 'verify', '../../etc/passwd']);
       expect(result.status).toBe(EXIT_CODES.input);
+    });
+  });
+
+  /**
+   * The copy that outlives the machine. A CI runner is gone ten minutes after
+   * the backup it took, so the nightly run and the pre-deploy backup put the
+   * archive in the environment's own private bucket — and `pull` is the way
+   * back from it, checked exactly as a local archive is.
+   */
+  describe('the backups bucket', () => {
+    const remote = (target, bucket) => target.read().r2.find((entry) => entry.name === bucket);
+
+    it('receives the archive as it was sealed, manifest last', () => {
+      const target = seededShop();
+      const expected = names(target.slug, 'staging');
+      const before = target.read().calls.length;
+      const { report, status } = target.json(['backup', '--env', 'staging', '--upload']);
+
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.uploaded).toEqual({ bucket: expected.backups, prefix: `${report.id}/`, files: 3 });
+      expect(remote(target, expected.backups).objects).toBe(3);
+      const puts = target.read().calls.slice(before)
+        .map(({ argv }) => argv.join(' '))
+        .filter((call) => call.startsWith(`r2 object put ${expected.backups}/`));
+      expect(puts).toHaveLength(3);
+      expect(puts.at(-1)).toContain(`${report.id}/manifest.json`);
+      expect(puts.every((call) => call.includes('-J eu'))).toBe(true);
+    });
+
+    it('refuses before reading a row when the bucket is not there', () => {
+      const target = seededShop();
+      const expected = names(target.slug, 'staging');
+      target.account({ r2: target.read().r2.filter((bucket) => bucket.name !== expected.backups) });
+      const result = target.run(['backup', '--env', 'staging', '--upload']);
+
+      expect(result.status).toBe(EXIT_CODES.precondition);
+      expect(result.stderr).toMatch(/-backups n'existe pas/);
+      expect(existsSync(join(target.root, 'backups'))).toBe(false);
+    });
+
+    it('gives an archive back that verifies and restores', () => {
+      const target = seededShop();
+      const { report } = target.json(['backup', '--env', 'staging', '--upload']);
+      rmSync(join(target.root, 'backups'), { recursive: true });
+
+      const pulled = target.json(['backup', 'pull', report.id, '--env', 'staging']);
+      expect(pulled.status, pulled.stderr).toBe(EXIT_CODES.ok);
+      expect(pulled.report.checks.every((check) => check.ok)).toBe(true);
+      expect(target.json(['backup', 'verify', report.id]).report.failures).toBe(0);
+      expect(target.run(['restore', '--env', 'staging', '--from', report.id, '--overwrite', '--dry-run']).status).toBe(EXIT_CODES.ok);
+    });
+
+    it('says which archive is missing rather than writing half of one', () => {
+      const target = seededShop({ object: false, seed: [] });
+      const result = target.run(['backup', 'pull', 'atelier-test-staging-20200101T000000Z', '--env', 'staging']);
+      expect(result.status).toBe(EXIT_CODES.input);
+      expect(result.stderr).toMatch(/manifest\.json est introuvable/);
+      expect(existsSync(join(target.root, 'backups', 'atelier-test-staging-20200101T000000Z'))).toBe(false);
+    });
+
+    it('will not overwrite a local copy', () => {
+      const target = seededShop();
+      const { report } = target.json(['backup', '--env', 'staging', '--upload']);
+      const result = target.run(['backup', 'pull', report.id, '--env', 'staging']);
+      expect(result.status).toBe(EXIT_CODES.precondition);
     });
   });
 

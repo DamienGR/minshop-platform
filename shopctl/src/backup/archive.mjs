@@ -48,6 +48,13 @@ export const OBJECTS_DIR = 'objects';
  *  no business in a repository. */
 export const DEFAULT_REPOSITORY = 'backups';
 
+/** Retention, when the operator names none. Both bounds apply, and an archive
+ *  is dropped only when both agree (ADR 0005: bornée, jamais vide). The day
+ *  bound is also the lifecycle rule `provision` puts on the backups bucket,
+ *  where only an age can be expressed — see provision.mjs. */
+export const DEFAULT_KEEP = 30;
+export const DEFAULT_KEEP_DAYS = 90;
+
 /** A backup's name: the shop, the environment, and the instant. Sorts
  *  chronologically as text, which is what makes `list` and `prune` free. */
 export function backupId(slug, env, at = new Date()) {
@@ -237,6 +244,19 @@ export function planPrune(entries, { keep = null, keepDays = null, now = new Dat
     remove,
     keepIds: entries.filter((entry) => !remove.some((dropped) => dropped.id === entry.id)).map((entry) => entry.id),
   };
+}
+
+/**
+ * The files of an archive, in the order they are copied to a remote store.
+ *
+ * The manifest LAST, on the way up as on disk: a copy interrupted half-way
+ * leaves objects with no manifest, which every reader already treats as an
+ * incomplete archive, rather than a manifest promising a body that never
+ * arrived.
+ */
+export function archiveFiles(manifest) {
+  const objects = (manifest.r2?.buckets ?? []).flatMap((bucket) => bucket.inventory.map((object) => object.file).filter(Boolean));
+  return [DATA_FILE, ...objects, MANIFEST_FILE];
 }
 
 export function removeArchive(path) {

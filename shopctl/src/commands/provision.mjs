@@ -32,11 +32,13 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  addRetentionRule,
   applyMigrations,
   bucketExposure,
   createBucket,
   createDatabase,
   databaseInfo,
+  hasRetentionRule,
   listBuckets,
   listDatabases,
   listSecrets,
@@ -49,6 +51,7 @@ import {
 import { ShopctlError, verificationError } from '../errors.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { renderWrangler, resourceNames, wranglerSubstitutions } from '../../../scripts/manifest.mjs';
+import { DEFAULT_KEEP_DAYS } from '../backup/archive.mjs';
 
 export const PROVISION_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id' };
 
@@ -176,7 +179,8 @@ export function runProvision(args, reporter) {
   }
 
   // ── R2 ────────────────────────────────────────────────────────────────────
-  for (const [label, name] of [['bucket images', names.images], ['bucket fichiers', names.files]]) {
+  const buckets = [['bucket images', names.images], ['bucket fichiers', names.files], ['bucket sauvegardes', names.backups]];
+  for (const [label, name] of buckets) {
     if (bucketsInJurisdiction.includes(name)) record(label, name, 'keep', jurisdiction);
     else if (dryRun) record(label, name, 'create', `juridiction ${jurisdiction}`);
     else {
@@ -221,7 +225,7 @@ export function runProvision(args, reporter) {
     }
   }
 
-  for (const name of [names.images, names.files]) {
+  for (const [, name] of buckets) {
     if (dryRun && !bucketsInJurisdiction.includes(name)) {
       reporter.todo(`${name} — juridiction ${jurisdiction} demandée à la création (simulation : rien à relire).`);
       continue;
@@ -261,6 +265,26 @@ export function runProvision(args, reporter) {
     reporter.todo(`${names.files} — créé privé ; l'exposition sera relue au prochain passage.`);
   }
 
+  // The backups bucket holds every order and every address the shop has taken,
+  // encrypted — and still never public: a key leaks more easily than a bucket
+  // that nobody can list.
+  let backupsExposure = null;
+  if (!dryRun || bucketsInJurisdiction.includes(names.backups)) {
+    backupsExposure = bucketExposure(names.backups, { cwd: root, jurisdiction });
+    if (!backupsExposure.known) {
+      reporter.warn(`${names.backups} — l'exposition publique n'a pas pu être lue.`, 'Vérifiez-la dans le tableau de bord avant la mise en production.');
+    } else if (backupsExposure.public) {
+      reporter.fail(
+        `${names.backups} est accessible publiquement (${backupsExposure.devUrl ?? backupsExposure.domains.join(', ')}).`,
+        'Ce bucket porte les sauvegardes chiffrées de la boutique. Coupez l\'URL r2.dev et détachez le domaine.',
+      );
+    } else {
+      reporter.ok(`${names.backups} — privé : ni URL r2.dev, ni domaine attaché`);
+    }
+  } else {
+    reporter.todo(`${names.backups} — créé privé ; l'exposition sera relue au prochain passage.`);
+  }
+
   let imagesExposure = null;
   if (!dryRun || bucketsInJurisdiction.includes(names.images)) {
     imagesExposure = bucketExposure(names.images, { cwd: root, jurisdiction });
@@ -274,6 +298,32 @@ export function runProvision(args, reporter) {
         'Elle convient à un essai mais n\'est pas un domaine de production : préférez un domaine personnalisé, et renseignez IMAGE_BASE_URL.',
       );
     } else reporter.ok(`${names.images} — images servies par le Worker (aucun domaine d'images)`);
+  }
+
+  // ── Retention of the backups ──────────────────────────────────────────────
+  //
+  // ADR 0005: a backup carries personal data, so its conservation is bounded.
+  // A bucket can only express an age, not "keep the last N", and that is
+  // acceptable here because the nightly run keeps adding recent archives; the
+  // rule `backup prune` applies locally, both bounds at once, is unchanged.
+  reporter.section('Conservation des sauvegardes');
+  let retention = null;
+  if (dryRun && !bucketsInJurisdiction.includes(names.backups)) {
+    reporter.todo(`${names.backups} — les objets de plus de ${DEFAULT_KEEP_DAYS} jours seraient expirés`);
+  } else {
+    const present = hasRetentionRule(names.backups, { cwd: root, jurisdiction });
+    if (present === true) {
+      retention = { days: DEFAULT_KEEP_DAYS, action: 'keep' };
+      reporter.ok(`${names.backups} — règle de conservation déjà posée`);
+    } else if (present === null) {
+      reporter.warn(`${names.backups} — les règles de cycle de vie n'ont pas pu être lues.`, `Vérifiez dans le tableau de bord qu'une règle expire les objets après ${DEFAULT_KEEP_DAYS} jours.`);
+    } else if (dryRun) {
+      reporter.todo(`${names.backups} — les objets de plus de ${DEFAULT_KEEP_DAYS} jours seraient expirés`);
+    } else {
+      addRetentionRule(names.backups, DEFAULT_KEEP_DAYS, { cwd: root, jurisdiction });
+      retention = { days: DEFAULT_KEEP_DAYS, action: 'create' };
+      reporter.ok(`${names.backups} — objets expirés après ${DEFAULT_KEEP_DAYS} jours`);
+    }
   }
 
   const failures = reporter.entries.filter((entry) => entry.status === 'fail');
@@ -337,7 +387,8 @@ export function runProvision(args, reporter) {
     databaseId,
     steps,
     jurisdictionChecks: checks,
-    exposure: { files: filesExposure, images: imagesExposure },
+    exposure: { files: filesExposure, images: imagesExposure, backups: backupsExposure },
+    retention,
     config: config?.out ?? null,
     migrations,
     secrets,

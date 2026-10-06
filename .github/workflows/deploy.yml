@@ -97,6 +97,10 @@ jobs:
       # so nothing here has to know how a token becomes an account.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # The operator's backup key, placed by `shopctl repo`. A production deploy
+      # refuses to start without it (plan §9): it seals the backup taken before
+      # the migrations, so that whoever holds the key can open what CI took.
+      SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
 
     steps:
       - name: Check out repository
@@ -149,9 +153,13 @@ jobs:
           echo "origin=$origin" >> "$GITHUB_OUTPUT"
 
       # The reports, not the logs. They carry the resources, the jurisdiction
-      # verdicts, the Time Travel bookmark and every smoke-test result — which is
-      # what an incident review a month from now actually needs, and what a
-      # scrolled-past console does not preserve.
+      # verdicts, the backup's identifier, the Time Travel bookmark and every
+      # smoke-test result — which is what an incident review a month from now
+      # actually needs, and what a scrolled-past console does not preserve.
+      #
+      # NOT the backup itself. The archive is the shop's whole database; it goes
+      # to the environment's own `-backups` bucket on the shop's account and in
+      # its jurisdiction (decided 2026-10-06), never to a GitHub artifact.
       - name: Keep the deployment reports
         if: always()
         uses: actions/upload-artifact@v4

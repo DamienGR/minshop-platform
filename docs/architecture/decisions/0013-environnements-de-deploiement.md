@@ -54,7 +54,8 @@ l'atteindre.
 
 - la campagne de certification a une cible réelle, dotée des mêmes ressources et
   de la même juridiction que la production ;
-- le coût double : deux bases D1 et quatre buckets R2 par boutique. C'est accepté
+- le coût double : deux bases D1 et quatre buckets R2 par boutique (six depuis
+  le bucket des sauvegardes, ADR 0005). C'est accepté
   — sur le plan tarifaire de référence, une boutique de moins de cent produits
   reste sous les seuils ;
 - un slug qui entre en collision avec l'environnement d'une autre boutique est

@@ -90,7 +90,7 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | `stripe_secret_key` test puis live (clé restreinte de préférence) | secret | Damien | coffre chiffré, Admin → Réglages → Paiements |
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
 | `resend_api_key` | secret | Damien | coffre chiffré |
-| Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) ou `SHOPCTL_BACKUP_KEY` |
+| Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) chez l'opérateur, et secret d'environnement GitHub `SHOPCTL_BACKUP_KEY` posé par `shopctl repo` (conservé s'il existe déjà) |
 | Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 |
 
 L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
@@ -144,8 +144,10 @@ Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
 - [ ] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
   minutes) et celui des cinq checkouts concurrents sur la dernière unité —
   §8.6 ;
-- [ ] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
-  le déploiement si elle échoue — §7.4, §9 ;
+- [x] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
+  le déploiement si elle échoue — §7.4, §9. L'archive est copiée dans un
+  bucket R2 privé par environnement, `<worker>-backups`, sur le compte de la
+  boutique et dans sa juridiction (décision du 2026-10-06, ADR 0005) ;
 - [ ] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
   Stripe test, webhook, e-mail de test, sauvegarde, restauration vers un
   environnement éphémère, smoke tests, audit des dépendances ;
@@ -272,11 +274,12 @@ Produit : le **rapport de performance**.
 
 Crée : la boutique `canary-minimal` en staging sur A.
 
-- [ ] deux Workers répondant sur deux origines, deux bases, quatre buckets ;
+- [ ] deux Workers répondant sur deux origines, deux bases, six buckets ;
 - [ ] un produit créé dans l'une n'apparaît pas dans l'autre ;
 - [ ] `catalog import` lancé depuis l'arbre de l'une vers l'autre : refus ;
 - [ ] `shopctl destroy --env staging --confirm canary-minimal` : tout part,
-  et rien de `pilot-fr`.
+  et rien de `pilot-fr` ; si le bucket `-backups` porte des archives, R2 le
+  refuse et la base reste — c'est le comportement attendu, à constater.
 
 Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
@@ -284,7 +287,8 @@ Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
 Crée : des archives de sauvegarde ; une restauration sur le compte B.
 
-- [ ] `backup keygen`, `backup --env staging`, `backup verify` ;
+- [ ] `backup keygen`, `backup --env staging --upload`, puis `backup pull`
+  depuis un autre poste et `backup verify` ;
 - [ ] **restauration chronométrée** dans un environnement neuf du compte B :
   du premier `provision` à la boutique servie, < 60 minutes (RTO) ; la
   restauration se prouve elle-même table par table — critère du jalon 8 ;

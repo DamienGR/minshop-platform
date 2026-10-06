@@ -2585,9 +2585,11 @@ sont conservés quatre-vingt-dix jours en artefacts.
 
 `sauvegarde verte` reste ouvert, mais plus pour la même raison : la sauvegarde
 applicative existe depuis le jalon 8 (`shopctl backup`, plan §5.6, ADR 0005) et
-son tour complet est éprouvé contre le vrai schéma. Ce qui manque est son
-enchaînement automatique devant un déploiement de production, et le premier
-passage sur un compte Cloudflare réel. Le bookmark Time Travel pris avant les
+son tour complet est éprouvé contre le vrai schéma, et depuis l'étape 0 de la
+certification `shopctl deploy --env production` la prend lui-même, la copie dans
+le bucket `-backups` de l'environnement et ne migre qu'ensuite — sans clé ou sans
+bucket, il refuse de démarrer (ADR 0005, note du 2026-10-06). Ce qui manque est
+le premier passage sur un compte Cloudflare réel. Le bookmark Time Travel pris avant les
 migrations est un filet court terme, pas la sauvegarde, et le rapport le dit
 avec ces mots.
 
@@ -2634,10 +2636,10 @@ avec ces mots.
 - [x] deux bases — noms **et** identifiants distincts : la liaison D1 s'appelle
   `DB` dans toute la flotte, donc c'est l'identifiant rendu qui décide où une
   écriture atterrit ;
-- [x] quatre buckets par paire d'environnements — images et fichiers, staging et
-  production. C'est un **compte** parce que la panne est un bucket *manquant* :
-  un bucket de fichiers privés qu'une deuxième boutique réutilise remet les
-  factures d'un commerçant à l'autre ;
+- [x] six buckets par paire d'environnements — images, fichiers et sauvegardes,
+  staging et production. C'est un **compte** parce que la panne est un bucket
+  *manquant* : un bucket de fichiers privés qu'une deuxième boutique réutilise
+  remet les factures d'un commerçant à l'autre ;
 - [x] aucun secret partagé — les secrets internes sont tirés par boutique et par
   environnement, chacun posé sur son seul Worker ; chaque dépôt reçoit son propre
   jeton Cloudflare par environnement — quatre jetons, aucun partagé — et aucune

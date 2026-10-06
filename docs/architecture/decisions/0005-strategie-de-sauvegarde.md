@@ -65,6 +65,30 @@ refuse de s'exécuter sans `--allow-missing-media`. Cette extension ne change
 aucune décision ci-dessus : elle ajoute au contenu énuméré, et l'inventaire
 reste ce qui rend `backup verify` possible sans la clé.
 
+### Note d'implémentation (jalon 10, 2026-10-06) — où vivent les sauvegardes de la CI
+
+Une sauvegarde prise par la CI — avant chaque mise en production, et chaque
+nuit — ne peut pas rester sur le runner qui l'a prise : il disparaît quelques
+minutes plus tard. Elle est copiée dans un **bucket R2 privé par boutique et par
+environnement**, `<worker>-backups`, sur le compte de la boutique et dans sa
+juridiction (ADR 0002, ADR 0004). Les artefacts GitHub sont écartés : l'archive
+est la base entière du commerçant, et elle quitterait l'UE.
+
+- `shopctl provision` crée le bucket, vérifie qu'il n'est pas public et lui pose
+  une règle de cycle de vie à quatre-vingt-dix jours, la borne d'âge de
+  `backup prune` ;
+- `shopctl backup --upload` y copie l'archive telle qu'elle a été scellée,
+  manifeste en dernier ; `shopctl backup pull <id>` la rapatrie et la contrôle
+  comme `backup verify` avant de la déclarer arrivée ;
+- `shopctl deploy --env production` exige la clé et le bucket avant de lire
+  quoi que ce soit, et ne migre qu'une fois l'archive copiée ;
+- la clé de la CI est celle de l'opérateur, posée par `shopctl repo` dans les
+  deux environnements GitHub, et **conservée** si elle y est déjà : réécrire une
+  clé de chiffrement depuis un autre poste ferait basculer la CI sur une clé que
+  le premier opérateur ne peut pas ouvrir ;
+- `shopctl destroy` supprime le bucket avec le reste, mais R2 refuse un bucket
+  non vide : tant que les archives sont là, la base D1 reste aussi.
+
 ## Alternatives écartées
 
 - **Time Travel D1 seul** : fenêtre limitée, périmètre restreint à D1, aucune

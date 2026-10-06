@@ -708,6 +708,7 @@ theme:
       database: 'minshop-boutique-du-port-db',
       images: 'minshop-boutique-du-port-images',
       files: 'minshop-boutique-du-port-files',
+      backups: 'minshop-boutique-du-port-backups',
       sessions: 'minshop-boutique-du-port-session',
     });
 

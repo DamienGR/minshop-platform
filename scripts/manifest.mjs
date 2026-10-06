@@ -72,6 +72,10 @@ export function resourceNames(manifest, { env = null } = {}) {
     database: `${worker}-db`,
     images: `${worker}-images`,
     files: `${worker}-files`,
+    // Where the CI's backups are kept: private, in the shop's own jurisdiction
+    // and on the shop's own account (ADR 0002, ADR 0004). No Worker binding
+    // names it — the storefront has no reason to read its own backups.
+    backups: `${worker}-backups`,
     sessions: `${worker}-session`,
   };
 }
@@ -162,6 +166,7 @@ export function fleetIdentifiers(manifest) {
       { kind: 'D1 database', env, value: names.database },
       { kind: 'images bucket', env, value: names.images },
       { kind: 'files bucket', env, value: names.files },
+      { kind: 'backups bucket', env, value: names.backups },
       { kind: 'sessions KV', env, value: names.sessions },
     );
   }
