@@ -137,8 +137,6 @@ function createBackup(args, reporter) {
   const { manifest, root, env, repository } = context(args);
   const dryRun = args.values['--dry-run'] === true;
   const withMedia = args.values['--no-media'] !== true;
-  const names = resourceNames(manifest, { env });
-  const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
 
   // The key FIRST, before a single row is read. A run that reads the whole
   // database and then discovers it has nowhere safe to put it has already put
@@ -156,6 +154,63 @@ function createBackup(args, reporter) {
     reporter,
     missing: `Il n'y a rien à sauvegarder en ${env}.`,
   });
+
+  const taken = captureBackup({ manifest, root, env, account, key, repository, withMedia, dryRun, reporter });
+
+  if (dryRun) {
+    reporter.result({
+      command: 'backup',
+      ok: true,
+      dryRun: true,
+      shop: manifest.client.slug,
+      env,
+      wouldWrite: taken.path,
+      schema: taken.schema,
+      tables: taken.tables.map(({ name, rows }) => ({ name, rows })),
+      r2: taken.r2,
+      skipped: taken.skipped,
+    });
+    if (!args.values['--json']) reporter.section(`Simulation. Relancez sans --dry-run pour écrire ${taken.path}.`);
+    return 0;
+  }
+
+  reporter.result({
+    command: 'backup',
+    ok: true,
+    dryRun: false,
+    shop: manifest.client.slug,
+    env,
+    id: taken.id,
+    path: taken.path,
+    schema: taken.schema.version,
+    tables: taken.tables,
+    r2: taken.r2,
+    bytes: taken.bytes,
+  });
+  if (!args.values['--json']) {
+    reporter.section(`Contrôlez-la : shopctl backup verify ${taken.id}`);
+    reporter.step(`    Restaurez-la : shopctl restore --env staging --from ${taken.id}`);
+  }
+  return 0;
+}
+
+/**
+ * Read one environment and seal it into an archive — the part of a backup that
+ * does not depend on who asked for it.
+ *
+ * `shopctl backup` calls it, and so does `shopctl deploy --env production`,
+ * which takes one before its migrations (plan §9: a deployment is blocked when
+ * the preceding backup fails). One implementation, so that the archive a deploy
+ * leaves behind is exactly the archive `backup verify` and `restore` already
+ * know how to read. Any failure throws, and the caller decides what that stops.
+ *
+ * The caller has already resolved the account and rendered the environment's
+ * configuration (`openEnvironment`, or the deploy's own resource check): the
+ * reads below go through the `DB` binding of the `wrangler.jsonc` in the tree.
+ */
+export function captureBackup({ manifest, root, env, account, key, repository, withMedia = true, dryRun = false, reporter }) {
+  const names = resourceNames(manifest, { env });
+  const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
 
   // ── The schema, as the database describes it ──────────────────────────────
   reporter.section('Schéma');
@@ -202,20 +257,14 @@ function createBackup(args, reporter) {
   const directory = join(repository, id);
 
   if (dryRun) {
-    reporter.result({
-      command: 'backup',
-      ok: true,
+    return {
       dryRun: true,
-      shop: manifest.client.slug,
-      env,
-      wouldWrite: directory,
+      path: directory,
       schema: { version: applied, migrations: migrations.length },
-      tables: tableEntries.map(({ name, rows }) => ({ name, rows })),
+      tables: tableEntries,
       r2: { images: inventory.images.length, files: inventory.files.length, media: withMedia },
       skipped,
-    });
-    if (!args.values['--json']) reporter.section(`Simulation. Relancez sans --dry-run pour écrire ${directory}.`);
-    return 0;
+    };
   }
 
   const buckets = [
@@ -294,24 +343,15 @@ function createBackup(args, reporter) {
 
   reporter.section('Sauvegarde');
   reporter.ok(`${id} — ${sealed.ciphertext.length} octet(s) chiffrés dans ${directory}`);
-  reporter.result({
-    command: 'backup',
-    ok: true,
+  return {
     dryRun: false,
-    shop: manifest.client.slug,
-    env,
     id,
     path: directory,
-    schema: manifestDocument.schema.version,
+    schema: manifestDocument.schema,
     tables: tableEntries.map(({ name, rows, digest: fingerprint }) => ({ name, rows, digest: fingerprint })),
     r2: bucketEntries.map(({ name, objects: count, stored }) => ({ name, objects: count, stored })),
     bytes: sealed.ciphertext.length,
-  });
-  if (!args.values['--json']) {
-    reporter.section(`Contrôlez-la : shopctl backup verify ${id}`);
-    reporter.step(`    Restaurez-la : shopctl restore --env staging --from ${id}`);
-  }
-  return 0;
+  };
 }
 
 // ── Listing ─────────────────────────────────────────────────────────────────

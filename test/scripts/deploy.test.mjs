@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
@@ -19,10 +19,13 @@ vi.setConfig({ testTimeout: 60_000 });
  * what `deploy` reads is what `provision` left, and a fixture that wrote that
  * state by hand would let the two drift apart silently.
  */
-function provisioned(env = 'staging', options = {}) {
+function provisioned(env = 'staging', { key = env === 'production', ...options } = {}) {
   const target = shop({ built: true, ...options });
   const result = target.run(['provision', '--env', env]);
   expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+  // A production deployment backs up first, and a backup needs its key. Written
+  // the way an operator writes it, so the suite reads the same file they do.
+  if (key) expect(target.run(['backup', 'keygen']).status).toBe(EXIT_CODES.ok);
   return target;
 }
 
@@ -316,6 +319,7 @@ describe('shopctl deploy', () => {
     it('keeps staging and production on separate workers', () => {
       const target = provisioned();
       target.run(['provision', '--env', 'production']);
+      target.run(['backup', 'keygen']);
       target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
       target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
       expect(target.read().deploys).toEqual([names(target.slug, 'staging').worker, names(target.slug, 'production').worker]);
@@ -336,7 +340,7 @@ describe('shopctl deploy', () => {
 
       const calls = target.read().calls.slice(before).map(({ argv }) => argv.join(' '));
       const bookmarked = calls.findIndex((call) => call.includes('time-travel'));
-      const migrated = calls.findIndex((call) => call.includes('migrations'));
+      const migrated = calls.findIndex((call) => call.includes('d1 migrations apply'));
       expect(bookmarked).toBeGreaterThan(-1);
       expect(bookmarked).toBeLessThan(migrated);
     });
@@ -345,6 +349,59 @@ describe('shopctl deploy', () => {
       const target = provisioned();
       const { report } = target.json(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
       expect(report.bookmark).toBeNull();
+      expect(report.backup).toBeNull();
+    });
+
+    // Plan §9: a deployment is blocked when the preceding backup fails. The
+    // bookmark is a net inside one account; the backup is what a restore into a
+    // new environment starts from, and the migration is the step after which
+    // the previous state is reachable no other way.
+    it('takes an encrypted backup before the migrations', () => {
+      const target = provisioned('production', { migrations: true });
+      const before = target.read().calls.length;
+      const { report, status } = target.json(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.backup.id).toMatch(new RegExp(`^${target.slug}-production-`));
+      expect(existsSync(join(report.backup.path, 'manifest.json'))).toBe(true);
+
+      // The backup's reads come before the first migration, and the archive is
+      // one `backup verify` accepts: the same implementation wrote it.
+      const calls = target.read().calls.slice(before).map(({ argv }) => argv.join(' '));
+      const read = calls.findIndex((call) => call.includes('d1 execute'));
+      const migrated = calls.findIndex((call) => call.includes('d1 migrations apply'));
+      expect(read).toBeGreaterThan(-1);
+      expect(read).toBeLessThan(migrated);
+      expect(target.run(['backup', 'verify', report.backup.id]).status).toBe(EXIT_CODES.ok);
+    });
+
+    // Asked before the verification suite, not after it: a run that cannot
+    // back up is not going to deploy, and should not spend three minutes first.
+    it('refuses production when there is no backup key, before touching anything', () => {
+      const target = provisioned('production', { key: false });
+      const before = target.read();
+      const result = target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(result.status).toBe(EXIT_CODES.precondition);
+      expect(result.stderr).toMatch(/clé de sauvegarde/);
+      const after = target.read();
+      expect(after.deploys ?? []).toEqual([]);
+      expect(after.migrationsApplied).toBe(before.migrationsApplied);
+    });
+
+    it('refuses a production dry run without a backup key too', () => {
+      const target = provisioned('production', { key: false });
+      expect(target.run(['deploy', '--env', 'production', '--dry-run', ...FAST]).status).toBe(EXIT_CODES.precondition);
+    });
+
+    it('stops before the first write when the backup fails', () => {
+      const target = provisioned('production', { migrations: true });
+      const before = target.read();
+      target.account({ failAt: 'd1 execute' });
+      const result = target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(result.status).not.toBe(EXIT_CODES.ok);
+      const after = target.read();
+      expect(after.deploys ?? []).toEqual([]);
+      expect(after.migrationsApplied).toBe(before.migrationsApplied);
+      expect(existsSync(join(target.root, 'backups'))).toBe(false);
     });
   });
 

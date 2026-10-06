@@ -12,7 +12,8 @@
  *     assumed from a previous run;
  *  2. the environment's configuration is rendered from the manifest;
  *  3. the verification suite the shop carries;
- *  4. a Time Travel bookmark, in production, before any migration;
+ *  4. in production, an applicative backup and a Time Travel bookmark, both
+ *     before any migration;
  *  5. the migrations;
  *  6. the build;
  *  7. the upload;
@@ -26,6 +27,12 @@
  * safe there and a migration that removes is not safe anywhere. The bookmark is
  * taken before the migrations for the same reason — it is the only moment at
  * which it can still describe the state the deploy started from.
+ *
+ * The backup is not optional in production, and there is no flag to skip it:
+ * plan §9 blocks a deployment whose preceding backup failed. The bookmark is a
+ * five-minute net inside one account; the backup is what a restore into a new
+ * environment starts from (ADR 0005), and a migration is precisely the step
+ * after which the previous state stops being reachable any other way.
  *
  * The smoke test is the last step and it can FAIL THE COMMAND. A deploy that
  * reports success for a site nobody can reach is worse than one that reports
@@ -48,10 +55,20 @@ import { ShopctlError, preconditionError, verificationError } from '../errors.mj
 import { run } from '../process.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { INTERNAL_SECRETS, generateSecret, renderEnvironmentConfig } from './provision.mjs';
+import { captureBackup } from './backup.mjs';
+import { repositoryPath } from '../backup/archive.mjs';
+import { keyId, loadKey } from '../backup/crypto.mjs';
 import { originFromDeployOutput, runSmoke } from '../smoke.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
 
-export const DEPLOY_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id', '--url': 'origine' };
+export const DEPLOY_OPTIONS = {
+  '--env': 'environnement',
+  '--shop': 'slug',
+  '--account': 'id',
+  '--url': 'origine',
+  '--key-file': 'chemin',
+  '--backup-dir': 'répertoire',
+};
 
 export const deployUsage = `Usage: shopctl deploy --env <staging|production> [options]
 
@@ -63,11 +80,16 @@ export const deployUsage = `Usage: shopctl deploy --env <staging|production> [op
   --skip-smoke                Ne pas interroger l'URL déployée. À n'utiliser que
                               lorsque le réseau du runner ne peut pas l'atteindre.
   --url <origine>             Origine à interroger, si wrangler n'en annonce pas.
+  --key-file <chemin>         Clé de la sauvegarde prise avant une mise en production.
+                              Défaut : .shopctl/backup.key, sinon SHOPCTL_BACKUP_KEY.
+  --backup-dir <répertoire>   Où écrire cette sauvegarde. Défaut : backups/.
   --account <id>              Compte Cloudflare attendu, si le manifeste ne le déclare pas.
   --shop <slug>               Manifeste à utiliser quand l'arbre en contient plusieurs.
   --json                      Rapport lisible par une machine.
 
 Les ressources doivent exister : \`shopctl provision --env <env>\` d'abord.
+En production, une sauvegarde chiffrée est prise avant les migrations ; si elle
+échoue, rien n'est déployé.
 `;
 
 /**
@@ -142,6 +164,17 @@ export async function runDeploy(args, reporter) {
   );
   reporter.ok(`${account.name} (${account.id})`);
 
+  // The backup key, before anything slow. A production deployment that runs
+  // the whole verification suite and only then discovers it cannot back up has
+  // spent the operator's attention on a run that was never going to proceed.
+  // Asked in a dry run too: "would this deployment be allowed?" includes it.
+  let backupKey = null;
+  if (env === 'production') {
+    const loaded = loadKey({ root, file: args.values['--key-file'] });
+    backupKey = loaded.key;
+    reporter.ok(`clé de sauvegarde ${keyId(backupKey)} (${loaded.source})`);
+  }
+
   // ── The resources this deployment needs ───────────────────────────────────
   reporter.section(`Ressources de ${manifest.client.slug} en ${env}`);
   const buckets = listBuckets({ cwd: root, jurisdiction });
@@ -200,7 +233,22 @@ export async function runDeploy(args, reporter) {
     reporter.ok('npm run verify');
   }
 
-  // ── Bookmark, then migrations ─────────────────────────────────────────────
+  // ── Backup, bookmark, then migrations ─────────────────────────────────────
+  //
+  // The backup reads through the `DB` binding of the configuration rendered
+  // above, which is this environment's database and no other. Any failure
+  // throws and the deployment stops here, before the first write.
+  let backup = null;
+  if (env === 'production') {
+    reporter.section('Sauvegarde préalable');
+    const repository = repositoryPath(root, args.values['--backup-dir']);
+    if (dryRun) reporter.todo(`une sauvegarde chiffrée serait écrite dans ${repository}`);
+    else {
+      const taken = captureBackup({ manifest, root, env, account, key: backupKey, repository, reporter });
+      backup = { id: taken.id, path: taken.path, bytes: taken.bytes, schema: taken.schema.version };
+    }
+  }
+
   reporter.section('Base de données');
   let bookmark = null;
   if (env === 'production' && !dryRun) {
@@ -302,6 +350,7 @@ export async function runDeploy(args, reporter) {
     account: { id: account.id, name: account.name },
     resources: names,
     databaseId,
+    backup,
     bookmark,
     origin,
     secrets,
