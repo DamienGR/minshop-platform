@@ -151,13 +151,21 @@ Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
 - [ ] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
   Stripe test, webhook, e-mail de test, sauvegarde, restauration vers un
   environnement éphémère, smoke tests, audit des dépendances ;
-- [ ] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
+- [x] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
   les webhooks, e-mails bloqués, base corrompue, fuite de secret, violation
-  de données) et la procédure de sortie d'un client — jalon 8, §12 ;
-- [ ] décider de la supervision : notifications Cloudflare (erreurs Worker,
-  CPU, quotas D1) et alerte de passage au plan Workers Paid — jalon 8, §8.6 ;
-- [ ] trancher les deux cases sans porte : le formateur (§7.1) et la CSP
-  (§8.4, voir jalon 8) — adopter, ou dérogation écrite.
+  de données) et la procédure de sortie d'un client — jalon 8, §12. Dans
+  `docs/operations/`, avec celui du mot de passe admin perdu ;
+- [x] décider de la supervision : notifications Cloudflare (erreurs Worker,
+  CPU, quotas D1) et alerte de passage au plan Workers Paid — jalon 8, §8.6.
+  Le catalogue de Cloudflare n'a pas ces alertes aux plans d'une boutique ;
+  `shopctl monitor` les lit dans l'API GraphQL Analytics et échoue au-delà de
+  1 % d'erreurs ou de 70 % d'un quota du plan gratuit
+  (`docs/operations/README.md`) ;
+- [x] trancher les deux cases sans porte : le formateur (§7.1) et la CSP
+  (§8.4, voir jalon 8) — adopter, ou dérogation écrite. Formateur : un
+  plancher, `npm run check:format`, plutôt qu'un reformatage qui arriverait en
+  conflit dans chaque boutique (§7.1). CSP : la part qu'aucun gabarit ne peut
+  casser est posée et gatée, le reste est une dérogation datée (§6).
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
@@ -293,6 +301,9 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
   du premier `provision` à la boutique servie, < 60 minutes (RTO) ; la
   restauration se prouve elle-même table par table — critère du jalon 8 ;
 - [ ] RPO ≤ 24 heures : le nocturne de l'étape 0 tourne trois nuits de suite ;
+- [ ] `shopctl monitor --env staging` contre la vraie API Analytics : les
+  champs que la doublure suppose existent, et un seuil abaissé à la main fait
+  bien échouer le run ;
 - [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
 - [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
 - [ ] montée de version réelle : un tag `v0.3.1` proposé par
@@ -371,5 +382,15 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 - **approbation de production opposable** — si le plan GitHub ne permet pas
   de relecteurs obligatoires sur un dépôt privé ; compensé par le fait que
   seul Damien a les droits d'écriture ;
-- **CSP** — si l'étape 0 confirme le choix du jalon 8 ;
+- **CSP, `script-src` et `style-src`** (écrite le 2026-10-06) — la boutique
+  envoie `object-src 'none'; base-uri 'self'; frame-ancestors 'none'` sur toute
+  réponse, Worker et actifs statiques, et la porte de sécurité le vérifie.
+  `script-src` et `style-src` restent ouverts : Astro sait hacher ses scripts
+  et ses styles (`security.csp`), mais la boutique porte des scripts en ligne
+  (`define:vars`, Turnstile) et des attributs `style` (préréglages de page) qu'il
+  faut d'abord recenser un par un. Mesures compensatoires : corps de page en
+  Markdown avec `html: false` (invariant 11), échappement d'Astro sur toute
+  valeur rendue, `nosniff` partout, aucun fichier téléversé servi pour ce qu'il
+  n'est pas (invariant 13). À rouvrir quand l'inventaire des scripts en ligne
+  est fait — un passage à part entière, pas un en-tête de plus ;
 - **critère 320 px de WCAG 1.4.10** — mesuré, non gaté (jalon 5).

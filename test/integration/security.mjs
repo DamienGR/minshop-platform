@@ -714,6 +714,11 @@ try {
         /max-age=\d{7,}/,
         name,
       );
+      assert.match(
+        response.headers.get('content-security-policy') ?? '',
+        /object-src 'none'.*base-uri 'self'.*frame-ancestors 'none'/,
+        name,
+      );
       assert.ok(response.headers.get('referrer-policy'), `${name} carries no referrer policy`);
       assert.ok(response.headers.get('cache-control'), `${name} left without a cache directive`);
     }
@@ -741,6 +746,7 @@ try {
       'X-Content-Type-Options: nosniff',
       'X-Frame-Options: DENY',
       'Strict-Transport-Security:',
+      "Content-Security-Policy: object-src 'none'",
       'Referrer-Policy:',
     ]) {
       assert.ok(built.includes(header), `the built asset config lost ${header}`);

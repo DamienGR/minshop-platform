@@ -21,6 +21,9 @@ change holds together. Run it after every meaningful edit, not just at the end.
 Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
 `npm run check:deploy` (Wrangler dry run + bundle budgets, needs a build),
 `npm run check:secrets` (tracked-tree credential scan),
+`npm run check:format` (the formatting floor: LF, final newline, no trailing
+whitespace, no tab indentation — a floor rather than a formatter, because a
+reformatted core lands as a merge conflict in every shop),
 `npm run check:secrets:artifacts` (the same rules over `dist/`, plus the local
 `.dev.vars` values, which Vite can freeze into the bundle — needs a build),
 `npm run test:security` (the security gate below, needs a build),
@@ -181,6 +184,7 @@ npm run shopctl -- deploy --env production --yes
 npm run shopctl -- destroy --env staging --confirm <slug>
 npm run shopctl -- privacy export --env production --email <adresse>
 npm run shopctl -- privacy anonymize --env production --email <adresse> --confirm <slug>
+npm run shopctl -- monitor --env production   # taux d'erreur, quotas du plan gratuit
 npm run shopctl -- core status          # quelle version cette boutique porte
 npm run shopctl -- core upgrade --to v1.1.0 --open-pr
 npm run shopctl -- fleet status         # depuis l'espace de travail de l'agence
@@ -288,7 +292,8 @@ Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
 `fleet.test.mjs` (core upgrade, fleet, pull requests) and `release.test.mjs`
 (the publication gate),
 `provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
-environment, deployment, teardown), `backup.test.mjs` and `restore.test.mjs`
+environment, deployment, teardown), `monitor.test.mjs` (the supervision,
+against `test/fixtures/graphql-double.mjs` in its own process), `backup.test.mjs` and `restore.test.mjs`
 (the archive and the round trip), `privacy.test.mjs` (the map, the erasure and
 the second buyer who must not be touched), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
 tags it, and runs the real binary against it. The last two install
@@ -298,6 +303,22 @@ live, against a real git repository whose GitHub remote is rewritten to a local
 bare one by `url.<path>.insteadOf`. The real argument construction, the real
 output parsers and the real exit codes are exercised — only the accounts are
 imaginary.
+
+## Supervision and runbooks
+
+`docs/operations/` is what an operator opens when something is wrong: one
+runbook per incident, and the client exit procedure. A runbook names real
+commands; when you change one of them (a flag, a table, a route), change the
+runbook in the same commit.
+
+`shopctl monitor --env <env>` is the supervision, and it is a command because
+Cloudflare's notification catalogue has no alert for a Worker's error rate,
+its CPU time or a D1 quota on the plans a shop runs on. It reads the GraphQL
+Analytics API (`CLOUDFLARE_API_TOKEN`, Account Analytics: Read), fails at 1 %
+errors or at 70 % of a Workers Free quota, and treats an unreachable or
+refusing API as exit 5 — never as a quiet night. The endpoint follows
+`CLOUDFLARE_API_BASE_URL`, the variable wrangler honours, which is how the
+suite points it at its double.
 
 ## Backup and restore
 

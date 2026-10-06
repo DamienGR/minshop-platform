@@ -2092,7 +2092,10 @@ passage, par quelqu'un qui n'aura pas eu à savoir que cette suite existe.
 `Content-Security-Policy`. Les gabarits Astro portent des scripts et des styles
 en ligne, et une CSP utile demanderait des nonces sur toute la chaîne de rendu :
 c'est une modification du rendu, pas un durcissement d'en-tête, et elle
-appartient à son propre passage plutôt qu'à celui-ci. Le plancher
+appartient à son propre passage plutôt qu'à celui-ci. (Étape 0 de la
+certification : la part qui ne dépend d'aucun gabarit — `object-src`,
+`base-uri`, `frame-ancestors` — est posée et gatée ; le reste est une
+dérogation écrite, `docs/certification/plan.md` §6.) Le plancher
 `referrer-policy` posé ici prend soin de ne jamais écraser le `no-referrer`
 qu'une page à URL-capacité s'est donné — l'inverse aurait dégradé la seule
 protection qui garde le jeton d'une commande hors des journaux d'un tiers.
@@ -2297,7 +2300,10 @@ points-virgules compris dans une description produit, sous peine de faire
 - **la supervision et les runbooks d'incident.** Une alerte se pose sur un
   compte Cloudflare, et un runbook décrit une procédure que quelqu'un a exécutée
   au moins une fois ; les deux attendent le même premier passage réel que les
-  jalons 6 et 7 ;
+  jalons 6 et 7. Depuis l'étape 0 de la certification, les runbooks sont écrits
+  (`docs/operations/`) et la supervision est décidée : `shopctl monitor`, lancé
+  chaque nuit, lit l'API GraphQL Analytics faute d'alerte Cloudflare
+  équivalente aux plans d'une boutique ;
 - **la rotation d'une clé.** `keygen` refuse d'écraser une clé existante — c'est
   elle qui ouvre les archives déjà prises — mais rien ne rechiffre un dépôt d'un
   jeu de clés vers un autre. Une agence qui doit tourner sa clé garde
@@ -2512,7 +2518,7 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
   témoins dans un seul compte et une seule forge, §8.3. Dans `vitest run` pour la
   même raison que les précédents : un défaut d'isolation qui n'est vu qu'à la
   campagne finale a déjà voyagé dans un tag ;
-- [ ] contrôle de formatage — voir ci-dessous.
+- [x] plancher de formatage (`npm run check:format`) — voir ci-dessous.
 
 Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
 environ trois minutes et demie, les jobs tournant en parallèle.
@@ -2524,8 +2530,18 @@ est `vitest run` ; `npm run test:cli` arrive au jalon 2 avec la CLI.
 
 La quatrième, `npm run format:check`, n'a pas d'équivalent : aucun formateur
 n'est installé. La renommer vers `astro check` serait faux — un typecheck ne dit
-rien de la mise en forme — donc la case reste ouverte et désigne ce qui manque
-réellement : la décision d'adopter un formateur, ou celle de s'en passer.
+rien de la mise en forme — donc la case est restée ouverte jusqu'à la décision.
+
+**Décision (2026-10-06, étape 0 de la certification) : pas de formateur, un
+plancher.** Une boutique reçoit chaque tag du socle par fusion (ADR 0016) : un
+commit qui reformate le socle arrive en conflit dans chaque fichier du cœur
+qu'une boutique a touché, et ce coût se paie une fois par boutique, à la montée
+de version. L'arbre est déjà homogène ; `npm run check:format` garde ce qu'une
+relecture ne voit pas et qu'une fusion remarque — fins de ligne LF, saut de
+ligne final, aucun espace de fin, aucune indentation par tabulation dans le
+code —, sur les seuls fichiers du cœur. Adopter Prettier reste possible : ce
+serait un commit de reformatage unique, annoncé dans les notes de migration de
+la version qui le porte.
 
 ### 7.2 À chaque pull request client
 
@@ -2685,8 +2701,10 @@ Sept de ces neuf lignes sont désormais gatées à chaque commit par
 `npm run test:security` et `npm run check:secrets:artifacts` (jalon 8) ; elles
 restent ouvertes ici parce que la campagne finale les rejoue sur une boutique
 **déployée**, ce qu'aucune porte locale ne remplace. Les deux exceptions se
-nomment : l'audit de vulnérabilités n'a pas de porte, et il n'y a pas de CSP —
-la raison est au jalon 8, section « État ».
+nomment : l'audit de vulnérabilités n'a pas de porte, et la CSP n'est que
+partielle — `object-src`, `base-uri` et `frame-ancestors` sont posés sur toute
+réponse depuis l'étape 0 de la certification ; `script-src` et `style-src` font
+l'objet d'une dérogation écrite (`docs/certification/plan.md`, §6).
 
 ### 8.5 Accessibilité et navigateurs
 
