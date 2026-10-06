@@ -192,11 +192,13 @@ sort à la fin : la campagne certifie une version publiée, pas `main`.
 - [x] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
   sont posées ; le tag est sorti du workflow `Release` le 2026-10-06, sur
   `4c12bd8`, après la fusion de la pull request #39 ;
-- [ ] publier `v0.3.1`, la version dont part la campagne : deux trous trouvés
+- [x] publier `v0.3.1`, la version dont part la campagne : deux trous trouvés
   en préparant l'étape 1 (`docs/migrations/v0.3.1.md`). Le Worker de staging
   ne recevait pas les valeurs de l'application Access, et `/admin/setup`
   aurait répondu 403 derrière elle ; le manifeste ne nommait qu'un compte pour
   les deux environnements, alors que staging vit sur A et la production sur B.
+  Le tag est sorti du workflow `Release` le 2026-10-06, sur `91a7994`, après la
+  fusion de la pull request #42.
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
