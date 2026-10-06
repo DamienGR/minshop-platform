@@ -189,6 +189,9 @@ Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
   plancher, `npm run check:format`, plutôt qu'un reformatage qui arriverait en
   conflit dans chaque boutique (§7.1). CSP : la part qu'aucun gabarit ne peut
   casser est posée et gatée, le reste est une dérogation datée (§6).
+- [ ] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
+  sont posées ; le tag sort du workflow `Release` une fois la pull request
+  fusionnée, sur feu vert de Damien.
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
