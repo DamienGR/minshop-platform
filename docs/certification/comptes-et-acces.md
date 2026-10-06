@@ -47,11 +47,11 @@ Le plus long d'abord ; le reste tient en une soirée.
   production.
 - Le mode test est disponible dès la création du compte.
 - **Lancer l'activation du mode live tout de suite.** Stripe demande la forme
-  juridique et, s'il y en a un, le SIREN, l'adresse, l'identité du représentant légal avec une
-  pièce justificative, un IBAN pour les virements, une description de
-  l'activité ou l'adresse du site, et le libellé des relevés bancaires. Le site
-  de production ne répondra qu'à l'étape 9 : décrire l'activité plutôt que
-  donner une adresse qui ne répond pas.
+  juridique et, s'il y en a un, le SIREN, l'adresse, l'identité du
+  représentant légal avec une pièce justificative, un IBAN pour les virements,
+  une description de l'activité ou l'adresse du site, et le libellé des
+  relevés bancaires. Le site de production ne répondra qu'à l'étape 9 :
+  décrire l'activité plutôt que donner une adresse qui ne répond pas.
 - Activer la double authentification.
 - Rien à relever. Les clés viennent aux étapes 3 et 10, **restreintes** :
 
