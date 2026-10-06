@@ -35,9 +35,19 @@ Le plus long d'abord ; le reste tient en une soirée.
 
 ## 1. Stripe
 
+- **À qui est le compte.** Pour une vraie boutique, le marchand l'ouvre à son
+  nom, parce que le contrat d'acquisition l'engage lui, et y donne à l'agence
+  un rôle restreint (ADR 0002). Pour le pilote, qui n'a pas de client, le
+  compte est au nom de l'opérateur et joue le client, comme le compte
+  Cloudflare B. Il n'est pas fictif pour autant : l'activation vérifie
+  l'identité et le compte bancaire, et l'étape 10 y encaisse une vraie
+  commande. De fausses informations font refuser l'activation ou fermer le
+  compte.
+- Un seul compte suffit : son mode test sert au staging, son mode live à la
+  production.
 - Le mode test est disponible dès la création du compte.
 - **Lancer l'activation du mode live tout de suite.** Stripe demande la forme
-  juridique et le SIREN, l'adresse, l'identité du représentant légal avec une
+  juridique et, s'il y en a un, le SIREN, l'adresse, l'identité du représentant légal avec une
   pièce justificative, un IBAN pour les virements, une description de
   l'activité ou l'adresse du site, et le libellé des relevés bancaires. Le site
   de production ne répondra qu'à l'étape 9 : décrire l'activité plutôt que
