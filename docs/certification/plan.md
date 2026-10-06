@@ -91,7 +91,11 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
 | `resend_api_key` | secret | Damien | coffre chiffré |
 | Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) chez l'opérateur, et secret d'environnement GitHub `SHOPCTL_BACKUP_KEY` posé par `shopctl repo` (conservé s'il existe déjà) |
-| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 |
+| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 ; celui de staging aussi en secret d'environnement GitHub `MINSHOP_ADMIN_PASSWORD`, pour l'e-mail de test du nocturne |
+| Jeton de service Access de staging | secret | Damien (Zero Trust → Service Auth) | secrets d'environnement GitHub `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET`, pour le nocturne et les portes distantes |
+| Clé Stripe test du nocturne | secret | Damien, clé restreinte « Checkout Sessions : écriture » | secret d'environnement GitHub `STRIPE_TEST_SECRET_KEY` ; une clé live est refusée |
+| Destinataire de l'e-mail de test, origine de staging | configuration | Damien | variables d'environnement GitHub `NIGHTLY_EMAIL_TO` et, sans `stagingDomain`, `STAGING_URL` |
+| Jeton de lecture de l'analytique de production | secret, lecture seule (« Account Analytics : Read », « D1 : Read ») | Damien, sur le compte de la production | secrets du dépôt `MONITOR_CLOUDFLARE_API_TOKEN` et `MONITOR_CLOUDFLARE_ACCOUNT_ID` — hors de l'environnement `production`, dont les relecteurs bloqueraient chaque nuit |
 
 L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
 s'abonne à cinq événements, ceux que l'adaptateur lit :
@@ -136,21 +140,40 @@ prouvé, et pour que l'argent réel arrive en dernier.
 Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
 `v0.3.0` sort à la fin : la campagne certifie une version publiée, pas `main`.
 
-- [ ] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
+- [x] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
   de l'extérieur au lieu du serveur local) et par une variante distante des
   contrôles de sécurité qui ne demandent pas Miniflare (en-têtes, admin
   anonyme, CSRF, téléchargement non autorisé, traversée de chemin) — §8.4,
-  §8.5 ;
-- [ ] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
+  §8.5. `npm run test:browser:remote` trouve dans le catalogue du marchand les
+  pages que les specs demandent (produit simple, épuisé, stock faible…) et
+  saute ce qu'il n'a pas en le disant ; `npm run test:security:remote` dérive
+  les routes d'administration des fichiers, comme la porte locale. Derrière une
+  preview privée, le jeton de service Access ne part que vers l'origine de la
+  boutique. `npm run verify` fait tourner la porte distante contre le Worker
+  construit (`test/integration/remote-gates.mjs`) : rouge sur une boutique
+  en amorçage, verte en mode mot de passe et en mode Access ;
+- [x] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
   minutes) et celui des cinq checkouts concurrents sur la dernière unité —
-  §8.6 ;
+  §8.6. `npm run test:load:remote` cadence la recherche à la moitié de son
+  limiteur, compte les 429 à part et échoue sur une seule 5xx ;
+  `npm run test:last-unit:remote -- --product <slug>` vérifie d'abord que le
+  stock vaut 1, sans rien réserver, puis tire les cinq requêtes ensemble. Les
+  deux tournent aussi dans `npm run verify` contre le Worker construit ;
 - [x] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
   le déploiement si elle échoue — §7.4, §9. L'archive est copiée dans un
   bucket R2 privé par environnement, `<worker>-backups`, sur le compte de la
   boutique et dans sa juridiction (décision du 2026-10-06, ADR 0005) ;
-- [ ] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
+- [x] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
   Stripe test, webhook, e-mail de test, sauvegarde, restauration vers un
-  environnement éphémère, smoke tests, audit des dépendances ;
+  environnement éphémère, smoke tests, audit des dépendances.
+  `.github/workflows/nightly.yml` : partout, la suite complète sur une D1
+  neuve et `npm audit` (dépendances d'exécution gatées au niveau `high`) ;
+  dans un dépôt de boutique, sur staging, `backup --upload`, la restauration
+  de cette archive par `restore --local` dans la D1 du runner (jetée avec
+  lui), les portes distantes, `shopctl monitor`, une session Stripe test
+  expirée par l'API de Stripe dont le webhook doit rendre l'unité, et
+  l'e-mail de test de l'administration. La jambe payée de Stripe reste
+  manuelle (étape 4) : la page hébergée refuse d'être pilotée par un script ;
 - [x] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
   les webhooks, e-mails bloqués, base corrompue, fuite de secret, violation
   de données) et la procédure de sortie d'un client — jalon 8, §12. Dans
@@ -221,7 +244,10 @@ secrets internes ; données de catalogue.
 - [ ] `/admin/setup` derrière Access, mot de passe posé ;
 - [ ] `catalog import --remote` du catalogue témoin, puis une seconde fois :
   plan vide ;
-- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration.
+- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration ;
+- [ ] secrets et variables du nocturne posés dans l'environnement `staging`
+  du dépôt (§2.3), puis le workflow `Nightly` lancé à la main : vert, ou
+  chaque contrôle sauté nommé dans son avertissement.
 
 Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
 (import réel), §8.4 en partie.
@@ -252,7 +278,9 @@ Fait avancer : jalon 7 (Stripe test, notification d'expédition), jalon 3
 Lecture seule, plus quelques requêtes hostiles vers sa propre boutique.
 
 - [ ] les neuf lignes du §8.4 contre l'URL de staging, avec l'outillage de
-  l'étape 0 ;
+  l'étape 0 (`BASE_URL=… npm run test:security:remote`). Elle échoue si
+  l'admin de staging est en mode Access seul : un jeton de service est une
+  identité Access valide, et il y entrerait — staging garde un mot de passe ;
 - [ ] `wrangler tail` pendant l'étape 4 rejouée : aucune adresse e-mail ni
   postale dans les logs ;
 - [ ] `npm audit` racine et `mcp/` : aucune vulnérabilité élevée ou critique
@@ -263,14 +291,18 @@ Produit : le **rapport de sécurité**.
 
 ### Étape 6 — Accessibilité, navigateurs, performance
 
-- [ ] porte navigateur contre l'URL de staging — §8.5 ;
+- [ ] porte navigateur contre l'URL de staging — §8.5 (`BASE_URL=… npm run
+  test:browser:remote`) ;
 - [ ] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
   iPhone, Chrome sur Android ;
 - [ ] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
   panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés ;
 - [ ] charge de quinze minutes : aucune erreur Worker, consommation du plan
-  Workers Free relevée ;
-- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande.
+  Workers Free relevée (`npm run test:load:remote -- --json charge.json`,
+  puis `shopctl monitor --env staging --hours 1`) ;
+- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande
+  (`npm run test:last-unit:remote -- --product <slug>`, stock mis à 1 dans
+  l'administration avant).
 
 La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
 le scénario doit les contourner explicitement ou les compter comme attendus,

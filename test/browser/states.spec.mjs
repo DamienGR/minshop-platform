@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { overflowOf, settle } from './pages.mjs';
+import { expect, test } from './fixtures.mjs';
+import { FIXTURE, overflowOf, settle } from './pages.mjs';
 
 /**
  * The branches a shop only meets on a bad day.
@@ -12,7 +12,8 @@ import { overflowOf, settle } from './pages.mjs';
  */
 
 test('un catalogue vide s’annonce au lieu d’afficher une grille blanche', async ({ page }) => {
-  const response = await page.goto('/categories/bientot');
+  test.skip(!FIXTURE.emptyCategory, 'état propre au jeu d’essai : une boutique déployée n’a pas de catégorie vide à montrer');
+  const response = await page.goto(FIXTURE.emptyCategory);
   expect(response?.status()).toBe(200);
   await settle(page);
 
@@ -27,7 +28,8 @@ test('un catalogue vide s’annonce au lieu d’afficher une grille blanche', as
 });
 
 test('un produit épuisé le dit et n’offre pas de l’acheter', async ({ page }) => {
-  await page.goto('/products/pagination-item-1');
+  test.skip(!FIXTURE.soldOut, 'aucun produit épuisé dans ce catalogue');
+  await page.goto(`/products/${FIXTURE.soldOut.slug}`);
   await settle(page);
 
   // The wording belongs to the design; that the state is expressed does not.
@@ -37,7 +39,8 @@ test('un produit épuisé le dit et n’offre pas de l’acheter', async ({ page
 });
 
 test('un stock faible se distingue d’une disponibilité normale', async ({ page }) => {
-  await page.goto('/products/pagination-item-5');
+  test.skip(!FIXTURE.lowStock, 'aucun produit en stock faible parmi ceux examinés');
+  await page.goto(`/products/${FIXTURE.lowStock.slug}`);
   await settle(page);
 
   const nudge = page.locator('[data-low-stock]');

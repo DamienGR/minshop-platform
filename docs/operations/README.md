@@ -61,9 +61,16 @@ Elle échoue (code 6) quand :
 
 Une analytique injoignable ou refusée est un échec (code 5), jamais un vert.
 
+Le workflow `Nightly` la lance sur staging avec le jeton de l'environnement, et
+sur la production avec un jeton à part, en lecture seule (« Account
+Analytics : Read » et « D1 : Read »), posé en secrets du dépôt
+`MONITOR_CLOUDFLARE_API_TOKEN` et `MONITOR_CLOUDFLARE_ACCOUNT_ID` : l'environnement
+`production` porte des relecteurs obligatoires qui retiendraient le run chaque
+nuit, et un jeton de déploiement qui peut écrire. Sans ce secret, le job le dit
+dans un avertissement plutôt que de passer.
+
 Le run nocturne qui échoue est une notification que GitHub envoie déjà ; il n'y
-a pas de second canal à entretenir. Le jeton Cloudflare de l'environnement doit
-porter le droit « Account Analytics : Read ».
+a pas de second canal à entretenir.
 
 ### Ce qui reste manuel
 

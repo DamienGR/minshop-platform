@@ -24,7 +24,15 @@ import { defineConfig, devices } from '@playwright/test';
 import { chromiumExecutable } from './test/browser/chromium.mjs';
 
 const PORT = Number(process.env.BROWSER_TEST_PORT ?? 8788);
-export const BASE_URL = `http://127.0.0.1:${PORT}`;
+const LOCAL_URL = `http://127.0.0.1:${PORT}`;
+
+// BASE_URL points the same specs at a DEPLOYED shop — the staging of the
+// certification campaign, or a production after a deploy — instead of the
+// fixture store (§8.5). Nothing is booted then: the shop exists, with the
+// merchant's catalogue, and test/browser/pages.mjs discovers the pages to walk
+// in it. Behind a private preview, CF_ACCESS_CLIENT_ID / _SECRET carry the
+// service token (test/browser/fixtures.mjs). `npm run test:browser:remote`.
+export const BASE_URL = process.env.BASE_URL ? new URL(process.env.BASE_URL).origin : LOCAL_URL;
 
 const executablePath = chromiumExecutable();
 
@@ -57,9 +65,9 @@ export default defineConfig({
     { name: 'phone', use: { ...devices['Pixel 7'] } },
   ],
 
-  webServer: {
+  webServer: process.env.BASE_URL ? undefined : {
     command: `node test/browser/serve.mjs ${PORT}`,
-    url: `${BASE_URL}/api/products?limit=1`,
+    url: `${LOCAL_URL}/api/products?limit=1`,
     // Migrations, two SQL fixtures and two R2 objects before workerd even
     // starts; a cold CI runner needs the room.
     timeout: 180_000,

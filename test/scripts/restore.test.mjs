@@ -296,6 +296,47 @@ describe('shopctl restore', () => {
     });
   });
 
+  /**
+   * The nightly proof (plan §7.3): last night's archive, restored on a runner
+   * that is thrown away afterwards. No account, no second set of databases —
+   * and the same table-by-table comparison as a real restore.
+   */
+  describe('into the tree\'s local D1', () => {
+    const local = (target, sql) => {
+      const result = target.wrangler(['d1', 'execute', 'DB', '--local', '--json', '--command', sql]);
+      return JSON.parse(result.stdout)[0].results;
+    };
+
+    it('restores and proves it without asking the account anything', () => {
+      const target = seededShop();
+      const before = contents(target);
+      const id = takeBackup(target);
+      const calls = target.read().calls.length;
+
+      const { report, status } = target.json(['restore', '--env', 'staging', '--from', id, '--local']);
+      expect(status).toBe(EXIT_CODES.ok);
+      expect(report.local).toBe(true);
+      expect(report.account).toBeNull();
+      expect(report.differences).toEqual([]);
+
+      const made = target.read().calls.slice(calls).map((call) => call.argv);
+      expect(made.some((argv) => ['whoami', 'list'].some((word) => argv.includes(word)))).toBe(false);
+      expect(made.filter((argv) => argv[0] === 'd1' || argv[0] === 'r2').every((argv) => argv.includes('--local'))).toBe(true);
+
+      expect(local(target, 'SELECT slug, name, description, price_cents, image_key FROM products ORDER BY id')).toEqual(before.products);
+      // The remote database is the one the archive came from, and untouched.
+      expect(contents(target)).toEqual(before);
+    });
+
+    it('refuses a production archive: a runner is not where buyers\' data goes', () => {
+      const target = seededShop({ env: 'production' });
+      const { report } = target.json(['backup', '--env', 'production']);
+      const result = target.run(['restore', '--env', 'staging', '--from', report.id, '--local']);
+      expect(result.status).toBe(EXIT_CODES.precondition);
+      expect(result.stderr).toMatch(/archive de production ne se restaure pas en local/);
+    });
+  });
+
   describe('what a restore refuses to guess', () => {
     it('stops when the archive carries no object bytes, unless told to accept it', () => {
       const target = seededShop();

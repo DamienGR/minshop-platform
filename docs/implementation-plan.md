@@ -2571,14 +2571,26 @@ quelqu'un d'autre. Les cases restent ouvertes et désignent cela.
 
 ### 7.3 Chaque nuit
 
-- [ ] D1 d'intégration propre ;
+- [x] D1 d'intégration propre ;
 - [ ] checkout Stripe test ;
 - [ ] webhook Stripe ;
 - [ ] e-mail de test ;
 - [ ] sauvegarde ;
 - [ ] restauration vers un environnement éphémère ;
 - [ ] smoke tests sur les deux boutiques témoins ;
-- [ ] audit des dépendances.
+- [x] audit des dépendances.
+
+Le workflow `Nightly` (`.github/workflows/nightly.yml`, étape 0 de la
+certification) porte les huit lignes. Les deux cochées tournent dans tout dépôt,
+socle compris, sans compte : `npm run verify` sur une D1 bâtie des seules
+migrations, et `npm audit` gaté au niveau `high` sur les dépendances
+d'exécution du Worker et du serveur MCP. Les six autres interrogent le staging
+d'une boutique — sauvegarde vers son bucket `-backups`, restauration de cette
+archive par `shopctl restore --local` dans la D1 du runner, portes distantes,
+session Stripe test expirée par l'API de Stripe dont le webhook doit rendre
+l'unité réservée, e-mail de test — et restent ouvertes jusqu'à leur premier
+passage réel (étape 8 de la certification). Chaque témoin est son propre dépôt
+et porte ce workflow : les « deux boutiques témoins » sont deux nocturnes.
 
 ### 7.4 Avant la production
 
@@ -2706,6 +2718,14 @@ partielle — `object-src`, `base-uri` et `frame-ancestors` sont posés sur tout
 réponse depuis l'étape 0 de la certification ; `script-src` et `style-src` font
 l'objet d'une dérogation écrite (`docs/certification/plan.md`, §6).
 
+Le rejeu a son outil : `npm run test:security:remote` pose les mêmes questions
+à une origine déployée — routes d'administration dérivées des fichiers,
+assistant fermé, assertion Access forgée, origine des formulaires, traversée
+de chemin, en-têtes sur chaque classe de réponse et sur les actifs statiques,
+URL à capacité, erreur non rattrapée — et `npm run verify` le fait tourner
+contre le Worker construit pour qu'il ne rencontre pas un Worker pour la
+première fois le jour de la campagne.
+
 ### 8.5 Accessibilité et navigateurs
 
 - [ ] zéro violation axe sérieuse ou critique ;
@@ -2717,6 +2737,11 @@ l'objet d'une dérogation écrite (`docs/certification/plan.md`, §6).
 - [ ] Firefox desktop ;
 - [ ] Safari/iPhone ;
 - [ ] Chrome/Android.
+
+La porte navigateur vise aussi une boutique déployée :
+`BASE_URL=… npm run test:browser:remote` retrouve dans le catalogue du marchand
+les pages que les specs demandent et saute, en le disant, les états qu'il n'a
+pas (une catégorie vide, la signature du design prise sur le jeu d'essai).
 
 ### 8.6 Performance
 
@@ -2733,7 +2758,16 @@ Objectifs internes initiaux :
 Si le plan Workers Free dépasse régulièrement sa limite CPU ou génère des
 erreurs de ressources, la boutique doit passer au plan Workers Paid.
 
-- [ ] Définir l'alerte et la procédure de passage au plan Workers Paid.
+- [x] Définir l'alerte et la procédure de passage au plan Workers Paid.
+
+Les deux scénarios de charge existent (étape 0 de la certification) et
+attendent leur passage sur staging : `npm run test:load:remote` (vingt
+acheteurs, quinze minutes, la recherche cadencée sous son limiteur, échec sur
+une seule 5xx) et `npm run test:last-unit:remote -- --product <slug>` (cinq
+checkouts simultanés sur un stock vérifié à 1). L'alerte est `shopctl monitor`,
+qui échoue au-delà de 1 % d'erreurs ou de 70 % d'un quota du plan gratuit et
+que le nocturne lance chaque nuit ; la procédure est le runbook
+`docs/operations/runbooks/worker-en-erreur.md`.
 
 ### 8.7 Résilience
 

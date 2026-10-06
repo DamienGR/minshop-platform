@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { settle } from './pages.mjs';
+import { expect, test } from './fixtures.mjs';
+import { FIXTURE, settle } from './pages.mjs';
 
 /**
  * Adding to the cart, with scripts and without — invariant 1 as a test rather
@@ -14,7 +14,8 @@ import { settle } from './pages.mjs';
  */
 
 test('avec JavaScript, l’ajout ouvre le tiroir sans quitter la page', async ({ page }) => {
-  await page.goto('/products/pagination-item-2');
+  test.skip(!FIXTURE.simple, 'aucun produit simple en stock dans ce catalogue');
+  await page.goto(`/products/${FIXTURE.simple.slug}`);
   await settle(page);
 
   const url = page.url();
@@ -48,7 +49,8 @@ test.describe('sans JavaScript', () => {
   });
 
   test('l’ajout au panier reste un vrai formulaire', async ({ page }) => {
-    await page.goto('/products/pagination-item-2');
+    test.skip(!FIXTURE.simple, 'aucun produit simple en stock dans ce catalogue');
+    await page.goto(`/products/${FIXTURE.simple.slug}`);
     // Settle BEFORE aiming at the button. Without it the hero image lands late
     // on a slow link, the form shifts under the pointer, and Playwright — quite
     // correctly — refuses to click a moving control.
@@ -64,11 +66,12 @@ test.describe('sans JavaScript', () => {
       page.waitForURL('**/cart'),
       form.getByRole('button', { name: /panier/i }).first().click(),
     ]);
-    await expect(page.locator('body')).toContainText('Pagination Item 2');
+    await expect(page.locator('body')).toContainText(FIXTURE.simple.name);
   });
 
   test('la fiche produit montre son image principale', async ({ page }) => {
-    await page.goto('/products/sample-tee');
+    test.skip(!FIXTURE.gallery, 'aucun produit en stock dans ce catalogue');
+    await page.goto(`/products/${FIXTURE.gallery.slug}`);
     await settle(page);
 
     const hero = page.locator('[data-hero-track] img').first();
