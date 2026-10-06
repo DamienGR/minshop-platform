@@ -2437,6 +2437,9 @@ migration, ni binding, ni secret).
 
 Durée indicative : 3 à 4 jours.
 
+Le déroulé de la campagne — comptes, secrets, ordre des étapes, actions
+humaines — est dans le [plan de certification](certification/plan.md).
+
 #### Livrables
 
 - [ ] rapport de tests ;
