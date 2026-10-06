@@ -37,6 +37,12 @@ const THEME_ID = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
  *  the first path segment of every dashboard URL — and short enough that the
  *  40-character credential pattern below cannot mistake it for one. */
 const ACCOUNT_ID = '^[0-9a-f]{32}$';
+/** A Zero Trust team name: the `<team>` of `<team>.cloudflareaccess.com`, one
+ *  DNS label. The core writes the rest of the URL, so a value cannot point the
+ *  JWT verifier at a key server that is not Cloudflare's. */
+const ACCESS_TEAM = '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$';
+/** An Access application's Audience (AUD) tag: 64 lowercase hex characters. */
+const ACCESS_AUD = '^[0-9a-f]{64}$';
 
 /**
  * Slugs a shop may not take.
@@ -162,6 +168,12 @@ export const MANIFEST_SPEC = {
         description:
           'Cloudflare account this shop is provisioned in. Written once provisioning has confirmed it; `shopctl provision` refuses to run against any other account. Not a credential — it is in the URL of every dashboard page — and it is what makes "wrong account" a refusal rather than a discovery.',
       },
+      productionAccountId: {
+        optional: true,
+        schema: { type: 'string', pattern: ACCOUNT_ID },
+        description:
+          'Cloudflare account production lives on, when it is not `accountId`. ADR 0015 builds staging on the agency\'s account and puts production on the client\'s, and both exist at once from the moment the client starts entering content until the agency copy is torn down. Absent, production lives on `accountId` like everything else.',
+      },
       imagesDomain: {
         optional: true,
         schema: { type: 'string', pattern: DOMAIN, minLength: 4, maxLength: 253 },
@@ -173,6 +185,18 @@ export const MANIFEST_SPEC = {
         schema: { type: 'string', pattern: DOMAIN, minLength: 4, maxLength: 253 },
         description:
           'Hostname the staging environment answers on, so an Access application can be put in front of it. Absent means staging is served on workers.dev, which CANNOT be gated: the Cf-Access-Jwt-Assertion header is forgeable against a *.workers.dev origin, so an Access app bound to a custom hostname is bypassed there. A shop being previewed by a client before launch needs this; one that is already public does not.',
+      },
+      stagingAccessTeam: {
+        optional: true,
+        schema: { type: 'string', pattern: ACCESS_TEAM, minLength: 1, maxLength: 63 },
+        description:
+          'Zero Trust team name of the Access application in front of `stagingDomain` — the `<team>` of `https://<team>.cloudflareaccess.com`. The staging Worker verifies every Access assertion against that team\'s keys; without it, an assertion is refused and `/admin/setup` answers 403 until an admin password exists.',
+      },
+      stagingAccessAud: {
+        optional: true,
+        schema: { type: 'string', pattern: ACCESS_AUD },
+        description:
+          'Application Audience (AUD) tag of the Access application in front of `stagingDomain`. Not a credential: it is the `aud` claim of every token that application issues, readable by anyone it lets through.',
       },
     },
   },
@@ -322,6 +346,36 @@ export const CROSS_FIELD_RULES = [
     },
   },
   {
+    id: 'staging-access-is-complete',
+    description: 'cloudflare.stagingAccessTeam and cloudflare.stagingAccessAud are declared together.',
+    check(m) {
+      const team = m.cloudflare?.stagingAccessTeam;
+      const aud = m.cloudflare?.stagingAccessAud;
+      if (Boolean(team) !== Boolean(aud)) {
+        return {
+          path: team ? 'cloudflare.stagingAccessAud' : 'cloudflare.stagingAccessTeam',
+          message:
+            'is missing while its pair is declared. The Worker refuses every Access assertion when only one of the two is set (src/features/auth/accessGate.ts), so a half-declared application locks the staging admin rather than protecting it.',
+        };
+      }
+      return null;
+    },
+  },
+  {
+    id: 'staging-access-needs-staging-domain',
+    description: 'An Access application for staging needs the staging hostname it is bound to.',
+    check(m) {
+      if (m.cloudflare?.stagingAccessTeam && !m.cloudflare?.stagingDomain) {
+        return {
+          path: 'cloudflare.stagingAccessTeam',
+          message:
+            'is declared without cloudflare.stagingDomain. An Access application binds to a hostname; on workers.dev nothing injects an assertion, and a Worker that expects one refuses every admin request.',
+        };
+      }
+      return null;
+    },
+  },
+  {
     id: 'no-credentials',
     description: 'No API key, token or secret in the manifest.',
     check(m) {
@@ -330,6 +384,7 @@ export const CROSS_FIELD_RULES = [
       // allowed. Manifests are committed; a value that reaches this file is
       // published to every clone of the repository.
       for (const [path, value] of walkStrings(m)) {
+        if (NOT_CREDENTIALS.has(path)) continue;
         for (const { pattern, what } of CREDENTIAL_PATTERNS) {
           if (pattern.test(value)) {
             return {
@@ -343,6 +398,18 @@ export const CROSS_FIELD_RULES = [
     },
   },
 ];
+
+/**
+ * Fields whose value has the shape of a credential and is not one.
+ *
+ * An Access AUD tag is 64 hex characters, which is exactly what the hex rule
+ * above is there to catch — and it is the `aud` claim of every token the
+ * application issues, in the clear in every request it lets through. Exempted
+ * by PATH, never by shape: the schema already pins the field to that exact
+ * format, and the same 64 characters anywhere else in the file are still
+ * refused.
+ */
+const NOT_CREDENTIALS = new Set(['cloudflare.stagingAccessAud']);
 
 function* walkStrings(value, path = []) {
   if (typeof value === 'string') {

@@ -24,6 +24,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { capture } from './process.mjs';
 import { externalError, preconditionError } from './errors.mjs';
+import { environmentAccount } from '../../scripts/manifest.mjs';
 
 /**
  * The wrangler this shop carries — the binary itself when it is installed, and
@@ -104,6 +105,28 @@ export function whoami({ cwd } = {}) {
 }
 
 /**
+ * What a command expects of the account, from the three places it can be
+ * named: the manifest's field for this environment, `--account`, and
+ * `CLOUDFLARE_ACCOUNT_ID`. One builder for every command that touches an
+ * account, so that none of them reads `accountId` where production reads
+ * `productionAccountId`.
+ *
+ * @param {object} manifest the shop's manifest
+ * @param {string} environment staging or production
+ * @param {Record<string, string|boolean>} values the command's parsed flags
+ */
+export function expectedAccount(manifest, environment, values = {}) {
+  const { id, field } = environmentAccount(manifest, environment);
+  return {
+    manifest: id,
+    field,
+    environment,
+    flag: values['--account'] ?? null,
+    env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
+  };
+}
+
+/**
  * The account this run is allowed to touch, or a refusal.
  *
  * Three sources, in decreasing order of how deliberate they are: the shop's own
@@ -116,12 +139,17 @@ export function whoami({ cwd } = {}) {
  * after the agency's next customer, and "it worked last time" is exactly how a
  * shop lands in the wrong place (ADR 0002).
  *
- * @param {{ manifest: string|null, flag: string|null, env: string|null }} expected
+ * The manifest's answer depends on the environment (`environmentAccount()`):
+ * production may live on another account than staging (ADR 0015), and the
+ * refusal names the field that answered.
+ *
+ * @param {{ manifest: string|null, field?: string, environment?: string|null, flag: string|null, env: string|null }} expected
  * @param {{ accounts: Array<{ id: string, name: string }> }} identity
  */
 export function resolveAccount(expected, identity) {
+  const field = expected.field ?? 'cloudflare.accountId';
   const named = [
-    ['le manifeste (cloudflare.accountId)', expected.manifest],
+    [`le manifeste (${field})`, expected.manifest],
     ['--account', expected.flag],
     ['CLOUDFLARE_ACCOUNT_ID', expected.env],
   ].filter(([, value]) => Boolean(value));
@@ -131,15 +159,22 @@ export function resolveAccount(expected, identity) {
   if (named.length === 0) {
     throw preconditionError(
       'aucun compte Cloudflare attendu n\'est déclaré.',
-      `Le provisioning ne devine pas le compte : ajoutez cloudflare.accountId au manifeste, ou passez --account <id>. Comptes accessibles avec cette session : ${list}.`,
+      `Le provisioning ne devine pas le compte : ajoutez ${field} au manifeste, ou passez --account <id>. Comptes accessibles avec cette session : ${list}.`,
     );
   }
 
   const distinct = [...new Set(named.map(([, value]) => value))];
   if (distinct.length > 1) {
+    // The likeliest cause in production is not a typo: it is a production on
+    // the client's account and a manifest that still names only the agency's.
+    // Saying so is the difference between fixing the manifest and "fixing" the
+    // session until it agrees with the wrong account.
+    const split = expected.environment === 'production' && field === 'cloudflare.accountId'
+      ? ' Si la production vit sur le compte du client (ADR 0015), déclarez-le dans cloudflare.productionAccountId.'
+      : '';
     throw preconditionError(
       `deux sources désignent des comptes différents : ${named.map(([where, value]) => `${where} = ${value}`).join(', ')}.`,
-      'Alignez-les avant de provisionner ; le manifeste fait foi une fois la boutique créée.',
+      `Alignez-les avant de provisionner ; le manifeste fait foi une fois la boutique créée.${split}`,
     );
   }
 

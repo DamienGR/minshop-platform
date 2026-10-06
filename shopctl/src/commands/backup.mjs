@@ -39,7 +39,7 @@ import { resourceNames } from '../../../scripts/manifest.mjs';
 import { canonical, digest, tableDigest } from '../backup/dump.mjs';
 import { classifyTables, objectInventory, orderTables } from '../backup/schema.mjs';
 import { countRows, getObject, putObject, readSchema, readTables } from '../backup/store.mjs';
-import { listBuckets, resolveAccount, whoami } from '../cloudflare.mjs';
+import { listBuckets, expectedAccount, resolveAccount, whoami } from '../cloudflare.mjs';
 import {
   ARCHIVE_FORMAT,
   DATA_FILE,
@@ -440,7 +440,7 @@ function pullBackup(args, reporter, id) {
   // client's (ADR 0015) under the same name.
   reporter.section('Compte Cloudflare');
   const account = resolveAccount(
-    { manifest: manifest.cloudflare.accountId ?? null, flag: args.values['--account'] ?? null, env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null },
+    expectedAccount(manifest, env, args.values),
     whoami({ cwd: root }),
   );
   reporter.ok(`${account.name} (${account.id})`);

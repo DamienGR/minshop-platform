@@ -252,6 +252,13 @@ describe('the resources of two shops in one account', () => {
         expect(config).toContain(own.images);
         expect(config).toContain(own.files);
         expect(config).not.toContain(other.slug);
+        // Only the pilot puts an Access application in front of its preview,
+        // and only its staging Worker may carry it: an audience rendered into
+        // the other shop's Worker would refuse that shop's own admin.
+        const { manifest } = resolveShop(target.root, null);
+        const aud = env === 'staging' ? (manifest.cloudflare.stagingAccessAud ?? '') : '';
+        expect(config).toContain(`"CF_ACCESS_AUD": "${aud}"`);
+        if (target === world.pilot && env === 'staging') expect(aud).not.toBe('');
         // The other environment of the SAME shop is the likelier mistake, and
         // the one no slug check would catch.
         for (const { database } of ENVS.filter((candidate) => candidate !== env).map((candidate) => names(target.slug, candidate))) {

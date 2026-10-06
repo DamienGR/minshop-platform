@@ -80,6 +80,24 @@ export function resourceNames(manifest, { env = null } = {}) {
   };
 }
 
+/**
+ * The account one environment lives on, and the manifest field that names it.
+ *
+ * Two fields rather than one per environment, because the ordinary shop has
+ * ONE account: `accountId` is it, for both. ADR 0015 is the exception that
+ * needed a second — staging on the agency's account, production on the
+ * client's, both live from the day the client starts entering content until
+ * the agency copy is torn down. A single field there makes every production
+ * command a disagreement between the manifest and the account it is meant for.
+ *
+ * The field travels with the id so that a refusal names the line to edit.
+ */
+export function environmentAccount(manifest, env) {
+  const production = env === 'production' ? (manifest.cloudflare.productionAccountId ?? null) : null;
+  if (production) return { id: production, field: 'cloudflare.productionAccountId' };
+  return { id: manifest.cloudflare.accountId ?? null, field: 'cloudflare.accountId' };
+}
+
 /** Every manifest in this tree: the shop's own, plus the witness fixtures. */
 export function discoverManifests(root = process.cwd()) {
   const files = [];
@@ -243,6 +261,13 @@ export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-00
         : null;
   const routes = host ? [{ pattern: host, custom_domain: true }] : [];
   const imagesDomain = manifest.cloudflare.imagesDomain ?? null;
+  // The Access application in front of the staging hostname. Behind it, every
+  // request carries an assertion, and the Worker refuses one it has no issuer
+  // and audience to verify (src/features/auth/accessGate.ts) — so a gated
+  // staging without these two answers 403 on /admin/setup before any password
+  // exists. Empty everywhere else, which the gate reads as "no Access": only
+  // staging is ever previewed behind one (ADR 0015).
+  const access = env === 'staging' && host ? manifest.cloudflare : {};
   return {
     __NAME__: names.worker,
     __DB_NAME__: names.database,
@@ -256,6 +281,11 @@ export function wranglerSubstitutions(manifest, { databaseId = '00000000-0000-00
     // `env.IMAGE_BASE_URL ?? ''` and serves images through the Worker, which is
     // slower and always correct.
     __IMAGE_BASE_URL__: imagesDomain ? `https://${imagesDomain}` : '',
+    // The team NAME is the manifest value and the URL is written here, so no
+    // manifest can point the JWT verifier at a key server that is not
+    // Cloudflare's.
+    __ACCESS_TEAM_DOMAIN__: access.stagingAccessTeam ? `https://${access.stagingAccessTeam}.cloudflareaccess.com` : '',
+    __ACCESS_AUD__: access.stagingAccessAud ?? '',
   };
 }
 

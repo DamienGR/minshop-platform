@@ -40,7 +40,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { applyMigrations, listBuckets, listDatabases, resolveAccount, whoami } from '../cloudflare.mjs';
+import { applyMigrations, listBuckets, listDatabases, expectedAccount, resolveAccount, whoami } from '../cloudflare.mjs';
 import { ShopctlError, inputError, preconditionError, verificationError } from '../errors.mjs';
 import { requireEnvironment } from '../shop.mjs';
 import { renderEnvironmentConfig } from './provision.mjs';
@@ -177,11 +177,7 @@ export function runRestore(args, reporter) {
   } else {
     reporter.section('Compte Cloudflare');
     account = resolveAccount(
-      {
-        manifest: manifest.cloudflare.accountId ?? null,
-        flag: args.values['--account'] ?? null,
-        env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-      },
+      expectedAccount(manifest, env, args.values),
       whoami({ cwd: root }),
     );
     reporter.ok(`${account.name} (${account.id})`);

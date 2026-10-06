@@ -12,7 +12,7 @@
  * One answer to "which database is this?", shared, rather than one per command
  * that eventually disagrees with the others.
  */
-import { listDatabases, resolveAccount, whoami } from './cloudflare.mjs';
+import { listDatabases, expectedAccount, resolveAccount, whoami } from './cloudflare.mjs';
 import { preconditionError } from './errors.mjs';
 import { resourceNames } from '../../scripts/manifest.mjs';
 import { renderEnvironmentConfig } from './commands/provision.mjs';
@@ -32,11 +32,7 @@ import { renderEnvironmentConfig } from './commands/provision.mjs';
 export function openEnvironment({ values, manifest, root, env, reporter, missing }) {
   reporter.section('Compte Cloudflare');
   const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
+    expectedAccount(manifest, env, values),
     whoami({ cwd: root }),
   );
   reporter.ok(`${account.name} (${account.id})`);

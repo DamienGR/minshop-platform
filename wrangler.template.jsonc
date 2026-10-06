@@ -89,7 +89,14 @@
     // go through the Worker, which is slower and always correct. Attach the
     // domain to the images bucket first — `shopctl provision` reports which
     // domains it finds.
-    "IMAGE_BASE_URL": "__IMAGE_BASE_URL__"
+    "IMAGE_BASE_URL": "__IMAGE_BASE_URL__",
+    // The Cloudflare Access application in front of a private preview, from
+    // cloudflare.stagingAccessTeam / stagingAccessAud in the client manifest:
+    // the admin gate verifies every Access assertion against them
+    // (src/middleware.ts). Rendered on staging only, and only with a
+    // stagingDomain; empty means no Access, which is every other render.
+    "CF_ACCESS_TEAM_DOMAIN": "__ACCESS_TEAM_DOMAIN__",
+    "CF_ACCESS_AUD": "__ACCESS_AUD__"
     //
     // This store's MCP endpoint, if you deployed the optional mcp/ Worker.
     // llms.txt advertises it to agents only when set — leave it unset and

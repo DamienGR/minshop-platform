@@ -42,6 +42,7 @@ import {
   deleteWorker,
   listBuckets,
   listDatabases,
+  expectedAccount,
   resolveAccount,
   whoami,
   workerExists,
@@ -116,11 +117,7 @@ export function runDestroy(args, reporter) {
 
   reporter.section('Compte Cloudflare');
   const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: args.values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
+    expectedAccount(manifest, env, args.values),
     whoami({ cwd: root }),
   );
   reporter.ok(`${account.name} (${account.id})`);

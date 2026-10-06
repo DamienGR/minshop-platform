@@ -67,6 +67,33 @@ comptes tombe entre la deuxième et la troisième.
 - `shopctl destroy` existe et est irréversible. Il demande le slug **saisi**, et
   `--yes` en plus en production.
 
+### Note d'implémentation (jalon 10, 2026-10-06) — deux comptes à la fois, et l'application Access
+
+Préparer l'étape 1 de la certification a montré deux choses que la décision
+supposait sans que le socle les porte.
+
+- **Entre l'étape 3 et la fin de l'étape 4, les deux comptes vivent en même
+  temps** : le client saisit sur le sien, et le staging de l'agence reste sur
+  celui de l'agence jusqu'au `destroy`. Quand la saisie a lieu en production —
+  le dispositif de la certification (plan §2.2) —, un seul
+  `cloudflare.accountId` faisait de chaque commande de production un désaccord
+  entre le manifeste et le compte visé. `cloudflare.productionAccountId`, facultatif, nomme le compte de la
+  production quand ce n'est pas `accountId` ; `environmentAccount()`
+  (`scripts/manifest.mjs`) est la seule réponse à « sur quel compte vit cet
+  environnement », et `shopctl repo` pose dans chaque environnement GitHub son
+  propre `CLOUDFLARE_ACCOUNT_ID`. Ce n'est pas l'alternative écartée plus bas :
+  le staging de l'agence disparaît toujours à la mise en ligne.
+- **Derrière l'application Access, chaque requête porte une assertion**, et le
+  Worker refuse celle qu'il ne peut pas vérifier : sans `CF_ACCESS_TEAM_DOMAIN`
+  ni `CF_ACCESS_AUD`, `/admin/setup` répondait 403 tant qu'aucun mot de passe
+  n'existait. Aucun outil ne les posait. `cloudflare.stagingAccessTeam` (le nom
+  d'équipe ; le socle écrit l'adresse, pour qu'aucun manifeste ne pointe le
+  vérificateur vers un autre serveur de clés) et `cloudflare.stagingAccessAud`
+  sont rendus dans les `vars` du seul Worker de staging, vides partout
+  ailleurs. Ils vont ensemble et demandent `stagingDomain`, et
+  `shopctl deploy --env staging` avertit quand une preview privée n'en déclare
+  aucun.
+
 ## Alternatives écartées
 
 - **Frontière à la mise en ligne** (construire ET faire saisir sur le compte de
@@ -97,4 +124,10 @@ comptes tombe entre la deuxième et la troisième.
   production confondues : `config:validate` les compare sous une seule clé ;
 - `shopctl destroy` refuse sans le slug saisi, refuse une production sans
   `--yes`, supprime la base en dernier et relaie le refus d'un bucket non vide
-  sans le vider (`test/scripts/destroy.test.mjs`).
+  sans le vider (`test/scripts/destroy.test.mjs`) ;
+- l'application Access n'est rendue que dans le Worker de staging, et une
+  moitié d'application est refusée par le manifeste
+  (`test/scripts/manifest.test.mjs`, `test/scripts/deploy.test.mjs`) ;
+- `provision --env production` vise `productionAccountId` quand il est
+  déclaré, et `shopctl repo` donne à chaque environnement son compte
+  (`test/scripts/provision.test.mjs`, `test/scripts/repo.test.mjs`).

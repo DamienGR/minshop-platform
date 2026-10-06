@@ -42,7 +42,7 @@ export const HUMAN_CHECKLIST = [
   ['R2 activé sur chaque compte avant tout provisioning', 'La création d\'un bucket échoue tant que R2 n\'a pas été activé une première fois dans le tableau de bord.'],
   ['membres de l\'équipe invités sur chaque compte', 'Un compte à un seul accès est un point de défaillance unique.'],
   ['compte Stripe activé, en mode test puis en mode live', 'L\'activation Stripe demande des pièces justificatives et prend des jours ouvrés.'],
-  ['nom d\'hôte de preview dans une zone du compte de l\'agence, derrière une application Access', 'cloudflare.stagingDomain ferme workers.dev ; sans application Access sur ce nom, la preview est publique.'],
+  ['nom d\'hôte de preview dans une zone du compte de l\'agence, derrière une application Access', 'cloudflare.stagingDomain ferme workers.dev ; sans application Access sur ce nom, la preview est publique. Son nom d\'équipe et son AUD vont dans cloudflare.stagingAccessTeam et cloudflare.stagingAccessAud.'],
   ['un widget Turnstile sur les noms d\'hôte de la boutique', 'Ses deux clés se saisissent dans Admin → Réglages → Protection.'],
   ['domaine de production dans une zone du compte du commerçant', 'Le domaine personnalisé d\'un Worker demande une zone active sur le compte qui porte ce Worker.'],
   ['domaine d\'expédition vérifié chez le fournisseur d\'e-mail', 'Sans SPF/DKIM alignés, les confirmations de commande partent en spam.'],

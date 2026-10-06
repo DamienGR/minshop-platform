@@ -120,16 +120,21 @@ autre jeton, sur B : Account Analytics et D1 en lecture, rien d'autre (plan
 
 ## 5. Zero Trust et Access (compte A)
 
-- Zero Trust → choisir un nom d'équipe. Il donne
-  `https://<équipe>.cloudflareaccess.com`, à relever : c'est
-  `CF_ACCESS_TEAM_DOMAIN`. L'offre Free suffit ; le tableau de bord peut, là
-  aussi, demander un moyen de paiement.
+- Zero Trust → choisir un nom d'équipe, celui de
+  `https://<équipe>.cloudflareaccess.com`. Relever le nom seul : c'est
+  `cloudflare.stagingAccessTeam`, et le socle écrit le reste de l'adresse.
+  L'offre Free suffit ; le tableau de bord peut, là aussi, demander un moyen de
+  paiement.
 - Access → Applications → Self-hosted, sur le nom d'hôte de preview exact,
   sans chemin : l'application couvre la vitrine **et** l'administration.
 - Une politique « Allow » sur les adresses de l'opérateur et du client qui
   regardera la preview ; le code à usage unique par e-mail suffit comme méthode
   de connexion.
-- Relever l'**Application Audience (AUD) Tag** : c'est `CF_ACCESS_AUD`.
+- Relever l'**Application Audience (AUD) Tag** : c'est
+  `cloudflare.stagingAccessAud`. `provision` et `deploy` rendent les deux
+  valeurs en `CF_ACCESS_TEAM_DOMAIN` et `CF_ACCESS_AUD` dans le seul Worker de
+  staging ; sans elles, le Worker refuse l'assertion d'Access et
+  `/admin/setup` répond 403.
 - Le jeton de service et sa politique « Service Auth » viennent à l'étape 3 :
   son secret ne s'affiche qu'une fois et va droit dans l'environnement
   `staging` du dépôt, qui n'existe qu'après l'étape 2.
@@ -183,11 +188,11 @@ Relevés à l'étape 1 — des identifiants, pas des secrets :
 | Valeur | Où elle ira | Étape |
 |---|---|---|
 | identifiant du compte A | `cloudflare.accountId`, et `--account` de `shopctl new` | 2 |
-| identifiant du compte B | manifeste de la production, `MONITOR_CLOUDFLARE_ACCOUNT_ID` | 8 et 9 |
+| identifiant du compte B | `cloudflare.productionAccountId` ; secret de dépôt `MONITOR_CLOUDFLARE_ACCOUNT_ID` | 2 ; 9 |
 | nom d'hôte de preview | `cloudflare.stagingDomain` | 2 |
 | domaine de production | `cloudflare.productionDomain` | 2 |
 | adresse d'expédition | `email.from` | 2 |
-| domaine d'équipe Access, AUD | `CF_ACCESS_TEAM_DOMAIN` et `CF_ACCESS_AUD` du Worker de staging | 3 |
+| nom d'équipe Access, AUD | `cloudflare.stagingAccessTeam` et `cloudflare.stagingAccessAud` | 2 |
 | clé de site Turnstile | Admin → Réglages → Protection | 3 |
 | adresse de l'e-mail de test | variable `NIGHTLY_EMAIL_TO` de l'environnement `staging` | 3 |
 

@@ -23,6 +23,7 @@ import {
   coreVersion,
   detectFleetCollisions,
   discoverManifests,
+  environmentAccount,
   isShopRepository,
   loadManifest,
   resourceNames,
@@ -179,6 +180,48 @@ describe('manifest schema', () => {
     expect(result.errors.map((e) => e.rule)).toContain('no-credentials');
   });
 
+  // The Worker refuses every assertion when only one of the two is set, so a
+  // half-declared application would lock the staging admin rather than guard it.
+  it.each([
+    ['an Access team without its audience', (m) => { delete m.cloudflare.stagingAccessAud; }, 'cloudflare.stagingAccessAud'],
+    ['an Access audience without its team', (m) => { delete m.cloudflare.stagingAccessTeam; }, 'cloudflare.stagingAccessTeam'],
+  ])('refuses %s', (_label, mutate, path) => {
+    const m = base();
+    mutate(m);
+    const result = validateManifest(m);
+    expect(result.errors).toContainEqual(expect.objectContaining({ rule: 'staging-access-is-complete', path }));
+  });
+
+  it('refuses an Access application with no staging hostname to bind to', () => {
+    const m = base();
+    delete m.cloudflare.stagingDomain;
+    expect(validateManifest(m).errors.map((e) => e.rule)).toContain('staging-access-needs-staging-domain');
+  });
+
+  // The team is one DNS label because the core writes the rest of the URL:
+  // a value cannot send the JWT verifier to a key server of its choosing.
+  it.each([
+    ['a URL', 'https://evil.example.com'],
+    ['a dotted name', 'evil.example'],
+    ['uppercase', 'Pilote'],
+  ])('refuses %s as an Access team', (_label, team) => {
+    const m = base();
+    m.cloudflare.stagingAccessTeam = team;
+    expect(validateManifest(m).errors).toContainEqual(expect.objectContaining({ path: 'cloudflare.stagingAccessTeam' }));
+  });
+
+  // An AUD is 64 hex characters — the exact shape the credential rule refuses.
+  // It is exempted by PATH: the same characters anywhere else are still a key.
+  // Asked of the rule itself: no other field of a valid manifest can hold 64
+  // characters of that shape, so the structural check would answer first.
+  it('accepts an AUD in its own field and nowhere else', () => {
+    expect(validateManifest(base()).ok).toBe(true);
+    const rule = CROSS_FIELD_RULES.find((r) => r.id === 'no-credentials');
+    const aud = base().cloudflare.stagingAccessAud;
+    expect(rule.check({ cloudflare: { stagingAccessAud: aud } })).toBeNull();
+    expect(rule.check({ cloudflare: { stagingDomain: aud } })).toMatchObject({ path: 'cloudflare.stagingDomain' });
+  });
+
   it('reports structural errors before cross-field rules', () => {
     // A rule reading m.client.slug on a manifest with no client section would
     // report a second failure for the same cause.
@@ -246,6 +289,10 @@ describe('fleet identifiers', () => {
       __WORKERS_DEV__: 'true',
       __ROUTES__: '[]',
       __IMAGE_BASE_URL__: '',
+      // pilot-fr declares an Access application, and it is still absent here:
+      // only the staging render carries it.
+      __ACCESS_TEAM_DOMAIN__: '',
+      __ACCESS_AUD__: '',
     });
   });
 
@@ -408,6 +455,57 @@ describe('fleet identifiers', () => {
     delete open.cloudflare.stagingDomain;
     expect(wranglerSubstitutions(open, { env: 'staging' })).toMatchObject({ __WORKERS_DEV__: 'true', __ROUTES__: '[]' });
   });
+
+  // Behind Access every request carries an assertion, and a Worker with no
+  // issuer and audience to verify it against refuses it — /admin/setup
+  // included. The values ride on staging's render and nowhere else.
+  it('gives the staging Worker the Access application in front of it', () => {
+    expect(wranglerSubstitutions(base(), { env: 'staging' })).toMatchObject({
+      __ACCESS_TEAM_DOMAIN__: 'https://pilote-agence.cloudflareaccess.com',
+      __ACCESS_AUD__: '0'.repeat(60) + 'abcd',
+    });
+    expect(wranglerSubstitutions(base(), { env: 'production' })).toMatchObject({ __ACCESS_TEAM_DOMAIN__: '', __ACCESS_AUD__: '' });
+  });
+
+  // Empty is what the gate reads as "no Access", which is the only correct
+  // answer for a staging nobody has put an application in front of.
+  it('renders no Access for a staging that declares none', () => {
+    const bare = base();
+    delete bare.cloudflare.stagingAccessTeam;
+    delete bare.cloudflare.stagingAccessAud;
+    expect(wranglerSubstitutions(bare, { env: 'staging' })).toMatchObject({ __ACCESS_TEAM_DOMAIN__: '', __ACCESS_AUD__: '' });
+  });
+
+  it('fills every placeholder of the template it is rendered into', () => {
+    const template = read('wrangler.template.jsonc');
+    const placeholders = [...new Set(template.match(/__[A-Z_]+__/g))].sort();
+    expect(Object.keys(wranglerSubstitutions(base(), { env: 'staging' })).sort()).toEqual(placeholders);
+  });
+});
+
+describe('the account of an environment', () => {
+  // The ordinary shop has one account, and both environments live on it.
+  it('is accountId for both environments when nothing else is declared', () => {
+    for (const env of ['staging', 'production']) {
+      expect(environmentAccount(base(), env)).toEqual({ id: '0'.repeat(28) + 'abcd', field: 'cloudflare.accountId' });
+    }
+  });
+
+  // ADR 0015: staging on the agency's account, production on the client's,
+  // both live at once. The field comes back with the id so a refusal names
+  // the line to edit.
+  it('is productionAccountId for production when the manifest declares one', () => {
+    const split = base();
+    split.cloudflare.productionAccountId = 'b'.repeat(32);
+    expect(environmentAccount(split, 'production')).toEqual({ id: 'b'.repeat(32), field: 'cloudflare.productionAccountId' });
+    expect(environmentAccount(split, 'staging')).toEqual({ id: '0'.repeat(28) + 'abcd', field: 'cloudflare.accountId' });
+  });
+
+  it('is nothing at all when the manifest has not learned it yet', () => {
+    const unknown = base();
+    delete unknown.cloudflare.accountId;
+    expect(environmentAccount(unknown, 'production')).toEqual({ id: null, field: 'cloudflare.accountId' });
+  });
 });
 
 describe('the two witness shops differ', () => {
@@ -477,7 +575,18 @@ describe('published JSON Schema', () => {
       }
     };
     walk(MANIFEST_SPEC);
-    expect(optional).toEqual(['cloudflare.accountId', 'cloudflare.imagesDomain', 'cloudflare.stagingDomain']);
+    // `productionAccountId` and the two Access values are learned too: the
+    // client's account exists only once the client has created it (ADR 0015),
+    // and an AUD only once an Access application has been put in front of the
+    // preview.
+    expect(optional).toEqual([
+      'cloudflare.accountId',
+      'cloudflare.productionAccountId',
+      'cloudflare.imagesDomain',
+      'cloudflare.stagingDomain',
+      'cloudflare.stagingAccessTeam',
+      'cloudflare.stagingAccessAud',
+    ]);
 
     const schema = manifestJsonSchema();
     const check = (node, prefix = []) => {

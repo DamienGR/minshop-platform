@@ -196,6 +196,11 @@
           "type": "string",
           "pattern": "^[0-9a-f]{32}$"
         },
+        "productionAccountId": {
+          "description": "Cloudflare account production lives on, when it is not `accountId`. ADR 0015 builds staging on the agency's account and puts production on the client's, and both exist at once from the moment the client starts entering content until the agency copy is torn down. Absent, production lives on `accountId` like everything else.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
         "imagesDomain": {
           "description": "Public custom domain of the images bucket, when one is attached. Absent means product images are served through the Worker, which is the default and is never wrong — only slower.",
           "type": "string",
@@ -209,6 +214,18 @@
           "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
           "minLength": 4,
           "maxLength": 253
+        },
+        "stagingAccessTeam": {
+          "description": "Zero Trust team name of the Access application in front of `stagingDomain` — the `<team>` of `https://<team>.cloudflareaccess.com`. The staging Worker verifies every Access assertion against that team's keys; without it, an assertion is refused and `/admin/setup` answers 403 until an admin password exists.",
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "stagingAccessAud": {
+          "description": "Application Audience (AUD) tag of the Access application in front of `stagingDomain`. Not a credential: it is the `aud` claim of every token that application issues, readable by anyone it lets through.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       }
     },
@@ -282,6 +299,14 @@
     {
       "id": "staging-domain-is-not-production",
       "description": "The staging hostname and the production domain must differ."
+    },
+    {
+      "id": "staging-access-is-complete",
+      "description": "cloudflare.stagingAccessTeam and cloudflare.stagingAccessAud are declared together."
+    },
+    {
+      "id": "staging-access-needs-staging-domain",
+      "description": "An Access application for staging needs the staging hostname it is bound to."
     },
     {
       "id": "no-credentials",

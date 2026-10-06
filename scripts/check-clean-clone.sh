@@ -55,6 +55,8 @@ sed \
   -e 's/__WORKERS_DEV__/true/g' \
   -e 's/__ROUTES__/[]/g' \
   -e 's/__IMAGE_BASE_URL__//g' \
+  -e 's/__ACCESS_TEAM_DOMAIN__//g' \
+  -e 's/__ACCESS_AUD__//g' \
   -e 's/__DB_NAME__/minshop-clean-clone-db/g' \
   -e 's/__DB_ID__/00000000-0000-0000-0000-000000000000/g' \
   -e 's/__BUCKET__/minshop-clean-clone-images/g' \

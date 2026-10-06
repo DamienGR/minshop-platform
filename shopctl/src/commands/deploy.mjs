@@ -47,6 +47,7 @@ import {
   listDatabases,
   listSecrets,
   putSecret,
+  expectedAccount,
   resolveAccount,
   whoami,
   wrangler,
@@ -155,11 +156,7 @@ export async function runDeploy(args, reporter) {
   reporter.section('Compte Cloudflare');
   const identity = whoami({ cwd: root });
   const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: args.values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
+    expectedAccount(manifest, env, args.values),
     identity,
   );
   reporter.ok(`${account.name} (${account.id})`);
@@ -223,6 +220,16 @@ export async function runDeploy(args, reporter) {
   reporter.section('Configuration');
   renderEnvironmentConfig({ root, manifest, env, databaseId });
   reporter.ok(`wrangler.jsonc rendu pour ${names.worker}`);
+  // A warning, not a refusal: the preview is still private, and an admin that
+  // already has a password still opens. What breaks is the first run — behind
+  // Access every request carries an assertion, the Worker has nothing to
+  // verify it with, and /admin/setup answers 403 (src/features/auth/accessGate.ts).
+  if (env === 'staging' && manifest.cloudflare.stagingDomain && !manifest.cloudflare.stagingAccessTeam) {
+    reporter.warn(
+      `${manifest.cloudflare.stagingDomain} est servi sans cloudflare.stagingAccessTeam ni cloudflare.stagingAccessAud.`,
+      'Derrière l\'application Access, le Worker refuse une assertion qu\'il ne peut pas vérifier : /admin/setup répond 403 tant qu\'aucun mot de passe n\'existe. Déclarez le nom d\'équipe Zero Trust et l\'AUD de l\'application dans le manifeste, puis redéployez.',
+    );
+  }
 
   // ── Verification ──────────────────────────────────────────────────────────
   const skipVerify = args.values['--skip-verify'] === true;
