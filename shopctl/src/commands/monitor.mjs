@@ -28,7 +28,7 @@
  * "Could not ask" is never "nothing to report": an analytics error or an
  * unreachable endpoint is exit 5, not a green run.
  */
-import { listDatabases, resolveAccount, whoami } from '../cloudflare.mjs';
+import { listDatabases, expectedAccount, resolveAccount, whoami } from '../cloudflare.mjs';
 import { externalError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
@@ -180,7 +180,7 @@ export async function runMonitor(args, reporter) {
   const names = resourceNames(manifest, { env });
   reporter.section('Compte Cloudflare');
   const account = resolveAccount(
-    { manifest: manifest.cloudflare.accountId ?? null, flag: args.values['--account'] ?? null, env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null },
+    expectedAccount(manifest, env, args.values),
     whoami({ cwd: root }),
   );
   reporter.ok(`${account.name} (${account.id})`);

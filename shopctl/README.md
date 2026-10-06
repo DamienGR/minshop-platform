@@ -195,7 +195,9 @@ Quatre propriétés valent d'être connues.
 
 **Rien qui touche un compte n'a de valeur par défaut.** `--env` est obligatoire,
 `--yes` l'est en production, et le compte Cloudflare attendu doit être nommé —
-par `cloudflare.accountId`, par `--account` ou par `CLOUDFLARE_ACCOUNT_ID`. Deux
+par le manifeste (`cloudflare.accountId`, ou `cloudflare.productionAccountId`
+pour `--env production` quand il est déclaré), par `--account` ou par
+`CLOUDFLARE_ACCOUNT_ID`. Deux
 sources qui divergent arrêtent l'exécution ; aucune source du tout l'arrête
 aussi, même si le jeton n'atteint qu'un compte. Provisionner dans le mauvais
 compte ne se défait pas en supprimant des ressources : les données d'un client
@@ -227,7 +229,7 @@ tombe entre la deuxième et la troisième
 | | Où | Commande |
 | --- | --- | --- |
 | 1. Construction | `staging`, compte agence | `shopctl new … --create-repo` puis `provision`/`deploy --env staging` |
-| 2. Preview privée | idem, derrière Access | `cloudflare.stagingDomain` au manifeste, puis `deploy --env staging` |
+| 2. Preview privée | idem, derrière Access | `cloudflare.stagingDomain`, `stagingAccessTeam` et `stagingAccessAud` au manifeste, puis `deploy --env staging` |
 | 3. Saisie par le client | **compte client** | `provision --env staging` sur le nouveau compte |
 | 4. Mise en ligne | `production`, compte client | `deploy --env production --yes`, puis `destroy --env staging` côté agence |
 
@@ -243,6 +245,18 @@ contre une origine `*.workers.dev`. Laisser les deux ouverts revient à ne rien
 fermer. Le test de fumée d'un environnement déclaré privé pose alors la question
 inverse : une réponse 200 à une requête non authentifiée fait échouer le
 déploiement.
+
+Derrière l'application Access, chaque requête porte une assertion que le Worker
+doit vérifier. `cloudflare.stagingAccessTeam` (le nom d'équipe Zero Trust) et
+`cloudflare.stagingAccessAud` (l'AUD de l'application) sont rendus dans les
+`vars` du seul Worker de staging ; sans eux, `/admin/setup` répond 403 tant
+qu'aucun mot de passe n'existe, et `deploy --env staging` le signale.
+
+Quand la production vit sur le compte du client pendant que le staging reste
+sur celui de l'agence — le dispositif de la certification —,
+`cloudflare.productionAccountId` nomme ce second compte : les commandes
+`--env production` le visent, et `shopctl repo` le pose dans l'environnement
+GitHub `production`.
 
 ## `shopctl destroy`
 

@@ -146,15 +146,21 @@ the browser gate and local development render, none of which reach an account.
 `x-staging` colliding with the staging family of `x` is a gate failure rather
 than a discovery.
 
-Every field is required except two: `cloudflare.accountId` and
-`cloudflare.imagesDomain` are `optional` because a shop LEARNS them rather than
-deciding them — one exists only after provisioning has run, the other only if a
-domain was ever attached. A third optional field is a deliberate act;
-`test/scripts/manifest.test.mjs` pins the list by name.
+Every field a shop DECIDES is required. The six `optional` ones under
+`cloudflare` are values a shop LEARNS: `accountId` exists only after
+provisioning has run, `productionAccountId` only once the client's own account
+does (ADR 0015), `imagesDomain` only if a domain was ever attached,
+`stagingDomain` only for a private preview, and `stagingAccessTeam` /
+`stagingAccessAud` only once an Access application stands in front of it. A new
+optional field is a deliberate act; `test/scripts/manifest.test.mjs` pins the
+list by name.
 
 No credential ever goes in the manifest — the schema is closed and a
 `no-credentials` rule scans the values that are allowed. An account id is not a
-credential: it is the first path segment of every dashboard URL.
+credential: it is the first path segment of every dashboard URL. Neither is an
+Access AUD, though it has the shape of one (64 hex characters): it is the `aud`
+claim of every token the application issues, and the rule exempts that one
+field by PATH, never by shape.
 
 `node scripts/prepare-client.mjs <slug>` renders `wrangler.jsonc` and the theme
 selection for one shop; `--env <staging|production>` renders that environment's
@@ -210,8 +216,11 @@ Four rules hold for every command, present and future:
   generates go to wrangler on STDIN and are never returned, logged or written.
 - **nothing that touches an account is defaulted.** `provision` and `deploy`
   refuse to run without `--env`; `deploy --env production` refuses without
-  `--yes`; neither will guess the Cloudflare account (manifest `accountId`,
+  `--yes`; neither will guess the Cloudflare account (the manifest — `accountId`,
+  or `productionAccountId` for `--env production` when it is declared —
   `--account`, or `CLOUDFLARE_ACCOUNT_ID`, and two that disagree stop the run).
+  `environmentAccount()` in `scripts/manifest.mjs` is the one answer to "which
+  account is this environment on"; `expectedAccount()` is how a command asks.
   `repo` creates a PRIVATE repository unless told otherwise, and never reopens
   or recloses an existing one.
 
@@ -242,7 +251,14 @@ nothing between accounts — putting it at go-live would make `backup`/`restore`
 renders the staging route AND closes workers.dev, because an Access app binds
 to a hostname and its header is forgeable against a `*.workers.dev` origin;
 leaving both open closes nothing. `deploy` then smoke-tests the inverse
-property: an unauthenticated 200 fails the run.
+property: an unauthenticated 200 fails the run. Behind that application every
+request carries an assertion the Worker must verify, so `stagingAccessTeam` and
+`stagingAccessAud` render `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` into the
+staging Worker's `vars` — and only there: without them the gate refuses the
+assertion and `/admin/setup` answers 403, which `deploy` warns about. Both
+accounts are live between steps three and four, which is what
+`productionAccountId` is for; `shopctl repo` gives each GitHub environment its
+own `CLOUDFLARE_ACCOUNT_ID`.
 
 `destroy` is irreversible and shaped by it: the shop's slug typed out (not
 `--yes`, which becomes a reflex), `--yes` on top in production, read-before-

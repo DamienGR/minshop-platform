@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
-import { resolveAccount } from '../../shopctl/src/cloudflare.mjs';
+import { expectedAccount, resolveAccount } from '../../shopctl/src/cloudflare.mjs';
 import { INTERNAL_SECRETS, generateSecret } from '../../shopctl/src/commands/provision.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, names, shop } from '../helpers/provisioned-shop.mjs';
 
@@ -40,6 +40,37 @@ describe('the account gate', () => {
   // customer. "It worked last time" is how a shop lands in the wrong place.
   it('refuses to guess when nothing names an account', () => {
     expect(() => resolveAccount({ manifest: null, flag: null, env: null }, { accounts: [ACCOUNT] })).toThrow(/aucun compte/);
+  });
+
+  // ADR 0015: staging on the agency's account, production on the client's,
+  // both live at once. The manifest names each, and the field that answered
+  // is the one a refusal sends the operator to.
+  it('reads production\u2019s account from productionAccountId when the manifest has one', () => {
+    const manifest = { cloudflare: { accountId: ACCOUNT.id, productionAccountId: OTHER_ACCOUNT.id } };
+    expect(expectedAccount(manifest, 'production')).toMatchObject({ manifest: OTHER_ACCOUNT.id, field: 'cloudflare.productionAccountId' });
+    expect(expectedAccount(manifest, 'staging')).toMatchObject({ manifest: ACCOUNT.id, field: 'cloudflare.accountId' });
+    // `env: null`: the suite must not depend on the runner's CLOUDFLARE_ACCOUNT_ID.
+    expect(resolveAccount({ ...expectedAccount(manifest, 'production'), env: null }, identity)).toMatchObject({
+      id: OTHER_ACCOUNT.id,
+      sources: ['le manifeste (cloudflare.productionAccountId)'],
+    });
+  });
+
+  // The likeliest disagreement in production is not a typo but a production
+  // on the client's account and a manifest that names only the agency's.
+  it('names productionAccountId when production disagrees with accountId', () => {
+    const refusal = (env) => {
+      try {
+        resolveAccount({ ...expectedAccount({ cloudflare: { accountId: ACCOUNT.id } }, env), flag: OTHER_ACCOUNT.id, env: null }, identity);
+      } catch (error) {
+        return error;
+      }
+      return null;
+    };
+    expect(refusal('production')?.message).toMatch(/comptes différents/);
+    expect(refusal('production')?.hint).toMatch(/cloudflare\.productionAccountId/);
+    expect(refusal('staging')?.message).toMatch(/comptes différents/);
+    expect(refusal('staging')?.hint).not.toMatch(/productionAccountId/);
   });
 });
 
@@ -84,6 +115,19 @@ describe('shopctl provision', () => {
     expect(result.status).toBe(EXIT_CODES.precondition);
     expect(result.stderr).toMatch(/pas accès au compte attendu/);
     expect(target.read().r2).toEqual([]);
+  });
+
+  // One session that sees both accounts, the way an agency user invited onto
+  // the client's account does (ADR 0015): each environment goes to its own.
+  it('provisions each environment on the account the manifest names for it', () => {
+    const target = shop({ cloudflare: { productionAccountId: OTHER_ACCOUNT.id } });
+    target.account({ accounts: [ACCOUNT, OTHER_ACCOUNT] });
+    const production = target.run(['provision', '--env', 'production', '--dry-run']);
+    expect(production.status, production.stderr).toBe(EXIT_CODES.ok);
+    expect(production.stdout).toContain(`${OTHER_ACCOUNT.name} (${OTHER_ACCOUNT.id})`);
+    const staging = target.run(['provision', '--env', 'staging', '--dry-run']);
+    expect(staging.status, staging.stderr).toBe(EXIT_CODES.ok);
+    expect(staging.stdout).toContain(`${ACCOUNT.name} (${ACCOUNT.id})`);
   });
 
   describe('--dry-run', () => {

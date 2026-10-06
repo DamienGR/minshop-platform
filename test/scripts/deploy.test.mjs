@@ -269,6 +269,39 @@ describe('shopctl deploy', () => {
       expect(staging).toContain('"routes": []');
     });
 
+    // Behind Access every request carries an assertion, and a Worker with
+    // nothing to verify it against refuses it — /admin/setup included. The
+    // application rides on the staging Worker only.
+    it('gives a private preview the Access application in front of it, and production none', () => {
+      const aud = 'c'.repeat(64);
+      const access = { stagingDomain: 'preview.boutique.example.fr', stagingAccessTeam: 'agence', stagingAccessAud: aud };
+      const target = provisioned('staging', { cloudflare: access });
+      const result = target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      expect(result.stdout).not.toMatch(/stagingAccessTeam/);
+      const staging = readFileSync(join(target.root, 'wrangler.jsonc'), 'utf8');
+      expect(staging).toContain('"CF_ACCESS_TEAM_DOMAIN": "https://agence.cloudflareaccess.com"');
+      expect(staging).toContain(`"CF_ACCESS_AUD": "${aud}"`);
+
+      expect(target.run(['provision', '--env', 'production']).status).toBe(EXIT_CODES.ok);
+      expect(target.run(['backup', 'keygen']).status).toBe(EXIT_CODES.ok);
+      expect(target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']).status).toBe(EXIT_CODES.ok);
+      const production = readFileSync(join(target.root, 'wrangler.jsonc'), 'utf8');
+      expect(production).toContain('"CF_ACCESS_TEAM_DOMAIN": ""');
+      expect(production).toContain('"CF_ACCESS_AUD": ""');
+    });
+
+    // Not a refusal — the preview is still private — but the first run of the
+    // wizard will answer 403, and that is better read in the deploy report
+    // than discovered on the client's screen.
+    it('warns about a private preview that declares no Access application', () => {
+      const target = provisioned('staging', { cloudflare: { stagingDomain: 'preview.boutique.example.fr' } });
+      const result = target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      expect(result.stdout + result.stderr).toMatch(/sans cloudflare\.stagingAccessTeam ni cloudflare\.stagingAccessAud/);
+      expect(readFileSync(join(target.root, 'wrangler.jsonc'), 'utf8')).toContain('"CF_ACCESS_AUD": ""');
+    });
+
     it('migrates, uploads the environment it was asked for, and reports the origin', () => {
       const target = provisioned();
       const expected = names(target.slug, 'staging');

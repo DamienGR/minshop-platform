@@ -202,6 +202,18 @@ describe('shopctl repo', () => {
       expect(environments.staging.secrets.CLOUDFLARE_ACCOUNT_ID).toBe('a1b2c3d4e5f60718293a4b5c6d7e8f90');
     });
 
+    // ADR 0015: the Deploy workflow reads CLOUDFLARE_ACCOUNT_ID from the
+    // environment it runs in, so a production on the client's account needs
+    // that account in `production` — and the agency's still in `staging`.
+    it('gives each environment the account the manifest names for it', () => {
+      const target = forgeShop({ cloudflare: { productionAccountId: '0123456789abcdef0123456789abcdef' } });
+      const result = target.run(['repo'], TOKENS);
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      const environments = target.github().repos[target.nameWithOwner].environments;
+      expect(environments.staging.secrets.CLOUDFLARE_ACCOUNT_ID).toBe('a1b2c3d4e5f60718293a4b5c6d7e8f90');
+      expect(environments.production.secrets.CLOUDFLARE_ACCOUNT_ID).toBe('0123456789abcdef0123456789abcdef');
+    });
+
     it('refuses to run when no account id can be found', () => {
       const target = forgeShop({ accountId: null });
       const result = target.run(['repo'], TOKENS);

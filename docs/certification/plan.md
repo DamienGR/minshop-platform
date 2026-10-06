@@ -81,11 +81,11 @@ argument de commande. La colonne « où » dit où chacun est posé.
 
 | Élément | Nature | Qui le crée | Où il vit |
 |---|---|---|---|
-| ID du compte A, ID du compte B | identifiant, pas un secret | Damien | `client.yaml` (`cloudflare.accountId`) et secret GitHub `CLOUDFLARE_ACCOUNT_ID` |
+| ID du compte A, ID du compte B | identifiant, pas un secret | Damien | `client.yaml` (`cloudflare.accountId` pour A, `cloudflare.productionAccountId` pour B), et secret d'environnement GitHub `CLOUDFLARE_ACCOUNT_ID`, celui de chaque environnement, posé par `shopctl repo` |
 | Jeton API Cloudflare, un par dépôt et par environnement | secret | Damien, sur chaque compte | secret d'environnement GitHub `CLOUDFLARE_API_TOKEN`, posé par `shopctl repo` |
 | Session Wrangler de l'opérateur | secret | Damien (`wrangler login`) | la machine qui exécute `shopctl` |
 | `AUTH_SECRET`, `SECRETS_KEK` | secrets internes | `shopctl provision` | secrets du Worker, tirés par boutique et par environnement, jamais affichés |
-| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | configuration, pas un secret | Damien (application Access) | `vars` du `wrangler.jsonc` de staging |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | configuration, pas un secret | Damien (application Access) | `client.yaml` (`cloudflare.stagingAccessTeam`, `cloudflare.stagingAccessAud`), rendus dans les `vars` du seul Worker de staging |
 | Clé Turnstile (site + secret) | secret pour la seconde | Damien | Admin → Réglages → Protection |
 | `stripe_secret_key` test puis live (clé restreinte de préférence) | secret | Damien | coffre chiffré, Admin → Réglages → Paiements |
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
@@ -138,7 +138,7 @@ prouvé, et pour que l'argent réel arrive en dernier.
 ### Étape 0 — Combler ce que le dépôt peut encore fermer
 
 Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
-`v0.3.0` sort à la fin : la campagne certifie une version publiée, pas `main`.
+sort à la fin : la campagne certifie une version publiée, pas `main`.
 
 - [x] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
   de l'extérieur au lieu du serveur local) et par une variante distante des
@@ -191,7 +191,12 @@ Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
   casser est posée et gatée, le reste est une dérogation datée (§6).
 - [x] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
   sont posées ; le tag est sorti du workflow `Release` le 2026-10-06, sur
-  `4c12bd8`, après la fusion de la pull request #39.
+  `4c12bd8`, après la fusion de la pull request #39 ;
+- [ ] publier `v0.3.1`, la version dont part la campagne : deux trous trouvés
+  en préparant l'étape 1 (`docs/migrations/v0.3.1.md`). Le Worker de staging
+  ne recevait pas les valeurs de l'application Access, et `/admin/setup`
+  aurait répondu 403 derrière elle ; le manifeste ne nommait qu'un compte pour
+  les deux environnements, alors que staging vit sur A et la production sur B.
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
@@ -229,9 +234,10 @@ Fait avancer : jalon 6 (prérequis humains), jalon 10.
 
 Crée : deux dépôts GitHub privés, leurs environnements et leurs secrets.
 
-- [ ] `shopctl new pilot-fr --core v0.3.0 --account <A> --create-repo` ;
+- [ ] `shopctl new pilot-fr --core v0.3.1 --account <A> --create-repo` ;
 - [ ] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
-  vert ;
+  vert : dont `stagingDomain`, `stagingAccessTeam` et `stagingAccessAud`
+  relevés à l'étape 1, et `productionAccountId` pour le compte B ;
 - [ ] `shopctl backup keygen` dans l'arbre de la boutique : sans cette clé,
   `shopctl repo` ne pose pas `SHOPCTL_BACKUP_KEY`, et la sauvegarde du
   nocturne de l'étape 3 échoue ;
@@ -351,7 +357,7 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
   bien échouer le run ;
 - [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
 - [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
-- [ ] montée de version réelle : un tag `v0.3.1` proposé par
+- [ ] montée de version réelle : un tag `v0.3.2` proposé par
   `shopctl core upgrade --open-pr`, fusionné, déployé en staging ;
 - [ ] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre ;
 - [ ] mot de passe admin perdu : procédure exécutée telle que le runbook la
@@ -368,7 +374,8 @@ Fait avancer : jalon 8 (critère de sortie, supervision, runbooks), jalon 9
 
 Crée : la production de `pilot-fr` sur B. Détruit : le staging sur A.
 
-- [ ] `provision --env production` sur B ;
+- [ ] `provision --env production` sur B, que le manifeste nomme
+  (`cloudflare.productionAccountId`) ;
 - [ ] contenus saisis sur B, pas recopiés depuis A (ADR 0015) ;
 - [ ] `deploy --env production` par le workflow `Deploy`, sauvegarde préalable
   verte, approbation GitHub ;

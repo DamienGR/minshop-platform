@@ -85,6 +85,8 @@ sed -e "s/__NAME__/$SLUG/g" \
     -e "s/__WORKERS_DEV__/true/g" \
     -e "s/__ROUTES__/[]/g" \
     -e "s/__IMAGE_BASE_URL__//g" \
+    -e "s/__ACCESS_TEAM_DOMAIN__//g" \
+    -e "s/__ACCESS_AUD__//g" \
     -e "s/__DB_NAME__/$DB_NAME/g" \
     -e "s/__DB_ID__/$DB_ID/g" \
     -e "s/__BUCKET__/$BUCKET/g" \

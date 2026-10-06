@@ -53,9 +53,13 @@ export const OTHER_ACCOUNT = { id: '0123456789abcdef0123456789abcdef', name: 'Co
  *   arrangement in which isolation means anything: separate accounts would
  *   prove nothing that separate temporary directories did not already.
  * @param options.forgeAccount the same, for the imaginary GitHub `forge` opens.
+ * @param options.cloudflare further fields of the generated manifest's
+ *   `cloudflare` section, by name — a production on its own account, a staging
+ *   preview — for the suites whose subject is one of them.
  */
 export function shop({
   accountId = ACCOUNT.id,
+  cloudflare = {},
   slug = 'atelier-test',
   built = false,
   forge = false,
@@ -116,6 +120,7 @@ export function shop({
       `  workerName: minshop-${slug}`,
       '  productionDomain: boutique.example.fr',
       ...(accountId ? [`  accountId: ${accountId}`] : []),
+      ...Object.entries(cloudflare).map(([key, value]) => `  ${key}: ${value}`),
       'email:',
       '  provider: resend',
       '  from: contact@boutique.example.fr',

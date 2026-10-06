@@ -1,6 +1,6 @@
 # Boutique témoin du pilote (plan §2.3). Fixture, pas un déploiement.
 schemaVersion: 1
-coreVersion: 0.3.0
+coreVersion: 0.3.1
 
 client:
   slug: pilot-fr
@@ -41,6 +41,11 @@ cloudflare:
   # ouverts revient à ne rien fermer. canary-minimal ne le déclare pas et sert
   # son staging sur workers.dev : la paire vérifie les deux rendus.
   stagingDomain: preview-pilote.example.fr
+  # L'application Access posée devant ce nom : nom d'équipe Zero Trust et AUD,
+  # rendus dans les vars du seul Worker de staging. Valeurs de fixture, comme
+  # le compte : aucune application ne porte cet AUD.
+  stagingAccessTeam: pilote-agence
+  stagingAccessAud: 000000000000000000000000000000000000000000000000000000000000abcd
 
 email:
   provider: resend

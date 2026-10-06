@@ -31,7 +31,7 @@
  * environment is what scopes the secrets — and that half works from GitHub Pro
  * up. GitHub Free has no environment secrets on a private repository.
  */
-import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
+import { ENVIRONMENTS, environmentAccount } from '../../../scripts/manifest.mjs';
 import { ShopctlError, preconditionError } from '../errors.mjs';
 import { KEY_ENV, keyId, loadKey } from '../backup/crypto.mjs';
 import { capture } from '../process.mjs';
@@ -81,7 +81,8 @@ Les secrets viennent de l'environnement, jamais de la ligne de commande :
   CLOUDFLARE_API_TOKEN_STAGING       remplace le précédent pour staging
   CLOUDFLARE_API_TOKEN_PRODUCTION    remplace le précédent pour production
 
-L'identifiant de compte, lui, vient du manifeste (cloudflare.accountId).
+L'identifiant de compte, lui, vient du manifeste : cloudflare.accountId, et
+cloudflare.productionAccountId quand la production vit sur un autre compte.
 `;
 
 /**
@@ -284,11 +285,18 @@ export function setupRepository({
 
   // ── 4. the secrets ────────────────────────────────────────────────────────
   reporter.section('Secrets d\'environnement');
-  const accountId = manifest.cloudflare.accountId ?? env.CLOUDFLARE_ACCOUNT_ID ?? null;
-  if (!accountId) {
+  // One account per environment, because ADR 0015 puts them on two: the
+  // Deploy workflow reads CLOUDFLARE_ACCOUNT_ID from the environment it runs
+  // in, and a production pointed at the agency's account would be refused by
+  // every command it runs — or, worse, accepted by an agency token.
+  const accounts = Object.fromEntries(
+    ENVIRONMENTS.map((name) => [name, environmentAccount(manifest, name).id ?? env.CLOUDFLARE_ACCOUNT_ID ?? null]),
+  );
+  const unknown = ENVIRONMENTS.filter((name) => !accounts[name]);
+  if (unknown.length > 0) {
     throw preconditionError(
-      'aucun identifiant de compte Cloudflare à poser dans les environnements.',
-      'Ajoutez cloudflare.accountId au manifeste de la boutique, ou exportez CLOUDFLARE_ACCOUNT_ID. Sans lui, le workflow Deploy ne saurait pas quel compte viser.',
+      `aucun identifiant de compte Cloudflare à poser dans ${unknown.length === ENVIRONMENTS.length ? 'les environnements' : unknown.join(', ')}.`,
+      'Ajoutez cloudflare.accountId au manifeste de la boutique (et cloudflare.productionAccountId si la production vit sur le compte du client, ADR 0015), ou exportez CLOUDFLARE_ACCOUNT_ID. Sans lui, le workflow Deploy ne saurait pas quel compte viser.',
     );
   }
 
@@ -320,7 +328,7 @@ export function setupRepository({
     }
     const present = dryRun ? [] : environmentSecrets(target.nameWithOwner, name, { cwd: root });
     if (dryRun) {
-      reporter.todo(`${name} — CLOUDFLARE_API_TOKEN (${token.from}) et CLOUDFLARE_ACCOUNT_ID seraient posés`);
+      reporter.todo(`${name} — CLOUDFLARE_API_TOKEN (${token.from}) et CLOUDFLARE_ACCOUNT_ID (${accounts[name]}) seraient posés`);
       secretReport.push({ env: name, set: [], from: token.from });
       continue;
     }
@@ -331,10 +339,10 @@ export function setupRepository({
     // rewriting costs nothing, where keeping a stale one costs a red pipeline
     // nobody can diagnose from the outside.
     setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_API_TOKEN', token.value, { cwd: root });
-    setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_ACCOUNT_ID', accountId, { cwd: root });
+    setEnvironmentSecret(target.nameWithOwner, name, 'CLOUDFLARE_ACCOUNT_ID', accounts[name], { cwd: root });
     const set = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'];
     reporter.ok(
-      `${name} — CLOUDFLARE_API_TOKEN (depuis ${token.from}) et CLOUDFLARE_ACCOUNT_ID posés${present.length > 0 ? ' (remplacés)' : ''}`,
+      `${name} — CLOUDFLARE_API_TOKEN (depuis ${token.from}) et CLOUDFLARE_ACCOUNT_ID (${accounts[name]}) posés${present.length > 0 ? ' (remplacés)' : ''}`,
     );
 
     // The one secret KEPT when present, and for the reason the tokens are not:

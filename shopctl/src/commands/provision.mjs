@@ -45,6 +45,7 @@ import {
   putSecret,
   verifyBucketJurisdiction,
   whoami,
+  expectedAccount,
   resolveAccount,
   workerExists,
 } from '../cloudflare.mjs';
@@ -130,19 +131,17 @@ export function runProvision(args, reporter) {
 
   reporter.section(`Compte Cloudflare`);
   const identity = whoami({ cwd: root });
-  const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: args.values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
-    identity,
-  );
+  const expected = expectedAccount(manifest, env, args.values);
+  const account = resolveAccount(expected, identity);
   reporter.ok(`${account.name} (${account.id}) — attendu par ${account.sources.join(', ')}`);
-  if (!manifest.cloudflare.accountId) {
+  if (!expected.manifest) {
+    // In production the line to add depends on whose account this is, which
+    // the session cannot say: the agency's is `accountId`, the client's
+    // (ADR 0015) is `productionAccountId`.
+    const key = expected.field.replace(/^cloudflare\./, '');
     reporter.warn(
-      'le manifeste ne déclare pas cloudflare.accountId.',
-      `Ajoutez « accountId: ${account.id} » sous cloudflare: dans ${shop.file}. Tant qu'il est absent, le bon compte dépend de ce que l'opérateur tape.`,
+      `le manifeste ne déclare pas ${expected.field}.`,
+      `Ajoutez « ${key}: ${account.id} » sous cloudflare: dans ${shop.file}${env === 'production' ? ', ou « productionAccountId: … » si la production vit sur le compte du client (ADR 0015)' : ''}. Tant qu'il est absent, le bon compte dépend de ce que l'opérateur tape.`,
     );
   }
 
