@@ -1,0 +1,371 @@
+# Plan de certification du pilote (jalon 10)
+
+Ce document dit **comment** la campagne du plan §8 se déroule en conditions
+réelles : ce qu'il faut éprouver, sur quels comptes, avec quels secrets, dans
+quel ordre, et qui fait quoi. Les critères eux-mêmes restent ceux du
+[plan d'implémentation](../implementation-plan.md) (§8, §9, jalon 10) ; ce
+document ne les redéfinit pas, il les ordonne.
+
+Il est écrit pour être rejoué : la même campagne certifie le pilote, puis
+chaque nouvelle boutique (plan §1, « une campagne de certification réutilisable
+pour chaque nouvelle boutique »).
+
+## 1. Point de départ
+
+Au socle `v0.2.0`, les jalons 1 à 9 sont livrés, et tout ce qu'une doublure
+peut prouver est prouvé à chaque commit : `npm run verify`, la porte de
+sécurité, la porte navigateur, l'isolation de deux boutiques dans un compte
+imaginaire. Un seul passage a eu lieu sur un compte réel : le déploiement
+`minshop-test` du jalon 0, le 2026-08-29, par les scripts de l'époque et non
+par `shopctl`.
+
+Ce qui n'a **jamais** tourné en réel, et que chaque jalon a nommé plutôt que
+coché :
+
+| Jalon | Ligne ouverte | Ce qui la ferme |
+|---|---|---|
+| 0 | fiabilité de l'intégration D1 en CI | l'observation du workflow `D1 flake probe`, hors campagne |
+| 3 | test « remises » contre un vrai code promotionnel | un checkout Stripe test avec un code réel (étape 4) |
+| 6 | provisioning dans un compte de test | `shopctl provision` sur le compte agence (étape 3) |
+| 6 | smoke test avant promotion | dérogation proposée : demande les déploiements graduels (§6) |
+| 7 | Stripe test **et** live | étapes 4 et 10 |
+| 7 | notification d'expédition | une expédition réelle en staging (étape 4) |
+| 7 | critère de sortie : paiement réel encaissé puis remboursé | étape 10 |
+| 8 | supervision, runbooks d'incident | étapes 0 et 8 |
+| 8 | critère de sortie : restauration chronométrée < 1 h | étape 8 |
+| 9 | rollback applicatif | étape 8 |
+| §7.3 | tout le nocturne | étape 0 (workflow) puis étape 8 (premier passage) |
+| §7.4 | sauvegarde verte avant production | étape 0 (enchaînement) puis étape 9 |
+| §8.3 | les lignes sur des boutiques **déployées** | étape 7 |
+
+## 2. Dispositif
+
+### 2.1 Les boutiques
+
+- **`pilot-fr`**, la boutique certifiée. Elle sort de son état de fixture :
+  un vrai dépôt créé par `shopctl new pilot-fr --core v0.2.0 --create-repo`
+  (ou la version du socle en cours au moment de la campagne), un vrai
+  manifeste, un vrai domaine. Le catalogue témoin de vingt produits est importé
+  tel quel.
+- **`canary-minimal`**, la contre-épreuve. Elle ne sert qu'à l'étape 7 :
+  déployée en staging à côté de `pilot-fr`, dans le même compte, pour rejouer
+  les lignes du §8.3 que la porte d'isolation ne peut pas tenir.
+
+### 2.2 Les comptes
+
+Le cycle de vie de l'[ADR 0015](../architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)
+fait passer une boutique d'un compte à l'autre entre la preview et la saisie.
+La campagne l'éprouve tel quel, donc il faut **deux** comptes Cloudflare :
+
+| Compte | Rôle | Environnements |
+|---|---|---|
+| Cloudflare **A** — agence | construction et preview privée | `pilot-fr` staging, `canary-minimal` staging |
+| Cloudflare **B** — « client » | saisie et mise en ligne | `pilot-fr` production, cible de la restauration |
+| Stripe — mode test | tout le fonctionnel | staging |
+| Stripe — mode live | la commande réelle et son remboursement | production |
+| Resend | e-mails de commande et d'expédition | staging puis production |
+| GitHub | dépôts des deux boutiques, environnements, approbation | — |
+
+Le compte B joue le client. Pour le pilote, c'est un second compte au nom de
+Damien ; pour une vraie boutique, c'est celui du marchand
+([ADR 0002](../architecture/decisions/0002-propriete-des-comptes.md)). Deux
+comptes coûtent un formulaire et prouvent deux choses qu'un seul ne prouve
+pas : que `provision` refuse le mauvais compte en vrai, et que la restauration
+fonctionne **vers un autre compte**, ce qui est la condition de sortie d'un
+client (ADR 0005).
+
+### 2.3 Les secrets et identifiants
+
+Aucun de ces éléments ne transite par le dépôt, par une conversation ou par un
+argument de commande. La colonne « où » dit où chacun est posé.
+
+| Élément | Nature | Qui le crée | Où il vit |
+|---|---|---|---|
+| ID du compte A, ID du compte B | identifiant, pas un secret | Damien | `client.yaml` (`cloudflare.accountId`) et secret GitHub `CLOUDFLARE_ACCOUNT_ID` |
+| Jeton API Cloudflare, un par dépôt et par environnement | secret | Damien, sur chaque compte | secret d'environnement GitHub `CLOUDFLARE_API_TOKEN`, posé par `shopctl repo` |
+| Session Wrangler de l'opérateur | secret | Damien (`wrangler login`) | la machine qui exécute `shopctl` |
+| `AUTH_SECRET`, `SECRETS_KEK` | secrets internes | `shopctl provision` | secrets du Worker, tirés par boutique et par environnement, jamais affichés |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | configuration, pas un secret | Damien (application Access) | `vars` du `wrangler.jsonc` de staging |
+| Clé Turnstile (site + secret) | secret pour la seconde | Damien | Admin → Réglages → Protection |
+| `stripe_secret_key` test puis live (clé restreinte de préférence) | secret | Damien | coffre chiffré, Admin → Réglages → Paiements |
+| `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
+| `resend_api_key` | secret | Damien | coffre chiffré |
+| Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) ou `SHOPCTL_BACKUP_KEY` |
+| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 |
+
+L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
+s'abonne à cinq événements, ceux que l'adaptateur lit :
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired` et
+`charge.refunded`.
+
+### 2.4 Où tournent les commandes
+
+`shopctl provision`, `deploy`, `backup` et `restore` demandent une session
+Wrangler sur le bon compte. Deux possibilités :
+
+- **la machine de Damien**, avec `wrangler login` — recommandé : les
+  identifiants ne quittent pas son poste, et la campagne exerce le chemin
+  qu'un opérateur suivra ;
+- **le workflow `Deploy` du dépôt de la boutique**, avec les jetons posés par
+  `shopctl repo` — pour `deploy` seulement, et c'est ce que l'étape 9 exige de
+  toute façon pour la production.
+
+## 3. Règles de la campagne
+
+- **Rien ne touche un compte réel sans le feu vert de Damien**, donné étape
+  par étape. Chaque étape ci-dessous commence par la liste de ce qu'elle crée,
+  modifie ou détruit, pour que ce feu vert porte sur quelque chose de précis.
+- **Chaque ligne cochée porte sa preuve** : un rapport JSON de `shopctl`, une
+  capture, un identifiant Stripe, une sortie de commande. Les preuves vont
+  dans `docs/certification/<boutique>/` du dépôt de la boutique, jamais une
+  valeur secrète ni une donnée personnelle réelle.
+- **Une ligne qui échoue n'est pas cochée « avec réserve »** : elle est
+  corrigée dans le socle, ou elle reçoit une dérogation écrite, datée, avec sa
+  mesure compensatoire (critère de sortie du jalon 10).
+- **Un défaut trouvé en réel devient un test** du socle quand une doublure
+  peut le reproduire, comme les défauts du jalon 0 et du jalon 6 l'ont été.
+
+## 4. Étapes
+
+Les étapes sont ordonnées pour que chacune repose sur ce que la précédente a
+prouvé, et pour que l'argent réel arrive en dernier.
+
+### Étape 0 — Combler ce que le dépôt peut encore fermer
+
+Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
+`v0.3.0` sort à la fin : la campagne certifie une version publiée, pas `main`.
+
+- [ ] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
+  de l'extérieur au lieu du serveur local) et par une variante distante des
+  contrôles de sécurité qui ne demandent pas Miniflare (en-têtes, admin
+  anonyme, CSRF, téléchargement non autorisé, traversée de chemin) — §8.4,
+  §8.5 ;
+- [ ] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
+  minutes) et celui des cinq checkouts concurrents sur la dernière unité —
+  §8.6 ;
+- [ ] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
+  le déploiement si elle échoue — §7.4, §9 ;
+- [ ] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
+  Stripe test, webhook, e-mail de test, sauvegarde, restauration vers un
+  environnement éphémère, smoke tests, audit des dépendances ;
+- [ ] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
+  les webhooks, e-mails bloqués, base corrompue, fuite de secret, violation
+  de données) et la procédure de sortie d'un client — jalon 8, §12 ;
+- [ ] décider de la supervision : notifications Cloudflare (erreurs Worker,
+  CPU, quotas D1) et alerte de passage au plan Workers Paid — jalon 8, §8.6 ;
+- [ ] trancher les deux cases sans porte : le formateur (§7.1) et la CSP
+  (§8.4, voir jalon 8) — adopter, ou dérogation écrite.
+
+Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
+campagne).
+
+### Étape 1 — Comptes et accès
+
+Actions humaines uniquement (ADR 0002) ; `shopctl doctor` vérifie ce qu'il
+peut et nomme le reste.
+
+- [ ] compte Cloudflare A et compte B, R2 activé sur les deux ;
+- [ ] un domaine réel dans une zone du compte A pour la preview
+  (`stagingDomain`), et un domaine pour la production rattaché au compte B ;
+- [ ] Zero Trust activé sur A, une application Access sur le nom d'hôte de
+  preview, son `AUD` relevé ;
+- [ ] un widget Turnstile ;
+- [ ] Stripe : compte en mode test ; activation du mode live (vérification
+  d'identité) lancée tôt, parce qu'elle prend des jours ;
+- [ ] Resend : domaine d'envoi vérifié (SPF, DKIM), une clé API ;
+- [ ] GitHub : décider si l'approbation de production doit être opposable —
+  sur un dépôt privé, les relecteurs obligatoires demandent un plan payant ;
+  sans lui, `shopctl repo` le dit et la ligne §9 « approbation humaine »
+  devient une dérogation ;
+- [ ] jetons API Cloudflare, un par dépôt et par environnement ;
+- [ ] `shopctl doctor` vert sur la machine de l'opérateur.
+
+Fait avancer : jalon 6 (prérequis humains), jalon 10.
+
+### Étape 2 — Forge réelle
+
+Crée : deux dépôts GitHub privés, leurs environnements et leurs secrets.
+
+- [ ] `shopctl new pilot-fr --core v0.3.0 --account <A> --create-repo` ;
+- [ ] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
+  vert ;
+- [ ] `shopctl repo` relancé : rien ne change, les secrets sont réécrits ;
+- [ ] une pull request de la boutique fait tourner sa CI — §7.2 ;
+- [ ] idem pour `canary-minimal`, sans `accountId` déclaré.
+
+Fait avancer : jalon 6 (forge), §7.2.
+
+### Étape 3 — Staging sur le compte agence
+
+Crée : Worker, D1, deux buckets R2 et un namespace KV par boutique sur A ;
+secrets internes ; données de catalogue.
+
+- [ ] `provision --env staging --dry-run`, puis réel, puis une seconde fois :
+  le second passage ne crée rien ;
+- [ ] `provision` avec le mauvais compte : refus, code de sortie 4 ;
+- [ ] juridiction `eu` lue sur la base et les buckets via l'API ;
+- [ ] bucket de fichiers inaccessible publiquement ;
+- [ ] `deploy --env staging` : smoke test vert, **et** requête anonyme sur la
+  preview refusée, **et** `workers.dev` fermé ;
+- [ ] `/admin/setup` derrière Access, mot de passe posé ;
+- [ ] `catalog import --remote` du catalogue témoin, puis une seconde fois :
+  plan vide ;
+- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration.
+
+Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
+(import réel), §8.4 en partie.
+
+### Étape 4 — Fonctionnel et paiement en mode test
+
+Crée : des commandes Stripe test, des e-mails réels vers des boîtes de test.
+
+- [ ] le parcours du §8.1 ligne par ligne, sur desktop et mobile ;
+- [ ] les sept lignes du §8.2, chacune avec l'identifiant Stripe, la ligne D1
+  et le stock avant/après ;
+- [ ] un code promotionnel réel : remise sur la commande, TVA calculée après
+  remise (ligne ouverte du jalon 3) ;
+- [ ] remboursement partiel puis total depuis Stripe : la commande suit ;
+- [ ] webhook rejoué depuis le tableau de bord Stripe : aucune seconde
+  commande ;
+- [ ] expédition saisie dans l'administration : l'e-mail d'expédition part
+  (ligne ouverte du jalon 7) ;
+- [ ] Resend rendu indisponible (clé révoquée le temps du test) : la commande
+  est écrite, l'e-mail part au balayage suivant — §8.7 ;
+- [ ] export des commandes, pages légales publiées, case CGV — §8.1.
+
+Fait avancer : jalon 7 (Stripe test, notification d'expédition), jalon 3
+(remises), §8.1, §8.2.
+
+### Étape 5 — Sécurité sur la boutique déployée
+
+Lecture seule, plus quelques requêtes hostiles vers sa propre boutique.
+
+- [ ] les neuf lignes du §8.4 contre l'URL de staging, avec l'outillage de
+  l'étape 0 ;
+- [ ] `wrangler tail` pendant l'étape 4 rejouée : aucune adresse e-mail ni
+  postale dans les logs ;
+- [ ] `npm audit` racine et `mcp/` : aucune vulnérabilité élevée ou critique
+  non justifiée ;
+- [ ] scan de secrets sur le dépôt de la boutique et ses artefacts de build.
+
+Produit : le **rapport de sécurité**.
+
+### Étape 6 — Accessibilité, navigateurs, performance
+
+- [ ] porte navigateur contre l'URL de staging — §8.5 ;
+- [ ] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
+  iPhone, Chrome sur Android ;
+- [ ] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
+  panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés ;
+- [ ] charge de quinze minutes : aucune erreur Worker, consommation du plan
+  Workers Free relevée ;
+- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande.
+
+La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
+le scénario doit les contourner explicitement ou les compter comme attendus,
+pas les désactiver.
+
+Produit : le **rapport de performance**.
+
+### Étape 7 — Isolation de deux boutiques déployées
+
+Crée : la boutique `canary-minimal` en staging sur A.
+
+- [ ] deux Workers répondant sur deux origines, deux bases, quatre buckets ;
+- [ ] un produit créé dans l'une n'apparaît pas dans l'autre ;
+- [ ] `catalog import` lancé depuis l'arbre de l'une vers l'autre : refus ;
+- [ ] `shopctl destroy --env staging --confirm canary-minimal` : tout part,
+  et rien de `pilot-fr`.
+
+Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
+
+### Étape 8 — Exploitation et résilience
+
+Crée : des archives de sauvegarde ; une restauration sur le compte B.
+
+- [ ] `backup keygen`, `backup --env staging`, `backup verify` ;
+- [ ] **restauration chronométrée** dans un environnement neuf du compte B :
+  du premier `provision` à la boutique servie, < 60 minutes (RTO) ; la
+  restauration se prouve elle-même table par table — critère du jalon 8 ;
+- [ ] RPO ≤ 24 heures : le nocturne de l'étape 0 tourne trois nuits de suite ;
+- [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
+- [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
+- [ ] montée de version réelle : un tag `v0.3.1` proposé par
+  `shopctl core upgrade --open-pr`, fusionné, déployé en staging ;
+- [ ] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre ;
+- [ ] mot de passe admin perdu : procédure exécutée telle que le runbook la
+  décrit ;
+- [ ] `privacy export` puis `anonymize` d'un acheteur de test.
+
+Les runbooks de l'étape 0 sont corrigés d'après ce qui s'est réellement
+passé. Produit : la **preuve de restauration**.
+
+Fait avancer : jalon 8 (critère de sortie, supervision, runbooks), jalon 9
+(rollback applicatif), §7.3, §8.7.
+
+### Étape 9 — Bascule sur le compte « client »
+
+Crée : la production de `pilot-fr` sur B. Détruit : le staging sur A.
+
+- [ ] `provision --env production` sur B ;
+- [ ] contenus saisis sur B, pas recopiés depuis A (ADR 0015) ;
+- [ ] `deploy --env production` par le workflow `Deploy`, sauvegarde préalable
+  verte, approbation GitHub ;
+- [ ] domaine de production, domaine d'images, smoke test public vert ;
+- [ ] `shopctl destroy --env staging` sur A.
+
+Fait avancer : jalon 6 (production), §7.4, §9.
+
+### Étape 10 — Argent réel
+
+Crée : une commande payée avec une vraie carte, puis son remboursement. Coût :
+les frais Stripe de la transaction, que le remboursement ne rend pas.
+
+- [ ] clés Stripe live et secret du webhook live dans le coffre de la
+  production ;
+- [ ] un produit à 1 € ; commande réelle ;
+- [ ] cohérence relevée entre Stripe, D1, stock, administration et e-mail ;
+- [ ] remboursement total ; la commande, le stock et l'e-mail suivent ;
+- [ ] e-mails lus dans Gmail, Outlook et Apple Mail ;
+- [ ] clés live retirées, ou boutique laissée fermée, selon la décision de
+  l'étape 11.
+
+Fait avancer : jalon 7 (critère de sortie), §8.8.
+
+### Étape 11 — Validations humaines et décision
+
+- [ ] relecture des pages légales et du consentement aux CGV ;
+- [ ] validation TVA et facturation par un expert-comptable — le manifeste
+  porte encore `invoiceStrategy: pending-validation` ;
+- [ ] recette par une personne extérieure au développement, sur le modèle de
+  procès-verbal du §12 ;
+- [ ] documentation du §12 complète ;
+- [ ] rapports assemblés, dérogations signées ;
+- [ ] décision go/no-go (point de décision F, §11).
+
+## 5. Livrables du jalon 10
+
+| Livrable | Produit par |
+|---|---|
+| rapport de tests | étapes 3, 4, 6, 7 |
+| rapport de sécurité | étape 5 |
+| rapport de performance | étape 6 |
+| preuve de restauration | étape 8 |
+| validation TVA/facturation | étape 11 |
+| checklist de lancement | étape 9, rejouable pour chaque boutique |
+| documentation de support | étapes 0 et 8 (runbooks), §12 |
+| décision go/no-go | étape 11 |
+
+## 6. Dérogations prévisibles
+
+À écrire dès maintenant plutôt qu'à découvrir le jour de la décision :
+
+- **smoke test avant promotion** (§5.5, étape 5) — demande les déploiements
+  graduels de Cloudflare ; compensé par le smoke test public qui échoue et
+  nomme la version de retour ;
+- **approbation de production opposable** — si le plan GitHub ne permet pas
+  de relecteurs obligatoires sur un dépôt privé ; compensé par le fait que
+  seul Damien a les droits d'écriture ;
+- **CSP** — si l'étape 0 confirme le choix du jalon 8 ;
+- **critère 320 px de WCAG 1.4.10** — mesuré, non gaté (jalon 5).
