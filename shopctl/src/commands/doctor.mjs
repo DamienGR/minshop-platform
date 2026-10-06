@@ -38,12 +38,16 @@ export const doctorUsage = `Usage: shopctl doctor [--offline] [--json]
  * first provisioning run, against a real account.
  */
 export const HUMAN_CHECKLIST = [
-  ['compte Cloudflare au nom de l\'agence, propriété vérifiée (ADR 0002)', 'Une boutique livrée sur le compte personnel du commerçant ne peut pas être exploitée ni restituée proprement.'],
-  ['R2 activé sur le compte avant tout provisioning', 'La création d\'un bucket échoue tant que R2 n\'a pas été activé une première fois dans le tableau de bord.'],
-  ['membres de l\'équipe invités sur le compte', 'Un compte à un seul accès est un point de défaillance unique.'],
+  ['compte Cloudflare de l\'agence pour la construction et la preview, compte du commerçant pour la saisie et la production (ADR 0002, ADR 0015)', 'Cloudflare ne transfère rien entre comptes : le compte du commerçant doit exister avant qu\'il saisisse quoi que ce soit.'],
+  ['R2 activé sur chaque compte avant tout provisioning', 'La création d\'un bucket échoue tant que R2 n\'a pas été activé une première fois dans le tableau de bord.'],
+  ['membres de l\'équipe invités sur chaque compte', 'Un compte à un seul accès est un point de défaillance unique.'],
   ['compte Stripe activé, en mode test puis en mode live', 'L\'activation Stripe demande des pièces justificatives et prend des jours ouvrés.'],
+  ['nom d\'hôte de preview dans une zone du compte de l\'agence, derrière une application Access', 'cloudflare.stagingDomain ferme workers.dev ; sans application Access sur ce nom, la preview est publique.'],
+  ['un widget Turnstile sur les noms d\'hôte de la boutique', 'Ses deux clés se saisissent dans Admin → Réglages → Protection.'],
+  ['domaine de production dans une zone du compte du commerçant', 'Le domaine personnalisé d\'un Worker demande une zone active sur le compte qui porte ce Worker.'],
   ['domaine d\'expédition vérifié chez le fournisseur d\'e-mail', 'Sans SPF/DKIM alignés, les confirmations de commande partent en spam.'],
-  ['domaine de production délégué à Cloudflare', 'Le domaine du manifeste doit exister avant la mise en production.'],
+  ['GitHub Pro au minimum sur le compte qui porte le dépôt de la boutique', 'Un dépôt privé n\'a pas de secrets d\'environnement sous GitHub Free ; les relecteurs obligatoires y demandent Enterprise.'],
+  ['un jeton API Cloudflare par environnement, limité à son compte et à sa zone', 'shopctl repo les pose (CLOUDFLARE_API_TOKEN_STAGING, CLOUDFLARE_API_TOKEN_PRODUCTION) ; un jeton commun donne au staging les droits de la production.'],
 ];
 
 /** The tree doctor is describing. Neither shape is an error: the core is where
