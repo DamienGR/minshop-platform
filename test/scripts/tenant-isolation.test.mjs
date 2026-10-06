@@ -194,7 +194,7 @@ describe('two themes', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Two Workers, two databases, four buckets per pair of environments (§8.3)
+// Two Workers, two databases, six buckets per pair of environments (§8.3)
 
 describe('the resources of two shops in one account', () => {
   /** Every resource name the account holds, by kind. */
@@ -212,19 +212,20 @@ describe('the resources of two shops in one account', () => {
     const expected = [world.pilot, world.canary].flatMap((target) => ENVS.map((env) => names(target.slug, env)));
     const { databases, buckets } = inventory();
     expect(databases.sort()).toEqual(expected.map(({ database }) => database).sort());
-    expect(buckets.sort()).toEqual(expected.flatMap(({ images, files }) => [images, files]).sort());
+    expect(buckets.sort()).toEqual(expected.flatMap(({ images, files, backups }) => [images, files, backups]).sort());
   });
 
-  // Four buckets per shop across the pair of environments — images and files,
-  // staging and production — is the plan's count, and it is a count because the
-  // failure is a MISSING one: a private-files bucket that a second shop reuses
-  // hands one merchant's invoices to the other.
-  it('gives each shop four buckets across the pair of environments', () => {
+  // Six buckets per shop across the pair of environments — images, files and
+  // backups, staging and production — and it is a count because the failure is
+  // a MISSING one: a private-files bucket that a second shop reuses hands one
+  // merchant's invoices to the other, and a shared backups bucket puts one
+  // shop's whole database next to another's restore.
+  it('gives each shop six buckets across the pair of environments', () => {
     const { buckets } = inventory();
     for (const target of [world.pilot, world.canary]) {
-      expect(buckets.filter((name) => name.includes(target.slug))).toHaveLength(4);
+      expect(buckets.filter((name) => name.includes(target.slug))).toHaveLength(6);
     }
-    expect(new Set(buckets).size).toBe(8);
+    expect(new Set(buckets).size).toBe(12);
   });
 
   it('never lets two shops share a database, an id or a Worker', () => {

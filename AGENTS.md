@@ -21,6 +21,9 @@ change holds together. Run it after every meaningful edit, not just at the end.
 Its parts can be run alone: `npm run check:toolchain` (Node/npm line),
 `npm run check:deploy` (Wrangler dry run + bundle budgets, needs a build),
 `npm run check:secrets` (tracked-tree credential scan),
+`npm run check:format` (the formatting floor: LF, final newline, no trailing
+whitespace, no tab indentation — a floor rather than a formatter, because a
+reformatted core lands as a merge conflict in every shop),
 `npm run check:secrets:artifacts` (the same rules over `dist/`, plus the local
 `.dev.vars` values, which Vite can freeze into the bundle — needs a build),
 `npm run test:security` (the security gate below, needs a build),
@@ -35,6 +38,9 @@ job; run it locally before tagging a core version.
 `npm run test:browser` is the other gate outside `verify` — Playwright against
 the built Worker, for everything a container render cannot see (accessibility,
 keyboard, zoom, no-JS, the compiled design). See "The browser gate" below.
+
+`test/remote/` is the third family: the same questions asked of a DEPLOYED
+shop, given as `BASE_URL`. See "The remote gates" below.
 
 Other commands: `npm run dev` (astro dev), `npm run preview` (wrangler dev =
 production mode, for testing middleware/auth), `npm run db:migrate` (local D1),
@@ -126,8 +132,10 @@ it for editors. Never hand-edit the generated schema — run
 `npm run config:validate -- --write`.
 
 Every Cloudflare resource name is DERIVED from `cloudflare.workerName`
-(`<name>-db`, `-images`, `-files`, `-session`), so one shop is one name family
-and `destroy-cf.sh` removes all of it. Two manifests may never claim the same
+(`<name>-db`, `-images`, `-files`, `-backups`, `-session`), so one shop is one
+name family and `shopctl destroy` removes all of it. `-backups` is the one no
+Worker binds: it holds the CI's encrypted archives, private, in the shop's
+jurisdiction (ADR 0005, note of 2026-10-06). Two manifests may never claim the same
 identifier: nothing at runtime separates two shops' data (ADR 0001).
 
 A DEPLOYED resource additionally carries its environment, which qualifies the
@@ -179,6 +187,7 @@ npm run shopctl -- deploy --env production --yes
 npm run shopctl -- destroy --env staging --confirm <slug>
 npm run shopctl -- privacy export --env production --email <adresse>
 npm run shopctl -- privacy anonymize --env production --email <adresse> --confirm <slug>
+npm run shopctl -- monitor --env production   # taux d'erreur, quotas du plan gratuit
 npm run shopctl -- core status          # quelle version cette boutique porte
 npm run shopctl -- core upgrade --to v1.1.0 --open-pr
 npm run shopctl -- fleet status         # depuis l'espace de travail de l'agence
@@ -286,7 +295,9 @@ Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
 `fleet.test.mjs` (core upgrade, fleet, pull requests) and `release.test.mjs`
 (the publication gate),
 `provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
-environment, deployment, teardown), `backup.test.mjs` and `restore.test.mjs`
+environment, deployment, teardown), `nightly.test.mjs` (the nightly workflow
+as text), `monitor.test.mjs` (the supervision,
+against `test/fixtures/graphql-double.mjs` in its own process), `backup.test.mjs` and `restore.test.mjs`
 (the archive and the round trip), `privacy.test.mjs` (the map, the erasure and
 the second buyer who must not be touched), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
 tags it, and runs the real binary against it. The last two install
@@ -296,6 +307,22 @@ live, against a real git repository whose GitHub remote is rewritten to a local
 bare one by `url.<path>.insteadOf`. The real argument construction, the real
 output parsers and the real exit codes are exercised — only the accounts are
 imaginary.
+
+## Supervision and runbooks
+
+`docs/operations/` is what an operator opens when something is wrong: one
+runbook per incident, and the client exit procedure. A runbook names real
+commands; when you change one of them (a flag, a table, a route), change the
+runbook in the same commit.
+
+`shopctl monitor --env <env>` is the supervision, and it is a command because
+Cloudflare's notification catalogue has no alert for a Worker's error rate,
+its CPU time or a D1 quota on the plans a shop runs on. It reads the GraphQL
+Analytics API (`CLOUDFLARE_API_TOKEN`, Account Analytics: Read), fails at 1 %
+errors or at 70 % of a Workers Free quota, and treats an unreachable or
+refusing API as exit 5 — never as a quiet night. The endpoint follows
+`CLOUDFLARE_API_BASE_URL`, the variable wrangler honours, which is how the
+suite points it at its double.
 
 ## Backup and restore
 
@@ -346,6 +373,26 @@ Six properties hold, and each one is a test:
 - **retention is bounded and both bounds must agree.** `backup prune` drops an
   archive only when it is BOTH older than `--keep-days` and beyond `--keep`: a
   shop that stopped being backed up must not lose its last archive to an age rule.
+
+`restore --local` writes into the tree's own `.wrangler/state` instead of an
+environment: no account, no resource, the same comparison at the end. It is
+how the nightly run proves the archive it just took still opens and still
+restores, on a runner that is thrown away. It refuses a production archive —
+that is buyers' personal data, and a laptop is not where the register says it
+goes. The wrangler double keeps `--local` apart from the account the way
+wrangler does (`.wrangler/state` in the tree), so the suite can tell the two
+targets apart.
+
+What CI takes does not stay on the runner. `backup --upload` copies the sealed
+files into the environment's private `-backups` bucket (manifest last, so a
+half-copied archive has no manifest), and `backup pull <id>` brings one back and
+checks it as `verify` would. `deploy --env production` takes one, uploads it and
+only then migrates (plan §9) — no flag skips that. The bucket's lifecycle rule is
+`--keep-days`' 90, and it is an AGE rule only: R2 cannot count, so the "never
+lose the last one" half of `prune` does not hold there. What holds it instead is
+the nightly run failing loudly — a nightly that stopped is an incident, not a
+quiet week. The CI's key is the operator's, placed by `shopctl repo` and KEPT
+when already there: archives are encrypted with it.
 
 Gotchas that cost an afternoon:
 
@@ -556,13 +603,68 @@ Two rules the gate enforces that are easy to break by accident:
   detector — a street address has no shape — so free-form provider text is kept
   out of the message at the source instead (see `features/email/resend.ts`).
 
+## The remote gates
+
+`test/remote/` holds the scripts that talk to a shop that EXISTS — the staging
+of the certification campaign, or a production after a deploy — rather than to
+a Worker this repository boots. Everything comes from the environment, never
+from an argument: `BASE_URL`, and behind a private preview
+`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` (`test/remote/target.mjs`).
+
+- `npm run test:security:remote` — the half of the security gate that needs
+  nothing but HTTP: the admin routes (derived from the files, through the same
+  `test/helpers/admin-routes.mjs` the local gate uses), the wizard, a forged
+  Access assertion, form origin, path traversal, headers on every class of
+  response including static assets, capability URLs, an unhandled error.
+  Behind Access the service token rides on every request, so "anonymous" means
+  anonymous to the Worker's own gate — and an admin guarded by Access alone,
+  which a service token would open, fails it.
+- `npm run test:browser:remote` — the browser gate against `BASE_URL`.
+  `test/browser/remote-routes.mjs` finds the kinds of page the specs need in
+  the merchant's catalogue (once per run, through `MINSHOP_REMOTE_FIXTURE`),
+  and a kind it does not find is a skip with its reason, never another page.
+  The service token goes ONLY to the shop's origin (`test/browser/fixtures.mjs`
+  routes it), never through `extraHTTPHeaders`, which would hand it to every
+  third party the page loads. Specs import `test`/`expect` from there.
+- `npm run test:load:remote` — twenty shoppers, fifteen minutes. Every shopper
+  shares one IP, so search is paced at half its limiter and a 429 is counted
+  apart; one 5xx fails the run. No checkout: that holds stock.
+- `npm run test:last-unit:remote -- --product <slug>` — five checkouts on a
+  stock checked to be 1 first (an order of a million units is refused with the
+  real count and reserves nothing).
+- `npm run test:stripe:remote` — a Stripe test session expired through
+  Stripe's API, and the webhook must give the unit back. TEST keys only.
+- `npm run test:email:remote` — the admin's test e-mail, through the login
+  when the admin has a password; the recipient is masked in the output.
+
+None of them has met a real Worker for the first time on the day it matters:
+`test/integration/remote-gates.mjs` (in `npm run verify`) runs each one over a
+real port against the BUILT Worker — the security gate red on a bootstrap
+shop and green in both admin modes; the others on a configured shop, with
+Stripe and Resend stood in for by this process. That runner spawns
+ASYNCHRONOUSLY on purpose: the stand-ins answer from the parent, and a
+`spawnSync` would deadlock the Worker on them.
+
+`.github/workflows/nightly.yml` strings them together every night (plan
+§7.3): everywhere, `npm run verify` on a clean D1 and `npm audit`; in a shop
+repository, against staging, backup, `restore --local`, the remote gates,
+`shopctl monitor`, Stripe and e-mail — and `shopctl monitor --env production`,
+the one production read, with a repository-level analytics-read token
+(`MONITOR_CLOUDFLARE_API_TOKEN`) rather than through the `production`
+environment, whose reviewers would hold every night. A check whose credential
+is absent is skipped with a warning, never passed silently.
+`test/scripts/nightly.test.mjs` pins what makes it safe: staging only but for
+that read, shopctl
+rather than raw wrangler, `pipefail` under every `tee`, no expression
+substituted into a script, and the archive never uploaded as an artifact.
+
 ## The tenant-isolation gate
 
 `npm run test:tenant-isolation` (`test/scripts/tenant-isolation.test.mjs`, and
 inside `vitest run`, so inside `npm run verify`) builds the two witness shops of
 plan §2.3 **in one imaginary Cloudflare account and one imaginary forge**, then
 asserts plan §8.3: two repositories, two themes, two Workers, two databases,
-four buckets per pair of environments, no shared secret, no crossed data.
+six buckets per pair of environments, no shared secret, no crossed data.
 
 The arrangement is the point. Every other suite here tests ONE shop, and the
 defect this gate exists for is a shop that is correct alone and wrong beside

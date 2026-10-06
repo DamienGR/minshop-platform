@@ -90,8 +90,12 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | `stripe_secret_key` test puis live (clé restreinte de préférence) | secret | Damien | coffre chiffré, Admin → Réglages → Paiements |
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
 | `resend_api_key` | secret | Damien | coffre chiffré |
-| Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) ou `SHOPCTL_BACKUP_KEY` |
-| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 |
+| Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) chez l'opérateur, et secret d'environnement GitHub `SHOPCTL_BACKUP_KEY` posé par `shopctl repo` (conservé s'il existe déjà) |
+| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 ; celui de staging aussi en secret d'environnement GitHub `MINSHOP_ADMIN_PASSWORD`, pour l'e-mail de test du nocturne |
+| Jeton de service Access de staging | secret | Damien (Zero Trust → Service Auth) | secrets d'environnement GitHub `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET`, pour le nocturne et les portes distantes |
+| Clé Stripe test du nocturne | secret | Damien, clé restreinte « Checkout Sessions : écriture » | secret d'environnement GitHub `STRIPE_TEST_SECRET_KEY` ; une clé live est refusée |
+| Destinataire de l'e-mail de test, origine de staging | configuration | Damien | variables d'environnement GitHub `NIGHTLY_EMAIL_TO` et, sans `stagingDomain`, `STAGING_URL` |
+| Jeton de lecture de l'analytique de production | secret, lecture seule (« Account Analytics : Read », « D1 : Read ») | Damien, sur le compte de la production | secrets du dépôt `MONITOR_CLOUDFLARE_API_TOKEN` et `MONITOR_CLOUDFLARE_ACCOUNT_ID` — hors de l'environnement `production`, dont les relecteurs bloqueraient chaque nuit |
 
 L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
 s'abonne à cinq événements, ceux que l'adaptateur lit :
@@ -136,26 +140,58 @@ prouvé, et pour que l'argent réel arrive en dernier.
 Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
 `v0.3.0` sort à la fin : la campagne certifie une version publiée, pas `main`.
 
-- [ ] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
+- [x] faire viser une URL déployée par la porte navigateur (`BASE_URL` fourni
   de l'extérieur au lieu du serveur local) et par une variante distante des
   contrôles de sécurité qui ne demandent pas Miniflare (en-têtes, admin
   anonyme, CSRF, téléchargement non autorisé, traversée de chemin) — §8.4,
-  §8.5 ;
-- [ ] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
+  §8.5. `npm run test:browser:remote` trouve dans le catalogue du marchand les
+  pages que les specs demandent (produit simple, épuisé, stock faible…) et
+  saute ce qu'il n'a pas en le disant ; `npm run test:security:remote` dérive
+  les routes d'administration des fichiers, comme la porte locale. Derrière une
+  preview privée, le jeton de service Access ne part que vers l'origine de la
+  boutique. `npm run verify` fait tourner la porte distante contre le Worker
+  construit (`test/integration/remote-gates.mjs`) : rouge sur une boutique
+  en amorçage, verte en mode mot de passe et en mode Access ;
+- [x] écrire le scénario de charge (vingt utilisateurs virtuels, quinze
   minutes) et celui des cinq checkouts concurrents sur la dernière unité —
-  §8.6 ;
-- [ ] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
-  le déploiement si elle échoue — §7.4, §9 ;
-- [ ] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
+  §8.6. `npm run test:load:remote` cadence la recherche à la moitié de son
+  limiteur, compte les 429 à part et échoue sur une seule 5xx ;
+  `npm run test:last-unit:remote -- --product <slug>` vérifie d'abord que le
+  stock vaut 1, sans rien réserver, puis tire les cinq requêtes ensemble. Les
+  deux tournent aussi dans `npm run verify` contre le Worker construit ;
+- [x] enchaîner `shopctl backup` devant `deploy --env production` et bloquer
+  le déploiement si elle échoue — §7.4, §9. L'archive est copiée dans un
+  bucket R2 privé par environnement, `<worker>-backups`, sur le compte de la
+  boutique et dans sa juridiction (décision du 2026-10-06, ADR 0005) ;
+- [x] écrire le workflow nocturne du §7.3 sur la base de staging : checkout
   Stripe test, webhook, e-mail de test, sauvegarde, restauration vers un
-  environnement éphémère, smoke tests, audit des dépendances ;
-- [ ] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
+  environnement éphémère, smoke tests, audit des dépendances.
+  `.github/workflows/nightly.yml` : partout, la suite complète sur une D1
+  neuve et `npm audit` (dépendances d'exécution gatées au niveau `high`) ;
+  dans un dépôt de boutique, sur staging, `backup --upload`, la restauration
+  de cette archive par `restore --local` dans la D1 du runner (jetée avec
+  lui), les portes distantes, `shopctl monitor`, une session Stripe test
+  expirée par l'API de Stripe dont le webhook doit rendre l'unité, et
+  l'e-mail de test de l'administration. La jambe payée de Stripe reste
+  manuelle (étape 4) : la page hébergée refuse d'être pilotée par un script ;
+- [x] rédiger les runbooks d'incident (Worker en erreur, Stripe ne livre plus
   les webhooks, e-mails bloqués, base corrompue, fuite de secret, violation
-  de données) et la procédure de sortie d'un client — jalon 8, §12 ;
-- [ ] décider de la supervision : notifications Cloudflare (erreurs Worker,
-  CPU, quotas D1) et alerte de passage au plan Workers Paid — jalon 8, §8.6 ;
-- [ ] trancher les deux cases sans porte : le formateur (§7.1) et la CSP
-  (§8.4, voir jalon 8) — adopter, ou dérogation écrite.
+  de données) et la procédure de sortie d'un client — jalon 8, §12. Dans
+  `docs/operations/`, avec celui du mot de passe admin perdu ;
+- [x] décider de la supervision : notifications Cloudflare (erreurs Worker,
+  CPU, quotas D1) et alerte de passage au plan Workers Paid — jalon 8, §8.6.
+  Le catalogue de Cloudflare n'a pas ces alertes aux plans d'une boutique ;
+  `shopctl monitor` les lit dans l'API GraphQL Analytics et échoue au-delà de
+  1 % d'erreurs ou de 70 % d'un quota du plan gratuit
+  (`docs/operations/README.md`) ;
+- [x] trancher les deux cases sans porte : le formateur (§7.1) et la CSP
+  (§8.4, voir jalon 8) — adopter, ou dérogation écrite. Formateur : un
+  plancher, `npm run check:format`, plutôt qu'un reformatage qui arriverait en
+  conflit dans chaque boutique (§7.1). CSP : la part qu'aucun gabarit ne peut
+  casser est posée et gatée, le reste est une dérogation datée (§6).
+- [ ] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
+  sont posées ; le tag sort du workflow `Release` une fois la pull request
+  fusionnée, sur feu vert de Damien.
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
@@ -211,7 +247,10 @@ secrets internes ; données de catalogue.
 - [ ] `/admin/setup` derrière Access, mot de passe posé ;
 - [ ] `catalog import --remote` du catalogue témoin, puis une seconde fois :
   plan vide ;
-- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration.
+- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration ;
+- [ ] secrets et variables du nocturne posés dans l'environnement `staging`
+  du dépôt (§2.3), puis le workflow `Nightly` lancé à la main : vert, ou
+  chaque contrôle sauté nommé dans son avertissement.
 
 Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
 (import réel), §8.4 en partie.
@@ -242,7 +281,9 @@ Fait avancer : jalon 7 (Stripe test, notification d'expédition), jalon 3
 Lecture seule, plus quelques requêtes hostiles vers sa propre boutique.
 
 - [ ] les neuf lignes du §8.4 contre l'URL de staging, avec l'outillage de
-  l'étape 0 ;
+  l'étape 0 (`BASE_URL=… npm run test:security:remote`). Elle échoue si
+  l'admin de staging est en mode Access seul : un jeton de service est une
+  identité Access valide, et il y entrerait — staging garde un mot de passe ;
 - [ ] `wrangler tail` pendant l'étape 4 rejouée : aucune adresse e-mail ni
   postale dans les logs ;
 - [ ] `npm audit` racine et `mcp/` : aucune vulnérabilité élevée ou critique
@@ -253,14 +294,18 @@ Produit : le **rapport de sécurité**.
 
 ### Étape 6 — Accessibilité, navigateurs, performance
 
-- [ ] porte navigateur contre l'URL de staging — §8.5 ;
+- [ ] porte navigateur contre l'URL de staging — §8.5 (`BASE_URL=… npm run
+  test:browser:remote`) ;
 - [ ] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
   iPhone, Chrome sur Android ;
 - [ ] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
   panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés ;
 - [ ] charge de quinze minutes : aucune erreur Worker, consommation du plan
-  Workers Free relevée ;
-- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande.
+  Workers Free relevée (`npm run test:load:remote -- --json charge.json`,
+  puis `shopctl monitor --env staging --hours 1`) ;
+- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande
+  (`npm run test:last-unit:remote -- --product <slug>`, stock mis à 1 dans
+  l'administration avant).
 
 La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
 le scénario doit les contourner explicitement ou les compter comme attendus,
@@ -272,11 +317,12 @@ Produit : le **rapport de performance**.
 
 Crée : la boutique `canary-minimal` en staging sur A.
 
-- [ ] deux Workers répondant sur deux origines, deux bases, quatre buckets ;
+- [ ] deux Workers répondant sur deux origines, deux bases, six buckets ;
 - [ ] un produit créé dans l'une n'apparaît pas dans l'autre ;
 - [ ] `catalog import` lancé depuis l'arbre de l'une vers l'autre : refus ;
 - [ ] `shopctl destroy --env staging --confirm canary-minimal` : tout part,
-  et rien de `pilot-fr`.
+  et rien de `pilot-fr` ; si le bucket `-backups` porte des archives, R2 le
+  refuse et la base reste — c'est le comportement attendu, à constater.
 
 Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
@@ -284,11 +330,15 @@ Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
 Crée : des archives de sauvegarde ; une restauration sur le compte B.
 
-- [ ] `backup keygen`, `backup --env staging`, `backup verify` ;
+- [ ] `backup keygen`, `backup --env staging --upload`, puis `backup pull`
+  depuis un autre poste et `backup verify` ;
 - [ ] **restauration chronométrée** dans un environnement neuf du compte B :
   du premier `provision` à la boutique servie, < 60 minutes (RTO) ; la
   restauration se prouve elle-même table par table — critère du jalon 8 ;
 - [ ] RPO ≤ 24 heures : le nocturne de l'étape 0 tourne trois nuits de suite ;
+- [ ] `shopctl monitor --env staging` contre la vraie API Analytics : les
+  champs que la doublure suppose existent, et un seuil abaissé à la main fait
+  bien échouer le run ;
 - [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
 - [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
 - [ ] montée de version réelle : un tag `v0.3.1` proposé par
@@ -367,5 +417,15 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 - **approbation de production opposable** — si le plan GitHub ne permet pas
   de relecteurs obligatoires sur un dépôt privé ; compensé par le fait que
   seul Damien a les droits d'écriture ;
-- **CSP** — si l'étape 0 confirme le choix du jalon 8 ;
+- **CSP, `script-src` et `style-src`** (écrite le 2026-10-06) — la boutique
+  envoie `object-src 'none'; base-uri 'self'; frame-ancestors 'none'` sur toute
+  réponse, Worker et actifs statiques, et la porte de sécurité le vérifie.
+  `script-src` et `style-src` restent ouverts : Astro sait hacher ses scripts
+  et ses styles (`security.csp`), mais la boutique porte des scripts en ligne
+  (`define:vars`, Turnstile) et des attributs `style` (préréglages de page) qu'il
+  faut d'abord recenser un par un. Mesures compensatoires : corps de page en
+  Markdown avec `html: false` (invariant 11), échappement d'Astro sur toute
+  valeur rendue, `nosniff` partout, aucun fichier téléversé servi pour ce qu'il
+  n'est pas (invariant 13). À rouvrir quand l'inventaire des scripts en ligne
+  est fait — un passage à part entière, pas un en-tête de plus ;
 - **critère 320 px de WCAG 1.4.10** — mesuré, non gaté (jalon 5).

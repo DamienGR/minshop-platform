@@ -28,9 +28,9 @@
  *    before it drops anything: a shop that stopped being backed up must not
  *    have its last archive expired by an age rule.
  */
-import { mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { ShopctlError, usageError, verificationError } from '../errors.mjs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { openEnvironment } from '../environment.mjs';
 import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
@@ -38,10 +38,16 @@ import { corePackage } from '../paths.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
 import { canonical, digest, tableDigest } from '../backup/dump.mjs';
 import { classifyTables, objectInventory, orderTables } from '../backup/schema.mjs';
-import { countRows, getObject, readSchema, readTables } from '../backup/store.mjs';
+import { countRows, getObject, putObject, readSchema, readTables } from '../backup/store.mjs';
+import { listBuckets, resolveAccount, whoami } from '../cloudflare.mjs';
 import {
   ARCHIVE_FORMAT,
   DATA_FILE,
+  MANIFEST_FILE,
+  archiveFiles,
+  assertBackupId,
+  DEFAULT_KEEP,
+  DEFAULT_KEEP_DAYS,
   DEFAULT_REPOSITORY,
   authenticatedHeader,
   backupId,
@@ -66,18 +72,16 @@ export const BACKUP_OPTIONS = {
   '--keep-days': 'jours',
 };
 
-export const BACKUP_FLAGS = ['--dry-run', '--no-media'];
+export const BACKUP_FLAGS = ['--dry-run', '--no-media', '--upload'];
 
-/** Retention, when the operator names none. Both bounds apply, and an archive
- *  is dropped only when both agree (ADR 0005: bornée, jamais vide). */
-export const DEFAULT_KEEP = 30;
-export const DEFAULT_KEEP_DAYS = 90;
+export { DEFAULT_KEEP, DEFAULT_KEEP_DAYS };
 
 export const backupUsage = `Usage: shopctl backup [sous-commande] [options]
 
   shopctl backup --env <staging|production>   Prendre une sauvegarde
   shopctl backup list                         Lister les sauvegardes du dépôt
   shopctl backup verify <id>                  Contrôler une sauvegarde
+  shopctl backup pull <id> --env <env>        Rapatrier une sauvegarde du bucket -backups
   shopctl backup prune                        Appliquer la politique de conservation
   shopctl backup keygen                       Écrire une clé de chiffrement
 
@@ -85,6 +89,8 @@ export const backupUsage = `Usage: shopctl backup [sous-commande] [options]
   --out <répertoire>          Dépôt des sauvegardes. Défaut : ${DEFAULT_REPOSITORY}/.
   --key-file <chemin>         Clé de chiffrement. Défaut : ${DEFAULT_KEY_FILE}, sinon SHOPCTL_BACKUP_KEY.
   --no-media                  Ne pas emporter les octets R2 ; l'inventaire seul.
+  --upload                    Copier aussi la sauvegarde dans le bucket -backups
+                              de l'environnement (privé, même juridiction).
   --keep <nombre>             Sauvegardes conservées par prune. Défaut : ${DEFAULT_KEEP}.
   --keep-days <jours>         Âge maximal conservé par prune. Défaut : ${DEFAULT_KEEP_DAYS}.
   --dry-run                   Tout préparer, ne rien écrire ni supprimer.
@@ -97,12 +103,12 @@ e-mails des clients. La clé n'est jamais passée en argument — elle vient d'u
 fichier ou de SHOPCTL_BACKUP_KEY — et \`backup keygen\` ne l'affiche pas.
 `;
 
-const SUBCOMMANDS = new Set(['create', 'list', 'verify', 'prune', 'keygen']);
+const SUBCOMMANDS = new Set(['create', 'list', 'verify', 'pull', 'prune', 'keygen']);
 
 export function runBackup(args, reporter) {
   const [first, ...rest] = args.positionals;
   const sub = first === undefined ? 'create' : first;
-  if (sub !== 'verify' && rest.length > 0) {
+  if (sub !== 'verify' && sub !== 'pull' && rest.length > 0) {
     throw usageError(`backup ${sub} ne prend pas d'argument positionnel ; reçu « ${rest.join('", "')} ».`, backupUsage.trim());
   }
   if (!SUBCOMMANDS.has(sub)) {
@@ -111,6 +117,7 @@ export function runBackup(args, reporter) {
   if (sub === 'create') return createBackup(args, reporter);
   if (sub === 'list') return listBackups(args, reporter);
   if (sub === 'verify') return verifyBackup(args, reporter, rest[0]);
+  if (sub === 'pull') return pullBackup(args, reporter, rest[0]);
   if (sub === 'prune') return pruneBackups(args, reporter);
   return keygen(args, reporter);
 }
@@ -137,8 +144,6 @@ function createBackup(args, reporter) {
   const { manifest, root, env, repository } = context(args);
   const dryRun = args.values['--dry-run'] === true;
   const withMedia = args.values['--no-media'] !== true;
-  const names = resourceNames(manifest, { env });
-  const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
 
   // The key FIRST, before a single row is read. A run that reads the whole
   // database and then discovers it has nowhere safe to put it has already put
@@ -156,6 +161,73 @@ function createBackup(args, reporter) {
     reporter,
     missing: `Il n'y a rien à sauvegarder en ${env}.`,
   });
+
+  // Asked before a row is read, for the same reason as the key: a nightly run
+  // that reads the whole database and then has nowhere durable to put it has
+  // only produced a file on a runner that is about to be thrown away.
+  const upload = args.values['--upload'] === true;
+  if (upload && !dryRun) requireBackupsBucket({ manifest, root, env });
+
+  const taken = captureBackup({ manifest, root, env, account, key, repository, withMedia, dryRun, reporter });
+
+  if (dryRun) {
+    if (upload) reporter.todo(`la sauvegarde serait copiée dans ${resourceNames(manifest, { env }).backups}`);
+    reporter.result({
+      command: 'backup',
+      ok: true,
+      dryRun: true,
+      shop: manifest.client.slug,
+      env,
+      wouldWrite: taken.path,
+      schema: taken.schema,
+      tables: taken.tables.map(({ name, rows }) => ({ name, rows })),
+      r2: taken.r2,
+      skipped: taken.skipped,
+    });
+    if (!args.values['--json']) reporter.section(`Simulation. Relancez sans --dry-run pour écrire ${taken.path}.`);
+    return 0;
+  }
+
+  const uploaded = upload ? uploadArchive({ manifest, root, env, path: taken.path, id: taken.id, reporter }) : null;
+
+  reporter.result({
+    command: 'backup',
+    ok: true,
+    dryRun: false,
+    shop: manifest.client.slug,
+    env,
+    id: taken.id,
+    path: taken.path,
+    schema: taken.schema.version,
+    tables: taken.tables,
+    r2: taken.r2,
+    bytes: taken.bytes,
+    uploaded,
+  });
+  if (!args.values['--json']) {
+    reporter.section(`Contrôlez-la : shopctl backup verify ${taken.id}`);
+    reporter.step(`    Restaurez-la : shopctl restore --env staging --from ${taken.id}`);
+  }
+  return 0;
+}
+
+/**
+ * Read one environment and seal it into an archive — the part of a backup that
+ * does not depend on who asked for it.
+ *
+ * `shopctl backup` calls it, and so does `shopctl deploy --env production`,
+ * which takes one before its migrations (plan §9: a deployment is blocked when
+ * the preceding backup fails). One implementation, so that the archive a deploy
+ * leaves behind is exactly the archive `backup verify` and `restore` already
+ * know how to read. Any failure throws, and the caller decides what that stops.
+ *
+ * The caller has already resolved the account and rendered the environment's
+ * configuration (`openEnvironment`, or the deploy's own resource check): the
+ * reads below go through the `DB` binding of the `wrangler.jsonc` in the tree.
+ */
+export function captureBackup({ manifest, root, env, account, key, repository, withMedia = true, dryRun = false, reporter }) {
+  const names = resourceNames(manifest, { env });
+  const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
 
   // ── The schema, as the database describes it ──────────────────────────────
   reporter.section('Schéma');
@@ -202,20 +274,14 @@ function createBackup(args, reporter) {
   const directory = join(repository, id);
 
   if (dryRun) {
-    reporter.result({
-      command: 'backup',
-      ok: true,
+    return {
       dryRun: true,
-      shop: manifest.client.slug,
-      env,
-      wouldWrite: directory,
+      path: directory,
       schema: { version: applied, migrations: migrations.length },
-      tables: tableEntries.map(({ name, rows }) => ({ name, rows })),
+      tables: tableEntries,
       r2: { images: inventory.images.length, files: inventory.files.length, media: withMedia },
       skipped,
-    });
-    if (!args.values['--json']) reporter.section(`Simulation. Relancez sans --dry-run pour écrire ${directory}.`);
-    return 0;
+    };
   }
 
   const buckets = [
@@ -294,23 +360,130 @@ function createBackup(args, reporter) {
 
   reporter.section('Sauvegarde');
   reporter.ok(`${id} — ${sealed.ciphertext.length} octet(s) chiffrés dans ${directory}`);
-  reporter.result({
-    command: 'backup',
-    ok: true,
+  return {
     dryRun: false,
-    shop: manifest.client.slug,
-    env,
     id,
     path: directory,
-    schema: manifestDocument.schema.version,
+    schema: manifestDocument.schema,
     tables: tableEntries.map(({ name, rows, digest: fingerprint }) => ({ name, rows, digest: fingerprint })),
     r2: bucketEntries.map(({ name, objects: count, stored }) => ({ name, objects: count, stored })),
     bytes: sealed.ciphertext.length,
-  });
-  if (!args.values['--json']) {
-    reporter.section(`Contrôlez-la : shopctl backup verify ${id}`);
-    reporter.step(`    Restaurez-la : shopctl restore --env staging --from ${id}`);
+  };
+}
+
+// ── The remote copy ─────────────────────────────────────────────────────────
+
+/**
+ * Copy an archive, as written, into the environment's backups bucket.
+ *
+ * Where a backup taken by CI survives the runner that took it (decided
+ * 2026-10-06: a private bucket per shop and environment, on the shop's own
+ * account, in its jurisdiction — ADR 0002 and ADR 0004). The files are the
+ * archive's own bytes, already encrypted: nothing is re-sealed on the way, so
+ * what `pull` brings back is byte for byte what `verify` checked here.
+ *
+ * Refused when the bucket does not exist rather than created: creating a bucket
+ * fixes its jurisdiction for good, which is provisioning's decision and nobody
+ * else's.
+ */
+export function uploadArchive({ manifest, root, env, path, id, reporter }) {
+  const names = resourceNames(manifest, { env });
+  const jurisdiction = manifest.cloudflare.jurisdiction;
+  requireBackupsBucket({ manifest, root, env, id });
+  const archive = JSON.parse(readFileSync(join(path, MANIFEST_FILE), 'utf8'));
+  const files = archiveFiles(archive);
+  for (const file of files) {
+    putObject(`${id}/${file}`, readFileSync(join(path, file)), {
+      cwd: root,
+      bucket: names.backups,
+      remote: true,
+      jurisdiction: ['-J', jurisdiction],
+    });
   }
+  reporter.ok(`${id} copiée dans ${names.backups} (${files.length} fichier(s))`);
+  return { bucket: names.backups, prefix: `${id}/`, files: files.length };
+}
+
+function requireBackupsBucket({ manifest, root, env, id = null }) {
+  const names = resourceNames(manifest, { env });
+  const jurisdiction = manifest.cloudflare.jurisdiction;
+  if (listBuckets({ cwd: root, jurisdiction }).includes(names.backups)) return;
+  throw preconditionError(
+    id ? `${names.backups} n'existe pas : la sauvegarde ${id} reste locale.` : `${names.backups} n'existe pas.`,
+    `\`shopctl provision --env ${env}\` crée ce bucket, privé et en juridiction ${jurisdiction}. Relancez ensuite la commande.`,
+  );
+}
+
+/**
+ * Bring an archive back from the backups bucket into the local repository.
+ *
+ * By identifier, because wrangler cannot list a bucket's objects: the id is in
+ * the deploy report, the nightly run's log, and the name of every file the
+ * bucket holds. The manifest comes first and names the rest; the copy is then
+ * checked exactly as `backup verify` checks a local one, before anything says
+ * it arrived.
+ */
+function pullBackup(args, reporter, id) {
+  if (!id) throw usageError('backup pull demande un identifiant.', 'Il figure dans le rapport du déploiement ou du run nocturne qui l\'a prise.');
+  assertBackupId(id);
+  const { manifest, root, env, repository } = context(args);
+  const names = resourceNames(manifest, { env });
+  const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
+  const directory = join(repository, id);
+  if (existsSync(join(directory, MANIFEST_FILE))) {
+    throw preconditionError(`${id} est déjà dans ${repository}.`, `Contrôlez-la : shopctl backup verify ${id}`);
+  }
+
+  // The account, but not the database: a pull is what an operator runs when the
+  // database is the thing that went wrong. The bucket's name alone does not say
+  // whose it is — a shop's staging exists on the agency's account and on the
+  // client's (ADR 0015) under the same name.
+  reporter.section('Compte Cloudflare');
+  const account = resolveAccount(
+    { manifest: manifest.cloudflare.accountId ?? null, flag: args.values['--account'] ?? null, env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null },
+    whoami({ cwd: root }),
+  );
+  reporter.ok(`${account.name} (${account.id})`);
+
+  reporter.section(`Rapatriement de ${id} depuis ${names.backups}`);
+  const fetch = (file) => {
+    const bytes = getObject(`${id}/${file}`, { cwd: root, bucket: names.backups, remote: true, jurisdiction });
+    if (!bytes) {
+      throw inputError(
+        `${id}/${file} est introuvable dans ${names.backups}.`,
+        file === MANIFEST_FILE
+          ? 'Vérifiez l\'identifiant et l\'environnement : une archive sans manifeste n\'a jamais fini d\'être copiée, ou a expiré.'
+          : 'L\'archive distante est incomplète ; elle ne peut pas servir.',
+      );
+    }
+    return bytes;
+  };
+
+  const manifestBytes = fetch(MANIFEST_FILE);
+  const archive = JSON.parse(manifestBytes.toString('utf8'));
+  if (archive.id !== id || archive.shop !== manifest.client.slug || archive.env !== env) {
+    throw verificationError(
+      `le manifeste distant décrit ${archive.shop}/${archive.env}/${archive.id}, pas ${manifest.client.slug}/${env}/${id}.`,
+      'Rien n\'a été écrit. Une archive se relit dans l\'arbre de la boutique qui l\'a prise.',
+    );
+  }
+  for (const file of archiveFiles(archive).filter((name) => name !== MANIFEST_FILE)) {
+    const target = join(directory, file);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, fetch(file));
+  }
+  // Written last, as `writeArchive` does: until it is there, the directory is
+  // an incomplete archive to every reader.
+  writeFileSync(join(directory, MANIFEST_FILE), manifestBytes);
+
+  const checks = verifyStructure(readArchive(repository, id));
+  for (const check of checks) (check.ok ? reporter.ok : reporter.fail).call(reporter, `${check.name} — ${check.detail}`);
+  const failures = checks.filter((check) => !check.ok);
+  reporter.result({ command: 'backup pull', ok: failures.length === 0, id, path: directory, bucket: names.backups, checks });
+  if (failures.length > 0) {
+    throw verificationError(`${failures.length} contrôle(s) ont échoué sur la copie de ${id}.`, 'La copie locale est gardée pour examen ; ne la restaurez pas.');
+  }
+  if (!args.values['--json']) reporter.section(`Restaurez-la : shopctl restore --env ${env} --from ${id}`);
   return 0;
 }
 

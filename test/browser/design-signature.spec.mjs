@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.mjs';
 import { resolveTheme } from '../../scripts/themes.mjs';
-import { settle } from './pages.mjs';
+import { REMOTE, settle } from './pages.mjs';
 
 /**
  * Visual regression, as a signature of the COMPILED design rather than as a
@@ -167,6 +167,9 @@ test.describe('signature du design', () => {
     // One viewport, checked from inside the test: a describe-level modifier
     // gets the fixtures, not the project.
     test.skip(test.info().project.name !== 'desktop', 'signature prise sur desktop');
+    // The probes aim at the fixture's pages and the signature records the
+    // fixture's rendering of them; a merchant's catalogue answers neither.
+    test.skip(REMOTE, 'signature prise sur le jeu d’essai, pas sur une boutique déployée');
 
     const captured = {};
     let current = null;

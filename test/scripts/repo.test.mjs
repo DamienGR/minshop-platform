@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -162,6 +162,37 @@ describe('shopctl repo', () => {
       expect(sets).toHaveLength(4);
       for (const call of sets) expect(call.argv.join(' ')).not.toContain('cf-token-shared');
       expect(`${result.stdout}${result.stderr}`).not.toContain('cf-token-shared');
+    });
+
+    // The CI seals with the operator's key, so that the operator can open what
+    // the CI took. Placed when absent and KEPT when present: archives are
+    // encrypted with it, and a second laptop with another key must not switch
+    // the CI over silently.
+    it('places the operator\u2019s backup key once, and keeps it after that', () => {
+      const target = forgeShop();
+      expect(target.run(['backup', 'keygen']).status).toBe(EXIT_CODES.ok);
+      const key = readFileSync(join(target.root, '.shopctl/backup.key'), 'utf8').trim();
+
+      const first = target.json(['repo'], TOKENS);
+      const environments = () => target.github().repos[target.nameWithOwner].environments;
+      for (const env of ['staging', 'production']) expect(environments()[env].secrets.SHOPCTL_BACKUP_KEY).toBe(key);
+      expect(first.report.secrets[0].set).toContain('SHOPCTL_BACKUP_KEY');
+      expect(`${first.stdout}${first.stderr}`).not.toContain(key);
+      const sets = target.github().calls.filter(({ argv }) => argv[0] === 'secret' && argv[1] === 'set');
+      for (const call of sets) expect(call.argv.join(' ')).not.toContain(key);
+
+      rmSync(join(target.root, '.shopctl/backup.key'));
+      target.run(['backup', 'keygen']);
+      const second = target.json(['repo'], TOKENS);
+      expect(second.report.secrets[0].set).not.toContain('SHOPCTL_BACKUP_KEY');
+      expect(environments().production.secrets.SHOPCTL_BACKUP_KEY).toBe(key);
+    });
+
+    it('says so when there is no backup key to place', () => {
+      const target = forgeShop();
+      const result = target.run(['repo'], TOKENS);
+      expect(result.status).toBe(EXIT_CODES.ok);
+      expect(result.stdout).toMatch(/aucune clé de sauvegarde à poser/);
     });
 
     it('takes the account id from the manifest', () => {

@@ -584,7 +584,7 @@ export function runNew(args, reporter) {
   reporter.step(`  socle    ${tag}`);
   reporter.step(`  domaine  ${domain}${domainFrom === '--domain' ? '' : `  (${domainFrom === 'placeholder' ? 'placeholder de documentation' : `depuis ${domainFrom}`})`}`);
   reporter.step(`  compte   ${accountId ?? '(non déclaré)'}${accountFrom && accountFrom !== '--account' ? `  (depuis ${accountFrom})` : ''}`);
-  reporter.step(`  Worker   ${names.worker}  (+ ${names.database}, ${names.images}, ${names.files}, ${names.sessions})`);
+  reporter.step(`  Worker   ${names.worker}  (+ ${names.database}, ${names.images}, ${names.files}, ${names.backups}, ${names.sessions})`);
   reporter.section('Prochaines actions');
   for (const step of nextSteps) reporter.step(`  ${step}`);
 

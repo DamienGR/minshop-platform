@@ -1,0 +1,307 @@
+# Every night (plan §7.3): what changes when nobody pushes.
+#
+# A shop that nobody touched for a month is not a shop that still works: a
+# dependency gets an advisory, a provider key is revoked, a webhook endpoint
+# stops being delivered to, an archive stops opening. None of those makes a
+# pull request fail, because there is no pull request. This workflow is the
+# pull request that comes every night.
+#
+# Two halves, because this file ships with the core into every shop:
+#
+#   - in EVERY repository — the core and each shop — the full suite on a clean
+#     D1 (`npm run verify`, whose integration stage builds a database from the
+#     migrations and nothing else) and the dependency audit;
+#   - in a SHOP repository only (one with `client/client.yaml`), the same
+#     questions asked of its deployed staging: a backup to the environment's
+#     `-backups` bucket, that backup restored into a throwaway D1 on the runner
+#     and compared table by table, the remote security and browser gates, the
+#     analytics thresholds, a Stripe test session expired through Stripe so
+#     the webhook gives its unit back, and a test e-mail through the saved
+#     configuration.
+#
+# Staging, never production — with ONE read-only exception: production's
+# error rate and quotas (`shopctl monitor`, docs/operations/README.md), read
+# with a token that can read analytics and nothing else. Not through the
+# `production` environment: its required reviewers would hold the run for an
+# approval every night, and the deploy token it carries can write.
+#
+# Each check that needs a credential runs only when its credential is
+# configured, and says so when it is skipped rather than passing silently:
+#
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, SHOPCTL_BACKUP_KEY
+#                                 placed by `shopctl repo`
+#   CF_ACCESS_CLIENT_ID / _SECRET a service token, when staging is a private
+#                                 preview (ADR 0015)
+#   STRIPE_TEST_SECRET_KEY        a TEST key, ideally restricted to
+#                                 "Checkout Sessions: write"
+#   MINSHOP_ADMIN_PASSWORD        the staging admin password (password mode)
+#   vars.NIGHTLY_EMAIL_TO         the operator address for the test e-mail
+#   vars.STAGING_URL              the staging origin, when the manifest
+#                                 declares no stagingDomain (a workers.dev URL)
+#
+# and, as repository secrets for the production watch:
+#
+#   MONITOR_CLOUDFLARE_API_TOKEN  Account Analytics: Read and D1: Read, on the
+#                                 account production lives on — nothing more
+#   MONITOR_CLOUDFLARE_ACCOUNT_ID that account
+#
+# GitHub suspends a schedule after sixty days without activity in a public
+# repository; a shop that is that quiet gets an e-mail from GitHub, and its
+# operator re-enables the workflow from the Actions tab.
+name: Nightly
+
+on:
+  schedule:
+    # 03:17 UTC: after D1's daily quotas reset at 00:00 UTC, so the night's
+    # reads land in a fresh day, and off the top of the hour, when GitHub's
+    # scheduler is busiest and runs late.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  suite:
+    name: Clean D1 and full suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Run the verification suite
+        uses: ./.github/actions/run-verify
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # What ships is the gate: the storefront Worker and the MCP Worker's
+      # runtime dependencies, at `high` and above. Build tooling (astro's
+      # compiler, wrangler, vitest) runs on a runner and a laptop, never in
+      # front of a buyer; its advisories are printed in full below the gate,
+      # and dependabot proposes the bumps.
+      - name: Audit runtime dependencies (storefront and MCP)
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high --prefix mcp
+
+      - name: Report every advisory, tooling included
+        if: always()
+        run: |
+          {
+            echo '## npm audit — tout l'"'"'arbre'
+            echo '```'
+            npm audit || true
+            echo '```'
+            echo '## npm audit — mcp/'
+            echo '```'
+            npm audit --prefix mcp || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # A job of its own, because a job-level `if:` cannot look at the tree.
+  detect:
+    name: Is this a shop?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shop: ${{ steps.shop.outputs.slug }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read the manifest
+        id: shop
+        run: |
+          if [ -f client/client.yaml ]; then
+            slug="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.client.slug)")"
+            echo "slug=$slug" >> "$GITHUB_OUTPUT"
+            echo "Boutique : $slug — les contrôles de staging tournent."
+          else
+            echo "Pas de client/client.yaml : le socle n'a pas de staging à interroger."
+          fi
+
+  staging:
+    name: Staging (${{ needs.detect.outputs.shop }})
+    needs: detect
+    if: ${{ needs.detect.outputs.shop != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find the staging origin
+        id: origin
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+        run: |
+          set -euo pipefail
+          domain="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.cloudflare.stagingDomain ?? '')")"
+          origin="${STAGING_URL:-${domain:+https://$domain}}"
+          if [ -z "$origin" ]; then
+            echo "::error::Ni cloudflare.stagingDomain dans le manifeste, ni la variable STAGING_URL dans l'environnement staging."
+            exit 1
+          fi
+          echo "url=$origin" >> "$GITHUB_OUTPUT"
+
+      # The archive stays on the runner for the restore below and goes to the
+      # environment's `-backups` bucket, on the shop's account and in its
+      # jurisdiction (decided 2026-10-06). Never to a GitHub artifact.
+      - name: Back up staging
+        id: backup
+        run: |
+          set -euo pipefail
+          node shopctl/bin/shopctl.mjs backup --env staging --upload --json | tee backup.json
+          echo "id=$(node -p "JSON.parse(require('node:fs').readFileSync('backup.json','utf8')).id")" >> "$GITHUB_OUTPUT"
+
+      # Into the runner's own D1, which is thrown away with it: the archive
+      # opens with the key, every table goes back, and the comparison against
+      # the archive's digests holds — the RPO half of jalon 8, every night.
+      - name: Restore it into a throwaway database
+        if: ${{ steps.backup.outcome == 'success' }}
+        env:
+          ARCHIVE: ${{ steps.backup.outputs.id }}
+        run: |
+          set -euo pipefail
+          node shopctl/bin/shopctl.mjs restore --env staging --from "$ARCHIVE" --local --json | tee restore.json
+
+      - name: Remote security gate
+        if: ${{ !cancelled() && steps.origin.outcome == 'success' }}
+        env:
+          BASE_URL: ${{ steps.origin.outputs.url }}
+        run: npm run test:security:remote
+
+      - name: Install Chromium
+        if: ${{ !cancelled() && steps.origin.outcome == 'success' }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser gate against staging
+        if: ${{ !cancelled() && steps.origin.outcome == 'success' }}
+        env:
+          BASE_URL: ${{ steps.origin.outputs.url }}
+        run: npm run test:browser:remote
+
+      - name: Error rate and quotas
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          node shopctl/bin/shopctl.mjs monitor --env staging --hours 24 --json | tee monitor.json
+
+      - name: Stripe test session, expiry and webhook
+        if: ${{ !cancelled() && steps.origin.outcome == 'success' }}
+        env:
+          BASE_URL: ${{ steps.origin.outputs.url }}
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: |
+          if [ -z "$STRIPE_TEST_SECRET_KEY" ]; then
+            echo "::warning::STRIPE_TEST_SECRET_KEY absent de l'environnement staging : contrôle Stripe sauté."
+            exit 0
+          fi
+          npm run test:stripe:remote
+
+      - name: Test e-mail
+        if: ${{ !cancelled() && steps.origin.outcome == 'success' }}
+        env:
+          BASE_URL: ${{ steps.origin.outputs.url }}
+          NIGHTLY_EMAIL_TO: ${{ vars.NIGHTLY_EMAIL_TO }}
+          MINSHOP_ADMIN_PASSWORD: ${{ secrets.MINSHOP_ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$NIGHTLY_EMAIL_TO" ]; then
+            echo "::warning::NIGHTLY_EMAIL_TO absent de l'environnement staging : e-mail de test sauté."
+            exit 0
+          fi
+          npm run test:email:remote
+
+      # The reports, not the data: identifiers, counts, digests, verdicts.
+      - name: Keep the nightly reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ needs.detect.outputs.shop }}-${{ github.run_id }}
+          path: |
+            backup.json
+            restore.json
+            monitor.json
+          retention-days: 30
+          if-no-files-found: warn
+
+  production-watch:
+    name: Production error rate and quotas (${{ needs.detect.outputs.shop }})
+    needs: detect
+    if: ${{ needs.detect.outputs.shop != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # wrangler, for the account and the database id; nothing else is used.
+      - name: Install dependencies
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        run: npm ci
+
+      - name: Error rate and quotas
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt : la production n'est pas surveillée cette nuit."
+            exit 0
+          fi
+          node shopctl/bin/shopctl.mjs monitor --env production --hours 24 --json | tee monitor-production.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ needs.detect.outputs.shop }}-production-${{ github.run_id }}
+          path: monitor-production.json
+          retention-days: 30
+          if-no-files-found: ignore

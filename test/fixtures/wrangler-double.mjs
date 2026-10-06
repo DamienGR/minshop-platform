@@ -170,14 +170,28 @@ function databaseNameFor(binding) {
   return name;
 }
 
+/**
+ * `--local` is the tree's own `.wrangler/state`, the way the real wrangler
+ * keeps it: nothing to provision, nothing on the account, and nothing shared
+ * with the remote database of the same name — which is the property a local
+ * restore relies on and the suite checks.
+ */
+const LOCAL = argv.includes('--local');
+const localState = (...parts) => join(process.cwd(), '.wrangler', 'state', ...parts);
+
 /** Where one database's bytes live: beside the state, one file per D1 name. */
 function databaseFile(name) {
-  return join(dirname(resolve(STATE)), `d1-${name.replace(/[^A-Za-z0-9._-]/g, '_')}.sqlite`);
+  const file = `d1-${name.replace(/[^A-Za-z0-9._-]/g, '_')}.sqlite`;
+  if (LOCAL) {
+    mkdirSync(localState(), { recursive: true });
+    return localState(file);
+  }
+  return join(dirname(resolve(STATE)), file);
 }
 
 function openDatabase(binding) {
   const name = databaseNameFor(binding);
-  if (!(state.d1 ?? []).some((entry) => entry.name === name)) fail(`Couldn't find DB with name '${name}'`);
+  if (!LOCAL && !(state.d1 ?? []).some((entry) => entry.name === name)) fail(`Couldn't find DB with name '${name}'`);
   return { name, db: new DatabaseSync(databaseFile(name)) };
 }
 
@@ -293,7 +307,7 @@ if (command === 'd1 migrations apply' || command.startsWith('d1 migrations')) {
     count += 1;
   }
   db.close();
-  done(`🌀 Executing on remote database: ${count} migrations to apply.`);
+  done(`🌀 Executing on ${LOCAL ? 'local' : 'remote'} database: ${count} migrations to apply.`);
 }
 
 if (command.startsWith('d1 execute')) {
@@ -321,7 +335,8 @@ if (command.startsWith('d1 execute')) {
 /** Where one bucket's objects live. Keyed by the hex of the object key, so a
  *  key with slashes in it is still one file. */
 function objectPath(bucket, key) {
-  return join(dirname(resolve(STATE)), 'r2', bucket, `${Buffer.from(key, 'utf8').toString('hex')}.bin`);
+  const file = `${Buffer.from(key, 'utf8').toString('hex')}.bin`;
+  return LOCAL ? localState('r2', bucket, file) : join(dirname(resolve(STATE)), 'r2', bucket, file);
 }
 
 function bucketEntry(name) {
@@ -332,7 +347,8 @@ function bucketEntry(name) {
 if (command.startsWith('r2 object ') && ['get', 'put', 'delete'].includes(positionals[2])) {
   const [bucketName, ...rest] = String(positionals[3] ?? '').split('/');
   const key = rest.join('/');
-  const bucket = bucketEntry(bucketName);
+  // A local bucket exists by being written to; its count is nobody's business.
+  const bucket = LOCAL ? {} : bucketEntry(bucketName);
   if (!bucket) fail('The specified bucket does not exist.');
   const path = objectPath(bucketName, key);
 
@@ -379,6 +395,29 @@ if (command === 'r2 bucket dev-url' && positionals[3] === 'get') {
   const bucket = (state.r2 ?? []).find((candidate) => candidate.name === name && (candidate.jurisdiction ?? null) === (wanted ?? null));
   if (!bucket) fail(`The specified bucket does not exist.`);
   done(bucket.devUrl ? `Public access is enabled at '${bucket.devUrl}'.` : 'Public access via the r2.dev URL is disabled.');
+}
+
+// Lifecycle rules: the real listing prints one `name:` line per rule, then
+// its fields. The double keeps the rules on the bucket record so a second
+// provisioning can find the one the first added.
+if (command === 'r2 bucket lifecycle' && positionals[3] === 'list') {
+  const bucket = bucketEntry(positionals[4]);
+  if (!bucket) fail('The specified bucket does not exist.');
+  const rules = bucket.lifecycle ?? [];
+  if (rules.length === 0) done(`Listing lifecycle rules for bucket '${bucket.name}'...\nThere are no lifecycle rules for bucket '${bucket.name}'.`);
+  done(
+    `Listing lifecycle rules for bucket '${bucket.name}'...\n` +
+      rules.map((rule) => `name:      ${rule.name}\nenabled:   Yes\nprefix:    (all prefixes)\naction:    Expire objects after ${rule.days} days`).join('\n\n'),
+  );
+}
+
+if (command === 'r2 bucket lifecycle' && positionals[3] === 'add') {
+  const bucket = bucketEntry(positionals[4]);
+  if (!bucket) fail('The specified bucket does not exist.');
+  const name = positionals[5];
+  if ((bucket.lifecycle ?? []).some((rule) => rule.name === name)) fail(`A lifecycle rule named '${name}' already exists.`);
+  bucket.lifecycle = [...(bucket.lifecycle ?? []), { name, days: Number(flag('--expire-days')) }];
+  done(`✨ Added lifecycle rule '${name}' to bucket '${bucket.name}'.`);
 }
 
 if (command === 'r2 bucket domain' && positionals[3] === 'list') {

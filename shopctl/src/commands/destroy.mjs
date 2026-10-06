@@ -29,6 +29,12 @@
  * and that refusal is relayed rather than worked around: a teardown that clears
  * a bucket on the operator's behalf is a teardown that deletes something nobody
  * meant to lose.
+ *
+ * The backups bucket is the last of the buckets, and the one most likely to be
+ * refused: it holds the archives, which are the only way back from a teardown
+ * that should not have happened. Emptying it is therefore the operator's own
+ * act, after `backup pull` has copied out what they mean to keep — and until
+ * they do, the database stays too.
  */
 import {
   deleteBucket,
@@ -56,13 +62,15 @@ export const destroyUsage = `Usage: shopctl destroy --env <staging|production> -
   --shop <slug>               Manifeste à utiliser quand l'arbre en contient plusieurs.
   --json                      Rapport lisible par une machine.
 
-Supprime, dans cet ordre : le Worker, les deux buckets R2, puis la base D1.
+Supprime, dans cet ordre : le Worker, les trois buckets R2 (images, fichiers,
+sauvegardes), puis la base D1.
 La base passe en dernier et seulement si le reste est parti — une exécution
 interrompue laisse une base lisible plutôt que des buckets orphelins.
 
 IRRÉVERSIBLE. Les commandes, les clients et les médias de cet environnement
 disparaissent avec lui. Un bucket non vide n'est pas vidé pour vous : R2 refuse,
-et le refus est relayé tel quel.
+et le refus est relayé tel quel. Récupérez les archives à garder
+(shopctl backup pull <id>) avant de vider le bucket des sauvegardes.
 `;
 
 export function runDestroy(args, reporter) {
@@ -127,6 +135,7 @@ export function runDestroy(args, reporter) {
     { kind: 'Worker', name: names.worker, exists: worker },
     { kind: 'bucket images', name: names.images, exists: buckets.includes(names.images) },
     { kind: 'bucket fichiers', name: names.files, exists: buckets.includes(names.files) },
+    { kind: 'bucket sauvegardes', name: names.backups, exists: buckets.includes(names.backups) },
     { kind: 'base D1', name: names.database, exists: Boolean(database) },
   ];
   for (const entry of present) {
@@ -177,11 +186,18 @@ export function runDestroy(args, reporter) {
 
   if (worker) record(deleteWorker(names.worker, { cwd: root }), 'Worker');
 
-  for (const [kind, name] of [['bucket images', names.images], ['bucket fichiers', names.files]]) {
+  for (const [kind, name] of [
+    ['bucket images', names.images],
+    ['bucket fichiers', names.files],
+    ['bucket sauvegardes', names.backups],
+  ]) {
     if (!buckets.includes(name)) continue;
     const outcome = record(deleteBucket(name, { cwd: root, jurisdiction }), kind);
     if (!outcome.removed && outcome.reason !== 'absent') {
       reporter.step('    R2 refuse un bucket non vide, et rien ne le vide à votre place.');
+      if (name === names.backups) {
+        reporter.step(`    Ce sont les archives de ${env} : récupérez celles à garder avant de vider (shopctl backup pull <id> --env ${env}).`);
+      }
       reporter.step(`    npx wrangler r2 object delete ${name}/<clé> -J ${jurisdiction}  — ou videz-le dans le tableau de bord.`);
     }
   }

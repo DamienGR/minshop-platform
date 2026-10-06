@@ -18,6 +18,11 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'x-content-type-options': 'nosniff', // don't MIME-sniff responses
   'x-frame-options': 'DENY', // block framing (clickjacking) — nothing here is meant to be embedded
   'strict-transport-security': 'max-age=31536000; includeSubDomains', // force HTTPS for a year
+  // The part of a Content-Security-Policy that no template can break: no
+  // plugins, no <base> rewriting every relative URL, no framing. script-src and
+  // style-src are a written derogation for now (docs/certification/plan.md §6):
+  // they need Astro's hashed CSP and an audit of every inline script first.
+  'content-security-policy': "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
 };
 
 /**

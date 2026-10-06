@@ -25,6 +25,14 @@
  *    target's tables do not, and the failure would land halfway through the
  *    insert.
  *
+ * `--local` restores into the tree's own `.wrangler/state` instead — no
+ * account, no resource, and the same comparison at the end. It is what the
+ * nightly run uses to prove last night's archive still opens and still
+ * restores (plan §7.3) on a runner that is thrown away afterwards, without a
+ * second set of databases on the account to keep. A PRODUCTION archive is
+ * refused there: it carries the buyers' personal data, and a laptop is not a
+ * place the RGPD register says it goes.
+ *
  * MIGRATIONS FIRST, then data. The archive holds rows, never DDL — which is
  * what makes it restorable into another account whose database was created five
  * minutes ago, and what makes the additive-migration rule (ADR 0006) the thing
@@ -44,6 +52,8 @@ import { DATA_FILE, authenticatedHeader, readArchive } from '../backup/archive.m
 import { keyId, keyMatches, loadKey, open } from '../backup/crypto.mjs';
 import { backupContext } from './backup.mjs';
 
+const LOCAL_DATABASE_ID = '00000000-0000-4000-8000-00000000c0de';
+
 export const RESTORE_OPTIONS = {
   '--env': 'environnement',
   '--from': 'identifiant',
@@ -54,7 +64,7 @@ export const RESTORE_OPTIONS = {
   '--confirm': 'slug',
 };
 
-export const RESTORE_FLAGS = ['--dry-run', '--overwrite', '--allow-production', '--allow-missing-media'];
+export const RESTORE_FLAGS = ['--dry-run', '--overwrite', '--allow-production', '--allow-missing-media', '--local'];
 
 export const restoreUsage = `Usage: shopctl restore --env <staging|production> --from <id> [options]
 
@@ -65,6 +75,9 @@ export const restoreUsage = `Usage: shopctl restore --env <staging|production> -
   --confirm <slug>            Le slug de la boutique, saisi. Obligatoire en production.
   --allow-missing-media       Continuer si l'archive ne porte pas les octets R2.
   --dry-run                   Tout contrôler et comparer, ne rien écrire.
+  --local                     Restaurer dans la D1 locale de l'arbre (.wrangler/state),
+                              sans compte : la preuve qu'une archive se rouvre. Refusé
+                              pour une archive de production.
   --out <répertoire>          Dépôt des sauvegardes. Défaut : backups/.
   --key-file <chemin>         Clé de chiffrement. Défaut : .shopctl/backup.key, sinon SHOPCTL_BACKUP_KEY.
   --account <id>              Compte Cloudflare attendu, si le manifeste ne le déclare pas.
@@ -87,6 +100,8 @@ export function runRestore(args, reporter) {
 
   const env = requireEnvironment(args.values['--env']);
   const dryRun = args.values['--dry-run'] === true;
+  const local = args.values['--local'] === true;
+  const remote = !local;
   const { manifest, root, repository } = backupContext(args);
   const names = resourceNames(manifest, { env });
   const jurisdiction = ['-J', manifest.cloudflare.jurisdiction];
@@ -96,7 +111,7 @@ export function runRestore(args, reporter) {
 
   // Production, before anything is read. The two gates the plan asks for
   // (§5.6): a dedicated option, and a confirmation the operator types.
-  if (env === 'production' && !dryRun) {
+  if (env === 'production' && !dryRun && remote) {
     if (args.values['--allow-production'] !== true) {
       throw preconditionError(
         'restaurer une PRODUCTION demande une option dédiée.',
@@ -124,6 +139,13 @@ export function runRestore(args, reporter) {
     );
   }
 
+  if (local && (archive.env === 'production' || env === 'production')) {
+    throw preconditionError(
+      'une archive de production ne se restaure pas en local.',
+      'Elle porte les données personnelles des acheteurs, et un poste n\'est pas un lieu de traitement déclaré. Restaurez-la dans un environnement du compte, ou prenez une sauvegarde de staging.',
+    );
+  }
+
   const { key, source } = loadKey({ root, file: args.values['--key-file'] });
   if (!keyMatches(key, archive.cipher.keyId)) {
     throw preconditionError(
@@ -145,53 +167,62 @@ export function runRestore(args, reporter) {
   reporter.ok(`corps ouvert — ${archive.tables.length} table(s), ${archive.tables.reduce((sum, table) => sum + table.rows, 0)} ligne(s)`);
 
   // ── Account and resources ─────────────────────────────────────────────────
-  reporter.section('Compte Cloudflare');
-  const account = resolveAccount(
-    {
-      manifest: manifest.cloudflare.accountId ?? null,
-      flag: args.values['--account'] ?? null,
-      env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
-    },
-    whoami({ cwd: root }),
-  );
-  reporter.ok(`${account.name} (${account.id})`);
-  if (account.id !== archive.account?.id) {
-    // Not a refusal: restoring into ANOTHER account is the point of an
-    // application-level backup (ADR 0005 — a clean exit for the client). It is
-    // said out loud because it is also what a mistake looks like.
-    reporter.warn(
-      `l'archive vient du compte ${archive.account?.name ?? 'inconnu'} (${archive.account?.id ?? '—'}).`,
-      'Restauration inter-comptes : c\'est ce que permet une sauvegarde applicative, et c\'est aussi à quoi ressemble une erreur de compte.',
+  let account = null;
+  if (local) {
+    reporter.section('Cible locale');
+    // The database id is a placeholder: a local D1 is keyed by it, and none of
+    // the account's ids belongs in a configuration that never reaches it.
+    renderEnvironmentConfig({ root, manifest, env, databaseId: LOCAL_DATABASE_ID });
+    reporter.ok(`${names.database} dans .wrangler/state — aucun compte interrogé`);
+  } else {
+    reporter.section('Compte Cloudflare');
+    account = resolveAccount(
+      {
+        manifest: manifest.cloudflare.accountId ?? null,
+        flag: args.values['--account'] ?? null,
+        env: process.env.CLOUDFLARE_ACCOUNT_ID ?? null,
+      },
+      whoami({ cwd: root }),
     );
-  }
+    reporter.ok(`${account.name} (${account.id})`);
+    if (account.id !== archive.account?.id) {
+      // Not a refusal: restoring into ANOTHER account is the point of an
+      // application-level backup (ADR 0005 — a clean exit for the client). It is
+      // said out loud because it is also what a mistake looks like.
+      reporter.warn(
+        `l'archive vient du compte ${archive.account?.name ?? 'inconnu'} (${archive.account?.id ?? '—'}).`,
+        'Restauration inter-comptes : c\'est ce que permet une sauvegarde applicative, et c\'est aussi à quoi ressemble une erreur de compte.',
+      );
+    }
 
-  const database = listDatabases({ cwd: root }).find((candidate) => candidate.name === names.database);
-  const buckets = listBuckets({ cwd: root, jurisdiction: manifest.cloudflare.jurisdiction });
-  const missing = [
-    database ? null : names.database,
-    buckets.includes(names.images) ? null : names.images,
-    buckets.includes(names.files) ? null : names.files,
-  ].filter(Boolean);
-  if (missing.length > 0) {
-    throw preconditionError(
-      `${missing.length} ressource(s) manquante(s) en ${env} : ${missing.join(', ')}.`,
-      `Lancez \`shopctl provision --env ${env}\` d'abord : une restauration remplit des ressources, elle n'en crée pas.`,
-    );
+    const database = listDatabases({ cwd: root }).find((candidate) => candidate.name === names.database);
+    const buckets = listBuckets({ cwd: root, jurisdiction: manifest.cloudflare.jurisdiction });
+    const missing = [
+      database ? null : names.database,
+      buckets.includes(names.images) ? null : names.images,
+      buckets.includes(names.files) ? null : names.files,
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw preconditionError(
+        `${missing.length} ressource(s) manquante(s) en ${env} : ${missing.join(', ')}.`,
+        `Lancez \`shopctl provision --env ${env}\` d'abord : une restauration remplit des ressources, elle n'en crée pas.`,
+      );
+    }
+    const databaseId = database.uuid ?? database.database_id;
+    renderEnvironmentConfig({ root, manifest, env, databaseId });
+    reporter.ok(`${names.database} (${databaseId}) — wrangler.jsonc rendu`);
   }
-  const databaseId = database.uuid ?? database.database_id;
-  renderEnvironmentConfig({ root, manifest, env, databaseId });
-  reporter.ok(`${names.database} (${databaseId}) — wrangler.jsonc rendu`);
 
   // ── Schema ────────────────────────────────────────────────────────────────
   reporter.section('Schéma');
   if (!dryRun) {
-    applyMigrations({ cwd: root, remote: true });
+    applyMigrations({ cwd: root, remote });
     reporter.ok(`migrations de l'arbre appliquées à ${names.database}`);
   } else {
     reporter.todo(`les migrations seraient appliquées à ${names.database}`);
   }
 
-  const { master, migrations } = readSchema({ cwd: root, remote: true });
+  const { master, migrations } = readSchema({ cwd: root, remote });
   const { tables } = classifyTables(master);
   const present = new Set(tables.map((table) => table.name));
   const absent = archive.tables.filter((table) => table.rows > 0 && !present.has(table.name)).map((table) => table.name);
@@ -215,7 +246,7 @@ export function runRestore(args, reporter) {
     ? seededTables(readdirSync(migrationsDirectory).filter((name) => name.endsWith('.sql')).sort().map((name) => readFileSync(join(migrationsDirectory, name), 'utf8')))
     : new Set();
   const targetOrder = orderTables(tables).order;
-  const counts = countRows(targetOrder, { cwd: root, remote: true });
+  const counts = countRows(targetOrder, { cwd: root, remote });
   const occupied = Object.entries(counts).filter(([name, count]) => count > 0 && !seeded.has(name));
   if (occupied.length > 0 && args.values['--overwrite'] !== true) {
     throw preconditionError(
@@ -265,12 +296,13 @@ export function runRestore(args, reporter) {
 
   // ── Write ─────────────────────────────────────────────────────────────────
   reporter.section('Restauration');
-  applyScript(statements, { cwd: root, remote: true });
+  applyScript(statements, { cwd: root, remote });
   reporter.ok(`${statements.length} instruction(s) appliquées`);
 
   for (const object of storedMedia) {
     const bytes = open({ iv: object.cipher.iv, tag: object.cipher.tag, ciphertext: readFileSync(join(entry.path, object.file)) }, key, `${archive.id}:${object.bucket}:${object.key}`);
-    putObject(object.key, bytes, { cwd: root, bucket: object.bucket, remote: true, jurisdiction });
+    // A local bucket has no jurisdiction; wrangler would refuse the flag there.
+    putObject(object.key, bytes, { cwd: root, bucket: object.bucket, remote, jurisdiction: remote ? jurisdiction : [] });
   }
   if (storedMedia.length > 0) reporter.ok(`${storedMedia.length} objet(s) reversés dans R2`);
   if (uncarried.length > 0) reporter.warn(`${uncarried.length} objet(s) manquent toujours.`, 'Les pages qui les affichent resteront cassées ; l\'inventaire du manifeste les nomme.');
@@ -283,8 +315,8 @@ export function runRestore(args, reporter) {
   }));
   const after = readTables(restored, {
     cwd: root,
-    remote: true,
-    counts: countRows(restored.map((table) => table.name), { cwd: root, remote: true }),
+    remote,
+    counts: countRows(restored.map((table) => table.name), { cwd: root, remote }),
   });
   const differences = [];
   for (const table of archive.tables) {
@@ -302,7 +334,8 @@ export function runRestore(args, reporter) {
     shop: manifest.client.slug,
     env,
     from: archive.id,
-    account: { id: account.id, name: account.name },
+    local,
+    account: account ? { id: account.id, name: account.name } : null,
     statements: statements.length,
     objects: storedMedia.length,
     uncarried,
@@ -322,8 +355,13 @@ export function runRestore(args, reporter) {
 
   reporter.ok(`${archive.tables.length} table(s) identiques à l'archive, empreinte pour empreinte`);
   if (!args.values['--json']) {
-    reporter.section(`${manifest.client.slug} restauré en ${env} depuis ${archive.id}.`);
-    reporter.step(`    Déployez le Worker si l'environnement est neuf : shopctl deploy --env ${env}`);
+    if (local) {
+      reporter.section(`${manifest.client.slug} restauré en local depuis ${archive.id}.`);
+      reporter.step('    La base vit dans .wrangler/state : `npm run preview` la sert.');
+    } else {
+      reporter.section(`${manifest.client.slug} restauré en ${env} depuis ${archive.id}.`);
+      reporter.step(`    Déployez le Worker si l'environnement est neuf : shopctl deploy --env ${env}`);
+    }
   }
   return 0;
 }

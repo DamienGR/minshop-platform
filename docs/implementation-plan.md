@@ -2092,7 +2092,10 @@ passage, par quelqu'un qui n'aura pas eu à savoir que cette suite existe.
 `Content-Security-Policy`. Les gabarits Astro portent des scripts et des styles
 en ligne, et une CSP utile demanderait des nonces sur toute la chaîne de rendu :
 c'est une modification du rendu, pas un durcissement d'en-tête, et elle
-appartient à son propre passage plutôt qu'à celui-ci. Le plancher
+appartient à son propre passage plutôt qu'à celui-ci. (Étape 0 de la
+certification : la part qui ne dépend d'aucun gabarit — `object-src`,
+`base-uri`, `frame-ancestors` — est posée et gatée ; le reste est une
+dérogation écrite, `docs/certification/plan.md` §6.) Le plancher
 `referrer-policy` posé ici prend soin de ne jamais écraser le `no-referrer`
 qu'une page à URL-capacité s'est donné — l'inverse aurait dégradé la seule
 protection qui garde le jeton d'une commande hors des journaux d'un tiers.
@@ -2297,7 +2300,10 @@ points-virgules compris dans une description produit, sous peine de faire
 - **la supervision et les runbooks d'incident.** Une alerte se pose sur un
   compte Cloudflare, et un runbook décrit une procédure que quelqu'un a exécutée
   au moins une fois ; les deux attendent le même premier passage réel que les
-  jalons 6 et 7 ;
+  jalons 6 et 7. Depuis l'étape 0 de la certification, les runbooks sont écrits
+  (`docs/operations/`) et la supervision est décidée : `shopctl monitor`, lancé
+  chaque nuit, lit l'API GraphQL Analytics faute d'alerte Cloudflare
+  équivalente aux plans d'une boutique ;
 - **la rotation d'une clé.** `keygen` refuse d'écraser une clé existante — c'est
   elle qui ouvre les archives déjà prises — mais rien ne rechiffre un dépôt d'un
   jeu de clés vers un autre. Une agence qui doit tourner sa clé garde
@@ -2512,7 +2518,7 @@ premiers ; les autres sont des jobs distincts du workflow `Verify`.
   témoins dans un seul compte et une seule forge, §8.3. Dans `vitest run` pour la
   même raison que les précédents : un défaut d'isolation qui n'est vu qu'à la
   campagne finale a déjà voyagé dans un tag ;
-- [ ] contrôle de formatage — voir ci-dessous.
+- [x] plancher de formatage (`npm run check:format`) — voir ci-dessous.
 
 Objectif : moins de cinq minutes. Tenu : le workflow complet sur `main` prend
 environ trois minutes et demie, les jobs tournant en parallèle.
@@ -2524,8 +2530,18 @@ est `vitest run` ; `npm run test:cli` arrive au jalon 2 avec la CLI.
 
 La quatrième, `npm run format:check`, n'a pas d'équivalent : aucun formateur
 n'est installé. La renommer vers `astro check` serait faux — un typecheck ne dit
-rien de la mise en forme — donc la case reste ouverte et désigne ce qui manque
-réellement : la décision d'adopter un formateur, ou celle de s'en passer.
+rien de la mise en forme — donc la case est restée ouverte jusqu'à la décision.
+
+**Décision (2026-10-06, étape 0 de la certification) : pas de formateur, un
+plancher.** Une boutique reçoit chaque tag du socle par fusion (ADR 0016) : un
+commit qui reformate le socle arrive en conflit dans chaque fichier du cœur
+qu'une boutique a touché, et ce coût se paie une fois par boutique, à la montée
+de version. L'arbre est déjà homogène ; `npm run check:format` garde ce qu'une
+relecture ne voit pas et qu'une fusion remarque — fins de ligne LF, saut de
+ligne final, aucun espace de fin, aucune indentation par tabulation dans le
+code —, sur les seuls fichiers du cœur. Adopter Prettier reste possible : ce
+serait un commit de reformatage unique, annoncé dans les notes de migration de
+la version qui le porte.
 
 ### 7.2 À chaque pull request client
 
@@ -2555,14 +2571,26 @@ quelqu'un d'autre. Les cases restent ouvertes et désignent cela.
 
 ### 7.3 Chaque nuit
 
-- [ ] D1 d'intégration propre ;
+- [x] D1 d'intégration propre ;
 - [ ] checkout Stripe test ;
 - [ ] webhook Stripe ;
 - [ ] e-mail de test ;
 - [ ] sauvegarde ;
 - [ ] restauration vers un environnement éphémère ;
 - [ ] smoke tests sur les deux boutiques témoins ;
-- [ ] audit des dépendances.
+- [x] audit des dépendances.
+
+Le workflow `Nightly` (`.github/workflows/nightly.yml`, étape 0 de la
+certification) porte les huit lignes. Les deux cochées tournent dans tout dépôt,
+socle compris, sans compte : `npm run verify` sur une D1 bâtie des seules
+migrations, et `npm audit` gaté au niveau `high` sur les dépendances
+d'exécution du Worker et du serveur MCP. Les six autres interrogent le staging
+d'une boutique — sauvegarde vers son bucket `-backups`, restauration de cette
+archive par `shopctl restore --local` dans la D1 du runner, portes distantes,
+session Stripe test expirée par l'API de Stripe dont le webhook doit rendre
+l'unité réservée, e-mail de test — et restent ouvertes jusqu'à leur premier
+passage réel (étape 8 de la certification). Chaque témoin est son propre dépôt
+et porte ce workflow : les « deux boutiques témoins » sont deux nocturnes.
 
 ### 7.4 Avant la production
 
@@ -2585,9 +2613,11 @@ sont conservés quatre-vingt-dix jours en artefacts.
 
 `sauvegarde verte` reste ouvert, mais plus pour la même raison : la sauvegarde
 applicative existe depuis le jalon 8 (`shopctl backup`, plan §5.6, ADR 0005) et
-son tour complet est éprouvé contre le vrai schéma. Ce qui manque est son
-enchaînement automatique devant un déploiement de production, et le premier
-passage sur un compte Cloudflare réel. Le bookmark Time Travel pris avant les
+son tour complet est éprouvé contre le vrai schéma, et depuis l'étape 0 de la
+certification `shopctl deploy --env production` la prend lui-même, la copie dans
+le bucket `-backups` de l'environnement et ne migre qu'ensuite — sans clé ou sans
+bucket, il refuse de démarrer (ADR 0005, note du 2026-10-06). Ce qui manque est
+le premier passage sur un compte Cloudflare réel. Le bookmark Time Travel pris avant les
 migrations est un filet court terme, pas la sauvegarde, et le rapport le dit
 avec ces mots.
 
@@ -2634,10 +2664,10 @@ avec ces mots.
 - [x] deux bases — noms **et** identifiants distincts : la liaison D1 s'appelle
   `DB` dans toute la flotte, donc c'est l'identifiant rendu qui décide où une
   écriture atterrit ;
-- [x] quatre buckets par paire d'environnements — images et fichiers, staging et
-  production. C'est un **compte** parce que la panne est un bucket *manquant* :
-  un bucket de fichiers privés qu'une deuxième boutique réutilise remet les
-  factures d'un commerçant à l'autre ;
+- [x] six buckets par paire d'environnements — images, fichiers et sauvegardes,
+  staging et production. C'est un **compte** parce que la panne est un bucket
+  *manquant* : un bucket de fichiers privés qu'une deuxième boutique réutilise
+  remet les factures d'un commerçant à l'autre ;
 - [x] aucun secret partagé — les secrets internes sont tirés par boutique et par
   environnement, chacun posé sur son seul Worker ; chaque dépôt reçoit son propre
   jeton Cloudflare par environnement — quatre jetons, aucun partagé — et aucune
@@ -2683,8 +2713,18 @@ Sept de ces neuf lignes sont désormais gatées à chaque commit par
 `npm run test:security` et `npm run check:secrets:artifacts` (jalon 8) ; elles
 restent ouvertes ici parce que la campagne finale les rejoue sur une boutique
 **déployée**, ce qu'aucune porte locale ne remplace. Les deux exceptions se
-nomment : l'audit de vulnérabilités n'a pas de porte, et il n'y a pas de CSP —
-la raison est au jalon 8, section « État ».
+nomment : l'audit de vulnérabilités n'a pas de porte, et la CSP n'est que
+partielle — `object-src`, `base-uri` et `frame-ancestors` sont posés sur toute
+réponse depuis l'étape 0 de la certification ; `script-src` et `style-src` font
+l'objet d'une dérogation écrite (`docs/certification/plan.md`, §6).
+
+Le rejeu a son outil : `npm run test:security:remote` pose les mêmes questions
+à une origine déployée — routes d'administration dérivées des fichiers,
+assistant fermé, assertion Access forgée, origine des formulaires, traversée
+de chemin, en-têtes sur chaque classe de réponse et sur les actifs statiques,
+URL à capacité, erreur non rattrapée — et `npm run verify` le fait tourner
+contre le Worker construit pour qu'il ne rencontre pas un Worker pour la
+première fois le jour de la campagne.
 
 ### 8.5 Accessibilité et navigateurs
 
@@ -2697,6 +2737,11 @@ la raison est au jalon 8, section « État ».
 - [ ] Firefox desktop ;
 - [ ] Safari/iPhone ;
 - [ ] Chrome/Android.
+
+La porte navigateur vise aussi une boutique déployée :
+`BASE_URL=… npm run test:browser:remote` retrouve dans le catalogue du marchand
+les pages que les specs demandent et saute, en le disant, les états qu'il n'a
+pas (une catégorie vide, la signature du design prise sur le jeu d'essai).
 
 ### 8.6 Performance
 
@@ -2713,7 +2758,16 @@ Objectifs internes initiaux :
 Si le plan Workers Free dépasse régulièrement sa limite CPU ou génère des
 erreurs de ressources, la boutique doit passer au plan Workers Paid.
 
-- [ ] Définir l'alerte et la procédure de passage au plan Workers Paid.
+- [x] Définir l'alerte et la procédure de passage au plan Workers Paid.
+
+Les deux scénarios de charge existent (étape 0 de la certification) et
+attendent leur passage sur staging : `npm run test:load:remote` (vingt
+acheteurs, quinze minutes, la recherche cadencée sous son limiteur, échec sur
+une seule 5xx) et `npm run test:last-unit:remote -- --product <slug>` (cinq
+checkouts simultanés sur un stock vérifié à 1). L'alerte est `shopctl monitor`,
+qui échoue au-delà de 1 % d'erreurs ou de 70 % d'un quota du plan gratuit et
+que le nocturne lance chaque nuit ; la procédure est le runbook
+`docs/operations/runbooks/worker-en-erreur.md`.
 
 ### 8.7 Résilience
 

@@ -275,4 +275,5 @@ export const names = (slug, env) => ({
   database: `minshop-${slug}-${env}-db`,
   images: `minshop-${slug}-${env}-images`,
   files: `minshop-${slug}-${env}-files`,
+  backups: `minshop-${slug}-${env}-backups`,
 });
