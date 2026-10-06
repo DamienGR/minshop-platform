@@ -135,11 +135,12 @@ if (argv[0] === 'api') {
     const repo = state.repos[name];
     if (!repo) fail('gh: Not Found (HTTP 404)');
     const body = stdin.trim() ? JSON.parse(stdin) : {};
-    // The free-plan private-repository refusal, which is the case this whole
-    // fallback path exists for: the environment is accepted, the protection
-    // rule is not.
+    // The private-repository refusal under GitHub Pro or Team, which is the
+    // case this whole fallback path exists for: the environment is accepted,
+    // the protection rule is not (required reviewers on a private repository
+    // need GitHub Enterprise).
     if (state.refuseReviewers && (body.reviewers ?? []).length > 0) {
-      fail('gh: Validation Failed (HTTP 422)\nDeployment protection rules are only available for public repositories, or with GitHub Pro.', 1);
+      fail('gh: Validation Failed (HTTP 422)\nRequired reviewers are not available for private repositories on this plan.', 1);
     }
     repo.environments = repo.environments ?? {};
     repo.environments[environment] = {

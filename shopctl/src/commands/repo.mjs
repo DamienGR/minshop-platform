@@ -25,10 +25,11 @@
  * would make the separation decorative.
  *
  * What it deliberately does NOT do is push protection rules onto an account
- * that cannot have them. Required reviewers are a paid feature on a private
- * repository; the command attempts them, reports plainly when GitHub refuses,
- * and still leaves the environment in place, because the environment is what
- * scopes the secrets and that half works on every plan.
+ * that cannot have them. On a private repository, required reviewers exist
+ * only under GitHub Enterprise; the command attempts them, reports plainly when
+ * GitHub refuses, and still leaves the environment in place, because the
+ * environment is what scopes the secrets — and that half works from GitHub Pro
+ * up. GitHub Free has no environment secrets on a private repository.
  */
 import { ENVIRONMENTS } from '../../../scripts/manifest.mjs';
 import { ShopctlError, preconditionError } from '../errors.mjs';
@@ -271,7 +272,7 @@ export function setupRepository({
     if (outcome.refusal) {
       reporter.warn(
         `${name} : GitHub a refusé les relecteurs obligatoires.`,
-        'Les règles de protection d\'environnement sont payantes sur un dépôt privé (GitHub Pro, Team ou Enterprise). L\'environnement existe et porte ses secrets ; l\'approbation, elle, n\'est pas opposable tant que le plan ne la permet pas. `shopctl deploy --env production` exige toujours --yes.',
+        'Sur un dépôt privé, les relecteurs obligatoires demandent GitHub Enterprise ; Pro et Team ne les offrent que sur un dépôt public. L\'environnement existe et porte ses secrets ; l\'approbation, elle, n\'est pas opposable tant que le plan ne la permet pas. `shopctl deploy --env production` exige toujours --yes.',
       );
     } else if (name === 'production' && wanted.length === 0 && !dryRun) {
       reporter.warn(

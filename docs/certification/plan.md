@@ -189,9 +189,9 @@ Aucun compte réel. Tout se fait par pull request sur le socle, et un tag
   plancher, `npm run check:format`, plutôt qu'un reformatage qui arriverait en
   conflit dans chaque boutique (§7.1). CSP : la part qu'aucun gabarit ne peut
   casser est posée et gatée, le reste est une dérogation datée (§6).
-- [ ] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
-  sont posées ; le tag sort du workflow `Release` une fois la pull request
-  fusionnée, sur feu vert de Damien.
+- [x] publier `v0.3.0` : la version et sa note (`docs/migrations/v0.3.0.md`)
+  sont posées ; le tag est sorti du workflow `Release` le 2026-10-06, sur
+  `4c12bd8`, après la fusion de la pull request #39.
 
 Fait avancer : jalon 8 (supervision, runbooks), jalon 10 (outillage de la
 campagne).
@@ -199,7 +199,9 @@ campagne).
 ### Étape 1 — Comptes et accès
 
 Actions humaines uniquement (ADR 0002) ; `shopctl doctor` vérifie ce qu'il
-peut et nomme le reste.
+peut et nomme le reste. Le pas-à-pas — ordre, droits de chaque jeton, valeurs
+à relever et moment où naît chaque secret — est dans
+[`comptes-et-acces.md`](comptes-et-acces.md).
 
 - [ ] compte Cloudflare A et compte B, R2 activé sur les deux ;
 - [ ] un domaine réel dans une zone du compte A pour la preview
@@ -210,11 +212,15 @@ peut et nomme le reste.
 - [ ] Stripe : compte en mode test ; activation du mode live (vérification
   d'identité) lancée tôt, parce qu'elle prend des jours ;
 - [ ] Resend : domaine d'envoi vérifié (SPF, DKIM), une clé API ;
-- [ ] GitHub : décider si l'approbation de production doit être opposable —
-  sur un dépôt privé, les relecteurs obligatoires demandent un plan payant ;
-  sans lui, `shopctl repo` le dit et la ligne §9 « approbation humaine »
-  devient une dérogation ;
-- [ ] jetons API Cloudflare, un par dépôt et par environnement ;
+- [ ] GitHub : Pro au minimum sur le compte qui porte les dépôts — sur un
+  dépôt privé, GitHub Free n'a pas de secrets d'environnement, et `Deploy`
+  comme `Nightly` les lisent là. Décider si l'approbation de production doit
+  être opposable : sur un dépôt privé, les relecteurs obligatoires demandent
+  GitHub Enterprise ; sans lui, `shopctl repo` le dit et la ligne §9
+  « approbation humaine » devient une dérogation ;
+- [ ] jetons API Cloudflare, un par dépôt et par environnement, avec les droits
+  du guide — créés au moment où `shopctl repo` les pose (staging à l'étape 2,
+  production à l'étape 9) plutôt que conservés d'ici là ;
 - [ ] `shopctl doctor` vert sur la machine de l'opérateur.
 
 Fait avancer : jalon 6 (prérequis humains), jalon 10.
@@ -226,7 +232,11 @@ Crée : deux dépôts GitHub privés, leurs environnements et leurs secrets.
 - [ ] `shopctl new pilot-fr --core v0.3.0 --account <A> --create-repo` ;
 - [ ] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
   vert ;
-- [ ] `shopctl repo` relancé : rien ne change, les secrets sont réécrits ;
+- [ ] `shopctl backup keygen` dans l'arbre de la boutique : sans cette clé,
+  `shopctl repo` ne pose pas `SHOPCTL_BACKUP_KEY`, et la sauvegarde du
+  nocturne de l'étape 3 échoue ;
+- [ ] `shopctl repo` relancé : rien ne change, les secrets sont réécrits, la
+  clé de sauvegarde est posée ;
 - [ ] une pull request de la boutique fait tourner sa CI — §7.2 ;
 - [ ] idem pour `canary-minimal`, sans `accountId` déclaré.
 
@@ -414,9 +424,10 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 - **smoke test avant promotion** (§5.5, étape 5) — demande les déploiements
   graduels de Cloudflare ; compensé par le smoke test public qui échoue et
   nomme la version de retour ;
-- **approbation de production opposable** — si le plan GitHub ne permet pas
-  de relecteurs obligatoires sur un dépôt privé ; compensé par le fait que
-  seul Damien a les droits d'écriture ;
+- **approbation de production opposable** — sur un dépôt privé, les
+  relecteurs obligatoires demandent GitHub Enterprise (Pro et Team ne les
+  offrent que sur un dépôt public) ; compensé par le fait que seul Damien a
+  les droits d'écriture, et que `deploy --env production` exige `--yes` ;
 - **CSP, `script-src` et `style-src`** (écrite le 2026-10-06) — la boutique
   envoie `object-src 'none'; base-uri 'self'; frame-ancestors 'none'` sur toute
   réponse, Worker et actifs statiques, et la porte de sécurité le vérifie.

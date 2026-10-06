@@ -302,10 +302,11 @@ describe('shopctl repo', () => {
       expect(environments.staging.reviewers).toBe(0);
     });
 
-    // The case this repository is actually in: a private repository on the free
-    // plan. The environment is accepted, the protection rule is not — and the
-    // command must leave the environment in place, because that is what scopes
-    // the secrets, while saying out loud that the approval is not enforceable.
+    // A private repository under GitHub Pro or Team: the environment is
+    // accepted, the protection rule is not (required reviewers on a private
+    // repository need Enterprise) — and the command must leave the environment
+    // in place, because that is what scopes the secrets, while saying out loud
+    // that the approval is not enforceable.
     it('keeps the environment when the plan refuses the protection rule, and says so', () => {
       const target = forgeShop();
       target.github({ refuseReviewers: true });

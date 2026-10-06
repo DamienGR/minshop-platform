@@ -197,13 +197,15 @@ export function environments(nameWithOwner, { cwd } = {}) {
 /**
  * Create or update one environment.
  *
- * `reviewers` is attempted, never assumed. Deployment protection rules are a
- * PAID feature on a private repository — GitHub Pro, Team or Enterprise — so on
- * a private repository under the free plan the API refuses the reviewers and
- * accepts the environment. Both outcomes are returned rather than one of them
- * being an error: the environment is what scopes the secrets and it is worth
- * having either way; the reviewers are what make the approval enforceable and
- * the operator has to be told, in those words, when they did not take.
+ * `reviewers` is attempted, never assumed. On a private repository, required
+ * reviewers exist only under GitHub Enterprise: under Pro or Team the API
+ * refuses the reviewers and accepts the environment. (Under Free a private
+ * repository has no environment secrets at all, which is why a shop's GitHub
+ * account needs Pro at least — docs/certification/comptes-et-acces.md.) Both
+ * outcomes are returned rather than one of them being an error: the
+ * environment is what scopes the secrets and it is worth having either way; the
+ * reviewers are what make the approval enforceable and the operator has to be
+ * told, in those words, when they did not take.
  *
  * @param {Array<{ type: 'User'|'Team', id: number }>} reviewers
  */
