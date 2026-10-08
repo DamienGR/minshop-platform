@@ -170,8 +170,9 @@ lire « déjà correct » : ce pourrait être le jeton du mois dernier. Rien en 
 n'est chiffré avec, donc réécrire ne coûte rien.
 
 **Les règles de protection sont tentées, jamais supposées.** Sur un dépôt privé
-hors GitHub Pro, l'API refuse les relecteurs obligatoires et accepte
-l'environnement. La commande garde l'environnement — c'est lui qui porte les
+hors GitHub Enterprise, l'API refuse les relecteurs obligatoires et accepte
+l'environnement (sous GitHub Free, un dépôt privé n'a pas non plus de secrets
+d'environnement ; un dépôt public, créé avec `--public`, a les deux). La commande garde l'environnement — c'est lui qui porte les
 secrets — et dit que l'approbation n'est pas opposable, plutôt que de laisser
 croire qu'elle l'est.
 

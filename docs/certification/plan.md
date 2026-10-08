@@ -210,21 +210,29 @@ peut et nomme le reste. Le pas-à-pas — ordre, droits de chaque jeton, valeurs
 à relever et moment où naît chaque secret — est dans
 [`comptes-et-acces.md`](comptes-et-acces.md).
 
-- [ ] compte Cloudflare A et compte B, R2 activé sur les deux ;
-- [ ] un domaine réel dans une zone du compte A pour la preview
+Les comptes sont cochés sur la déclaration de Damien du 2026-10-08 ; les
+étapes 2 et 3 les relisent par leurs propres commandes.
+
+- [x] compte Cloudflare A et compte B, R2 activé sur les deux ;
+- [x] un domaine réel dans une zone du compte A pour la preview
   (`stagingDomain`), et un domaine pour la production rattaché au compte B ;
-- [ ] Zero Trust activé sur A, une application Access sur le nom d'hôte de
+- [x] Zero Trust activé sur A, une application Access sur le nom d'hôte de
   preview, son `AUD` relevé ;
-- [ ] un widget Turnstile ;
-- [ ] Stripe : compte en mode test ; activation du mode live (vérification
+- [x] un widget Turnstile ;
+- [x] Stripe : compte en mode test ; activation du mode live (vérification
   d'identité) lancée tôt, parce qu'elle prend des jours ;
-- [ ] Resend : domaine d'envoi vérifié (SPF, DKIM), une clé API ;
-- [ ] GitHub : Pro au minimum sur le compte qui porte les dépôts — sur un
-  dépôt privé, GitHub Free n'a pas de secrets d'environnement, et `Deploy`
-  comme `Nightly` les lisent là. Décider si l'approbation de production doit
-  être opposable : sur un dépôt privé, les relecteurs obligatoires demandent
-  GitHub Enterprise ; sans lui, `shopctl repo` le dit et la ligne §9
-  « approbation humaine » devient une dérogation ;
+- [x] Resend : domaine d'envoi vérifié (SPF, DKIM), une clé API ;
+- [x] GitHub : décidé le 2026-10-08, le compte reste en Free et les dépôts de
+  boutique du pilote sont **publics**. Sur un dépôt privé, Free n'a pas de
+  secrets d'environnement (`Deploy` et `Nightly` les lisent là) et ne donne
+  que 2 000 minutes d'Actions par mois ; sur un dépôt public, il a les secrets
+  d'environnement, les relecteurs obligatoires et des minutes sans limite. En
+  contrepartie, une boutique est un clone du socle avec son historique : le
+  socle jusqu'au tag cloné, les adresses e-mail des auteurs de commits, le
+  manifeste, les journaux et les rapports de la CI deviennent publics. Avant
+  tout dépôt public, l'historique de `v0.3.1` a été passé blob par blob aux
+  règles de `scripts/check-secrets.mjs` : rien. Une vraie boutique reste
+  privée et demande alors GitHub Pro au minimum (§6) ;
 - [ ] jetons API Cloudflare, un par dépôt et par environnement, avec les droits
   du guide — créés au moment où `shopctl repo` les pose (staging à l'étape 2,
   production à l'étape 9) plutôt que conservés d'ici là ;
@@ -234,17 +242,23 @@ Fait avancer : jalon 6 (prérequis humains), jalon 10.
 
 ### Étape 2 — Forge réelle
 
-Crée : deux dépôts GitHub privés, leurs environnements et leurs secrets.
+Crée : deux dépôts GitHub publics (étape 1), leurs environnements et leurs
+secrets.
 
-- [ ] `shopctl new pilot-fr --core v0.3.1 --account <A> --create-repo` ;
+- [ ] `shopctl new pilot-fr --core v0.3.1 --account <A>`, sans
+  `--create-repo` : cette option crée un dépôt privé, et `shopctl repo` ne
+  change jamais la visibilité d'un dépôt qui existe ;
 - [ ] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
   vert : dont `stagingDomain`, `stagingAccessTeam` et `stagingAccessAud`
   relevés à l'étape 1, et `productionAccountId` pour le compte B ;
 - [ ] `shopctl backup keygen` dans l'arbre de la boutique : sans cette clé,
   `shopctl repo` ne pose pas `SHOPCTL_BACKUP_KEY`, et la sauvegarde du
   nocturne de l'étape 3 échoue ;
-- [ ] `shopctl repo` relancé : rien ne change, les secrets sont réécrits, la
-  clé de sauvegarde est posée ;
+- [ ] `shopctl repo --public --reviewer <login>` dans l'arbre de la
+  boutique : dépôt public créé, branche poussée, `staging` et `production`
+  créés, un relecteur obligatoire sur `production`, secrets posés ;
+- [ ] la même commande relancée, `--reviewer` compris : rien ne change, les
+  secrets sont réécrits, la clé de sauvegarde est conservée ;
 - [ ] une pull request de la boutique fait tourner sa CI — §7.2 ;
 - [ ] idem pour `canary-minimal`, sans `accountId` déclaré.
 
@@ -434,9 +448,11 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
   graduels de Cloudflare ; compensé par le smoke test public qui échoue et
   nomme la version de retour ;
 - **approbation de production opposable** — sur un dépôt privé, les
-  relecteurs obligatoires demandent GitHub Enterprise (Pro et Team ne les
-  offrent que sur un dépôt public) ; compensé par le fait que seul Damien a
-  les droits d'écriture, et que `deploy --env production` exige `--yes` ;
+  relecteurs obligatoires demandent GitHub Enterprise (Free, Pro et Team ne
+  les offrent que sur un dépôt public) ; compensé par le fait que seul Damien
+  a les droits d'écriture, et que `deploy --env production` exige `--yes`.
+  Le pilote n'en a pas besoin : ses dépôts sont publics (étape 1), et
+  `shopctl repo --reviewer` pose le relecteur que l'étape 9 attend ;
 - **CSP, `script-src` et `style-src`** (écrite le 2026-10-06) — la boutique
   envoie `object-src 'none'; base-uri 'self'; frame-ancestors 'none'` sur toute
   réponse, Worker et actifs statiques, et la porte de sécurité le vérifie.
