@@ -25,7 +25,7 @@ import { HUMAN_CHECKLIST } from '../../shopctl/src/commands/doctor.mjs';
 import { parseManifestYaml } from '../../scripts/manifest-yaml.mjs';
 import { CREDENTIAL_PATTERNS, RESERVED_SLUGS, validateManifest } from '../../scripts/manifest-schema.mjs';
 import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
-import { clientSlugs } from '../../scripts/manifest.mjs';
+import { WITNESS_CLIENTS_DIR, discoverManifests } from '../../scripts/manifest.mjs';
 // The core fixture and the git identity live in a helper: the fleet suite
 // (jalon 9) creates the same "core at a tag" and a second copy would drift.
 import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
@@ -71,6 +71,15 @@ function core() {
 
 function workspace() {
   return mkdtempSync(join(tmpdir(), 'shopctl-work-'));
+}
+
+/** The witnesses' slugs, read from their own manifests. Not clientSlugs():
+ *  CI also runs this suite inside a generated shop, where that list starts
+ *  with the shop itself. */
+function witnessSlugs() {
+  return discoverManifests(CORE)
+    .filter((file) => file.startsWith(`${WITNESS_CLIENTS_DIR}/`))
+    .map((file) => parseManifestYaml(readFileSync(join(CORE, file), 'utf8'), { file }).client.slug);
 }
 
 // ---------------------------------------------------------------------------
@@ -450,7 +459,7 @@ describe('shopctl new', () => {
   // leave the shop without a conflict at every upgrade. Found rehearsing the
   // certification's step 2, whose plan named the real shops after witnesses.
   it('refuses a witness slug before cloning', () => {
-    const [witness] = clientSlugs(CORE);
+    const [witness] = witnessSlugs();
     const work = workspace();
     const result = shopctl(['new', witness, '--from', core(), '--core', CORE_TAG, '--no-install'], work);
 
@@ -465,7 +474,7 @@ describe('shopctl new', () => {
   // Not only the slug: `<witness>-staging` derives the witness's own staging
   // Worker and database.
   it('refuses a slug whose derived names are a witness\'s', () => {
-    const [witness] = clientSlugs(CORE);
+    const [witness] = witnessSlugs();
     const work = workspace();
     const result = shopctl(['new', `${witness}-staging`, '--from', core(), '--core', CORE_TAG, '--no-install'], work);
 
