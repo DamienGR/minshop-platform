@@ -244,8 +244,9 @@ Les comptes sont cochés sur la déclaration de Damien du 2026-10-08 ; les
   privée et demande alors GitHub Pro au minimum (§6) ;
 - [ ] jetons API Cloudflare, un par dépôt et par environnement, avec les droits
   du guide — créés au moment où `shopctl repo` les pose (staging à l'étape 2,
-  production à l'étape 9) plutôt que conservés d'ici là ;
-- [ ] `shopctl doctor` vert sur la machine de l'opérateur.
+  production à l'étape 9) plutôt que conservés d'ici là. Ceux de staging sont
+  posés (2026-10-11) ;
+- [x] `shopctl doctor` vert sur la machine de l'opérateur.
 
 Fait avancer : jalon 6 (prérequis humains), jalon 10.
 
@@ -261,32 +262,40 @@ quand il est relancé avec le jeton de production, à l'étape 9.
 Répétée le 2026-10-11 contre la doublure de `gh`, jusqu'au second
 `shopctl repo` : c'est ce passage qui a trouvé les noms des témoins (§2.1).
 
-- [ ] `shopctl new pilote-certif --core v0.3.1 --account <A> --domain <domaine
+Passée en réel le 2026-10-11 : `DamienGR/shop-pilote-certif` et
+`DamienGR/shop-canari-certif`, preuves dans `client/certification/etape-2/` de
+chacun. Le premier `shopctl repo` a créé le dépôt puis échoué au push :
+`gh auth login` range `git_protocol` sous l'hôte, `shopctl` lisait la clé
+globale (`https`) et posait un remote HTTPS sur un poste qui n'a que SSH.
+Contourné en remettant `origin` en SSH, la commande étant rejouable ; corrigé
+dans le socle après `v0.3.1`, avec son test.
+
+- [x] `shopctl new pilote-certif --core v0.3.1 --account <A> --domain <domaine
   de production> --name <nom> --from-theme atelier --dir ../shop-pilote-certif`,
   sans `--create-repo` : cette option crée un dépôt privé, et `shopctl repo` ne
   change jamais la visibilité d'un dépôt qui existe. `--dir`, parce que
   `npm run` exécute dans le dépôt du socle et que la boutique s'y créerait ;
-- [ ] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
+- [x] manifeste rempli de valeurs réelles, `npm run shopctl -- config validate`
   vert : dont `stagingDomain`, `stagingAccessTeam` et `stagingAccessAud`
   relevés à l'étape 1, et `productionAccountId` pour le compte B. **Commité** :
   `shopctl repo` pousse la branche, pas l'arbre de travail ;
-- [ ] `npm run shopctl -- doctor` vert dans l'arbre de la boutique (étape 1) ;
-- [ ] `shopctl backup keygen` dans l'arbre de la boutique : sans cette clé,
+- [x] `npm run shopctl -- doctor` vert dans l'arbre de la boutique (étape 1) ;
+- [x] `shopctl backup keygen` dans l'arbre de la boutique : sans cette clé,
   `shopctl repo` ne pose pas `SHOPCTL_BACKUP_KEY`, et la sauvegarde du
   nocturne de l'étape 3 échoue ;
-- [ ] `shopctl repo --public --reviewer <login>` dans l'arbre de la
+- [x] `shopctl repo --public --reviewer <login>` dans l'arbre de la
   boutique, avec le jeton de staging dans `CLOUDFLARE_API_TOKEN_STAGING` et
   **sans** `CLOUDFLARE_API_TOKEN` dans le shell, que `shopctl repo` poserait
   aussi dans `production` : dépôt public créé, branche poussée, `staging` et
   `production` créés, un relecteur obligatoire sur `production`, secrets de
   `staging` posés ;
-- [ ] la même commande relancée, `--reviewer` compris : rien ne change, les
+- [x] la même commande relancée, `--reviewer` compris : rien ne change, les
   secrets sont réécrits, la clé de sauvegarde est conservée ;
-- [ ] workflow `Nightly` désactivé dans le dépôt de la boutique jusqu'à
+- [x] workflow `Nightly` désactivé dans le dépôt de la boutique jusqu'à
   l'étape 3 : sans base de staging, son job de staging échouerait chaque nuit ;
 - [ ] une pull request de la boutique fait tourner sa CI — §7.2 : celle qui
   verse les rapports `--json` de cette étape dans `client/certification/` ;
-- [ ] idem pour `canari-certif` (`--from-theme market`, domaine laissé au
+- [x] idem pour `canari-certif` (`--from-theme market`, domaine laissé au
   placeholder : elle n'a pas de production), sans `accountId` déclaré :
   `CLOUDFLARE_ACCOUNT_ID` absent du shell au `shopctl new`, qui l'écrirait dans
   le manifeste, et exporté pour le seul `shopctl repo`, qui en a besoin pour
