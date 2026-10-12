@@ -35,7 +35,7 @@ import {
 } from '../../../scripts/manifest.mjs';
 import { setupRepository } from './repo.mjs';
 import { assertForgeReady, defaultOwner, gitProtocol, repositoryNameFor, repositoryUrl } from '../forge.mjs';
-import { RESERVED_THEME_IDS, THEMES_DIR, isValidThemeId, normalizeThemeId } from '../../../scripts/themes.mjs';
+import { RESERVED_THEME_IDS, SHOP_SIGNATURES_DIR, SIGNATURES_DIR, THEMES_DIR, isValidThemeId, normalizeThemeId } from '../../../scripts/themes.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { EXIT_CODES, ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { capture, run } from '../process.mjs';
@@ -423,6 +423,15 @@ export function runNew(args, reporter) {
     );
   }
   cpSync(referenceDir, themeDir, { recursive: true });
+  // The copy renders exactly as its reference, so the reference's design
+  // signature is the copy's, and the shop's browser gate is green at its first
+  // commit. It goes under client/: test/ is the core's, and a shop recording
+  // its own signature there would be a core change at every upgrade.
+  const referenceSignature = resolve(target, SIGNATURES_DIR, `${referenceTheme}.json`);
+  if (existsSync(referenceSignature)) {
+    mkdirSync(resolve(target, SHOP_SIGNATURES_DIR), { recursive: true });
+    cpSync(referenceSignature, resolve(target, SHOP_SIGNATURES_DIR, `${theme}.json`));
+  }
 
   const manifestText = renderManifest(manifest, {
     header: [

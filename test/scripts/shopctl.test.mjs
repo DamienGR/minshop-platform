@@ -610,6 +610,7 @@ describe('shopctl new', () => {
     // it would otherwise add. The paths do not move; only the letter does.
     const expected = [
       'client/client.yaml',
+      'client/signatures/boutique-du-port.json',
       'imports/README.md',
       'src/themes/boutique-du-port/Catalog.astro',
       'src/themes/boutique-du-port/ContentPage.astro',
@@ -626,6 +627,13 @@ describe('shopctl new', () => {
       .split('\n')
       .map((line) => line.split('\t'));
     expect(changed).toEqual(expected);
+
+    // The copied theme renders as its reference, so its browser gate starts
+    // from the reference's signature rather than from none (étape 2 de la
+    // certification: every real shop's Browser job was red at its first PR).
+    expect(readFileSync(join(shop, 'client/signatures/boutique-du-port.json'), 'utf8')).toBe(
+      readFileSync(join(core(), 'test/browser/__signatures__/default.json'), 'utf8'),
+    );
 
     expect(readFileSync(join(shop, 'client/client.yaml'), 'utf8')).toBe(
       `# Manifeste de la boutique Boutique Du Port.
