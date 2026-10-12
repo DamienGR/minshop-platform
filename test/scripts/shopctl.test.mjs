@@ -870,7 +870,11 @@ describe('shopctl doctor', () => {
     const result = shopctl(['doctor', '--offline', '--json'], CORE);
     const report = JSON.parse(result.stdout);
     expect(report.tree).toBe(existsSync(join(CORE, 'client/client.yaml')) ? 'shop' : 'core');
-    expect(report.checks.filter((entry) => entry.status === 'fail')).toEqual([]);
+    // A shop's CI checks out `origin` alone: the missing `core` remote
+    // describes that clone, not the code under test, and doctor is right to
+    // name it on an operator's machine.
+    const describesTheClone = (entry) => entry.message.startsWith('aucun remote "core"');
+    expect(report.checks.filter((entry) => entry.status === 'fail' && !describesTheClone(entry))).toEqual([]);
   });
 
   it('names what stays human rather than pretending to verify it', () => {
