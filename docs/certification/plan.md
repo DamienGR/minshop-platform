@@ -293,12 +293,16 @@ dans le socle après `v0.3.1`, avec son test.
   secrets sont réécrits, la clé de sauvegarde est conservée ;
 - [x] workflow `Nightly` désactivé dans le dépôt de la boutique jusqu'à
   l'étape 3 : sans base de staging, son job de staging échouerait chaque nuit ;
-- [ ] une pull request de la boutique fait tourner sa CI — §7.2 : celle qui
+- [x] une pull request de la boutique fait tourner sa CI — §7.2 : celle qui
   verse les rapports `--json` de cette étape dans `client/certification/`.
   Rouge au premier passage, pour deux défauts du socle qu'aucune doublure ne
   voyait (remote `core` absent d'un checkout de CI, pas de signature de design
   pour le thème de la boutique) : corrigés en `v0.3.2`, que chaque boutique
-  prend par `shopctl core upgrade --to v0.3.2 --open-pr` avant cette ligne ;
+  prend par `shopctl core upgrade --to v0.3.2 --open-pr` avant cette ligne.
+  Ces montées (pull requests #5) ont trouvé le troisième : la porte de
+  propriété bloquait les fichiers apportés par la release, levée par le label
+  `core-change`, corrigée après `v0.3.2`. Verte le 2026-10-12 sur les deux
+  pull requests #4, vingt jobs sur vingt ;
 - [x] idem pour `canari-certif` (`--from-theme market`, domaine laissé au
   placeholder : elle n'a pas de production), sans `accountId` déclaré :
   `CLOUDFLARE_ACCOUNT_ID` absent du shell au `shopctl new`, qui l'écrirait dans
