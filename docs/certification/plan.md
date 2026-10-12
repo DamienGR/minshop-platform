@@ -327,8 +327,8 @@ Répétée le 2026-10-12 en doublure, contre une boutique `v0.3.2` et un
 `wrangler` de doublure qui choisit désormais son compte comme la version
 4.149 : quatre trous du socle, trouvés avant tout passage en réel, corrigés
 après `v0.3.2` et livrés avec `v0.3.3` (étape 8, avant la production de
-l'étape 9). Tant que la boutique porte `v0.3.2`, la fiche de commandes les
-contourne.
+l'étape 9). Tant que la boutique porte `v0.3.2`, la
+[fiche de commandes](etape-3-commandes.md) les contourne.
 
 - `shopctl` vérifiait le compte mais ne le passait pas à wrangler. Avec une
   session qui voit A et B — celle du guide de l'étape 1 —, un wrangler dont
