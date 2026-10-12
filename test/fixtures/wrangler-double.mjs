@@ -21,6 +21,7 @@
  *
  *   accounts        [{ id, name }]           what `whoami` reports
  *   authenticated   boolean                  false makes `whoami --json` exit 1
+ *                                            (plain `whoami` still exits 0)
  *   d1              [{ name, uuid, jurisdiction }]
  *   r2              [{ name, jurisdiction, devUrl, domains }]
  *   workers         [{ name, secrets: [] }]
@@ -118,7 +119,11 @@ const uuid = (name) => {
 const jurisdictionOf = () => flag('-J', '--jurisdiction');
 
 if (positionals[0] === 'whoami') {
-  if (state.authenticated === false) fail('You are not authenticated.');
+  // Wrangler 4.149, verbatim: without --json, a missing session is a message
+  // on stdout and exit 0; only --json turns it into a failure. Anything that
+  // reads the exit status of the plain form believes nobody is logged out.
+  if (state.authenticated === false && argv.includes('--json')) done(JSON.stringify({ loggedIn: false }), 1);
+  if (state.authenticated === false) done('You are not authenticated. Please run `wrangler login`.');
   done(JSON.stringify({
     loggedIn: true,
     authType: 'OAuth Token',
