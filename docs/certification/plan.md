@@ -108,7 +108,9 @@ L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
 s'abonne à cinq événements, ceux que l'adaptateur lit :
 `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
 `checkout.session.async_payment_failed`, `checkout.session.expired` et
-`charge.refunded`.
+`charge.refunded`. Derrière la preview privée, ce chemin est le seul qui
+contourne Access ([guide, §5](comptes-et-acces.md#5-zero-trust-et-access-compte-a)) :
+la signature que le Worker vérifie est ce qui le protège.
 
 ### 2.4 Où tournent les commandes
 
@@ -313,8 +315,52 @@ Fait avancer : jalon 6 (forge), §7.2.
 
 ### Étape 3 — Staging sur le compte agence
 
-Crée : Worker, D1, deux buckets R2 et un namespace KV par boutique sur A ;
-secrets internes ; données de catalogue.
+Crée, pour `pilote-certif` seule (`canari-certif` attend l'étape 7), sur A :
+le Worker et son domaine personnalisé sur le nom d'hôte de preview, la base D1
+et trois buckets R2 en juridiction `eu` (images, fichiers, sauvegardes avec sa
+règle de conservation de 90 jours), le namespace KV des sessions que wrangler
+crée au premier déploiement, les secrets internes, le catalogue témoin ; dans
+Access, une application de contournement sur le seul chemin du webhook ; dans
+Stripe test, l'endpoint du webhook.
+
+Répétée le 2026-10-12 en doublure, contre une boutique `v0.3.2` et un
+`wrangler` de doublure qui choisit désormais son compte comme la version
+4.149 : quatre trous du socle, trouvés avant tout passage en réel, corrigés
+après `v0.3.2` et livrés avec `v0.3.3` (étape 8, avant la production de
+l'étape 9). Tant que la boutique porte `v0.3.2`, la fiche de commandes les
+contourne.
+
+- `shopctl` vérifiait le compte mais ne le passait pas à wrangler. Avec une
+  session qui voit A et B — celle du guide de l'étape 1 —, un wrangler dont
+  l'entrée n'est pas un terminal refuse (« More than one account
+  available »), ou prend le compte qu'il a mis en cache la dernière fois
+  qu'on en a choisi un à la main dans l'arbre : `provision` aurait alors créé
+  la boutique sur B en annonçant A. Contournement : `CLOUDFLARE_ACCOUNT_ID`
+  exporté, égal au manifeste. `catalog import --remote` ne nommait aucun
+  compte ; il passe désormais par la même résolution.
+- `deploy` lisait l'origine à tester dans la sortie de wrangler. Celle-ci
+  liste un domaine personnalisé sans `https://` et n'annonce aucune URL
+  `workers.dev` une fois cette porte fermée : sur une preview privée comme en
+  production (y compris par le workflow `Deploy`), le test de fumée n'avait
+  rien à interroger, ou interrogeait le lien de documentation d'un
+  avertissement. L'origine vient désormais du manifeste. Contournement :
+  `--url https://<nom d'hôte de preview>`.
+- `deploy --json` laissait la sortie de `npm run verify` et du build sur la
+  sortie standard, devant le rapport : le workflow `Deploy` n'aurait pas pu
+  lire l'origine dans un rapport qui n'est plus du JSON, et la preuve versée
+  aurait été illisible. Elle passe désormais sur la sortie d'erreur.
+  Contournement : `npm run verify` et `npm run build` lancés à part, puis
+  `deploy --skip-verify --skip-build --json`.
+- le contrôle d'e-mail du nocturne se connectait à l'administration avec le
+  seul mot de passe : Turnstile activé, la connexion était refusée et le
+  contrôle rouge chaque nuit. Il répond désormais au widget de test par le
+  jeton factice que seules les clés de test acceptent, et devant un widget
+  réel se saute en le disant. Contournement : clés de test enregistrées,
+  case « Enable Turnstile » décochée jusqu'à `v0.3.3`.
+
+`npm run verify` a aussi tourné dans l'arbre de la boutique avec la
+configuration de staging rendue (domaine, `workers.dev` fermé, variables
+d'Access) : vert. C'est ce que `deploy` exécute avant de téléverser.
 
 - [ ] `provision --env staging --dry-run`, puis réel, puis une seconde fois :
   le second passage ne crée rien ;
@@ -324,9 +370,15 @@ secrets internes ; données de catalogue.
 - [ ] `deploy --env staging` : smoke test vert, **et** requête anonyme sur la
   preview refusée, **et** `workers.dev` fermé ;
 - [ ] `/admin/setup` derrière Access, mot de passe posé ;
+- [ ] le chemin du webhook, et lui seul, contourne Access : Stripe ne passe
+  pas une page de connexion (guide de l'étape 1, §5). Un POST non signé y
+  reçoit le 400 du Worker, pas la redirection d'Access ;
 - [ ] `catalog import --remote` du catalogue témoin, puis une seconde fois :
   plan vide ;
-- [ ] clés Stripe test, Resend et Turnstile saisies dans l'administration ;
+- [ ] clés Stripe test et Resend saisies dans l'administration, et les clés de
+  test de Turnstile (guide de l'étape 1, §6) : le contrôle d'e-mail du
+  nocturne se connecte à l'administration, ce qu'aucun script ne fait devant
+  un widget réel ;
 - [ ] secrets et variables du nocturne posés dans l'environnement `staging`
   du dépôt (§2.3), puis le workflow `Nightly` réactivé et lancé à la main :
   vert, ou chaque contrôle sauté nommé dans son avertissement.
