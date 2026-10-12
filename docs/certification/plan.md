@@ -294,7 +294,11 @@ dans le socle après `v0.3.1`, avec son test.
 - [x] workflow `Nightly` désactivé dans le dépôt de la boutique jusqu'à
   l'étape 3 : sans base de staging, son job de staging échouerait chaque nuit ;
 - [ ] une pull request de la boutique fait tourner sa CI — §7.2 : celle qui
-  verse les rapports `--json` de cette étape dans `client/certification/` ;
+  verse les rapports `--json` de cette étape dans `client/certification/`.
+  Rouge au premier passage, pour deux défauts du socle qu'aucune doublure ne
+  voyait (remote `core` absent d'un checkout de CI, pas de signature de design
+  pour le thème de la boutique) : corrigés en `v0.3.2`, que chaque boutique
+  prend par `shopctl core upgrade --to v0.3.2 --open-pr` avant cette ligne ;
 - [x] idem pour `canari-certif` (`--from-theme market`, domaine laissé au
   placeholder : elle n'a pas de production), sans `accountId` déclaré :
   `CLOUDFLARE_ACCOUNT_ID` absent du shell au `shopctl new`, qui l'écrirait dans
@@ -412,8 +416,10 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
   bien échouer le run ;
 - [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
 - [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
-- [ ] montée de version réelle : un tag `v0.3.2` proposé par
-  `shopctl core upgrade --open-pr`, fusionné, déployé en staging ;
+- [ ] montée de version réelle : un tag `v0.3.3` proposé par
+  `shopctl core upgrade --open-pr`, fusionné, déployé en staging. `v0.3.2` est
+  déjà passée par ce chemin à l'étape 2, mais avant tout déploiement : la
+  ligne demande une montée sur une boutique qui tourne ;
 - [ ] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre ;
 - [ ] mot de passe admin perdu : procédure exécutée telle que le runbook la
   décrit ;
