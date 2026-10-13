@@ -101,7 +101,7 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 ; celui de staging aussi en secret d'environnement GitHub `MINSHOP_ADMIN_PASSWORD`, pour l'e-mail de test du nocturne |
 | Jeton de service Access de staging | secret | Damien (Zero Trust → Service Auth) | secrets d'environnement GitHub `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET`, pour le nocturne et les portes distantes |
 | Clé Stripe test du nocturne | secret | Damien, clé restreinte « Checkout Sessions : écriture » | secret d'environnement GitHub `STRIPE_TEST_SECRET_KEY` ; une clé live est refusée |
-| Destinataire de l'e-mail de test, origine de staging | configuration | Damien | variables d'environnement GitHub `NIGHTLY_EMAIL_TO` et, sans `stagingDomain`, `STAGING_URL` |
+| Destinataire de l'e-mail de test, origine de staging | configuration | Damien | secret d'environnement GitHub `NIGHTLY_EMAIL_TO` (une variable s'afficherait en clair dans les journaux, publics sur un dépôt public) et, sans `stagingDomain`, variable `STAGING_URL` |
 | Jeton de lecture de l'analytique de production | secret, lecture seule (« Account Analytics : Read », « D1 : Read ») | Damien, sur le compte de la production | secrets du dépôt `MONITOR_CLOUDFLARE_API_TOKEN` et `MONITOR_CLOUDFLARE_ACCOUNT_ID` — hors de l'environnement `production`, dont les relecteurs bloqueraient chaque nuit |
 
 L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
