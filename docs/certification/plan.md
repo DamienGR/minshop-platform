@@ -326,9 +326,19 @@ Stripe test, l'endpoint du webhook.
 Répétée le 2026-10-12 en doublure, contre une boutique `v0.3.2` et un
 `wrangler` de doublure qui choisit désormais son compte comme la version
 4.149 : quatre trous du socle, trouvés avant tout passage en réel, corrigés
-après `v0.3.2` et livrés avec `v0.3.3` (étape 8, avant la production de
-l'étape 9). Tant que la boutique porte `v0.3.2`, la
-[fiche de commandes](etape-3-commandes.md) les contourne.
+après `v0.3.2` et livrés avec `v0.3.3`. Tant que la boutique porte `v0.3.2`,
+la [fiche de commandes](etape-3-commandes.md) les contourne.
+
+Passée en réel à partir du 2026-10-13, elle en a trouvé deux autres. Le
+staging de `v0.3.2` répondait 500 à chaque enregistrement de
+l'administration, `/admin/setup` compris, données pourtant écrites : un
+Worker sans cache reçoit un `cache` sans `purge`, que le socle prenait pour
+une purge échouée (journaux de `wrangler tail`). Et `shopctl doctor`
+déclarait active une session wrangler qui n'existait pas : la case de
+l'étape 1 reposait sur un faux vert. L'étape 4 passant par l'administration,
+`v0.3.3` est publiée pendant l'étape 3 avec les six correctifs
+(`docs/migrations/v0.3.3.md`), et la montée de version réelle de l'étape 8
+vise `v0.3.4`.
 
 - `shopctl` vérifiait le compte mais ne le passait pas à wrangler. Avec une
   session qui voit A et B — celle du guide de l'étape 1 —, un wrangler dont
@@ -472,7 +482,7 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
   bien échouer le run ;
 - [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
 - [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
-- [ ] montée de version réelle : un tag `v0.3.3` proposé par
+- [ ] montée de version réelle : un tag `v0.3.4` proposé par
   `shopctl core upgrade --open-pr`, fusionné, déployé en staging. `v0.3.2` est
   déjà passée par ce chemin à l'étape 2, mais avant tout déploiement : la
   ligne demande une montée sur une boutique qui tourne ;
