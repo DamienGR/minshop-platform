@@ -372,26 +372,35 @@ vise `v0.3.4`.
 configuration de staging rendue (domaine, `workers.dev` fermé, variables
 d'Access) : vert. C'est ce que `deploy` exécute avant de téléverser.
 
-- [ ] `provision --env staging --dry-run`, puis réel, puis une seconde fois :
+- [x] `provision --env staging --dry-run`, puis réel, puis une seconde fois :
   le second passage ne crée rien ;
-- [ ] `provision` avec le mauvais compte : refus, code de sortie 4 ;
-- [ ] juridiction `eu` lue sur la base et les buckets via l'API ;
-- [ ] bucket de fichiers inaccessible publiquement ;
-- [ ] `deploy --env staging` : smoke test vert, **et** requête anonyme sur la
+- [x] `provision` avec le mauvais compte : refus, code de sortie 4 ;
+- [x] juridiction `eu` lue sur la base et les buckets via l'API ;
+- [x] bucket de fichiers inaccessible publiquement ;
+- [x] `deploy --env staging` : smoke test vert, **et** requête anonyme sur la
   preview refusée, **et** `workers.dev` fermé ;
-- [ ] `/admin/setup` derrière Access, mot de passe posé ;
-- [ ] le chemin du webhook, et lui seul, contourne Access : Stripe ne passe
+- [x] `/admin/setup` derrière Access, mot de passe posé ;
+- [x] le chemin du webhook, et lui seul, contourne Access : Stripe ne passe
   pas une page de connexion (guide de l'étape 1, §5). Un POST non signé y
   reçoit le 400 du Worker, pas la redirection d'Access ;
-- [ ] `catalog import --remote` du catalogue témoin, puis une seconde fois :
+- [x] `catalog import --remote` du catalogue témoin, puis une seconde fois :
   plan vide ;
-- [ ] clés Stripe test et Resend saisies dans l'administration, et les clés de
+- [x] clés Stripe test et Resend saisies dans l'administration, et les clés de
   test de Turnstile (guide de l'étape 1, §6) : le contrôle d'e-mail du
   nocturne se connecte à l'administration, ce qu'aucun script ne fait devant
   un widget réel ;
 - [ ] secrets et variables du nocturne posés dans l'environnement `staging`
   du dépôt (§2.3), puis le workflow `Nightly` réactivé et lancé à la main :
-  vert, ou chaque contrôle sauté nommé dans son avertissement.
+  vert, ou chaque contrôle sauté nommé dans son avertissement. Posés et lancé
+  le 2026-10-13 ([run 38455159960](https://github.com/DamienGR/shop-pilote-certif/actions/runs/38455159960)) :
+  sauvegarde, restauration, porte de sécurité, Stripe et e-mail verts. Deux
+  rouges laissent la ligne ouverte. La porte navigateur cherchait l'image
+  principale d'une fiche sous la seule forme d'une galerie (défaut du test,
+  corrigé par la pull request #59, à prendre par une montée de version). Le
+  CPU p99 dépasse les 10 ms du plan gratuit — renvoyé à l'étape 6.
+Preuves dans `client/certification/etape-3/` de `pilote-certif` (pull request
+`Nightly` a aussi montré que `NIGHTLY_EMAIL_TO`, posée en variable, s'affiche
+en clair dans un journal public : c'est désormais un secret (pull request
 
 Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
 (import réel), §8.4 en partie.
@@ -448,6 +457,17 @@ Produit : le **rapport de sécurité**.
   (`npm run test:last-unit:remote -- --product <slug>`, stock mis à 1 dans
   l'administration avant).
 
+Le CPU, constaté à l'étape 3 : sur le staging, l'administration prend 13 à
+43 ms de CPU par requête, la connexion 35 ms, `GET /` 26 ms à froid, le cron
+1 à 4 ms ; le plan gratuit annonce 10 ms. Cloudflare tolère un dépassement
+occasionnel par isolat et n'interrompt (erreur 1102, issue `exceededCpu`)
+qu'un Worker qui le franchit régulièrement : aucune invocation interrompue à
+ce jour. Mesurer à chaud (charge) et à froid (première visite après un temps
+mort) séparément, page par page, vitrine d'abord ; optimiser autant que
+possible avant de choisir entre le plan Workers Paid et une dérogation. Le
+seuil de `shopctl monitor` juge aujourd'hui le p99 : le compte des
+invocations `exceededCpu`, qu'il regroupe déjà par statut, est le signal qui
+compte.
 La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
 le scénario doit les contourner explicitement ou les compter comme attendus,
 pas les désactiver.
