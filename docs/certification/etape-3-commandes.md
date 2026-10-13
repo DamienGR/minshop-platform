@@ -29,7 +29,7 @@ minutes) fait 288 invocations par jour.
 ## Quatre contournements, tant que la boutique porte `v0.3.2`
 
 La répétition a trouvé quatre trous du socle, corrigés par la pull request #53
-et livrés avec `v0.3.3` (étape 8). D'ici là :
+et livrés avec `v0.3.3`, publiée pendant l'étape 3. D'ici là :
 
 1. **`CLOUDFLARE_ACCOUNT_ID` exporté**, égal au compte A. Sans lui, `shopctl`
    vérifie le compte mais wrangler, qui voit A et B, refuse de choisir
