@@ -124,6 +124,7 @@ export const fr = {
   'checkout.editAddress': 'Modifier l’adresse',
   'checkout.shipping': 'Livraison',
   'checkout.shippingFree': 'Offerte',
+  'checkout.shippingFreeOption': 'Livraison offerte',
   'checkout.total': 'total',
   'checkout.continue': 'Continuer vers la livraison',
   'checkout.field.email': 'E-mail',
