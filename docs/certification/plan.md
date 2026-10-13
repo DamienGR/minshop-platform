@@ -388,19 +388,26 @@ d'Access) : vert. C'est ce que `deploy` exécute avant de téléverser.
 - [x] clés Stripe test et Resend saisies dans l'administration, et les clés de
   test de Turnstile (guide de l'étape 1, §6) : le contrôle d'e-mail du
   nocturne se connecte à l'administration, ce qu'aucun script ne fait devant
-  un widget réel ;
+  un widget réel. Le premier `Nightly` du 2026-10-13 a trouvé une vraie clé
+  de site et sauté l'e-mail ; clés de test posées, le second
+  ([run 38466884657](https://github.com/DamienGR/shop-pilote-certif/actions/runs/38466884657))
+  s'est connecté et l'a envoyé ;
 - [ ] secrets et variables du nocturne posés dans l'environnement `staging`
   du dépôt (§2.3), puis le workflow `Nightly` réactivé et lancé à la main :
   vert, ou chaque contrôle sauté nommé dans son avertissement. Posés et lancé
-  le 2026-10-13 ([run 38455159960](https://github.com/DamienGR/shop-pilote-certif/actions/runs/38455159960)) :
+  le 2026-10-13, relancé après les clés de test de Turnstile
+  ([run 38466884657](https://github.com/DamienGR/shop-pilote-certif/actions/runs/38466884657)) :
   sauvegarde, restauration, porte de sécurité, Stripe et e-mail verts. Deux
   rouges laissent la ligne ouverte. La porte navigateur cherchait l'image
   principale d'une fiche sous la seule forme d'une galerie (défaut du test,
   corrigé par la pull request #59, à prendre par une montée de version). Le
   CPU p99 dépasse les 10 ms du plan gratuit — renvoyé à l'étape 6.
-Preuves dans `client/certification/etape-3/` de `pilote-certif` (pull request
-`Nightly` a aussi montré que `NIGHTLY_EMAIL_TO`, posée en variable, s'affiche
-en clair dans un journal public : c'est désormais un secret (pull request
+
+Preuves dans `client/certification/etape-3/` de `pilote-certif` (pull
+request #7). Le premier `Nightly` a aussi montré que `NIGHTLY_EMAIL_TO`, posée
+en variable, s'affiche en clair dans un journal public : c'est désormais un
+secret (pull request #58). Le `Nightly` de `v0.3.3` ne lit que la variable :
+elle passe en secret à la prochaine montée de version de la boutique.
 
 Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
 (import réel), §8.4 en partie.
