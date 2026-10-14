@@ -5,7 +5,7 @@ import {
   productEmailImageUrl,
   type ImageDelivery,
 } from '../products/image';
-import { carrierName, trackingUrl } from '../orders/tracking';
+import { shippedCarrierName, trackingUrl } from '../orders/tracking';
 import { t, formatNumber } from '../i18n/index.ts';
 import type { EmailMessage } from './provider';
 import {
@@ -236,6 +236,7 @@ export function orderShippedEmail(
   const cfg = getConfig();
   const num = orderReference(order.public_id, order.id, cfg.orderNumber);
   const url = trackingUrl(order.tracking_carrier, order.tracking_number);
+  const carrier = shippedCarrierName(order.tracking_carrier);
   const orderUrl = guestOrderUrl ?? null;
 
   const text = [
@@ -243,7 +244,7 @@ export function orderShippedEmail(
     ...(order.tracking_number
       ? [
           ``,
-          t('email.shipped.carrier', { transporteur: carrierName(order.tracking_carrier) }),
+          ...(carrier ? [t('email.shipped.carrier', { transporteur: carrier })] : []),
           t('email.shipped.number', { numero: order.tracking_number }),
           ...(url ? [t('email.shipped.trackLine', { url })] : []),
         ]
@@ -254,7 +255,7 @@ export function orderShippedEmail(
   const trackingHtml = order.tracking_number
     ? emailLabel(t('email.shipped.tracking')) +
       `<p style="margin:0;font-size:14px;line-height:1.6;">
-        ${escapeHtml(carrierName(order.tracking_carrier))}<br>
+        ${carrier ? `${escapeHtml(carrier)}<br>` : ''}
         ${
           url
             ? `<a href="${url}" style="color:${PALETTE.brand};font-weight:600;">${escapeHtml(order.tracking_number)}</a>`
