@@ -484,19 +484,45 @@ Fait avancer : jalon 7 (Stripe test, notification d'expédition), jalon 3
 
 ### Étape 5 — Sécurité sur la boutique déployée
 
-Lecture seule, plus quelques requêtes hostiles vers sa propre boutique.
+Lecture seule, plus quelques requêtes hostiles vers sa propre boutique, et une
+commande de test sous capture des journaux.
 
-- [ ] les neuf lignes du §8.4 contre l'URL de staging, avec l'outillage de
-  l'étape 0 (`BASE_URL=… npm run test:security:remote`). Elle échoue si
+Répétée le 2026-10-14 en doublure, contre le Worker construit de
+`pilote-certif` en `v0.3.3` derrière une doublure d'Access, Stripe et Resend
+simulés : la porte distante, l'étape 4 rejouée sous capture, `npm audit`, le
+scan de secrets sur l'arbre, l'historique public et le build de staging. La
+boutique a tenu ; deux défauts, corrigés après `v0.3.3` et livrés avec
+`v0.3.4`. Cloudflare nomme un compte « <adresse>'s Account », et `shopctl`
+recopiait ce nom : l'adresse de connexion de l'opérateur est publiée dans cinq
+preuves de l'étape 3 et dans les journaux et artefacts du `Nightly` ; elle est
+masquée à la source, et la [fiche de commandes](etape-5-commandes.md) dit quoi
+faire de ce qui est déjà publié. `npm audit` complet trouvait deux alertes
+élevées dans `sharp`, outil de test seulement, que l'audit de production du
+`Nightly` ne voyait pas ; `sharp` est forcé en 0.35.5. L'outillage de l'étape 0
+ne couvrait pas quatre lignes, ajoutées : webhooks non signés et forgés, champs
+de carte et limiteurs (`--limiteurs`) dans la porte distante, relevé d'une
+capture de `wrangler tail` (`npm run test:logs:remote`), scan de tout
+l'historique Git (`npm run check:secrets:history`). L'étape se passe donc en
+`v0.3.4` : la fiche commence par la montée, ce qui coche d'avance la ligne de
+montée réelle de l'étape 8.
+
+- [ ] les neuf lignes du §8.4 contre l'URL de staging
+  (`BASE_URL=… npm run test:security:remote -- --limiteurs`). Elle échoue si
   l'admin de staging est en mode Access seul : un jeton de service est une
   identité Access valide, et il y entrerait — staging garde un mot de passe ;
-- [ ] `wrangler tail` pendant l'étape 4 rejouée : aucune adresse e-mail ni
-  postale dans les logs ;
-- [ ] `npm audit` racine et `mcp/` : aucune vulnérabilité élevée ou critique
-  non justifiée ;
-- [ ] scan de secrets sur le dépôt de la boutique et ses artefacts de build.
+- [ ] `wrangler tail` pendant une commande, un remboursement, une expédition
+  et la porte distante : aucune adresse e-mail ni postale, aucun jeton ni
+  secret dans ce que la boutique écrit ni dans les URL ;
+- [ ] `npm audit` racine et `mcp/`, outils de développement compris : aucune
+  vulnérabilité élevée ou critique non justifiée ;
+- [ ] scan de secrets sur l'arbre de la boutique, tout son historique et ses
+  artefacts de build ; ni secret ni adresse dans les journaux et artefacts
+  publics du `Nightly`.
 
 Produit : le **rapport de sécurité**.
+
+Fait avancer : jalon 10 (§8.4, rapport de sécurité), jalon 8 (journaux et
+portes de sécurité sur un déploiement réel).
 
 ### Étape 6 — Accessibilité, navigateurs, performance
 
@@ -561,7 +587,8 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
 - [ ] montée de version réelle : un tag `v0.3.4` proposé par
   `shopctl core upgrade --open-pr`, fusionné, déployé en staging. `v0.3.2` est
   déjà passée par ce chemin à l'étape 2, mais avant tout déploiement : la
-  ligne demande une montée sur une boutique qui tourne ;
+  ligne demande une montée sur une boutique qui tourne. Elle se fait en tête
+  de l'étape 5, qui demande `v0.3.4` ;
 - [ ] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre ;
 - [ ] mot de passe admin perdu : procédure exécutée telle que le runbook la
   décrit ;

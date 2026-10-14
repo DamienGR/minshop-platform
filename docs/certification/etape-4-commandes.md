@@ -30,7 +30,7 @@ cette étape-là. L'étape 8 s'en servira pour `privacy export` et `anonymize`.
 ## Ce que la boutique montre encore en `v0.3.3`
 
 La répétition a trouvé trois défauts, corrigés dans le socle après `v0.3.3` et
-livrés avec `v0.3.4` (montée de version de l'étape 8). Ils ne bloquent aucune
+livrés avec `v0.3.4` (montée de version de l'étape 5). Ils ne bloquent aucune
 ligne de cette étape ; notez-les en passant, ils disparaissent à la montée.
 
 1. **« Free shipping »** : au-delà de 60 €, l'option gratuite que la page de
