@@ -13,6 +13,7 @@ const SCRIPT = resolve(import.meta.dirname, '../remote/logs.mjs');
 // Assembled, so that this file is not itself a finding of the secret scan.
 const STRIPE_KEY = ['sk', 'live', 'Zq8Lm3Rt7Vx2Nc5Bk9Wd4Hs6'].join('_');
 const GUEST_TOKEN = 'otk_' + 'Ab3dEf5hIj7lMn9pQr1tUw';
+const ACCESS_ASSERTION = ['eyJhbGciOiJSUzI1NiJ9', 'eyJzdWIiOiJvcGVyYXRvciJ9', 'c2ln'].join('.');
 
 /** One event as `wrangler tail --format json` prints it. */
 function fetchEvent({ url = 'https://shop.example/', logs = [], exceptions = [], headers = {}, cf = {} } = {}) {
@@ -80,7 +81,7 @@ describe('what the shop wrote', () => {
     const report = scanCapture(
       [
         fetchEvent({
-          headers: { 'cf-access-authenticated-user-email': 'operator@example.fr', 'cf-access-jwt-assertion': 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvcGVyYXRvciJ9.c2ln' },
+          headers: { 'cf-access-authenticated-user-email': 'operator@example.fr', 'cf-access-jwt-assertion': ACCESS_ASSERTION },
           cf: { postalCode: '35000' },
         }),
       ],
