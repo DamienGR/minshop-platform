@@ -203,6 +203,8 @@ export const fr = {
   'pay.lightning.description': 'Payez {boutique} en Bitcoin Lightning.',
   'pay.demo.expired.title': 'Commande expirée',
   'pay.demo.expired.body': 'Cette commande de démonstration a expiré. Recommencez-en une nouvelle.',
+  'pay.demo.closed.title': 'Commande de démonstration indisponible',
+  'pay.demo.closed.body': 'Cette boutique ne prend plus de commandes de démonstration.',
   'pay.demo.banner': '⚠️ Commande de démonstration — ce n’est pas un vrai paiement',
   'pay.demo.explain': 'Aucune carte n’est débitée. L’envoi du formulaire enregistre une vraie commande, marquée',
   'pay.demo.explainAfter': 'pour que vous voyiez le parcours complet.',
