@@ -428,19 +428,51 @@ migration 0028. Le catalogue témoin, vingt produits pour vingt-quatre par page,
 ne montre jamais la pagination : la [fiche de commandes](etape-4-commandes.md)
 ajoute cinq produits le temps de la voir.
 
-- [ ] le parcours du §8.1 ligne par ligne, sur desktop et mobile ;
-- [ ] les sept lignes du §8.2, chacune avec l'identifiant Stripe, la ligne D1
-  et le stock avant/après ;
-- [ ] un code promotionnel réel : remise sur la commande, TVA calculée après
-  remise (ligne ouverte du jalon 3) ;
-- [ ] remboursement partiel puis total depuis Stripe : la commande suit ;
-- [ ] webhook rejoué depuis le tableau de bord Stripe : aucune seconde
-  commande ;
-- [ ] expédition saisie dans l'administration : l'e-mail d'expédition part
-  (ligne ouverte du jalon 7) ;
-- [ ] Resend rendu indisponible (clé révoquée le temps du test) : la commande
-  est écrite, l'e-mail part au balayage suivant — §8.7 ;
-- [ ] export des commandes, pages légales publiées, case CGV — §8.1.
+Passée en réel le 2026-10-14, elle en a trouvé quatre autres, à corriger dans
+le socle et à livrer avec `v0.3.4`.
+
+- Les quatre pages légales n'avaient pas d'identifiant public : la migration
+  0040 les insère après la 0033, et rien ne lance
+  `scripts/backfill-public-ids.mjs`. L'administration les liait à
+  `/admin/pages/null/edit`, et aucune ne pouvait être publiée. Toute boutique
+  créée depuis la 0040 est touchée. Contournement : le script lancé avec
+  `--remote` sur la base de staging, qui n'a rempli que ces quatre lignes.
+- `/express` répète la case CGV dans le formulaire de chaque moyen de
+  paiement : deux moyens, deux cases. Le panier n'en montre qu'une.
+- Le paiement de démonstration est offert à côté de Stripe : `enabledMethods`
+  l'ajoute tant que l'administration ne le désactive pas, et n'importe quel
+  visiteur passe alors une commande sans payer, stock décrémenté. C'était le
+  second moyen de `/express`. Contournement : « Demo checkout » décoché dans
+  les réglages de la boutique.
+- Les transporteurs de l'expédition sont américains (USPS, UPS, FedEx, DHL,
+  Other), quand les tarifs par défaut s'appellent Colissimo. Contournement :
+  « Other », sans lien de suivi dans l'e-mail.
+
+Les images des e-mails ne s'affichent pas sur le staging : la preview les sert
+derrière Access, qui répond par sa page de connexion. Attendu ; c'est en
+production, à l'étape 9, qu'elles se vérifient.
+
+- [x] le parcours du §8.1 ligne par ligne, sur desktop et mobile ;
+- [x] les sept lignes du §8.2, chacune avec l'identifiant Stripe, la ligne D1
+  et le stock avant/après : quatre commandes, montants de Stripe égaux à ceux
+  de D1, une commande par session, stock décrémenté une fois ;
+- [x] un code promotionnel réel : remise sur la commande, TVA calculée après
+  remise (ligne ouverte du jalon 3). `CERTIF10` sur B : 42,40 − 4,24 + 5,90 =
+  44,06 €, dont TVA 7,34 € ;
+- [x] remboursement partiel puis total depuis Stripe : la commande suit ;
+- [x] webhook rejoué depuis le tableau de bord Stripe : aucune seconde
+  commande. Le `charge.refunded` rejoué ne compte pas deux fois ;
+- [x] expédition saisie dans l'administration : l'e-mail d'expédition part
+  (ligne ouverte du jalon 7), avec le transporteur « Other » ;
+- [x] Resend rendu indisponible (clé révoquée le temps du test) : la commande
+  est écrite, l'e-mail part au balayage suivant — §8.7. Nouvelle clé collée
+  trois minutes après la commande, les deux e-mails partis à la deuxième
+  tentative ;
+- [x] export des commandes, pages légales publiées, case CGV — §8.1. Pages
+  publiées après le contournement de leur identifiant public.
+
+Preuves dans `client/certification/etape-4/` de `pilote-certif` (pull
+request #9).
 
 Fait avancer : jalon 7 (Stripe test, notification d'expédition), jalon 3
 (remises), §8.1, §8.2.
