@@ -428,8 +428,8 @@ migration 0028. Le catalogue témoin, vingt produits pour vingt-quatre par page,
 ne montre jamais la pagination : la [fiche de commandes](etape-4-commandes.md)
 ajoute cinq produits le temps de la voir.
 
-Passée en réel le 2026-10-14, elle en a trouvé quatre autres, à corriger dans
-le socle et à livrer avec `v0.3.4`.
+Passée en réel le 2026-10-14, elle en a trouvé quatre autres, corrigés dans le
+socle (pull request #64) et livrés avec `v0.3.4`.
 
 - Les quatre pages légales n'avaient pas d'identifiant public : la migration
   0040 les insère après la 0033, et rien ne lance
@@ -442,8 +442,13 @@ le socle et à livrer avec `v0.3.4`.
 - Le paiement de démonstration est offert à côté de Stripe : `enabledMethods`
   l'ajoute tant que l'administration ne le désactive pas, et n'importe quel
   visiteur passe alors une commande sans payer, stock décrémenté. C'était le
-  second moyen de `/express`. Contournement : « Demo checkout » décoché dans
-  les réglages de la boutique.
+  second moyen de `/express`. « Demo checkout » décoché dans les réglages de
+  la boutique ne la fermait pas : `/checkout` ne vérifiait que la
+  configuration du moyen, toujours vraie pour la démo, et un POST forgé y
+  passait encore. Le staging en `v0.3.3` reste ouvert ainsi, derrière Access ;
+  la production de l'étape 9 doit porter `v0.3.4`. Depuis, la démo n'est
+  offerte qu'en l'absence de tout vrai moyen, et chaque entrée exige un moyen
+  activé.
 - Les transporteurs de l'expédition sont américains (USPS, UPS, FedEx, DHL,
   Other), quand les tarifs par défaut s'appellent Colissimo. Contournement :
   « Other », sans lien de suivi dans l'e-mail.
