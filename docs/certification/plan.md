@@ -416,6 +416,18 @@ Fait avancer : jalon 6 (« provisioning dans un compte de test »), jalon 4
 
 Crée : des commandes Stripe test, des e-mails réels vers des boîtes de test.
 
+Répétée le 2026-10-13 en doublure, contre le Worker construit de
+`pilote-certif` en `v0.3.3`, le catalogue témoin, et Stripe et Resend simulés :
+quatre commandes, le webhook rejoué, deux remboursements, l'expédition, la
+panne de Resend rattrapée par le cron, l'export. Trois défauts, corrigés après
+`v0.3.3` et livrés avec `v0.3.4` : l'option de livraison gratuite s'appelait
+« Free shipping » sur la page de Stripe et dans la commande ; la version texte
+des e-mails de commande omettait la TVA ; et la documentation du socle disait
+qu'une page publiée entre seule dans le pied de page, qui est un menu depuis la
+migration 0028. Le catalogue témoin, vingt produits pour vingt-quatre par page,
+ne montre jamais la pagination : la [fiche de commandes](etape-4-commandes.md)
+ajoute cinq produits le temps de la voir.
+
 - [ ] le parcours du §8.1 ligne par ligne, sur desktop et mobile ;
 - [ ] les sept lignes du §8.2, chacune avec l'identifiant Stripe, la ligne D1
   et le stock avant/après ;

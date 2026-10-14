@@ -878,8 +878,9 @@ total, never per line.
   `catalog/plan.mjs` — the generated `imports/README.md` and its gate derive from
   that list.
 - **A content page:** nothing to add — merchants create them at `/admin/pages`.
-  Published pages appear at `/pages/<slug>`, in the footer, sitemap, and
-  `llms.txt` automatically.
+  Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
+  automatically. The footer is a menu (migration 0028): a page reaches it only
+  through Admin → Navigation, the four legal pages of migration 0040 included.
 - **A page layout preset:** add ONE entry to `PAGE_LAYOUTS` in
   `features/pages/layouts.ts`. The editor dropdown, validation, the storefront,
   and the admin preview all derive from it, and `measure`/`titleAlign` are

@@ -62,6 +62,15 @@ function totalRows(order: Order, money: (cents: number) => string): TotalRow[] {
   ];
 }
 
+/**
+ * The same rows for the plain-text part. A client that shows the text part, or a
+ * reader that reads it aloud, gets the whole receipt: the VAT breakdown was once
+ * in the HTML only.
+ */
+function totalLines(order: Order, money: (cents: number) => string): string[] {
+  return totalRows(order, money).map(({ label, amount }) => `${label} : ${amount.replace('&minus;', '-')}`);
+}
+
 /** One-line-per-field shipping address, blank lines dropped. */
 function formatShipAddress(order: Order): string {
   if (!order.ship_address) return '-';
@@ -106,14 +115,7 @@ export function orderConfirmationEmail(
     t('email.order.reference', { numero: num, boutique: storeName }),
     ``,
     ...rows,
-    ...(order.shipping_cents > 0
-      ? [`${t('email.total.shipping')} : ${money(order.shipping_cents)}`]
-      : []),
-    ...(order.discount_cents > 0
-      ? [`${t('email.total.discount')} : -${money(order.discount_cents)}`]
-      : []),
-    ...(order.tax_cents > 0 ? [`${t('email.total.tax')} : ${money(order.tax_cents)}`] : []),
-    `${t('email.total.total')} : ${money(order.amount_total_cents)}`,
+    ...totalLines(order, money),
     ...(hasDigital && orderUrl ? [``, t('email.order.download')] : []),
     ...(orderUrl ? [``, t('email.order.viewOrderLine', { url: orderUrl })] : []),
   ].join('\n');
@@ -182,14 +184,7 @@ export function orderNotificationEmail(
     shipText,
     ``,
     ...rows,
-    ...(order.shipping_cents > 0
-      ? [`${t('email.total.shipping')} : ${money(order.shipping_cents)}`]
-      : []),
-    ...(order.discount_cents > 0
-      ? [`${t('email.total.discount')} : -${money(order.discount_cents)}`]
-      : []),
-    ...(order.tax_cents > 0 ? [`${t('email.total.tax')} : ${money(order.tax_cents)}`] : []),
-    `${t('email.total.total')} : ${money(order.amount_total_cents)}`,
+    ...totalLines(order, money),
     ``,
     t('email.notification.viewInAdminLine', { url: adminUrl }),
   ].join('\n');
