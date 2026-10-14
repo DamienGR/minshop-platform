@@ -96,6 +96,17 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 npx wrangler d1 migrations apply DB --local --persist-to "$state_dir" >/dev/null
+# Rows a migration inserts reach a real store as they are: nothing there runs
+# seed.sql's normalization below, nor scripts/backfill-public-ids.mjs. The legal
+# pages of 0040 arrived without a public_id, and the admin linked each one to
+# /admin/pages/null/edit — found on a real store. Checked before the seed hides it.
+migrated_without_id="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
+  --command "SELECT (SELECT COUNT(*) FROM products WHERE public_id IS NULL) + (SELECT COUNT(*) FROM product_variants WHERE public_id IS NULL) + (SELECT COUNT(*) FROM product_extras WHERE public_id IS NULL) + (SELECT COUNT(*) FROM categories WHERE public_id IS NULL) + (SELECT COUNT(*) FROM pages WHERE public_id IS NULL) + (SELECT COUNT(*) FROM media WHERE public_id IS NULL) + (SELECT COUNT(*) FROM product_images WHERE public_id IS NULL) + (SELECT COUNT(*) FROM menu_items WHERE public_id IS NULL) AS n;" |
+  node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s)[0].results[0].n)))')"
+if [[ "$migrated_without_id" != "0" ]]; then
+  echo "D1 integration failed: migrations left $migrated_without_id row(s) without a public_id" >&2
+  exit 1
+fi
 npx wrangler d1 execute DB --local --persist-to "$state_dir" --file ./seed.sql >/dev/null
 npx wrangler d1 execute DB --local --persist-to "$state_dir" \
   --command "INSERT INTO settings (key, value) VALUES ('setup_complete', '1');" >/dev/null
