@@ -19,9 +19,14 @@ from an argument: `BASE_URL`, and behind a private preview
   which a service token would open, fails it. It also posts unsigned and
   forged events to every webhook (Access lets them through on a bypass, the
   Worker must refuse them), and checks that no page asks for a card number.
-  `-- --limiteurs` adds the rate limiters last, tripped to a 429 each: it
-  costs a minute of the operator's own IP on search, checkout and login, so it
-  is opt-in.
+  `-- --limiteurs` adds the rate limiters last, tripped to a 429 each. Search
+  and checkout are held by Cloudflare's limiter, permissive by design (per
+  location, cached per machine), so they are flooded fifty at a time up to
+  twenty times their limit; the admin login is held by the shop's exact
+  counter (`features/auth/loginThrottle.ts`), so it must refuse the sixth
+  guess at the latest, with a Retry-After longer than the edge's minute. It
+  costs the operator's own IP a minute of checkout and a quarter of an hour
+  of admin login, so it is opt-in.
 - `npm run test:logs:remote -- tail.json` — reads a `wrangler tail --format
   json` capture taken while someone buys on the shop, for e-mail addresses,
   guest tokens, credentials and the values in `PII_NEEDLES` (what the tester

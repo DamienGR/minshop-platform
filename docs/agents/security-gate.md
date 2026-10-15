@@ -31,6 +31,17 @@ delivery was actually attempted and that the failure was actually logged BEFORE
 they assert that the customer is absent from the log. If you change the e-mail
 configuration the section sets up, those guards are what will tell you.
 
+**Two limiters, two jobs.** Cloudflare's rate limiting binding
+(`features/auth/rateLimit.ts`) holds search, checkout and the login routes
+against a flood; it counts per location and caches per machine, and on a
+deployed shop it let a patient guesser through (certification, step 5). The
+admin password is therefore counted exactly in D1 as well
+(`features/auth/loginThrottle.ts`, migration 0044): five attempts per client
+network per quarter of an hour, counted BEFORE the password is checked, in one
+statement. The brute-force section proves it with a parallel burst, each
+client given its own `cf-connecting-ip` so the edge limiter never answers
+first — every 429 there carries the counter's Retry-After, never the edge's 60.
+
 Two rules the gate enforces that are easy to break by accident:
 
 - `public/_headers` and `src/features/http/securityHeaders.ts` are one list in

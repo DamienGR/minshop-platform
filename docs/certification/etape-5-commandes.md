@@ -353,6 +353,38 @@ réponse de la section 6.6, ce que montrait la trace de la section 7, et le
 Enfin, Zero Trust → Access → Service credentials → « pilote-certif étape 5 »
 → **révoquer**, et `unset CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET`.
 
+## Après `v0.3.5` : fermer la ligne des limiteurs
+
+`v0.3.5` compte les tentatives de connexion à l'administration exactement, dans
+la base de la boutique (migration 0044) : cinq par réseau client et par quart
+d'heure, la sixième refusée, le bon mot de passe compris. La recherche et le
+checkout gardent le limiteur de Cloudflare, et la porte le mesure désormais à
+ce qu'il garantit : un 429 sous une inondation, cinquante requêtes à la fois,
+jusqu'à vingt fois la limite.
+
+Prérequis : le tag `v0.3.5`. La section 0, avec un nouveau jeton de service le
+temps du passage, puis :
+
+```sh
+npm run shopctl -- core upgrade --to v0.3.5 --open-pr
+gh pr checks socle/v0.3.5 --watch
+gh pr merge socle/v0.3.5 --merge
+git switch main && git pull && npm ci && npm ci --prefix mcp
+npm run -s shopctl -- deploy --env staging --json > client/certification/etape-5/deploy-v0.3.5.json; echo $?
+npm run -s test:security:remote -- --limiteurs > client/certification/etape-5/porte-distante-v0.3.5.txt; echo $?
+```
+
+Attendu : `0` deux fois, sans contournement pour `deploy` (les deux tests qui
+dépendaient du poste ne le font plus). Le déploiement applique la migration
+0044. Dans le relevé, les trois contrôles des limiteurs en `✓` : la recherche et
+le checkout disent dans combien de requêtes leur premier 429 est venu ; la
+connexion refuse au plus tard la sixième tentative, avec un `Retry-After` d'au
+plus un quart d'heure. Pendant ce quart d'heure, votre adresse ne peut plus se
+connecter à l'administration du staging : rien à faire qu'attendre.
+
+Les deux fichiers dans une pull request de preuves, le jeton de service révoqué,
+puis le lien dans le thread : le rapport de sécurité ferme sa ligne d'après elle.
+
 ## Ce que le rapport de sécurité dira
 
 Le rapport s'écrit depuis la pull request des preuves, une ligne du §8.4 du

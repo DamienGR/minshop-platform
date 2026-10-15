@@ -544,7 +544,9 @@ en-têtes d'identité d'Access y arrivent déjà masqués par la plateforme.
   l'admin de staging est en mode Access seul : un jeton de service est une
   identité Access valide, et il y entrerait — staging garde un mot de passe.
   15 contrôles sur 15 ; les trois limiteurs en échec. Ouverte jusqu'à
-  `v0.3.5` ;
+  `v0.3.5`, qui compte les tentatives de connexion exactement (migration
+  0044) et mesure la recherche et le checkout sous une inondation : la porte
+  se rejoue d'après la [fiche](etape-5-commandes.md#après-v035--fermer-la-ligne-des-limiteurs) ;
 - [x] `wrangler tail` pendant une commande, un remboursement, une expédition
   et la porte distante : aucune adresse e-mail ni postale, aucun jeton ni
   secret dans ce que la boutique écrit ni dans les URL. 531 événements sans

@@ -58,7 +58,7 @@ ici :
 
 | Défaut | Trouvé | Effet | État |
 |---|---|---|---|
-| les limiteurs de Cloudflare comptent par localisation et par machine, et laissent passer un essai patient | en réel | un essai patient sur la connexion à l'administration de production, sans Access, ne bute que sur Turnstile s'il est activé et sur le coût du hachage (PBKDF2, 100 000 itérations) ; la recherche et le checkout restent protégés d'une inondation | décidé : compteur exact des échecs de connexion et porte recalibrée, en `v0.3.5` |
+| les limiteurs de Cloudflare comptent par localisation et par machine, et laissent passer un essai patient | en réel | un essai patient sur la connexion à l'administration de production, sans Access, ne bute que sur Turnstile s'il est activé et sur le coût du hachage (PBKDF2, 100 000 itérations) ; la recherche et le checkout restent protégés d'une inondation | compteur exact des tentatives de connexion (migration 0044) et porte recalibrée, en `v0.3.5` ; à rejouer contre le staging |
 | `shopctl` recopiait le nom du compte Cloudflare, « <adresse>'s Account » | en répétition | l'adresse de connexion de l'opérateur publiée dans cinq rapports de l'étape 3, et dans les journaux et artefacts du `Nightly`, publics | masquée à la source en `v0.3.4` (#65) ; rapports masqués dans la boutique, journaux et artefacts des anciens `Nightly` supprimés |
 | `sharp` 0.35.2 sous `miniflare` | en répétition | deux alertes élevées de `npm audit`, dans un outil de test | forcé en 0.35.5, `v0.3.4` (#65) |
 | un JWT d'exemple signé « sig », commité par un test du socle puis retiré | en réel | `check:secrets:history` rouge sur toute boutique en `v0.3.4` | la règle exige une signature de vraie longueur (#67) |
