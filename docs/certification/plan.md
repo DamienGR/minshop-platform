@@ -608,6 +608,16 @@ possible avant de choisir entre le plan Workers Paid et une dérogation. Le
 seuil de `shopctl monitor` juge aujourd'hui le p99 : le compte des
 invocations `exceededCpu`, qu'il regroupe déjà par statut, est le signal qui
 compte.
+
+Répétée en doublure le 2026-10-15 ; ce qu'elle a trouvé est corrigé dans
+`v0.3.6`, et la fiche de passage est [etape-6-commandes.md](etape-6-commandes.md).
+Le monitor y juge les invocations arrêtées et relève le p99 sans le juger ; la
+vitrine lit sa base en un appel par page (à chaud, la fiche produit passe de
+13 à 16 ms à 8 ms sur le Worker construit) ; `npm run test:cpu:remote` relève
+le CPU route par route d'une capture de `wrangler tail`, à froid après le
+déploiement et à chaud sous la charge. Le cache de Workers, désactivé sur
+toutes les boutiques, est la troisième issue à peser avec le plan payant et la
+dérogation.
 La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
 le scénario doit les contourner explicitement ou les compter comme attendus,
 pas les désactiver.

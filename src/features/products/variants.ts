@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { listProductImages } from './db';
 import { toMinorUnits } from '../../money';
 import { toGrams, type WeightUnit } from '../shipping/weight';
@@ -35,30 +35,46 @@ export interface ProductExtra {
 // ── Reads ────────────────────────────────────────────────────────────────────
 
 /** Variants for a product, in display order. Active-only unless includeInactive. */
+/** listVariants, unexecuted — for a batched read (categories/db.ts says why). */
+export function listVariantsStatement(
+  db: D1Database,
+  productId: number,
+  includeInactive = false,
+): D1PreparedStatement {
+  const where = includeInactive ? '' : ' AND active = 1';
+  return db
+    .prepare(`SELECT * FROM product_variants WHERE product_id = ?${where} ORDER BY position, id`)
+    .bind(productId);
+}
+
 export async function listVariants(
   db: D1Database,
   productId: number,
   includeInactive = false,
 ): Promise<ProductVariant[]> {
-  const where = includeInactive ? '' : ' AND active = 1';
-  const { results } = await db
-    .prepare(`SELECT * FROM product_variants WHERE product_id = ?${where} ORDER BY position, id`)
-    .bind(productId)
-    .all<ProductVariant>();
+  const { results } = await listVariantsStatement(db, productId, includeInactive).all<ProductVariant>();
   return results ?? [];
 }
 
 /** Extras for a product, in display order. Active-only unless includeInactive. */
+/** listExtras, unexecuted — for a batched read. */
+export function listExtrasStatement(
+  db: D1Database,
+  productId: number,
+  includeInactive = false,
+): D1PreparedStatement {
+  const where = includeInactive ? '' : ' AND active = 1';
+  return db
+    .prepare(`SELECT * FROM product_extras WHERE product_id = ?${where} ORDER BY position, id`)
+    .bind(productId);
+}
+
 export async function listExtras(
   db: D1Database,
   productId: number,
   includeInactive = false,
 ): Promise<ProductExtra[]> {
-  const where = includeInactive ? '' : ' AND active = 1';
-  const { results } = await db
-    .prepare(`SELECT * FROM product_extras WHERE product_id = ?${where} ORDER BY position, id`)
-    .bind(productId)
-    .all<ProductExtra>();
+  const { results } = await listExtrasStatement(db, productId, includeInactive).all<ProductExtra>();
   return results ?? [];
 }
 
