@@ -591,6 +591,17 @@ try {
     assert.equal(after - before, 4, 'a refused upload still reached the library');
     ok('a refused upload leaves nothing behind in the library');
 
+    // Astro answers HEAD with the GET handler, and the Cache API stores GET
+    // only: the certification's step 5 found every HEAD on an image throwing
+    // in waitUntil — an exception in the real runtime's tail, under a 200.
+    // Miniflare does not surface a rejected waitUntil, so this holds the
+    // answer, not the exception.
+    const [{ imageKey }] = (await (await fetch('/api/admin/media', { headers: { cookie } })).json()).media;
+    const head = await fetch(`/images/${imageKey}`, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.match(head.headers.get('content-type') ?? '', /^image\//);
+    ok('a stored image answers HEAD like GET');
+
     // A batch is validated before anything is stored, so one bad file in a
     // multi-select cannot leave half of it uploaded.
     const mixed = await post([
