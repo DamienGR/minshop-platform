@@ -561,7 +561,8 @@ en-têtes d'identité d'Access y arrivent déjà masqués par la plateforme.
 Preuves dans `client/certification/etape-5/` de `pilote-certif` (pull
 request #11).
 
-Produit : le **rapport de sécurité**.
+Produit : le **rapport de sécurité**, [`rapport-securite.md`](rapport-securite.md) :
+huit lignes du §8.4 sur neuf tenues, les limiteurs ouverts jusqu'à `v0.3.5`.
 
 Fait avancer : jalon 10 (§8.4, rapport de sécurité), jalon 8 (journaux et
 portes de sécurité sur un déploiement réel).
@@ -691,7 +692,7 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 | Livrable | Produit par |
 |---|---|
 | rapport de tests | étapes 3, 4, 6, 7 |
-| rapport de sécurité | étape 5 |
+| [rapport de sécurité](rapport-securite.md) | étape 5 |
 | rapport de performance | étape 6 |
 | preuve de restauration | étape 8 |
 | validation TVA/facturation | étape 11 |
