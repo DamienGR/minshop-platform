@@ -47,7 +47,7 @@ l'outillage de l'étape, corrigés dans le socle et livrés avec `v0.3.4`.
 
 | Où | Ce qui est créé ou modifié |
 |---|---|
-| Staging `pilote-certif` (A) | le Worker en `v0.3.4` et la migration 0043 ; une commande de test (E) et son stock ; un média téléversé puis supprimé ; votre adresse IP bloquée une minute par les limiteurs |
+| Staging `pilote-certif` (A) | le Worker en `v0.3.4` et la migration 0043 ; une commande de test (E) et son stock ; un média téléversé puis supprimé ; des rafales de recherches, de checkouts vides et de connexions (les limiteurs) |
 | Access (A) | un jeton de service « pilote-certif étape 5 », révoqué à la fin |
 | Stripe, mode test | un paiement, un remboursement partiel |
 | Resend | trois ou quatre e-mails vers votre adresse de test |
@@ -100,12 +100,33 @@ npm run -s shopctl -- deploy --env staging --json > client/certification/etape-5
 node -e 'const r = require("./client/certification/etape-5/deploy-v0.3.4.json"); console.log(r.ok, r.account, r.smoke.ok)'
 ```
 
+En `v0.3.4`, le `npm run verify` que lance `deploy` dépend de deux réglages du
+poste : avec `CLOUDFLARE_ACCOUNT_ID` exporté (section 0) ou `core.autocrlf=true`
+dans `~/.gitconfig`, un test échoue et `deploy` s'arrête avant de téléverser
+(code 5). Corrigé après `v0.3.4`. D'ici là, le déploiement se lance ainsi, et
+`shopctl` épingle quand même le compte A depuis le manifeste :
+
+```sh
+env -u CLOUDFLARE_ACCOUNT_ID GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.autocrlf GIT_CONFIG_VALUE_0=false \
+  npm run -s shopctl -- deploy --env staging --json > client/certification/etape-5/deploy-v0.3.4.json; echo $?
+```
+
 Attendu : la pull request verte ; `0` ; `true`, le compte A sous le nom
 `<email>'s Account`, `true`. Le déploiement applique la migration 0043 (les
 identifiants publics des pages légales, déjà remplis à la main à l'étape 4 :
 elle ne touche rien). Rien à faire dans l'administration :
 `docs/migrations/v0.3.4.md` le dit. Cette montée coche d'avance la ligne
 « montée de version réelle » de l'étape 8.
+
+Les mêmes notes demandent une chose côté GitHub : une boutique dont le
+`Nightly` lit encore `NIGHTLY_EMAIL_TO` en **variable** la pose en secret,
+sans quoi le `Nightly` de la section 8 l'écrit en clair. Sans l'afficher :
+
+```sh
+R=DamienGR/shop-pilote-certif
+gh variable get NIGHTLY_EMAIL_TO --env staging --repo $R | tr -d '\r\n' | gh secret set NIGHTLY_EMAIL_TO --env staging --repo $R
+gh variable delete NIGHTLY_EMAIL_TO --env staging --repo $R
+```
 
 ## 2. Secrets : l'arbre, l'historique, le build
 
@@ -134,10 +155,26 @@ Attendu : `0` deux fois, puis `high: 0, critical: 0` des deux côtés. L'audit
 complet, outils de développement compris : celui du `Nightly` n'en voit que la
 production.
 
-## 4. La capture des journaux
+## 4. Les limiteurs, puis la capture des journaux
 
-Dans un **second terminal**, ouvert dans la boutique, qui reste ouvert pendant
-les sections 5 et 6 :
+Les limiteurs d'abord, **hors de la capture** : leurs rafales la saturent, et
+wrangler l'échantillonne alors (`overload`), ce qui la rend inutilisable pour la
+section 7. Dans le premier terminal :
+
+```sh
+npm run -s test:security:remote -- --limiteurs > client/certification/etape-5/porte-distante-limiteurs.txt; echo $?
+```
+
+En `v0.3.4`, attendu `1` : les trois contrôles de « Les limiteurs de débit » en
+échec, tout le reste `✓`. Le limiteur de Cloudflare est actif mais permissif,
+compté par localisation et mis en cache par machine : passé le 2026-10-15, il
+n'a refusé aucune des 232 recherches envoyées une par une en 70 s, et son
+premier 429 n'est venu qu'après environ 450 recherches envoyées 50 à la fois. Le
+compteur exact des échecs de connexion et la porte recalibrée arrivent avec
+`v0.3.5`.
+
+Puis la capture, dans un **second terminal**, ouvert dans la boutique, qui
+reste ouvert pendant les sections 5 et 6 :
 
 ```sh
 export CLOUDFLARE_ACCOUNT_ID=$(awk '/^  accountId:/ {print $2}' client/client.yaml)
@@ -154,19 +191,16 @@ conserve les mêmes événements.
 Dans le premier terminal, la capture tournant :
 
 ```sh
-npm run -s test:security:remote -- --limiteurs > client/certification/etape-5/porte-distante.txt; echo $?
+npm run -s test:security:remote > client/certification/etape-5/porte-distante.txt; echo $?
 cat client/certification/etape-5/porte-distante.txt
 ```
 
 Attendu : `0`, chaque contrôle `✓`, dont les sections « Les webhooks de
-paiement », « Aucune donnée de carte » et « Les limiteurs de débit ».
-L'administration de staging a un mot de passe : en Access seul, la porte
-échouerait, parce qu'un jeton de service y entrerait. Elle envoie exprès une
-requête qui fait échouer le Worker (une erreur dans `monitor`), et une URL de
-commande au jeton inventé, que la section 7 cherchera dans la capture.
-
-**Attendre une minute** : votre adresse IP vient de se faire refuser la
-recherche, le checkout et la connexion.
+paiement » et « Aucune donnée de carte ». L'administration de staging a un mot
+de passe : en Access seul, la porte échouerait, parce qu'un jeton de service y
+entrerait. Elle envoie exprès une requête qui fait échouer le Worker (un
+`POST /api/cart` au corps `application/octet-stream`), et une URL de commande
+au jeton inventé, que la section 7 cherchera dans la capture.
 
 ## 6. Un achat sous la capture
 
@@ -187,6 +221,9 @@ Dans le navigateur, sur la preview :
    printf 'pas une image' > ~/faux.png
    { printf '\x89PNG\r\n\x1a\n'; head -c 6000000 /dev/zero; } > ~/gros.png
    ```
+
+   Le sélecteur de fichiers de Windows atteint le dossier personnel de WSL
+   par `\\wsl.localhost\Ubuntu\home\<utilisateur>`.
 
    `faux.png` : refusé, « Image must be JPEG, PNG, WebP, or GIF. » ; `gros.png` :
    refusé, « Image must be 5 MB or smaller. » ; une vraie photo de moins de
@@ -226,19 +263,23 @@ Attendu : `0`, et
   celui de la porte) sont masqués par la plateforme, par leur forme
   (`features/ids/token.ts`). Un jeton en clair ici est un constat : Workers Logs
   le garderait plusieurs jours ;
-- **les en-têtes et métadonnées**, rapportés sans être jugés : votre adresse
-  (masquée) dans `cf-access-authenticated-user-email` et l'assertion d'Access
-  dans `cf-access-jwt-assertion`, posées par Access sur chaque requête de la
-  preview. Elles disparaissent en production, qui n'a pas d'Access.
+- **les en-têtes et métadonnées**, rapportés sans être jugés.
+  `cf-access-authenticated-user-email` et `cf-access-jwt-assertion`, posés par
+  Access sur chaque requête de la preview, arrivent déjà `REDACTED` dans la
+  capture ; ils disparaissent en production, qui n'a pas d'Access. Les valeurs
+  hexadécimales de `cf.tlsExportedAuthenticator` sont des métadonnées TLS de la
+  plateforme.
 
 Si le relevé signale un échantillonnage (`overload`), refaire les sections 4 à
 7 : des événements manquent.
 
 Puis, dans le tableau de bord du compte A → Workers & Pages →
 `minshop-pilote-certif-staging` → **Observability** : l'événement du
-`POST /api/webhook` qui a enregistré E, et sa trace. Ni le nom ni l'adresse de
-Jeanne dans ses attributs : les traces sont gardées comme les journaux, et la
-capture ne les montre pas.
+`POST /api/webhook` qui a enregistré E, et sa trace. Le bon est celui de
+l'heure de création de E (Admin → Orders) : un webhook antérieur peut être la
+libération d'une réservation abandonnée (`UPDATE products SET stock = stock +
+?`). Ni le nom ni l'adresse de Jeanne dans ses attributs : les traces sont
+gardées comme les journaux, et la capture ne les montre pas.
 
 ## 8. Ce qui est déjà publié
 
@@ -276,7 +317,12 @@ Puis ce qui la porte encore :
 - les journaux et les artefacts des runs `Nightly` antérieurs à la montée ;
   les premiers portent aussi l'adresse de test, d'abord posée en variable.
   Les runs restent, avec leurs jobs verts ou rouges : l'étape 3 en cite un
-  comme preuve.
+  comme preuve. Un `Nightly` programmé qui a tourné après la montée est déjà
+  propre : le relire comme `$RUN` et le retirer de la liste plutôt que d'effacer
+  ses journaux. Un run cité comme preuve s'archive d'abord hors du dépôt, chez
+  l'opérateur : les journaux de **chaque** tentative
+  (`repos/$R/actions/runs/<id>/attempts/<n>/logs`) et chacun de ses artefacts,
+  un run relancé en ayant un par tentative.
 
   ```sh
   gh run list --workflow Nightly --repo $R --limit 50 --json databaseId,createdAt -q ".[] | select(.databaseId != $RUN) | \"\(.databaseId) \(.createdAt)\"" > ~/certif-runs.txt
@@ -318,7 +364,7 @@ plan d'implémentation par preuve :
 | aucune clé dans Git, les logs ou les artefacts | sections 2, 7 et 8, `journaux.json` | trois scans verts ; aucun secret dans la capture ; ni clé ni adresse dans le `Nightly` |
 | webhooks signés | `porte-distante.txt` ; l'étape 4 | les événements signés passent (étape 4), les autres sont refusés par le Worker à travers le contournement d'Access |
 | routes admin protégées | `porte-distante.txt` | chaque route dérivée des fichiers refusée sans session ; assistant fermé ; assertion Access forgée ignorée |
-| rate limits actifs | `porte-distante.txt` (`--limiteurs`) | un 429 avec `retry-after` sur la recherche, le checkout et la connexion |
+| rate limits actifs | `porte-distante-limiteurs.txt` | un 429 avec `retry-after` sur la recherche, le checkout et la connexion — ouverte en `v0.3.4`, voir section 4 |
 | uploads contrôlés | `README.md` (6.5, 6.6) ; porte locale | refus par le type et la taille ; servi avec son type et `nosniff` |
 | CSP et en-têtes présents | `porte-distante.txt` | durcissement complet sur chaque classe de réponse ; `script-src`/`style-src` sous la dérogation du plan (§6) |
 | aucune donnée de carte traitée | `porte-distante.txt` ; le schéma | aucun champ de carte sur les pages de la boutique ; le paiement se fait sur la page de Stripe ; aucune colonne de carte dans les 43 migrations |
