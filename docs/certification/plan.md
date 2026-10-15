@@ -544,7 +544,9 @@ en-têtes d'identité d'Access y arrivent déjà masqués par la plateforme.
   l'admin de staging est en mode Access seul : un jeton de service est une
   identité Access valide, et il y entrerait — staging garde un mot de passe.
   15 contrôles sur 15 ; les trois limiteurs en échec. Ouverte jusqu'à
-  `v0.3.5` ;
+  `v0.3.5`, qui compte les tentatives de connexion exactement (migration
+  0044) et mesure la recherche et le checkout sous une inondation : la porte
+  se rejoue d'après la [fiche](etape-5-commandes.md#après-v035--fermer-la-ligne-des-limiteurs) ;
 - [x] `wrangler tail` pendant une commande, un remboursement, une expédition
   et la porte distante : aucune adresse e-mail ni postale, aucun jeton ni
   secret dans ce que la boutique écrit ni dans les URL. 531 événements sans
@@ -561,7 +563,8 @@ en-têtes d'identité d'Access y arrivent déjà masqués par la plateforme.
 Preuves dans `client/certification/etape-5/` de `pilote-certif` (pull
 request #11).
 
-Produit : le **rapport de sécurité**.
+Produit : le **rapport de sécurité**, [`rapport-securite.md`](rapport-securite.md) :
+huit lignes du §8.4 sur neuf tenues, les limiteurs ouverts jusqu'à `v0.3.5`.
 
 Fait avancer : jalon 10 (§8.4, rapport de sécurité), jalon 8 (journaux et
 portes de sécurité sur un déploiement réel).
@@ -691,7 +694,7 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 | Livrable | Produit par |
 |---|---|
 | rapport de tests | étapes 3, 4, 6, 7 |
-| rapport de sécurité | étape 5 |
+| [rapport de sécurité](rapport-securite.md) | étape 5 |
 | rapport de performance | étape 6 |
 | preuve de restauration | étape 8 |
 | validation TVA/facturation | étape 11 |
