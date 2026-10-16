@@ -1200,7 +1200,9 @@ refuse une commande que la page ne permettait pas d'accepter.
 La frontière de traduction n'est pas « admin / storefront » mais « qui lit »
 ([ADR 0011](architecture/decisions/0011-langue-de-l-administration.md)).
 L'administration reste en anglais au pilote — c'est l'agence qui exploite
-(ADR 0002) —, `AdminLayout` garde donc `lang="en"` délibérément, et
+(ADR 0002) —, `AdminLayout` garde donc `lang="en"` délibérément (décision
+remplacée au jalon 10 par l'[ADR 0018](architecture/decisions/0018-administration-en-francais.md),
+qui passe toute l'administration en français), et
 `/payment-setup`, atteignable depuis le panier, est en français tout en nommant
 en anglais les écrans qui portent ces noms. Les montants et les dates restent
 formatés en `fr-FR` partout, admin comprise : une date au format américain dans

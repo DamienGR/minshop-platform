@@ -258,8 +258,13 @@ no-break space (U+202F) before `? ! ; :`, accents — `messages.test.ts` asserts
 in `fr-FR`. Store-owned templates may import the catalog directly — it's the
 fourth entry on the storefront boundary allowlist, beside models and controls.
 
-The **admin stays in English** (ADR 0011) and `AdminLayout` keeps `lang="en"` on
-purpose; money and dates still format in the store's locale everywhere.
+The **admin is French too** (ADR 0018, which replaced ADR 0011's English
+admin): `AdminLayout` declares the storefront's `lang`, and every Admin string is
+a key in `src/features/i18n/admin/` — one fragment per section, every key
+prefixed `admin.`, spread into `fr`. An Admin label is a `t()` call like any
+other; `test/i18n/admin-language.test.mjs` fails on an English sentence written
+into an Admin template. Identifiers stay English: CSV export columns, enum
+values, field names, and log lines.
 
 **Terms of sale.** `features/legal/terms.ts` holds ONE predicate: the checkout
 checkbox renders and the server refuses exactly when the terms page is
@@ -386,6 +391,8 @@ total, never per line.
   `shopctl deploy`, which backs production up first — never migrate it by hand.
 - **An admin page:** `src/pages/admin/<x>.astro` using `AdminLayout` (add a nav
   entry there). Mutations go through `/api/admin/*` (covered by the auth gate).
+  Its strings are `t('admin.<x>.…')` keys in `src/features/i18n/admin/<x>.ts`
+  (a new fragment is added to `admin/index.ts`), never literals.
 - **A storefront feature behind a flag:** `config.features.<x>` toggle; gate the
   nav link in `Layout.astro` and the route.
 - **Customer auth:** `features/auth/customer.ts` is the magic-link adapter (no
