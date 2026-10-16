@@ -434,6 +434,13 @@ total, never per line.
   crypto, absent on Workers. Web Crypto everywhere (see `auth/access.ts`).
 - **FTS5 `MATCH` throws on raw input** — sanitize to alphanumeric prefix tokens
   (`features/products/search.ts`).
+- **D1 bills the rows a query SCANS, not the rows it returns.** A query on a
+  table that grows with the order history (`orders`, `order_items`,
+  `order_guest_access`, `checkout_reservations`) needs an index on what it
+  filters by, or it reads the whole history on every call — and past five
+  million rows a day the Free plan fails every query, every page included,
+  until midnight UTC. `test/integration/history-reads.mjs` asserts
+  `meta.rows_read` on those paths; a new one belongs there.
 - **`wrangler d1 export` fails on FTS5 virtual tables**, which this database has
   since migration 0003. A backup goes through `shopctl backup`
   (`docs/agents/backup.md`), never through a dropped index.
