@@ -13,7 +13,7 @@ import { paymentMethodCopy } from '../features/payments/labels';
 import { t, tn } from '../features/i18n';
 import { catalogPath } from '../features/settings/home';
 
-// Cart switched off in Settings → browse-only catalog, no cart page.
+// Cart switched off in Réglages → Général (browse-only catalog), no cart page.
 if (!(Astro.locals.settings?.cartEnabled ?? true)) return Astro.redirect('/', 302);
 
 // Show only the methods that can actually take a payment right now — the

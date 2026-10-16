@@ -17,7 +17,7 @@ import { getSetting } from '../settings/db';
 export type { SearchProvider, SearchResult } from './provider';
 
 /**
- * Effective search backend. The runtime setting (Admin → Settings → Search,
+ * Effective search backend. The runtime setting (Admin → Réglages → Recherche,
  * persisted in D1) overlays the build-time default (config.search.provider /
  * SEARCH_PROVIDER) — so an owner can switch to semantic search without a redeploy.
  * Falls back to the build-time default if the setting is unset or the table is

@@ -3,6 +3,7 @@ import { listProductImages } from './db';
 import { toMinorUnits } from '../../money';
 import { toGrams, type WeightUnit } from '../shipping/weight';
 import { withPublicId } from '../ids/publicId.ts';
+import { t } from '../i18n/index.ts';
 
 /** A purchasable variant (the SKU/inventory unit). A product has 0 or N. */
 export interface ProductVariant {
@@ -328,13 +329,17 @@ export function validateVariantWeights(
     if (parsed.status !== 'error') continue;
     const what =
       parsed.reason === 'negative'
-        ? 'weight cannot be negative.'
+        ? t('admin.products.error.weightNegative')
         : parsed.reason === 'precision'
-          ? `weight has too many decimal places for ${weightUnit}.`
+          ? t('admin.products.error.weightPrecision', { unite: weightUnit })
           : parsed.reason === 'over_limit'
-            ? 'weight is too heavy for parcel shipping.'
-            : 'weight must be a number.';
-    return `Variant ${i + 1}: ${what}`;
+            ? t('admin.products.error.weightOverLimit')
+            : t('admin.products.error.weightNotNumber');
+    // The row's sentence continues after the colon, so it starts in lower case.
+    return t('admin.products.error.variantRow', {
+      numero: i + 1,
+      erreur: what.charAt(0).toLowerCase() + what.slice(1),
+    });
   }
   return null;
 }

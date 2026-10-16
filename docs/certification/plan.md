@@ -93,7 +93,7 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | Session Wrangler de l'opérateur | secret | Damien (`wrangler login`) | la machine qui exécute `shopctl` |
 | `AUTH_SECRET`, `SECRETS_KEK` | secrets internes | `shopctl provision` | secrets du Worker, tirés par boutique et par environnement, jamais affichés |
 | `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | configuration, pas un secret | Damien (application Access) | `client.yaml` (`cloudflare.stagingAccessTeam`, `cloudflare.stagingAccessAud`), rendus dans les `vars` du seul Worker de staging |
-| Clé Turnstile (site + secret) | secret pour la seconde | Damien | Admin → Réglages → Protection |
+| Clé Turnstile (site + secret) | secret pour la seconde | Damien | Admin → Réglages → Protection anti-robots |
 | `stripe_secret_key` test puis live (clé restreinte de préférence) | secret | Damien | coffre chiffré, Admin → Réglages → Paiements |
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
 | `resend_api_key` | secret | Damien | coffre chiffré |
