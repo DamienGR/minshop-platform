@@ -80,6 +80,38 @@ describe('the smoke test', () => {
     expect(result).toMatchObject({ ok: false, severity: 'warn' });
   });
 
+  // Every first deployment no Access application hides — a staging on
+  // workers.dev, the first production of every shop — answers this way until
+  // someone runs the wizard. Failing it turned each of them red after the
+  // upload (found rehearsing certification step 7); passing it silently would
+  // vouch for a storefront nobody has seen.
+  it('warns, rather than fails, a shop that is not installed yet', () => {
+    const toSetup = { ok: true, status: 302, body: '', headers: { location: 'https://shop.example/admin/setup' }, error: null };
+    const verdict = evaluateSmoke({
+      ...ok,
+      storefront: toSetup,
+      catalogue: toSetup,
+      robots: toSetup,
+      'admin-setup-open': { ok: true, status: 200, body: '<html lang="fr">', headers: {}, error: null },
+    });
+    expect(verdict.ok).toBe(true);
+    for (const id of ['storefront', 'catalogue', 'robots']) {
+      const result = verdict.results.find((check) => check.id === id);
+      expect(result).toMatchObject({ ok: false, severity: 'warn', status: 302 });
+      expect(result.message).toMatch(/pas encore installée/);
+    }
+  });
+
+  // Only the wizard. A redirect anywhere else is still a storefront that does
+  // not answer, and a 302 with no destination proves nothing about the base.
+  it('still fails a redirect that does not lead to the wizard', () => {
+    for (const headers of [{ location: '/admin/login' }, { location: 'https://ailleurs.example/admin/setup-guide' }, {}]) {
+      const verdict = evaluateSmoke({ ...ok, storefront: { ok: true, status: 302, body: '', headers, error: null } });
+      expect(verdict.ok).toBe(false);
+      expect(verdict.results.find((result) => result.id === 'storefront').severity).toBe('fail');
+    }
+  });
+
   // The failure this whole module exists to prevent: a deployment announced as
   // green because the check could not reach it.
   it('never reads an unreachable site as a pass', () => {
@@ -160,7 +192,9 @@ describe('the smoke test against a live origin', () => {
     server = createServer((request, response) => {
       const route = routes.get(new URL(request.url, 'http://x').pathname);
       if (!route) return response.writeHead(404).end('not found');
-      response.writeHead(route.status, { 'content-type': 'text/html' }).end(route.body ?? '');
+      response
+        .writeHead(route.status, { 'content-type': 'text/html', ...(route.location ? { location: route.location } : {}) })
+        .end(route.body ?? '');
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     origin = `http://127.0.0.1:${server.address().port}`;
@@ -186,6 +220,24 @@ describe('the smoke test against a live origin', () => {
     routes.set('/admin', { status: 302 });
     const report = await runSmoke(origin);
     expect(report.results.find((result) => result.id === 'admin-closed')).toMatchObject({ ok: true, status: 302 });
+  });
+
+  // The shape the built Worker gives a fresh database: every storefront path
+  // redirects to the wizard, which answers 200. Read off the wire, location
+  // header and all, the deployment is a warning and not a failure.
+  it('passes, with warnings, a shop whose wizard has not run', async () => {
+    for (const path of ['/', '/products', '/robots.txt']) routes.set(path, { status: 302, location: `${origin}/admin/setup` });
+    routes.set('/admin', { status: 303, location: '/admin/setup' });
+    routes.set('/admin/setup', { status: 200, body: '<!doctype html><html lang="fr">' });
+
+    const report = await runSmoke(origin);
+    expect(report.ok).toBe(true);
+    expect(report.results.filter((result) => !result.ok).map((result) => result.id)).toEqual([
+      'storefront',
+      'catalogue',
+      'robots',
+      'admin-setup-open',
+    ]);
   });
 
   it('runs the gated checks instead when the environment is private', async () => {

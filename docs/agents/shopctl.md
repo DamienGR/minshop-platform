@@ -94,7 +94,12 @@ own `CLOUDFLARE_ACCOUNT_ID`.
 `destroy` is irreversible and shaped by it: the shop's slug typed out (not
 `--yes`, which becomes a reflex), `--yes` on top in production, read-before-
 write, the database deleted LAST and only once everything else is gone, and a
-non-empty bucket's refusal relayed rather than worked around.
+non-empty bucket's refusal relayed rather than worked around — with an
+`r2 object delete` that says `--remote`, because wrangler 4 otherwise empties
+its local simulator. It also removes the sessions KV namespace, which nothing
+in the tree names: the Astro adapter binds `SESSION` in the built
+configuration and wrangler provisions it at the first deploy as
+`<worker>-session`, so `destroy` looks it up on the account by that title.
 
 `repo` wraps `gh`, and that is forced rather than preferred (ADR 0014): a GitHub
 environment secret is a libsodium sealed box (X25519 + Blake2b +

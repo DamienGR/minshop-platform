@@ -20,7 +20,7 @@
  */
 
 /**
- * @typedef {{ id: string, path: string, what: string, severity?: 'fail'|'warn', check: (response: SmokeResponse) => string|null }} SmokeCheck
+ * @typedef {{ id: string, path: string, what: string, severity?: 'fail'|'warn', check: (response: SmokeResponse) => string|{ message: string, severity: 'warn' }|null }} SmokeCheck
  * @typedef {{ ok: boolean, status: number|null, body: string, headers: Record<string,string>, error: string|null }} SmokeResponse
  */
 
@@ -29,6 +29,34 @@
  *  catalogue is a megabyte nobody looks at. */
 export const BODY_LIMIT = 64 * 1024;
 
+/**
+ * A shop nobody has installed yet sends every storefront page to the wizard.
+ *
+ * That is the state of EVERY first deployment that no Access application
+ * hides — a staging on workers.dev, and the first production of every shop,
+ * deployed before the client can enter anything (ADR 0015). Read as a failure,
+ * it turned each of them red after the upload; read as a pass, it would vouch
+ * for a storefront nobody has seen. So it is a warning that names the state,
+ * and the redirect is not nothing: the middleware sends it only after reading
+ * the settings from D1 and finding the installation unfinished, so the
+ * database answered.
+ */
+function awaitingSetup(response) {
+  if (![301, 302, 303, 307, 308].includes(response.status)) return false;
+  const location = response.headers?.location;
+  if (!location) return false;
+  try {
+    return new URL(location, 'http://shop.invalid').pathname === '/admin/setup';
+  } catch {
+    return false;
+  }
+}
+
+const SETUP_PENDING = {
+  severity: 'warn',
+  message: 'renvoie vers /admin/setup : la boutique n\'est pas encore installée (la base a répondu, l\'installation y est inachevée). Ce point se vérifiera au déploiement qui suivra l\'assistant.',
+};
+
 /** @type {SmokeCheck[]} */
 export const SMOKE_CHECKS = [
   {
@@ -36,6 +64,7 @@ export const SMOKE_CHECKS = [
     path: '/',
     what: 'la vitrine répond et se déclare française',
     check(response) {
+      if (awaitingSetup(response)) return SETUP_PENDING;
       if (response.status !== 200) return `répond ${response.status ?? 'rien'} au lieu de 200`;
       // The locale attribute is the one thing on this page that proves the
       // FRENCH core is what got deployed. A 200 from a default Worker
@@ -53,6 +82,7 @@ export const SMOKE_CHECKS = [
       // against a database that does not exist — a missing binding, a
       // jurisdiction the binding does not name — still serves the home page and
       // fails here.
+      if (awaitingSetup(response)) return SETUP_PENDING;
       if (response.status !== 200) return `répond ${response.status ?? 'rien'} au lieu de 200 : la liaison D1 est le premier suspect`;
       return null;
     },
@@ -62,6 +92,7 @@ export const SMOKE_CHECKS = [
     path: '/robots.txt',
     what: 'les fichiers de service sont servis',
     check(response) {
+      if (awaitingSetup(response)) return SETUP_PENDING;
       if (response.status !== 200) return `répond ${response.status ?? 'rien'} au lieu de 200`;
       return null;
     },
@@ -151,8 +182,12 @@ export function evaluateSmoke(responses, checks = SMOKE_CHECKS) {
       // warning-level check that cannot be run has told us nothing.
       return { ...base, severity: 'fail', ok: false, status: null, message: response.error ?? 'requête impossible' };
     }
-    const message = check.check(response);
-    return { ...base, ok: message === null, status: response.status, message };
+    const verdict = check.check(response);
+    // A check may lower its own severity for one answer — the shop that is
+    // not installed yet — and never raise it.
+    const message = typeof verdict === 'string' || verdict === null ? verdict : verdict.message;
+    const lowered = verdict !== null && typeof verdict === 'object' && verdict.severity === 'warn' ? { severity: 'warn' } : {};
+    return { ...base, ...lowered, ok: message === null, status: response.status, message };
   });
   return {
     ok: results.every((result) => result.ok || result.severity === 'warn'),
