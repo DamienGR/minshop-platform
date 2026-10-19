@@ -126,7 +126,17 @@ quatre avertissements au test de fumée — `/`, `/products` et `/robots.txt`
 « renvoie vers /admin/setup : la boutique n'est pas encore installée », et
 l'assistant ouvert. Si le test de fumée échoue sur une erreur réseau ou un 404
 « There is nothing here yet », workers.dev n'a pas encore propagé le nom :
-attendre une minute et relancer avec `--skip-verify --skip-build`.
+attendre une minute et relancer **avant** l'assistant, pour que le rapport
+garde les avertissements que la ligne demande :
+
+```sh
+mv "$E/deploy-canari-1.json" "$E/deploy-canari-1-propagation.json"
+npm run -s shopctl -- deploy --env staging --skip-verify --skip-build --json > "$E/deploy-canari-1.json"; echo $?
+```
+
+Le passage réel l'a rencontré : `/` et `/products` en 404, `/robots.txt` et
+l'assistant déjà en 200, code 6 ; une minute plus tard, la relance sortait en
+`0` avec ses quatre avertissements.
 
 **Tout de suite**, dans le navigateur : `$CANARI/admin/setup`. Nom « Canari
 Certif », fuseau Europe/Paris, un mot de passe neuf rangé dans le
@@ -206,15 +216,21 @@ un client bloqué sur l'une ne doit pas l'être sur l'autre.
 
 ```sh
 seq 600 | xargs -P 50 -I{} curl -s -o /dev/null -w '%{http_code}\n' "$CANARI/search?q=croix{}" | sort | uniq -c | tee "$E/limiteurs.txt"
-echo "pilote juste après  $(ac -o /dev/null -w '%{http_code}' "$PILOTE/search?q=tee")" | tee -a "$E/limiteurs.txt"
 echo "canari juste après  $(curl -s -o /dev/null -w '%{http_code}' "$CANARI/search?q=croix")" | tee -a "$E/limiteurs.txt"
+echo "pilote juste après  $(ac -o /dev/null -w '%{http_code}' "$PILOTE/search?q=tee")" | tee -a "$E/limiteurs.txt"
+echo "canari encore       $(curl -s -o /dev/null -w '%{http_code}' "$CANARI/search?q=croix")" | tee -a "$E/limiteurs.txt"
 ```
 
 Attendu : des `429` parmi les 600 recherches de la canari (à l'étape 5, le
-premier arrivait avant la 250e), puis `200` sur le pilote, et `429` sur la
-canari si sa minute n'est pas finie. Sans aucun `429` côté canari, la ligne
-ne prouve rien : le noter dans le README des preuves, sans relancer plus
-fort.
+premier arrivait avant la 250e), puis `429` sur la canari, `200` sur le
+pilote, et de nouveau `429` sur la canari : le pilote répond pendant que la
+canari refuse. Si la canari répond déjà `200` juste après, sa fenêtre s'est
+rouverte et la ligne ne tranche pas : le noter dans le README des preuves,
+sans relancer plus fort. Sans aucun `429` côté canari, elle ne prouve rien.
+
+Au passage réel, la canari était relue après le pilote seulement : 40 `429`
+sur 600, le pilote en `200`, puis la canari en `200`. Rien ne disait qu'elle
+refusait encore quand le pilote a répondu ; d'où l'ordre ci-dessus.
 
 ## 6. L'import croisé
 
@@ -287,7 +303,9 @@ diff "$E/liaisons-pilote.json" "$E/liaisons-pilote-apres.json" && echo "liaisons
 
 Attendu : une base, trois buckets et un namespace, tous du pilote, sous les
 mêmes identifiants qu'à la section 3 ; la canari en 404, le pilote en 200 avec
-ses vingt et un produits. Puis, dans l'administration du pilote : Produits →
+ses vingt et un produits. Une canari sans réponse (`000`), comme au passage
+réel depuis un second terminal, se relit en IPv4 : `curl -s -4 "$CANARI/"`
+répond `error code: 1042`, plus de Worker sous ce nom. Puis, dans l'administration du pilote : Produits →
 « Croix de test pilote » → **Supprimer**.
 
 L'archive locale de la canari peut partir avec elle : `rm -rf "backups/$ID"`.

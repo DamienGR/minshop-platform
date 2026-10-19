@@ -668,12 +668,21 @@ tenues, celle des parcours d'achat ouverte, et la décision sur le CPU posée.
 
 Crée : la boutique `canari-certif` en staging sur A.
 
-- [ ] deux Workers répondant sur deux origines, deux bases, six buckets ;
-- [ ] un produit créé dans l'une n'apparaît pas dans l'autre ;
-- [ ] `catalog import` lancé depuis l'arbre de l'une vers l'autre : refus ;
-- [ ] `shopctl destroy --env staging --confirm canari-certif` : tout part,
+- [x] deux Workers répondant sur deux origines, deux bases, six buckets. La
+  canari en 200 sur workers.dev, le pilote en 200 avec le jeton et 302 sans ;
+  deux bases, six buckets, deux namespaces de sessions, et les liaisons de
+  chaque version déployée ne nomment que les siens ;
+- [x] un produit créé dans l'une n'apparaît pas dans l'autre : chaque croix en
+  200 chez elle et 404 chez l'autre, dans les deux sens, et chaque base ne
+  connaît que la sienne ;
+- [x] `catalog import` lancé depuis l'arbre de l'une vers l'autre : refus, code
+  4, avant toute lecture du compte ; la canari inchangée ;
+- [x] `shopctl destroy --env staging --confirm canari-certif` : tout part,
   et rien de `pilote-certif` ; si le bucket `-backups` porte des archives, R2 le
-  refuse et la base reste — c'est le comportement attendu, à constater.
+  refuse et la base reste — c'est le comportement attendu, à constater. Premier
+  passage en code 6, les buckets d'images et de sauvegardes refusés, la base
+  gardée ; second passage en 0 une fois vidés ; le pilote sous les mêmes
+  identifiants, ses liaisons inchangées.
 
 Répétée en doublure le 2026-10-19 : une canari montée de `v0.3.2` en `v0.3.9`
 d'un seul saut, sans conflit, à côté d'un pilote en `v0.3.9`, sur un
@@ -700,6 +709,31 @@ La porte d'isolation supprime désormais le staging de la canari à côté du
 pilote et vérifie que seules ses six ressources quittent le compte. Non
 répétés, faute de doublure : Access, la lecture des liaisons déployées, les
 limiteurs de Cloudflare ; la fiche les constate en réel.
+
+Passée en réel dans la nuit du 19 au 20 octobre 2026 : la canari montée en
+`v0.3.10` (pull request #8 de la boutique, CI 20/20, fusion sans conflit),
+provisionnée, déployée, puis supprimée à côté d'un pilote resté en `v0.3.9`.
+Les quatre lignes tenues ; les trois correctifs de `v0.3.10` que le passage
+pouvait voir, vus : le déploiement d'avant l'assistant vert avec ses
+avertissements, le namespace des sessions supprimé, la commande de vidage
+avec `--remote`. Access et la lecture des liaisons déployées ont fonctionné
+tels que la fiche les écrit.
+
+- **Le premier déploiement est sorti en code 6**, comme la fiche le prévoyait :
+  le test de fumée a couru avant que workers.dev ne serve le nouveau nom
+  partout (`/` et `/products` en 404, dont le message accuse la liaison D1,
+  `/robots.txt` déjà en 200). Relancé une minute plus tard, il était vert avec
+  ses avertissements. `deploy` ne distingue pas encore la page de Cloudflare
+  d'une vitrine cassée, et la première production de l'étape 9 peut le
+  rencontrer sur son domaine.
+- **La mesure des limiteurs ne tranche pas seule** : 40 réponses 429 sur 600
+  recherches de la canari, le pilote en 200 juste après, mais la canari
+  elle-même rouverte quand on l'a relue ensuite. La clé de chaque compteur
+  porte le nom d'hôte ; la mesure est compatible avec elle sans la prouver,
+  et la fiche relit désormais la canari avant le pilote.
+
+Preuves dans `client/certification/etape-7/` de `canari-certif` (pull request
+#10).
 
 Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
