@@ -584,18 +584,23 @@ portes de sécurité sur un déploiement réel).
 
 ### Étape 6 — Accessibilité, navigateurs, performance
 
-- [ ] porte navigateur contre l'URL de staging — §8.5 (`BASE_URL=… npm run
-  test:browser:remote`) ;
+- [x] porte navigateur contre l'URL de staging — §8.5 (`BASE_URL=… npm run
+  test:browser:remote`). Rouge en `v0.3.8` sur le contraste de la page CGV,
+  verte en `v0.3.9` : 85 passés, 5 sautés avec leur raison ;
 - [ ] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
-  iPhone, Chrome sur Android ;
-- [ ] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
-  panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés ;
-- [ ] charge de quinze minutes : aucune erreur Worker, consommation du plan
+  iPhone, Chrome sur Android. Une commande payée sur quatre (#6) : trois achats
+  restent à faire, avec leur navigateur, sa version et leur numéro ;
+- [x] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
+  panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés.
+  100 / 100 / 92 partout (le SEO plafonne derrière Access), LCP 1,0 à 1,6 s,
+  CLS 0, INP 24 ms ;
+- [x] charge de quinze minutes : aucune erreur Worker, consommation du plan
   Workers Free relevée (`npm run test:load:remote -- --json charge.json`,
-  puis `shopctl monitor --env staging --hours 1`) ;
-- [ ] cinq checkouts concurrents sur la dernière unité : une seule commande
+  puis `shopctl monitor --env staging --hours 1`). 6 528 requêtes, 0 erreur ;
+  monitor vert, aucune invocation arrêtée ;
+- [x] cinq checkouts concurrents sur la dernière unité : une seule commande
   (`npm run test:last-unit:remote -- --product <slug>`, stock mis à 1 dans
-  l'administration avant).
+  l'administration avant). Une session, quatre `409`, aucune survente.
 
 Le CPU, constaté à l'étape 3 : sur le staging, l'administration prend 13 à
 43 ms de CPU par requête, la connexion 35 ms, `GET /` 26 ms à froid, le cron
@@ -623,7 +628,41 @@ La charge déclenche les limiteurs de débit si elle vient d'une seule adresse :
 le scénario doit les contourner explicitement ou les compter comme attendus,
 pas les désactiver.
 
-Produit : le **rapport de performance**.
+Passée en réel le 2026-10-19, en `v0.3.8` montée depuis `v0.3.5` (pull request
+#15 de la boutique, migration 0045), puis en `v0.3.9` pour la porte
+navigateur (#17). La boutique a tenu sous la charge et sur la dernière unité ;
+sept défauts : quatre corrigés dans le socle ou la fiche, un dit dans la
+fiche, un réglé sur le jeton du monitor, un laissé ouvert (le `trap` de
+l'intégration D1 laisse un `wrangler dev` en vie).
+
+- **La prose des pages de contenu tombait sous AA.** Le bandeau « Brouillon »
+  des pages légales (migration 0040) est une citation avec du gras et du code,
+  et le socle figeait la citation en `#6b7280` et le code sur `#f5f5f4` :
+  4,37:1 sur le papier d'atelier. Le `Nightly` de l'étape 5 l'avait vu ; la
+  porte du socle ne le pouvait pas, sa page de contenu n'ayant pas de citation.
+  Le jeu d'essai porte désormais le bandeau, la porte échouait alors sur les
+  quatre thèmes ; la prose prend ses couleurs du thème en `v0.3.9`.
+- **Lighthouse recopie le jeton de service dans ses rapports**, JSON et HTML.
+  La fiche les masque, et `check:secrets` refuse le secret depuis `v0.3.9`.
+  Sous WSL, il laissait aussi ses profils Chrome, cookies d'Access compris,
+  dans la boutique : il tourne désormais depuis un dossier jetable.
+- **`wrangler tail` perd des événements sans le dire** : 37 sur 46 à froid,
+  42 % sous la charge. Observability complète ce qui manque.
+- **Le jeton du monitor manquait « Account Settings : Read »**, dont
+  `wrangler whoami` a besoin. Le jeton de lecture de la production, documenté
+  sans ce droit, est à vérifier à l'étape 9.
+
+Le CPU : à chaud, la vitrine tient sous 10 ms en médiane (3 à 6 ms) ; à froid,
+la première requête d'une route coûte 35 à 53 ms ; aucune invocation arrêtée.
+Les trois issues, plan gratuit sous dérogation, Workers Paid ou cache de
+Workers, sont posées dans le rapport ; le choix reste à faire.
+
+Preuves dans `client/certification/etape-6/` de `pilote-certif` (pull request
+#18).
+
+Produit : le **rapport de performance**,
+[`rapport-performance.md`](rapport-performance.md) : quatre lignes sur cinq
+tenues, celle des parcours d'achat ouverte, et la décision sur le CPU posée.
 
 ### Étape 7 — Isolation de deux boutiques déployées
 
@@ -723,7 +762,7 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 |---|---|
 | rapport de tests | étapes 3, 4, 6, 7 |
 | [rapport de sécurité](rapport-securite.md) | étape 5 |
-| rapport de performance | étape 6 |
+| [rapport de performance](rapport-performance.md) | étape 6 |
 | preuve de restauration | étape 8 |
 | validation TVA/facturation | étape 11 |
 | checklist de lancement | étape 9, rejouable pour chaque boutique |
