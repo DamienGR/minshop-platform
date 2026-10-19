@@ -2,9 +2,10 @@
 
 Fiche de passage pour le poste de Damien. Elle suit l'étape 6 du
 [plan](plan.md#étape-6--accessibilité-navigateurs-performance) et se passe sur
-`pilote-certif` **montée en `v0.3.6`** (section 1) : les corrections de cette
-étape arrivent avec cette version, et c'est elle que la production de l'étape
-9 portera.
+`pilote-certif` **montée en `v0.3.8`** (section 1) : les corrections de cette
+étape sont arrivées en `v0.3.6`, l'administration est en français depuis
+`v0.3.7`, `v0.3.8` cesse de relire l'historique des commandes, et c'est elle
+que la production de l'étape 9 portera.
 
 Elle a été répétée le 2026-10-15 dans un conteneur, contre le Worker construit
 de `pilote-certif` (son propre arbre, son thème, configuration de staging,
@@ -69,11 +70,11 @@ vendue une fois.
 
 | Où | Ce qui est créé ou modifié |
 |---|---|
-| Staging `pilote-certif` (A) | le Worker en `v0.3.6` ; trois liens dans le menu d'en-tête ; quatre commandes de test, une par navigateur, et leur stock ; le stock d'un produit mis à 1, puis réservé par la dernière unité ; quinze minutes de charge |
+| Staging `pilote-certif` (A) | le Worker en `v0.3.8` et sa migration 0045 ; trois liens dans le menu d'en-tête ; quatre commandes de test, une par navigateur, et leur stock ; le stock d'un produit mis à 1, puis réservé par la dernière unité ; quinze minutes de charge |
 | Access (A) | un jeton de service « pilote-certif étape 6 », révoqué à la fin |
 | Stripe, mode test | quatre paiements ; une session de paiement ouverte par la dernière unité, qui expire seule |
 | Resend | les e-mails de confirmation des quatre commandes, vers votre adresse de test |
-| GitHub `shop-pilote-certif` | la pull request de montée `socle/v0.3.6` ; une pull request de preuves |
+| GitHub `shop-pilote-certif` | la pull request de montée `socle/v0.3.8` ; une pull request de preuves |
 | Cloudflare au-delà, compte B, `canari-certif`, Stripe live | rien |
 
 ## 0. Shell propre
@@ -103,22 +104,24 @@ ac -o /dev/null -w '%{http_code}\n' "$BASE_URL/"                         # 200
 npx playwright install --with-deps chromium                             # une fois par poste
 ```
 
-## 1. Monter en `v0.3.6`
+## 1. Monter en `v0.3.8`
 
-Prérequis : le tag `v0.3.6`, publié par le workflow `Release` du socle.
+Prérequis : le tag `v0.3.8`, publié par le workflow `Release` du socle.
 
 ```sh
 npm run shopctl -- core status                       # v0.3.5
-npm run shopctl -- core upgrade --to v0.3.6 --open-pr
-gh pr checks socle/v0.3.6 --watch
-gh pr merge socle/v0.3.6 --merge
+npm run shopctl -- core upgrade --to v0.3.8 --open-pr
+gh pr checks socle/v0.3.8 --watch
+gh pr merge socle/v0.3.8 --merge
 git switch main && git pull && npm ci && npm ci --prefix mcp
 mkdir -p client/certification/etape-6
-npm run -s shopctl -- deploy --env staging --json > client/certification/etape-6/deploy-v0.3.6.json; echo $?
+npm run -s shopctl -- deploy --env staging --json > client/certification/etape-6/deploy-v0.3.8.json; echo $?
 ```
 
-Attendu : la pull request verte, puis `0`. Aucune migration, rien à faire
-dans l'administration (`docs/migrations/v0.3.6.md`). Derrière Access, le test
+Attendu : la pull request verte, avec les notes de `v0.3.6`, `v0.3.7` et
+`v0.3.8`, puis `0`. Une seule migration, la 0045 (cinq index et une table
+vide), que `deploy` applique ; rien à faire dans l'administration, qui passe
+en français (`docs/migrations/v0.3.7.md`, `v0.3.8.md`). Derrière Access, le test
 de fumée du déploiement s'arrête à Access : le Worker n'a encore servi
 personne. **Enchaîner tout de suite la section 2**, avant toute visite : c'est
 la mesure à froid.
@@ -135,8 +138,8 @@ npx wrangler tail minshop-pilote-certif-staging --format json > ~/certif-froid.j
 Puis, dans le navigateur, sur la preview, **une visite de chaque**, dans cet
 ordre : l'accueil, une catégorie, une fiche produit simple, une fiche à
 variantes, une recherche (`lin`), **Ajouter au panier**, le panier. Puis
-`/admin` : la connexion, le tableau de bord, Products, Orders, Settings,
-Media, Pages. Enfin Admin → **Navigation** → menu d'en-tête : y ajouter trois
+`/admin` : la connexion, le tableau de bord, Produits, Commandes, Réglages,
+Médias, Pages. Enfin Admin → **Navigation** → **En-tête** : y ajouter trois
 liens (deux catégories et une page légale, par exemple), qui restent ; le test
 clavier du menu replié en a besoin.
 
@@ -289,7 +292,8 @@ sur un échantillon : le dire dans les preuves, la mesure reste valable.
 
 ## 7. La dernière unité
 
-Admin → Products → un produit simple de peu de valeur → stock **1** → Save.
+Admin → Produits → un produit simple de peu de valeur → Stock **1** →
+**Enregistrer les modifications**.
 
 ```sh
 npm run -s test:last-unit:remote -- --product <slug> > client/certification/etape-6/derniere-unite.txt; echo $?
@@ -307,7 +311,7 @@ ensuite le stock d'origine dans l'administration.
 rm ~/certif-froid.json ~/certif-chaud.json
 git restore wrangler.jsonc
 git switch -c certification-etape-6
-git add client/certification && git commit -m "Certification, étape 6 : accessibilité, navigateurs, performance en v0.3.6"
+git add client/certification && git commit -m "Certification, étape 6 : accessibilité, navigateurs, performance en v0.3.8"
 git push -u origin certification-etape-6
 gh pr create --fill
 ```
