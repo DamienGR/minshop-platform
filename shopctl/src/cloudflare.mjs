@@ -403,6 +403,28 @@ export function deleteDatabase(name, { cwd }) {
   return removal(wrangler(['d1', 'delete', name, '--skip-confirmation'], { cwd, allowFailure: true }), name);
 }
 
+/**
+ * KV namespaces on the account, as `{ id, title }`.
+ *
+ * A shop owns exactly one, and never asked for it: the Astro adapter adds a
+ * `SESSION` binding to the built configuration, and wrangler provisions it at
+ * the first deploy as `<worker>-session`. Nothing renders it, so only the
+ * account knows its id — and `wrangler delete` leaves it behind with the
+ * Worker gone.
+ */
+export function listKvNamespaces({ cwd }) {
+  const result = wrangler(['kv', 'namespace', 'list'], { cwd });
+  const document = extractJson(result.stdout, 'kv namespace list');
+  return Array.isArray(document) ? document : (document.result ?? []);
+}
+
+export function deleteKvNamespace(namespace, { cwd }) {
+  return removal(
+    wrangler(['kv', 'namespace', 'delete', '--namespace-id', namespace.id, '--skip-confirmation'], { cwd, allowFailure: true }),
+    namespace.title,
+  );
+}
+
 /** The lifecycle rule that bounds a backups bucket. Named, so a second
  *  provisioning finds it rather than adding a twin. */
 export const RETENTION_RULE = 'shopctl-retention';

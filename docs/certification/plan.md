@@ -675,6 +675,32 @@ Crée : la boutique `canari-certif` en staging sur A.
   et rien de `pilote-certif` ; si le bucket `-backups` porte des archives, R2 le
   refuse et la base reste — c'est le comportement attendu, à constater.
 
+Répétée en doublure le 2026-10-19 : une canari montée de `v0.3.2` en `v0.3.9`
+d'un seul saut, sans conflit, à côté d'un pilote en `v0.3.9`, sur un
+`wrangler` de doublure qui voit deux comptes. Quatre défauts de `shopctl`,
+que le passage en réel aurait tous rencontrés, corrigés dans `v0.3.10` ; la
+fiche de passage, qui monte la canari en `v0.3.10`, est
+[etape-7-commandes.md](etape-7-commandes.md).
+
+- **Le premier déploiement d'une boutique sans Access finissait en code 6.**
+  Tant que `/admin/setup` n'a pas tourné, la vitrine renvoie chaque page vers
+  lui, et le test de fumée lisait ces redirections comme une vitrine absente.
+  La canari sur workers.dev l'aurait vu, et la première production de chaque
+  boutique à l'étape 9 aussi.
+- **`destroy` laissait le namespace KV des sessions**, que wrangler crée au
+  premier déploiement sous `<worker>-session` et qu'aucun fichier de la
+  boutique ne nomme : « tout part » était faux.
+- **La commande proposée pour vider un bucket refusé ne vidait rien** : sans
+  `--remote`, wrangler 4 vide son simulateur local et répond « Delete
+  complete ».
+- **Le refus de l'import croisé conseillait `prepare-client.mjs --env`**, qui
+  rend un identifiant de base factice ; il renvoie vers `shopctl provision`.
+
+La porte d'isolation supprime désormais le staging de la canari à côté du
+pilote et vérifie que seules ses six ressources quittent le compte. Non
+répétés, faute de doublure : Access, la lecture des liaisons déployées, les
+limiteurs de Cloudflare ; la fiche les constate en réel.
+
 Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
 ### Étape 8 — Exploitation et résilience

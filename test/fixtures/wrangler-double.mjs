@@ -24,6 +24,8 @@
  *                                            (plain `whoami` still exits 0)
  *   d1              [{ name, uuid, jurisdiction }]
  *   r2              [{ name, jurisdiction, devUrl, domains }]
+ *   kv              [{ id, title }]          one per deployed Worker, as the
+ *                                            adapter's SESSION binding makes it
  *   workers         [{ name, secrets: [] }]
  *   reportsD1Jurisdiction  boolean           `d1 info` publishes the field or not
  *   failAt          "d1 create" | …          one command that dies, for the
@@ -205,8 +207,14 @@ function databaseNameFor(binding) {
  * keeps it: nothing to provision, nothing on the account, and nothing shared
  * with the remote database of the same name — which is the property a local
  * restore relies on and the suite checks.
+ *
+ * And it is the DEFAULT where wrangler 4 makes it one: `d1 execute`,
+ * `d1 migrations apply` and `r2 object` touch the local simulator unless told
+ * `--remote`. A double that read silence as "remote" let `destroy` print an
+ * `r2 object delete` that empties nothing on the account.
  */
-const LOCAL = argv.includes('--local');
+const LOCAL_BY_DEFAULT = ['d1 execute', 'd1 migrations', 'r2 object'].some((prefix) => command.startsWith(prefix));
+const LOCAL = argv.includes('--local') || (LOCAL_BY_DEFAULT && !argv.includes('--remote'));
 const localState = (...parts) => join(process.cwd(), '.wrangler', 'state', ...parts);
 
 /** Where one database's bytes live: beside the state, one file per D1 name. */
@@ -491,6 +499,20 @@ if (positionals[0] === 'delete' && flag('--name')) {
   done(`? Are you sure you want to delete ${name}?\n🤖 Using fallback value in non-interactive context: yes\n✨ Successfully deleted ${name}`);
 }
 
+if (command === 'kv namespace list') {
+  // A JSON array on stdout, with no --json flag: the real command has only
+  // this one shape.
+  done(JSON.stringify((state.kv ?? []).map(({ id, title }) => ({ id, title, supports_url_encoding: true })), null, '  '));
+}
+
+if (command === 'kv namespace delete') {
+  const id = flag('--namespace-id');
+  const index = (state.kv ?? []).findIndex((namespace) => namespace.id === id);
+  if (index === -1) fail(`A request to the Cloudflare API (/accounts/…/storage/kv/namespaces/${id}) failed.\n  namespace not found [code: 10013]`);
+  const [removed] = state.kv.splice(index, 1);
+  done(`Deleting KV namespace id: "${removed.id}".\nDeleted KV namespace id: "${removed.id}".`);
+}
+
 if (command.startsWith('d1 delete')) {
   const name = positionals[2];
   const index = (state.d1 ?? []).findIndex((entry) => entry.name === name);
@@ -545,6 +567,14 @@ if (positionals[0] === 'deploy') {
   }
   worker.versions = [{ id: `v${(worker.versions?.length ?? 0) + 1}`, number: (worker.versions?.length ?? 0) + 1 }, ...(worker.versions ?? [])];
   state.deploys = [...(state.deploys ?? []), name];
+  // The Astro adapter binds SESSION in the BUILT configuration, with no id,
+  // and wrangler provisions it at the first deploy under `<worker>-<binding>`.
+  // Nothing the shop renders names it, which is how a teardown came to forget
+  // it; the double creates it where the real deploy does.
+  const session = `${name}-session`;
+  if (!(state.kv ?? []).some((namespace) => namespace.title === session)) {
+    state.kv = [...(state.kv ?? []), { id: uuid(session).replaceAll('-', ''), title: session }];
+  }
   // The targets, listed as wrangler lists them: the workers.dev URL only while
   // that door is open, and a custom domain BARE, with no scheme. A double that
   // printed a workers.dev URL with that door shut is how `deploy` came to read
