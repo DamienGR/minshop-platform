@@ -84,6 +84,7 @@ Comme à l'étape 5 :
 ```sh
 cd <chemin>/shop-pilote-certif
 git switch main && git pull && git status --short     # rien
+git remote get-url core || git remote add core https://github.com/DamienGR/minshop-platform.git   # shopctl new le pose, un clone non
 nvm use 22 && npm ci && npm ci --prefix mcp
 unset CLOUDFLARE_API_TOKEN
 export CLOUDFLARE_ACCOUNT_ID=$(awk '/^  accountId:/ {print $2}' client/client.yaml)
@@ -153,6 +154,11 @@ cat client/certification/etape-6/cpu-froid.txt
 Attendu : `0`, « aucune invocation arrêtée ». La colonne `1re` est le coût à
 froid de chaque route : au-delà de 10 ms, c'est attendu et relevé, pas jugé.
 
+`wrangler tail` peut perdre des événements sans le dire : le 2026-10-19, 37
+sur 46 requêtes, sans échantillonnage annoncé ni cache devant le Worker. Une
+route absente du relevé se lit dans Observability (ci-dessous), qui garde
+toutes les invocations.
+
 Si la commande répond `2` (« aucun événement ne porte son temps CPU »), le
 flux de `wrangler tail` ne donne pas le CPU : le chercher dans le tableau de
 bord du compte A → Workers & Pages → `minshop-pilote-certif-staging` →
@@ -210,6 +216,25 @@ lh /cart ~/certif-lh-panier.json panier
 rm ~/certif-lh-headers.json ~/certif-lh-panier.json
 ```
 
+Lighthouse recopie `--extra-headers` dans chaque rapport, JSON et HTML : le
+jeton de service et le cookie du panier y sont **en clair**. Les masquer avant
+que les rapports n'approchent le dépôt, puis vérifier :
+
+```sh
+node -e '
+const fs = require("fs");
+for (const f of process.argv.slice(1)) {
+  let t = fs.readFileSync(f, "utf8");
+  for (const s of [process.env.CF_ACCESS_CLIENT_SECRET, process.env.CF_ACCESS_CLIENT_ID]) t = t.split(s).join("<masqué>");
+  t = t.replace(/("cookie":\s*")[^"]*(")/g, "$1<masqué>$2").replace(/(\\"cookie\\":\s*\\")[^"\\]*(\\")/g, "$1<masqué>$2");
+  fs.writeFileSync(f, t);
+}' client/certification/etape-6/lighthouse-*
+grep -lF "$CF_ACCESS_CLIENT_SECRET" client/certification/etape-6/* || echo propre
+```
+
+Attendu : `propre`. Depuis `v0.3.9`, `npm run check:secrets` refuse un rapport
+qui porte encore le secret.
+
 Le relevé, et la vérification qu'aucune requête n'est partie ailleurs :
 
 ```sh
@@ -223,7 +248,9 @@ console.log(process.argv[1].padEnd(10), ["performance", "accessibility", "seo"].
 
 Attendu : ≥ 90 partout, aucun `⚠`. Un `⚠` nomme un domaine qui a reçu le
 jeton de service : le remonter dans le thread et révoquer le jeton tout de
-suite. Les photos du catalogue témoin sont petites ; un LCP mesuré sur elles
+suite. Derrière Access, le SEO plafonne à 92 : Lighthouse lit `/robots.txt`
+sans les en-têtes, reçoit la page de connexion d'Access et la juge invalide ;
+celui de la boutique l'est (`ac "$BASE_URL/robots.txt"`). Les photos du catalogue témoin sont petites ; un LCP mesuré sur elles
 dit peu de ce que donneront les vraies photos d'un marchand.
 
 **L'INP** ne se mesure qu'avec des interactions, ce que Lighthouse en mode
