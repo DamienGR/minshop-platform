@@ -136,7 +136,10 @@ npm run -s shopctl -- deploy --env staging --skip-verify --skip-build --json > "
 
 Le passage réel l'a rencontré : `/` et `/products` en 404, `/robots.txt` et
 l'assistant déjà en 200, code 6 ; une minute plus tard, la relance sortait en
-`0` avec ses quatre avertissements.
+`0` avec ses quatre avertissements. Les 404 étaient la réponse de Cloudflare
+(« There is nothing here yet »), le robots.txt aussi : depuis `v0.3.11`, `deploy` les
+reconnaît et attend la propagation lui-même, deux minutes au plus ; la relance
+n'est plus utile que s'il sort en 6 en nommant Cloudflare.
 
 **Tout de suite**, dans le navigateur : `$CANARI/admin/setup`. Nom « Canari
 Certif », fuseau Europe/Paris, un mot de passe neuf rangé dans le
