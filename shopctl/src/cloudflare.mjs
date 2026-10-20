@@ -22,8 +22,9 @@
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { capture } from './process.mjs';
+import { capture, describe } from './process.mjs';
 import { externalError, preconditionError } from './errors.mjs';
+import { redact } from './secrets.mjs';
 import { environmentAccount } from '../../scripts/manifest.mjs';
 
 /**
@@ -67,7 +68,21 @@ let pinnedAccount = null;
 export function wrangler(args, { cwd = process.cwd(), input, allowFailure = false, env = process.env, maxBuffer } = {}) {
   const { command, prefix } = wranglerCommand(cwd);
   const childEnv = pinnedAccount ? { ...env, CLOUDFLARE_ACCOUNT_ID: pinnedAccount } : env;
-  return capture(command, [...prefix, ...args], { cwd, input, allowFailure, env: childEnv, maxBuffer });
+  const argv = [...prefix, ...args];
+  const result = capture(command, argv, { cwd, input, allowFailure: true, env: childEnv, maxBuffer });
+  if (result.status !== 0 && !allowFailure) {
+    // The reason, not the announcement: wrangler opens with "[ERROR] … was only
+    // partially updated:" and puts the API's sentence, with its code and often
+    // its remedy, lines below (certification step 8, a cron refused for want
+    // of a workers.dev subdomain).
+    const reason = refusal(result);
+    throw externalError(`${describe(command, argv)} exited with status ${result.status}.`, reason ? redact(reason) : null, {
+      command,
+      args: argv,
+      status: result.status,
+    });
+  }
+  return result;
 }
 
 /**
@@ -404,7 +419,10 @@ function removal(result, name) {
  */
 function refusal(result) {
   const stderr = stripAnsi(result.stderr ?? '');
-  const coded = stderr.split('\n').map((line) => line.trim()).find((line) => /\[code: \d+\]/.test(line));
+  const coded = stderr
+    .split('\n')
+    .map((line) => line.trim().replace(/^- /, ''))
+    .find((line) => /\[code: \d+\]/.test(line));
   return coded ?? firstLine(stderr) ?? firstLine(stripAnsi(result.stdout ?? ''));
 }
 

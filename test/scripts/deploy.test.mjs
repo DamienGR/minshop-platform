@@ -779,6 +779,21 @@ describe('shopctl deploy', () => {
       expect(result.stderr).toMatch(/aucune URL/);
     });
   });
+
+  describe('when wrangler refuses', () => {
+    // Certification step 8: the report said "was only partially updated:" and
+    // stopped there. The cause and its remedy were four lines further down,
+    // and only wrangler's own log file still had them.
+    it('relays the API’s sentence and its code, not the line announcing a failure', () => {
+      const target = provisioned();
+      target.account({ workersDevSubdomain: false });
+      const result = target.json(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      expect(result.status).toBe(EXIT_CODES.external);
+      expect(result.report.error.hint).toBe(
+        'You need a workers.dev subdomain in order to proceed. Please go to the dashboard and open the Workers menu. Opening the Workers landing page for the first time will create a workers.dev subdomain automatically. [code: 10063]',
+      );
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
