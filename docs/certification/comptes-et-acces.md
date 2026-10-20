@@ -100,6 +100,12 @@ l'état « Actif ».
 - **R2 activé sur chacun.** Tant qu'il ne l'est pas, `provision` échoue à la
   création du premier bucket. Le tableau de bord peut demander un moyen de
   paiement, même pour l'offre gratuite.
+- **Workers & Pages ouvert une fois sur chacun.** C'est ce qui crée le
+  sous-domaine workers.dev du compte. Sans lui, Cloudflare refuse le cron du
+  Worker (code 10063) après l'avoir téléversé : `deploy` échoue, la boutique
+  est servie sans ses secrets internes jusqu'au passage suivant (étape 8, sur
+  B). Le sous-domaine ne rend aucune boutique visible : une production ferme
+  workers.dev.
 - Double authentification sur les deux comptes.
 - Relever les deux identifiants de compte : premier segment de l'URL du tableau
   de bord, ou `npx wrangler whoami`.
@@ -126,8 +132,11 @@ Workers », puis :
 | Account Analytics, lecture | `shopctl monitor --env staging` dans le nocturne |
 
 Le jeton de lecture de la production (`MONITOR_CLOUDFLARE_API_TOKEN`) est un
-autre jeton, sur B : Account Analytics et D1 en lecture, rien d'autre (plan
-§2.3).
+autre jeton, sur B, en lecture seule : Account Analytics, D1 et Account
+Settings, et côté utilisateur Memberships et User Details, rien d'autre (plan
+§2.3). `monitor` le passe aussi à `wrangler whoami` et `wrangler d1 list` :
+avec Account Analytics seul, il s'arrête sur « wrangler refuse le jeton »
+(étape 8).
 
 ## 5. Zero Trust et Access (compte A)
 

@@ -43,8 +43,10 @@
 #
 # and, as repository secrets for the production watch:
 #
-#   MONITOR_CLOUDFLARE_API_TOKEN  Account Analytics: Read and D1: Read, on the
-#                                 account production lives on — nothing more
+#   MONITOR_CLOUDFLARE_API_TOKEN  read-only, on the account production lives on:
+#                                 Account Analytics, D1 and Account Settings:
+#                                 Read, plus the user's Memberships and User
+#                                 Details: Read for wrangler whoami — nothing more
 #   MONITOR_CLOUDFLARE_ACCOUNT_ID that account
 #
 # GitHub suspends a schedule after sixty days without activity in a public

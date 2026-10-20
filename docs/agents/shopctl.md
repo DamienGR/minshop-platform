@@ -181,7 +181,9 @@ runbook in the same commit.
 `shopctl monitor --env <env>` is the supervision, and it is a command because
 Cloudflare's notification catalogue has no alert for a Worker's error rate,
 its CPU time or a D1 quota on the plans a shop runs on. It reads the GraphQL
-Analytics API (`CLOUDFLARE_API_TOKEN`, Account Analytics: Read), fails at 1 %
+Analytics API (`CLOUDFLARE_API_TOKEN`; the same token reaches wrangler's
+`whoami` and `d1 list`, so it needs Account Analytics, D1 and Account
+Settings: Read, plus the user's Memberships and User Details: Read), fails at 1 %
 errors, at 70 % of a Workers Free quota, or on one invocation Cloudflare
 stopped for its limits (error 1102) — the CPU p99 is reported, not judged,
 because a cold start runs past 10 ms by construction and the plan tolerates it

@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { stripAnsi } from '../../shopctl/src/cloudflare.mjs';
+import { OPERATOR_ENV } from './operator-env.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -260,8 +261,7 @@ export function shop({
           ...GIT_ENV,
           WRANGLER_DOUBLE_STATE: statePath,
           GH_DOUBLE_STATE: ghState,
-          CLOUDFLARE_ACCOUNT_ID: '',
-          CLOUDFLARE_API_TOKEN: '',
+          ...OPERATOR_ENV,
           ...(forge ? { PATH: `${bin}:${process.env.PATH}` } : {}),
           ...env,
         },
