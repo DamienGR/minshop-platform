@@ -777,6 +777,45 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
 Les runbooks de l'étape 0 sont corrigés d'après ce qui s'est réellement
 passé. Produit : la **preuve de restauration**.
 
+Répétée en doublure le 2026-10-20 : le pilote en `v0.3.11` servi en local
+avec des commandes, un coffre rempli et Turnstile actif, puis un `wrangler` de
+doublure qui voit A et B. Sauvegarde, rapatriement et contrôle depuis un
+second arbre ; restauration en production sur B puis déploiement ;
+destruction ; rotation de `AUTH_SECRET` ; mot de passe perdu ; export et
+anonymisation ; seuil du monitor abaissé ; une image supprimée à la main. Trois
+défauts du socle, corrigés dans `v0.3.12` avec celui de `destroy` trouvé à
+l'étape 7 ; la fiche de passage, qui monte le pilote en `v0.3.12`, est
+[etape-8-commandes.md](etape-8-commandes.md).
+
+- **`deploy` désignait la mauvaise version pour revenir en arrière.** Chaque
+  rapport du staging du pilote depuis l'étape 3 nomme la même `rollbackTo`, la
+  plus ancienne des dix que liste `wrangler versions list`. `deploy` lit
+  désormais la version qui sert avant de téléverser.
+- **La restauration chronométrée aurait échoué sur B.** `restore` reversait les
+  images dans les buckets que l'archive nomme, ceux du staging, qui n'existent
+  pas sur B ; restaurée sur le même compte, une production aurait rempli le
+  bucket du staging. Les objets suivent désormais leur liaison.
+- **Le coffre ne voyage pas, et rien ne le disait.** Restaurées sur B, les
+  quatre clés des fournisseurs sont chiffrées avec la `SECRETS_KEK` du staging :
+  illisibles, et Turnstile, actif, refuse alors toute connexion à
+  l'administration, là où elles se ressaisissent. `restore` les nomme et donne
+  la commande qui désactive Turnstile ; la connexion qui refuse reste, la porte
+  de sécurité l'exige.
+
+Quatre runbooks et la page d'exploitation corrigés : une commande `wrangler` brute nomme son compte (une
+session qui en voit deux refuse de choisir hors d'un terminal) ; un retour
+arrière ramène les secrets de la version visée, et wrangler passe outre tout
+seul hors d'un terminal ; une rotation de `SECRETS_KEK` désactive Turnstile
+d'abord ; une rotation de `AUTH_SECRET` remet aussi à zéro les compteurs de
+connexion ; la restauration vers un autre compte, et les effacements RGPD à
+rejouer après elle ; le mot de passe de staging à remplacer aussi dans le
+secret du nocturne. Une image supprimée à la main : la fiche reste en 200,
+l'image en `404` sans erreur, mais servie depuis le cache de Cloudflare
+jusqu'à un an là où elle y est ; et le nocturne refuse ensuite de restaurer
+l'archive qui ne la porte plus, ce qui est voulu. Non répétés, faute de
+doublure : le retour arrière réel (lu dans le source de wrangler), le domaine
+personnalisé sur B, Access, les trois nuits.
+
 Fait avancer : jalon 8 (critère de sortie, supervision, runbooks), jalon 9
 (rollback applicatif), §7.3, §8.7.
 

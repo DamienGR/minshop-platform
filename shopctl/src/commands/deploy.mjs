@@ -313,6 +313,9 @@ export async function runDeploy(args, reporter) {
     reporter.ok('npm run build');
   }
 
+  // Read BEFORE the upload: the version serving now is the one to come back to
+  // if this one fails. Asked after, it can only be guessed from a list.
+  const rollback = activeVersion(names.worker, { cwd: root });
   const uploaded = wrangler(['deploy'], { cwd: root });
   // The custom domain first: it is the route this command just rendered, and
   // wrangler lists it bare — "preview.example.fr (custom domain)" — with no
@@ -376,7 +379,6 @@ export async function runDeploy(args, reporter) {
     }
   }
 
-  const rollback = previousVersion(names.worker, { cwd: root });
   reporter.result({
     command: 'deploy',
     ok: smoke ? smoke.ok : true,
@@ -422,13 +424,13 @@ export function smokeFailure({ smoke, origin, worker, env, rollback, waitSeconds
   return {
     message: `le test de fumée a échoué sur ${origin} : la version déployée ne sert pas la boutique.`,
     hint: rollback
-      ? `Revenez à la version précédente : npx wrangler rollback ${rollback} --name ${worker}. Les migrations, elles, ne se rejouent pas à l'envers (ADR 0006) — c'est le code qui recule.`
+      ? `Revenez à la version qui servait avant ce déploiement : npx wrangler rollback ${rollback} --name ${worker}. Les migrations, elles, ne se rejouent pas à l'envers (ADR 0006) — c'est le code qui recule.`
       : `Aucune version antérieure n'existe sur ${worker} : c'est le premier déploiement, il n'y a rien derrière quoi revenir.`,
   };
 }
 
 /**
- * The version to roll back to, read before it is needed.
+ * The version to roll back to: the one serving before this deployment.
  *
  * Named in the failure message rather than rolled back automatically: an
  * automatic rollback on a failed smoke test would also fire on a check that
@@ -436,15 +438,23 @@ export function smokeFailure({ smoke, origin, worker, env, rollback, waitSeconds
  * deployment that was fine. The operator gets the exact command, with the
  * version id already resolved, which is the part that is tedious to find under
  * pressure.
+ *
+ * Asked of the DEPLOYMENT, before the upload, and not read off `versions list`
+ * afterwards. That list is oldest first (the ten most recent, sorted by
+ * `created_on`), and it counts every `secret put` as a version: its second
+ * entry, which this function used to return, was the pilot's first secret
+ * version of step 3 in every report of the certification — a rollback to
+ * v0.3.2 offered as "the previous version" through v0.3.9.
  */
-export function previousVersion(worker, { cwd }) {
-  const result = wrangler(['versions', 'list', '--name', worker, '--json'], { cwd, allowFailure: true });
+export function activeVersion(worker, { cwd }) {
+  const result = wrangler(['deployments', 'status', '--name', worker, '--json'], { cwd, allowFailure: true });
   if (result.status !== 0) return null;
   const start = result.stdout.search(/[[{]/);
   if (start === -1) return null;
   try {
-    const versions = JSON.parse(result.stdout.slice(start));
-    return Array.isArray(versions) && versions.length > 1 ? (versions[1].id ?? null) : null;
+    const deployment = JSON.parse(result.stdout.slice(start));
+    const [serving] = [...(deployment.versions ?? [])].sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0));
+    return serving?.version_id ?? null;
   } catch {
     return null;
   }

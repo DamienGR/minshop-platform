@@ -719,16 +719,31 @@ describe('shopctl deploy', () => {
     // one that reports failure, because the second one gets looked at.
     it('fails the command and names the version to roll back to', () => {
       const target = provisioned();
-      // Deploy twice: the rollback target is the version BEFORE the current one,
-      // and a first deployment has nothing behind it.
+      // The rollback target is the version serving BEFORE this deployment. The
+      // first one uploads v1, then each deferred secret is a version of its
+      // own: v3 is what served when the second deployment started.
       target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
 
       const result = target.json(['deploy', '--env', 'staging', ...FAST, '--url', 'http://127.0.0.1:1']);
       expect(result.status).toBe(EXIT_CODES.verification);
       expect(result.report.ok).toBe(false);
       expect(result.report.smoke.results.every((check) => !check.ok)).toBe(true);
-      expect(result.report.rollbackTo).toBe('v1');
-      expect(result.stderr).toMatch(/wrangler rollback v1/);
+      expect(result.report.rollbackTo).toBe('v3');
+      expect(result.stderr).toMatch(/wrangler rollback v3/);
+    });
+
+    // The certification's pilot: six deployments, six reports naming the same
+    // second-oldest version, because `versions list` is oldest first and the
+    // command read its second entry.
+    it('names the version that served last, however many came before', () => {
+      const target = provisioned();
+      target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+
+      const result = target.json(['deploy', '--env', 'staging', ...FAST, '--url', 'http://127.0.0.1:1']);
+      expect(result.report.rollbackTo).toBe('v5');
+      expect(target.read().workers.find((worker) => worker.name === result.report.resources.worker).active).toBe('v6');
     });
 
     it('says plainly that a first deployment has nothing behind it', () => {

@@ -120,6 +120,11 @@ request accepts, and a comment-only robots.txt — is never read as the shop's:
 `deploy` reruns the whole test while it lasts, `--smoke-wait` seconds at most
 (120), then fails without advising a rollback. The first deployment on
 workers.dev met it in real at certification step 7.
+The report's `rollbackTo` is the version serving BEFORE the upload, read from
+`wrangler deployments status` while it is still the active one; inferred
+afterwards from `versions list`, which is oldest first and capped at ten, it
+named a version weeks old (certification step 8). `null` means there was none
+to read: a first deployment, or an answer wrangler did not give.
 `.github/workflows/deploy.yml` runs the same commands behind a GitHub
 Environment so production waits for a reviewer.
 
