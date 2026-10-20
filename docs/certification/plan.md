@@ -750,17 +750,28 @@ Fait avancer : §8.3 (lignes déployées), jalon 6 (`destroy` réel).
 
 Crée : des archives de sauvegarde ; une restauration sur le compte B.
 
-- [ ] `backup keygen`, `backup --env staging --upload`, puis `backup pull`
-  depuis un autre poste et `backup verify` ;
-- [ ] **restauration chronométrée** dans un environnement neuf du compte B :
+- [x] `backup keygen`, `backup --env staging --upload`, puis `backup pull`
+  depuis un autre poste et `backup verify`. `keygen` en 4, la clé gardée ;
+  l'archive rapatriée dans un clone neuf avec la clé du coffre, « Archive
+  complète et cohérente », 26 tables ;
+- [x] **restauration chronométrée** dans un environnement neuf du compte B :
   du premier `provision` à la boutique servie, < 60 minutes (RTO) ; la
-  restauration se prouve elle-même table par table — critère du jalon 8 ;
-- [ ] RPO ≤ 24 heures : le nocturne de l'étape 0 tourne trois nuits de suite ;
-- [ ] `shopctl monitor --env staging` contre la vraie API Analytics : les
+  restauration se prouve elle-même table par table — critère du jalon 8.
+  **29 min 21 s**, deux arrêts du `deploy` compris ; 26 tables identiques à
+  l'archive, empreinte pour empreinte ; images dans le bucket de B ; B détruit
+  ensuite ;
+- [x] RPO ≤ 24 heures : le nocturne de l'étape 0 tourne trois nuits de suite.
+  Cinq nuits consécutives, du 16 au 20 octobre, sauvegarde et restauration en
+  `success` ;
+- [x] `shopctl monitor --env staging` contre la vraie API Analytics : les
   champs que la doublure suppose existent, et un seuil abaissé à la main fait
-  bien échouer le run ;
-- [ ] média R2 supprimé à la main : la page dégrade sans erreur ;
-- [ ] rollback Worker vers la version précédente, puis retour — jalon 9 ;
+  bien échouer le run. `0` sur 24 heures, puis `6` avec les trois quotas en ✗,
+  une fois le jeton complété (ci-dessous) ;
+- [x] média R2 supprimé à la main : la page dégrade sans erreur. Fiche,
+  catalogue et API en 200, l'image en `404`, aucune exception ;
+- [x] rollback Worker vers la version précédente, puis retour — jalon 9.
+  `rollbackTo` désigne la version qui servait ; elle à 100 %, puis `v0.3.12`
+  à 100 %, la vitrine en 200 ;
 - [x] montée de version réelle : un tag `v0.3.4` proposé par
   `shopctl core upgrade --open-pr`, fusionné, déployé en staging. `v0.3.2` est
   déjà passée par ce chemin à l'étape 2, mais avant tout déploiement : la
@@ -769,10 +780,13 @@ Crée : des archives de sauvegarde ; une restauration sur le compte B.
   fusionnée, déployée en staging avec la migration 0043. Les deux premiers
   `deploy` se sont arrêtés à leur `npm run verify`, sans rien téléverser
   (étape 5) ;
-- [ ] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre ;
-- [ ] mot de passe admin perdu : procédure exécutée telle que le runbook la
-  décrit ;
-- [ ] `privacy export` puis `anonymize` d'un acheteur de test.
+- [x] rotation de `AUTH_SECRET` : les sessions tombent, rien d'autre. L'admin
+  en 303 après la rotation, vitrine, catalogue et panier en 200, reconnexion ;
+- [x] mot de passe admin perdu : procédure exécutée telle que le runbook la
+  décrit. Assistant refermé en une minute, ancienne session tombée, secret du
+  nocturne remplacé ;
+- [x] `privacy export` puis `anonymize` d'un acheteur de test. Six lignes, puis
+  plus rien sous l'adresse ; la commande garde montants et TVA.
 
 Les runbooks de l'étape 0 sont corrigés d'après ce qui s'est réellement
 passé. Produit : la **preuve de restauration**.
@@ -816,12 +830,55 @@ l'archive qui ne la porte plus, ce qui est voulu. Non répétés, faute de
 doublure : le retour arrière réel (lu dans le source de wrangler), le domaine
 personnalisé sur B, Access, les trois nuits.
 
+Passée en réel le 2026-10-20 : le pilote monté en `v0.3.12` (pull request #19
+de la boutique, CI 20/20), une production neuve sur B restaurée puis
+détruite. Les neuf lignes tenues ; les trois correctifs de `v0.3.12` vus en
+réel (`rollbackTo`, les images dans les buckets de B, la section Coffre et sa
+commande). Les commandes qui écrivent sur un compte ont été lancées par
+Damien, depuis des scripts reprenant la fiche. Preuves dans
+`client/certification/etape-8/` de `pilote-certif` (pull request #20). Six
+défauts ou écarts, corrigés dans `v0.3.13` ou dans la documentation :
+
+- **Une clé de sauvegarde exportée faisait échouer `deploy`.** La fiche
+  l'exporte dans le second arbre ; les tests que `deploy` relance par
+  `npm run verify` la recevaient, huit rougissaient. Les harnais vident
+  désormais chaque variable du shell de l'opérateur que lit `shopctl`.
+- **Un compte neuf n'a pas de sous-domaine workers.dev**, et Cloudflare refuse
+  alors le cron après avoir téléversé le Worker (code 10063) : la boutique de
+  B a été servie cinq minutes sans ses secrets internes. Ouvrir une fois
+  Workers & Pages sur chaque compte (guide des comptes, §4) ; l'étape 9 en a
+  besoin sur B.
+- **`shopctl` ne relayait que la première ligne d'une erreur de wrangler**,
+  « was only partially updated: » ; la cause et son remède n'étaient que dans
+  le journal de wrangler. Il relaie la phrase de l'API et son code.
+- **Le jeton du monitor demande plus que ce que son aide disait.** Il sert aussi
+  à `wrangler whoami` et `d1 list` : « D1 », « Account Settings », et côté
+  utilisateur « Memberships » et « User Details », en lecture. Un jeton refusé
+  nomme désormais ces droits ; le jeton de lecture de la production (§2.3) les
+  porte.
+- **L'anonymisation laissait en attente les notifications** de la personne :
+  un reçu refusé était retenté vers le pseudonyme. Elles sont closes avec
+  l'effacement.
+- **R2 refuse un bucket non vide avec le code 10008**, pas 10014 ; la doublure
+  et la fiche disent le vrai.
+
+Hors socle : le staging envoyait ses e-mails depuis `onboarding@resend.dev`,
+le domaine de test de Resend, qui ne livre qu'au titulaire du compte. Les
+reçus des étapes 4 et 6 n'ont donc été prouvés que vers cette adresse ;
+l'étape 9 règle l'expéditeur de la production sur le domaine vérifié.
+
 Fait avancer : jalon 8 (critère de sortie, supervision, runbooks), jalon 9
 (rollback applicatif), §7.3, §8.7.
 
 ### Étape 9 — Bascule sur le compte « client »
 
 Crée : la production de `pilote-certif` sur B. Détruit : le staging sur A.
+
+D'après le passage réel de l'étape 8, avant de commencer : Workers & Pages
+déjà ouvert sur B (le sous-domaine workers.dev existe depuis l'étape 8) ; le
+jeton de lecture de la production avec ses cinq droits (§2.3) ; dans Admin →
+Réglages → E-mail de la production, l'expéditeur sur le domaine vérifié, pas
+`onboarding@resend.dev`.
 
 - [ ] `provision --env production` sur B, que le manifeste nomme
   (`cloudflare.productionAccountId`) ;
