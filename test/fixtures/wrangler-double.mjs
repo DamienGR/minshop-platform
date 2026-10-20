@@ -26,7 +26,9 @@
  *   r2              [{ name, jurisdiction, devUrl, domains }]
  *   kv              [{ id, title }]          one per deployed Worker, as the
  *                                            adapter's SESSION binding makes it
- *   workers         [{ name, secrets: [] }]
+ *   workers         [{ name, secrets: [], versions, active }]
+ *                                            versions oldest first, `active`
+ *                                            the one deployed
  *   reportsD1Jurisdiction  boolean           `d1 info` publishes the field or not
  *   failAt          "d1 create" | …          one command that dies, for the
  *                                            interrupted-run test
@@ -100,6 +102,15 @@ function fail(text, code = 1) {
   save();
   process.stderr.write(`${text}\n`);
   process.exit(code);
+}
+
+/** A new version of a Worker, deployed to all of its traffic at once: what
+ *  `deploy` and `secret put` both do. Kept in creation order, as the account
+ *  dates them. */
+function release(worker) {
+  const number = (worker.versions?.length ?? 0) + 1;
+  worker.versions = [...(worker.versions ?? []), { id: `v${number}`, number, metadata: { created_on: new Date(Date.UTC(2026, 9, 1, 0, number)).toISOString() } }];
+  worker.active = `v${number}`;
 }
 
 // One command can be made to die, so a test can kill a run halfway and re-run
@@ -488,6 +499,10 @@ if (command.startsWith('secret put')) {
   if (!worker) fail(`Could not find Worker "${name}".`);
   if (!stdin.trim()) fail('No value was piped in for the secret.');
   worker.secrets = [...new Set([...(worker.secrets ?? []), secret])];
+  // A secret is part of a version: on a Worker that exists, the real `secret
+  // put` creates a new version and deploys it. The first deployment's deferred
+  // secrets are therefore two versions newer than its upload.
+  release(worker);
   done(`✨ Success! Uploaded secret ${secret}`);
 }
 
@@ -545,10 +560,25 @@ if (command.startsWith('versions list')) {
   const name = flag('--name');
   const worker = (state.workers ?? []).find((candidate) => candidate.name === name);
   if (!worker) fail(`Could not find Worker "${name}".`);
-  // Newest first, like the real one. `shopctl deploy` names the SECOND entry as
-  // the rollback target, so a Worker with a single version must report exactly
-  // one — that is the "nothing to roll back to" case of a first deployment.
-  done(JSON.stringify(worker.versions ?? [{ id: 'v1', number: 1 }]));
+  // OLDEST first, the ten most recent: wrangler 4 sorts by `created_on`
+  // ascending and keeps the tail. This double used to answer newest first, and
+  // `shopctl deploy` read its second entry as the previous version — in real,
+  // the second-oldest of the ten, the same stale id in six reports of the
+  // certification's pilot.
+  done(JSON.stringify((worker.versions ?? []).slice(-10)));
+}
+
+if (command.startsWith('deployments status')) {
+  const name = flag('--name');
+  const worker = (state.workers ?? []).find((candidate) => candidate.name === name);
+  if (!worker) fail(`Could not find Worker "${name}".`);
+  if (!worker.active) fail(`The Worker ${name} has no deployments.`);
+  done(JSON.stringify({
+    id: `deployment-${worker.active}`,
+    source: 'api',
+    strategy: 'percentage',
+    versions: [{ version_id: worker.active, percentage: 100 }],
+  }));
 }
 
 if (positionals[0] === 'deploy') {
@@ -568,7 +598,7 @@ if (positionals[0] === 'deploy') {
     worker = { name, secrets: [], versions: [] };
     state.workers = [...(state.workers ?? []), worker];
   }
-  worker.versions = [{ id: `v${(worker.versions?.length ?? 0) + 1}`, number: (worker.versions?.length ?? 0) + 1 }, ...(worker.versions ?? [])];
+  release(worker);
   state.deploys = [...(state.deploys ?? []), name];
   // The Astro adapter binds SESSION in the BUILT configuration, with no id,
   // and wrangler provisions it at the first deploy under `<worker>-<binding>`.
