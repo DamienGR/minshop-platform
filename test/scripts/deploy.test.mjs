@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
+import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -699,6 +700,22 @@ describe('shopctl deploy', () => {
     it('refuses a production dry run without a backup key too', () => {
       const target = provisioned('production', { key: false });
       expect(target.run(['deploy', '--env', 'production', '--dry-run', ...FAST]).status).toBe(EXIT_CODES.precondition);
+    });
+
+    // Certification step 8: the restore sheet exports SHOPCTL_BACKUP_KEY in a
+    // fresh tree, then `deploy` runs this suite through `npm run verify`. The
+    // key reached every spawned shopctl, eight tests saw it, and the deploy
+    // stopped on its own gate.
+    it('does not hand the operator’s exported backup key to the shop under test', () => {
+      const target = provisioned('production', { key: false });
+      const previous = process.env.SHOPCTL_BACKUP_KEY;
+      process.env.SHOPCTL_BACKUP_KEY = randomBytes(32).toString('base64');
+      try {
+        expect(target.run(['deploy', '--env', 'production', '--dry-run', ...FAST]).status).toBe(EXIT_CODES.precondition);
+      } finally {
+        if (previous === undefined) delete process.env.SHOPCTL_BACKUP_KEY;
+        else process.env.SHOPCTL_BACKUP_KEY = previous;
+      }
     });
 
     it('stops before the first write when the backup fails', () => {
