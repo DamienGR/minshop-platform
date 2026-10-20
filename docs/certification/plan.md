@@ -723,9 +723,12 @@ tels que la fiche les écrit.
   le test de fumée a couru avant que workers.dev ne serve le nouveau nom
   partout (`/` et `/products` en 404, dont le message accuse la liaison D1,
   `/robots.txt` déjà en 200). Relancé une minute plus tard, il était vert avec
-  ses avertissements. `deploy` ne distingue pas encore la page de Cloudflare
-  d'une vitrine cassée, et la première production de l'étape 9 peut le
-  rencontrer sur son domaine.
+  ses avertissements. C'était Cloudflare qui répondait : un `404` sur chaque
+  chemin (« There is nothing here yet », ou `error code: 1042` à `curl`), et
+  son propre robots.txt, fait de commentaires, en 200 ; `/admin` et `/robots.txt` passaient donc sur des
+  réponses que la boutique n'avait pas données. Corrigé dans `v0.3.11` : le
+  test de fumée reconnaît cette réponse, attend la propagation deux minutes au
+  plus, et n'en fait jamais un succès ni un rollback.
 - **La mesure des limiteurs ne tranche pas seule** : 40 réponses 429 sur 600
   recherches de la canari, le pilote en 200 juste après, mais la canari
   elle-même rouverte quand on l'a relue ensuite. La clé de chaque compteur

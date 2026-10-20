@@ -114,7 +114,13 @@ read as "already correct".
 `deploy` follows plan §5.5 in order: resources, config, `npm run verify`,
 bookmark (production), migrations, build, upload, deferred secrets, smoke test.
 The smoke test can fail the command, and an unreachable site is a failure, never
-a pass. `.github/workflows/deploy.yml` runs the same commands behind a GitHub
+a pass. Cloudflare's own answer on a name that leads to no Worker yet — a
+`404`, "There is nothing here yet" or `error code: 1042` depending on what the
+request accepts, and a comment-only robots.txt — is never read as the shop's:
+`deploy` reruns the whole test while it lasts, `--smoke-wait` seconds at most
+(120), then fails without advising a rollback. The first deployment on
+workers.dev met it in real at certification step 7.
+`.github/workflows/deploy.yml` runs the same commands behind a GitHub
 Environment so production waits for a reviewer.
 
 `backup` and `restore` are the operations half of jalon 8 (plan §5.6, ADR 0005),
