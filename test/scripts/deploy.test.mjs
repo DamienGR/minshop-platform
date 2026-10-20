@@ -678,6 +678,31 @@ describe('shopctl deploy', () => {
       expect(upload).toBeLessThan(migrated);
     });
 
+    // Certification step 9: rendered into production's configuration, the
+    // images domain is where every product image points. Declared and not
+    // attached, the shop would open on a catalogue of broken images.
+    it('refuses production when the declared images domain is not attached', () => {
+      const target = provisioned('production', { cloudflare: { imagesDomain: 'images.boutique.example.fr' } });
+      const before = target.read();
+      const result = target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(result.status).toBe(EXIT_CODES.verification);
+      expect(result.stderr).toMatch(/images\.boutique\.example\.fr, qui n'est pas attaché/);
+      const after = target.read();
+      expect(after.deploys ?? []).toEqual([]);
+      expect(after.migrationsApplied).toBe(before.migrationsApplied);
+    });
+
+    it('serves production\u2019s images from its domain once it is attached', () => {
+      const target = provisioned('production', { cloudflare: { imagesDomain: 'images.boutique.example.fr' } });
+      const bucket = names(target.slug, 'production').images;
+      target.account({
+        r2: target.read().r2.map((entry) => (entry.name === bucket ? { ...entry, domains: ['images.boutique.example.fr'] } : entry)),
+      });
+      const result = target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      expect(readFileSync(join(target.root, 'wrangler.jsonc'), 'utf8')).toContain('"IMAGE_BASE_URL": "https://images.boutique.example.fr"');
+    });
+
     it('refuses production when the backups bucket is missing', () => {
       const target = provisioned('production');
       const bucket = names(target.slug, 'production').backups;

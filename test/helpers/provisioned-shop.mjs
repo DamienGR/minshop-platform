@@ -252,10 +252,13 @@ export function shop({
       writeFileSync(ghState, JSON.stringify({ ...current, ...patch }, null, 2));
       return current;
     },
-    run(args, env = {}) {
+    /** `input`, when given, is the command's standard input — how a
+     *  password reaches `shopctl admin password`, never through an argument. */
+    run(args, env = {}, input = undefined) {
       const result = spawnSync('node', [BIN, ...args], {
         cwd: root,
         encoding: 'utf8',
+        input,
         env: {
           ...process.env,
           ...GIT_ENV,
@@ -268,8 +271,8 @@ export function shop({
       });
       return { ...result, stdout: stripAnsi(result.stdout ?? ''), stderr: stripAnsi(result.stderr ?? '') };
     },
-    json(args, env = {}) {
-      const result = this.run([...args, '--json'], env);
+    json(args, env = {}, input = undefined) {
+      const result = this.run([...args, '--json'], env, input);
       return { ...result, report: result.stdout.trim() ? JSON.parse(result.stdout) : null };
     },
   };

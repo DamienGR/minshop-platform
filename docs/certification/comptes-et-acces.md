@@ -138,6 +138,16 @@ Settings, et côté utilisateur Memberships et User Details, rien d'autre (plan
 avec Account Analytics seul, il s'arrête sur « wrangler refuse le jeton »
 (étape 8).
 
+Le jeton de la sauvegarde nocturne de la production en est un troisième, sur
+B, créé à l'étape 9 : **D1** en lecture, **Workers R2 Storage** en écriture
+(l'archive va dans le bucket `-backups`, et les images sont lues pour y être
+emportées), **Account Settings** en lecture, et côté utilisateur
+**Memberships** et **User Details** en lecture. Rien d'autre : il vit dans
+l'environnement GitHub `backup`, qui ne demande l'approbation de personne, et
+un jeton qui déploie y contournerait les relecteurs de `production` — c'est
+pourquoi `shopctl repo` refuse d'y poser le jeton de production. Exporté en
+`CLOUDFLARE_API_TOKEN_BACKUP`, il est posé par `shopctl repo`.
+
 ## 5. Zero Trust et Access (compte A)
 
 - Zero Trust → choisir un nom d'équipe, celui de
