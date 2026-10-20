@@ -126,8 +126,11 @@ Workers », puis :
 | Account Analytics, lecture | `shopctl monitor --env staging` dans le nocturne |
 
 Le jeton de lecture de la production (`MONITOR_CLOUDFLARE_API_TOKEN`) est un
-autre jeton, sur B : Account Analytics et D1 en lecture, rien d'autre (plan
-§2.3).
+autre jeton, sur B, en lecture seule : Account Analytics, D1 et Account
+Settings, et côté utilisateur Memberships et User Details, rien d'autre (plan
+§2.3). `monitor` le passe aussi à `wrangler whoami` et `wrangler d1 list` :
+avec Account Analytics seul, il s'arrête sur « wrangler refuse le jeton »
+(étape 8).
 
 ## 5. Zero Trust et Access (compte A)
 

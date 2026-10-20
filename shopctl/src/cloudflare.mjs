@@ -144,6 +144,15 @@ export function accountLabel(name) {
 export function whoami({ cwd } = {}) {
   const result = wrangler(['whoami', '--json'], { cwd, allowFailure: true });
   if (result.status !== 0) {
+    // A token wrangler refuses is not a session to log back into: `whoami`
+    // reads the user and its memberships, which a token scoped to its command's
+    // own rights cannot (certification step 8, the monitor's analytics token).
+    if (process.env.CLOUDFLARE_API_TOKEN) {
+      throw preconditionError(
+        'wrangler refuse le jeton CLOUDFLARE_API_TOKEN.',
+        'Pour reconnaître un jeton, wrangler lit l\'utilisateur et ses comptes : ajoutez-lui « Account Settings : Read », et côté utilisateur « Memberships : Read » et « User Details : Read », en plus des droits de la commande. Vérifiez aussi qu\'il n\'a pas expiré.',
+      );
+    }
     throw preconditionError(
       'wrangler n\'est pas authentifié auprès de Cloudflare.',
       'npx wrangler login — ou, sous WSL2 avec un navigateur Windows, node scripts/wrangler-login-wsl.mjs. En CI, posez CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID.',
