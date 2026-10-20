@@ -335,7 +335,11 @@ describe('the smoke test against a live origin', () => {
   it('gives up after the wait, on a verdict that names Cloudflare', async () => {
     unserved = -1;
     try {
-      const report = await runSmoke(origin, { waitMs: 50, intervalMs: 10 });
+      // Room for a second attempt even on a loaded machine: the deadline runs
+      // from the start, and one attempt is five requests in a row. At 50 ms,
+      // the first one alone sometimes used it up, and `npm run verify`, which
+      // a production `deploy` runs, went red one time in five.
+      const report = await runSmoke(origin, { waitMs: 500, intervalMs: 50 });
       expect(report).toMatchObject({ ok: false, notServed: true });
       expect(report.attempts).toBeGreaterThan(1);
       expect(report.results.every((result) => result.message?.includes('error code: 1042'))).toBe(true);
