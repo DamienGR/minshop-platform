@@ -553,7 +553,10 @@ if (command.startsWith('r2 bucket delete')) {
   // R2 refuses a bucket that still holds objects. The double refuses it too,
   // because that refusal is the one branch of the teardown that has a remedy
   // the operator has to be told about.
-  if ((state.r2[index].objects ?? 0) > 0) fail('The bucket you tried to delete is not empty. [code: 10014]');
+  // The sentence and code R2 gave at certification step 8.
+  if ((state.r2[index].objects ?? 0) > 0) {
+    fail(`The bucket you tried to delete (${state.r2[index].name}) is not empty (account ${state.accounts?.[0]?.id ?? 'account'}). [code: 10008]`);
+  }
   state.r2.splice(index, 1);
   done(`Deleted bucket '${name}'.`);
 }
