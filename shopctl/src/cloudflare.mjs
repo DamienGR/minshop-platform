@@ -383,7 +383,7 @@ export function workerExists(worker, { cwd }) {
  * that has to be re-run because one resource was missing is a teardown people
  * stop finishing, and a half-torn-down environment is worse than either state.
  * A REAL failure — a non-empty bucket, a permission the token lacks — is
- * reported with wrangler's own first line, because those two have different
+ * reported with wrangler's own refusal, because those two have different
  * remedies and the operator has to be able to tell them apart.
  */
 function removal(result, name) {
@@ -392,7 +392,20 @@ function removal(result, name) {
   if (/not found|does not exist|Couldn't find|could not resolve|no such/i.test(text)) {
     return { name, removed: false, reason: 'absent' };
   }
-  return { name, removed: false, reason: firstLine(text) ?? 'échec' };
+  return { name, removed: false, reason: refusal(result) ?? 'échec' };
+}
+
+/**
+ * Why wrangler refused, read from STDERR first. Stdout opens with what it was
+ * about to do — "Deleting bucket <name> (eu)." — and a report that relays that
+ * line says nothing about the refusal (étape 7 of the certification, both
+ * buckets). The API's own sentence carries its code; the `[ERROR]` line around
+ * it only says that a request failed.
+ */
+function refusal(result) {
+  const stderr = stripAnsi(result.stderr ?? '');
+  const coded = stderr.split('\n').map((line) => line.trim()).find((line) => /\[code: \d+\]/.test(line));
+  return coded ?? firstLine(stderr) ?? firstLine(stripAnsi(result.stdout ?? ''));
 }
 
 export function deleteWorker(worker, { cwd }) {

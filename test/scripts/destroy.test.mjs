@@ -203,6 +203,17 @@ describe('shopctl destroy', () => {
       expect(target.read().d1.map((entry) => entry.name)).toEqual([expected.database]);
     });
 
+    // The reason is R2's, not wrangler's announcement of what it was about to
+    // do: the étape 7 report gave "Deleting bucket … (eu)." for both buckets.
+    it('relays the refusal, not the line wrangler printed before it', () => {
+      const target = withObjects();
+      const result = target.json(['destroy', '--env', 'staging', ...CONFIRM(target)]);
+
+      const [failure] = result.report.failures;
+      expect(failure.reason).toMatch(/not empty/);
+      expect(failure.reason).not.toMatch(/^Deleting bucket/);
+    });
+
     it('says how to empty it rather than emptying it', () => {
       const target = withObjects();
       const result = target.run(['destroy', '--env', 'staging', ...CONFIRM(target)]);
