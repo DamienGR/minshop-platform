@@ -81,3 +81,7 @@ Une note dans le registre d'incidents : qui l'a demandé, par quel canal, et
 comment l'identité du demandeur a été vérifiée. Une réinitialisation demandée
 par quelqu'un qui n'est pas le commerçant est une tentative de prise de
 contrôle, pas un ticket de support.
+
+`wrangler.jsonc` est resté rendu pour l'environnement visé, avec ses vrais
+identifiants : `git restore wrangler.jsonc` remet le rendu versionné, sans
+compte, avant tout commit (étape 8 de la certification).
