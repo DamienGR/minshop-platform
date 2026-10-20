@@ -734,6 +734,12 @@ tels que la fiche les écrit.
   elle-même rouverte quand on l'a relue ensuite. La clé de chaque compteur
   porte le nom d'hôte ; la mesure est compatible avec elle sans la prouver,
   et la fiche relit désormais la canari avant le pilote.
+- **Le refus de R2 n'était pas relayé.** Dans `destroy-1.json`, la raison
+  donnée pour les deux buckets refusés est la ligne par laquelle wrangler
+  annonce la suppression (« Deleting bucket … (eu). »), pas le refus : la
+  doublure ne l'imprimait pas. `destroy` lit désormais la phrase de l'API,
+  avec son code ; corrigé après `v0.3.11`, livré avec la version suivante,
+  avant que l'étape 9 ne supprime le staging du pilote.
 
 Preuves dans `client/certification/etape-7/` de `canari-certif` (pull request
 #10).

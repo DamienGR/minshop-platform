@@ -528,6 +528,9 @@ if (command.startsWith('d1 delete')) {
 if (command.startsWith('r2 bucket delete')) {
   const name = positionals[3];
   const wanted = jurisdictionOf();
+  // The real one announces the deletion on stdout before asking, so a refusal
+  // arrives after a line that reads like progress.
+  process.stdout.write(`Deleting bucket ${name}${wanted ? ` (${wanted})` : ''}.\n`);
   const index = (state.r2 ?? []).findIndex((bucket) => bucket.name === name && (bucket.jurisdiction ?? null) === (wanted ?? null));
   if (index === -1) fail('The specified bucket does not exist.');
   // R2 refuses a bucket that still holds objects. The double refuses it too,
