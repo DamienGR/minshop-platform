@@ -98,10 +98,11 @@ argument de commande. La colonne « où » dit où chacun est posé.
 | `stripe_webhook_secret` test puis live | secret | Stripe, à la création de l'endpoint | coffre chiffré |
 | `resend_api_key` | secret | Damien | coffre chiffré |
 | Clé de sauvegarde | secret | `shopctl backup keygen` | `.shopctl/backup.key` (0600) chez l'opérateur, et secret d'environnement GitHub `SHOPCTL_BACKUP_KEY` posé par `shopctl repo` (conservé s'il existe déjà) |
-| Mot de passe admin | secret | l'assistant `/admin/setup` | haché en D1 ; celui de staging aussi en secret d'environnement GitHub `MINSHOP_ADMIN_PASSWORD`, pour l'e-mail de test du nocturne |
+| Mot de passe admin | secret | l'assistant `/admin/setup` ; en production `shopctl admin password`, lu sur l'entrée standard, avant le premier déploiement | haché en D1 ; celui de staging aussi en secret d'environnement GitHub `MINSHOP_ADMIN_PASSWORD`, pour l'e-mail de test du nocturne |
 | Jeton de service Access de staging | secret | Damien (Zero Trust → Service Auth) | secrets d'environnement GitHub `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET`, pour le nocturne et les portes distantes |
 | Clé Stripe test du nocturne | secret | Damien, clé restreinte « Checkout Sessions : écriture » | secret d'environnement GitHub `STRIPE_TEST_SECRET_KEY` ; une clé live est refusée |
 | Destinataire de l'e-mail de test, origine de staging | configuration | Damien | secret d'environnement GitHub `NIGHTLY_EMAIL_TO` (une variable s'afficherait en clair dans les journaux, publics sur un dépôt public) et, sans `stagingDomain`, variable `STAGING_URL` |
+| Jeton de la sauvegarde nocturne de production | secret : « D1 » en lecture, « Workers R2 Storage » en écriture, « Account Settings » en lecture, et côté utilisateur « Memberships » et « User Details » en lecture ; rien qui déploie | Damien, sur le compte de la production | secret `CLOUDFLARE_API_TOKEN` de l'environnement GitHub `backup`, limité à la branche par défaut, sans relecteur, posé par `shopctl repo` depuis `CLOUDFLARE_API_TOKEN_BACKUP` (avec `CLOUDFLARE_ACCOUNT_ID` de B et `SHOPCTL_BACKUP_KEY`) |
 | Jeton de lecture de l'analytique de production | secret, lecture seule (« Account Analytics », « D1 », « Account Settings », et côté utilisateur « Memberships » et « User Details », tous en lecture : `monitor` le passe aussi à `wrangler whoami`) | Damien, sur le compte de la production | secrets du dépôt `MONITOR_CLOUDFLARE_API_TOKEN` et `MONITOR_CLOUDFLARE_ACCOUNT_ID` — hors de l'environnement `production`, dont les relecteurs bloqueraient chaque nuit |
 
 L'endpoint de webhook Stripe pointe sur `https://<hôte>/api/webhook` et
@@ -891,6 +892,46 @@ Réglages → E-mail de la production, l'expéditeur sur le domaine vérifié, p
   l'administration, la connexion refuse au plus tard la sixième tentative
   ([rapport de sécurité](rapport-securite.md)) ;
 - [ ] `shopctl destroy --env staging` sur A.
+
+Répétée en doublure le 2026-10-20 : le pilote en `v0.3.13`, son staging sur A
+et sa production sur B dans un `wrangler` de doublure, le chemin du workflow
+`Deploy` rejoué hors de GitHub, la production construite servie en local pour
+la saisie et la porte distante, puis la destruction du staging. Six défauts du
+socle, corrigés dans `v0.3.14` ; la fiche de passage, qui monte le pilote en
+`v0.3.14`, est [etape-9-commandes.md](etape-9-commandes.md), et le livrable de
+l'étape, la checklist de lancement rejouable pour chaque boutique, est
+[mise-en-ligne.md](../operations/mise-en-ligne.md).
+
+- **Le premier déploiement ouvrait l'assistant au public.** Sans mot de passe,
+  `/admin/setup` répond à quiconque : sur la production, à qui arrive le
+  premier sur un domaine dont le certificat vient d'être publié. Le test de
+  fumée le signalait sans rien y pouvoir. `shopctl admin password` pose le
+  haché avant le premier déploiement, lu sur l'entrée standard ; il remplace
+  aussi la fenêtre que le runbook du mot de passe perdu rouvrait.
+- **La production prenait des commandes sans paiement.** Sans Stripe, le
+  paiement de démonstration est offert : n'importe qui commande, réserve du
+  stock et déclenche des e-mails. `provision` le coupe dans une production
+  jamais installée ; le commerçant le rallume d'un clic.
+- **Le domaine d'images était rendu partout.** Déclaré, il passait dans le
+  staging et les builds locaux, qui auraient servi les objets de la
+  production ; non attaché, la production aurait ouvert sur des images
+  cassées. Seule la production le rend, et `deploy` refuse un domaine qui
+  n'est pas attaché au bucket.
+- **La porte distante échouait sur une boutique sans moyen de paiement** :
+  `/express` y renvoie vers la fiche. Elle l'accepte et le dit, à rejouer une
+  fois Stripe configuré.
+- **Le nocturne aurait été rouge chaque nuit après la destruction du
+  staging, et la production n'y était pas sauvegardée** : le RPO de 24 heures
+  n'était plus tenu (trou noté le 2026-10-15). La variable de dépôt
+  `STAGING_RETIRED` éteint la partie staging ; un job sauvegarde la production
+  chaque nuit dans l'environnement `backup`, limité à la branche par défaut,
+  avec son propre jeton de B, qui ne déploie pas.
+- **`destroy` renvoyait vers `r2 object delete` pour des clés que personne ne
+  connaît**, celles des archives du nocturne ; il nomme le vidage du tableau
+  de bord.
+
+Non répétés, faute de doublure : le domaine de production et son certificat
+sur B, le domaine d'images, l'approbation GitHub, Access.
 
 Fait avancer : jalon 6 (production), §7.4, §9.
 
