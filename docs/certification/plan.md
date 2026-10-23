@@ -636,7 +636,8 @@ Passée en réel le 2026-10-19, en `v0.3.8` montée depuis `v0.3.5` (pull reques
 navigateur (#17). La boutique a tenu sous la charge et sur la dernière unité ;
 sept défauts : quatre corrigés dans le socle ou la fiche, un dit dans la
 fiche, un réglé sur le jeton du monitor, un laissé ouvert (le `trap` de
-l'intégration D1 laisse un `wrangler dev` en vie).
+l'intégration D1 laisse un `wrangler dev` en vie), corrigé depuis dans
+`v0.3.19`.
 
 - **La prose des pages de contenu tombait sous AA.** Le bandeau « Brouillon »
   des pages légales (migration 0040) est une citation avec du gras et du code,
@@ -960,14 +961,14 @@ lancer les deux derniers. Preuves dans `client/certification/etape-9/` de `pilot
 (pull request #27), avec les achats de l'étape 6. Le premier certificat, celui
 du domaine d'images, a pris moins de sept minutes.
 
-Six défauts ou écarts : quatre ouverts pour une version suivante, les achats
-sous dérogation, la fiche corrigée :
+Six défauts ou écarts : quatre corrigés dans `v0.3.19`, les achats sous
+dérogation, la fiche corrigée :
 
 - **Le nom de la boutique ne vient pas du manifeste.**
   `wrangler.template.jsonc` porte `STORE_NAME: "Ma boutique"` en dur et
   `client.displayName` n'y arrive jamais : l'assistant de B a proposé « Ma
-  boutique », et le staging portait le même nom. La checklist dit de le
-  saisir.
+  boutique », et le staging portait le même nom. Le rendu y écrit
+  `client.displayName` depuis `v0.3.19`.
 - **Le nocturne nomme mal le job sauté** (`Staging
   (${{ needs.detect.outputs.shop }})`), et GitHub signale que
   `actions/upload-artifact@v4` tourne sur Node 20, déprécié.

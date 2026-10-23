@@ -114,8 +114,9 @@ défaire.
 ## 5. Installer et saisir sur B
 
 Connexion sur `https://<domaine>/admin/login`, puis l'assistant : nom de la
-boutique, fuseau. L'assistant propose « Ma boutique », pas le `displayName` du
-manifeste : saisir le vrai nom. Ensuite, dans Admin → Réglages :
+boutique, fuseau. L'assistant propose le `client.displayName` du manifeste
+(« Ma boutique » avant `v0.3.19`) : le corriger si ce n'est pas le nom que
+voient les clients. Ensuite, dans Admin → Réglages :
 
 - [ ] **E-mail** : l'expéditeur sur le domaine vérifié (jamais
   `onboarding@resend.dev`, qui ne livre qu'au titulaire du compte Resend), la
