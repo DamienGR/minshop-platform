@@ -588,12 +588,11 @@ portes de sécurité sur un déploiement réel).
 - [x] porte navigateur contre l'URL de staging — §8.5 (`BASE_URL=… npm run
   test:browser:remote`). Rouge en `v0.3.8` sur le contraste de la page CGV,
   verte en `v0.3.9` : 85 passés, 5 sautés avec leur raison ;
-- [ ] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
+- [x] parcours d'achat à la main sur Chrome et Firefox desktop, Safari sur
   iPhone, Chrome sur Android. Trois sur quatre : Chrome (#6), puis Firefox et
   Chrome Android repassés à l'étape 9, qui ont trouvé trois défauts corrigés
   dans `v0.3.17` ; Chrome Android refait ensuite, sans défaut. Safari sur
-  iPhone n'a pas été fait, faute d'appareil : à passer sur la production à
-  l'étape 10, ou à porter en dérogation ;
+  iPhone, faute d'appareil, sous dérogation datée du 2026-10-23 (§6) ;
 - [x] Lighthouse mobile sur l'accueil, une catégorie, une fiche produit, le
   panier : ≥ 90 en performance, accessibilité et SEO ; LCP, CLS, INP relevés.
   100 / 100 / 92 partout (le SEO plafonne derrière Access), LCP 1,0 à 1,6 s,
@@ -665,8 +664,9 @@ Preuves dans `client/certification/etape-6/` de `pilote-certif` (pull request
 #18).
 
 Produit : le **rapport de performance**,
-[`rapport-performance.md`](rapport-performance.md) : quatre lignes sur cinq
-tenues, celle des parcours d'achat ouverte, et la décision sur le CPU posée.
+[`rapport-performance.md`](rapport-performance.md) : les cinq lignes tenues,
+celle des parcours d'achat sous dérogation pour Safari sur iPhone (fermée le
+2026-10-23, après l'étape 9), et la décision sur le CPU posée.
 
 ### Étape 7 — Isolation de deux boutiques déployées
 
@@ -960,7 +960,8 @@ lancer les deux derniers. Preuves dans `client/certification/etape-9/` de `pilot
 (pull request #27), avec les achats de l'étape 6. Le premier certificat, celui
 du domaine d'images, a pris moins de sept minutes.
 
-Six défauts ou écarts, ouverts pour une version suivante sauf le dernier :
+Six défauts ou écarts : quatre ouverts pour une version suivante, les achats
+sous dérogation, la fiche corrigée :
 
 - **Le nom de la boutique ne vient pas du manifeste.**
   `wrangler.template.jsonc` porte `STORE_NAME: "Ma boutique"` en dur et
@@ -983,8 +984,9 @@ Six défauts ou écarts, ouverts pour une version suivante sauf le dernier :
   de `test/storefront/boundary.test.mjs` prend 4,5 s pour un budget de 5 sous
   charge.
 - **Les achats de l'étape 6 restent à trois sur quatre** : Safari sur iPhone
-  n'a pas été fait, faute d'appareil, et les versions et numéros des premiers
-  achats n'ont pas été relevés avant la destruction du staging.
+  n'a pas été fait, faute d'appareil (dérogation, §6), et les versions et
+  numéros des premiers achats n'ont pas été relevés avant la destruction du
+  staging.
 - **La fiche ne demandait pas de révoquer la clé Resend du staging** ; elle et
   la checklist le demandent.
 
@@ -1063,4 +1065,16 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
   valeur rendue, `nosniff` partout, aucun fichier téléversé servi pour ce qu'il
   n'est pas (invariant 13). À rouvrir quand l'inventaire des scripts en ligne
   est fait — un passage à part entière, pas un en-tête de plus ;
-- **critère 320 px de WCAG 1.4.10** — mesuré, non gaté (jalon 5).
+- **critère 320 px de WCAG 1.4.10** — mesuré, non gaté (jalon 5) ;
+- **achat sur Safari, iPhone** (étape 6, écrite le 2026-10-23) : aucun iPhone
+  à disposition pendant le passage. Trois achats de bout en bout sur quatre :
+  Chrome et Firefox sur le poste, Chrome sur Android ; aucun sur WebKit.
+  Mesures compensatoires : la vitrine est rendue côté serveur et marche sans
+  JavaScript (invariant 1), ce qui retire au navigateur la part où les moteurs
+  divergent le plus ; le paiement se fait sur la page hébergée de Stripe, que
+  Stripe maintient pour Safari ; la porte navigateur rejoue la vitrine sur un
+  téléphone émulé (`isMobile`, tactile) à chaque version, et les défauts de
+  mise en page vus sur Chrome Android y sont devenus des tests (`v0.3.17`).
+  Risque restant : un défaut propre à WebKit, de rendu ou de formulaire,
+  qu'aucun passage n'a vu. À rouvrir dès qu'un iPhone est disponible, ou si
+  la porte navigateur gagne un projet WebKit.
