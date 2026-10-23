@@ -991,6 +991,13 @@ dérogation, la fiche corrigée :
 - **La fiche ne demandait pas de révoquer la clé Resend du staging** ; elle et
   la checklist le demandent.
 
+La montée du pilote en `v0.3.19` (pull request #28) en a trouvé un septième :
+la porte de propriété refusait le `wrangler.jsonc` que la montée re-rend. Elle
+n'exemptait que les fichiers identiques à ceux de la release, et ce fichier,
+rendu pour une seule boutique, ne l'est jamais. `v0.3.19` est la première
+version depuis `v0.3.3` à changer son gabarit. Corrigé dans `v0.3.20` : la
+porte refait le rendu depuis l'arbre et laisse passer un fichier identique.
+
 Hors socle : avant `v0.3.16`, le mot de passe d'administration du staging est
 parti chez Resend comme jeton. Il ne protégeait que le staging, détruit depuis ;
 la production a le sien, posé avant son premier déploiement.
