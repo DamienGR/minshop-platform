@@ -516,8 +516,11 @@ describe('shopctl core upgrade', () => {
     const agency = workspace();
     const shop = agency.shop();
     const rendered = read(shop, 'wrangler.jsonc');
+    // The Worker's name: the one line every rendering rewrites, whatever the
+    // core's copy is — the committed default here, a template rendering in CI,
+    // whose `run-verify` renders it before the suite.
     const coreConfig = read(agency.core, 'wrangler.jsonc');
-    const edited = coreConfig.replace(/^(\{\n\s*\/\/ )/, '$1Edited by the next core version. ');
+    const edited = coreConfig.replace(/^(\s*)"name": "[^"]+",$/m, '$1"name": "minshop-next-core",');
     expect(edited).not.toBe(coreConfig);
     agency.publish({ files: { 'wrangler.jsonc': edited } });
 
