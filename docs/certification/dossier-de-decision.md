@@ -191,7 +191,8 @@ Conditions d'un **go** :
   le résultat (ADR 0010 : sans elle, aucune boutique ne passe en production
   pour vendre) ;
 - le procès-verbal de recette signé, sans anomalie bloquante ;
-- `v0.3.25` publiée, le pilote monté, un nocturne vert.
+- `v0.3.26` publiée (elle porte les corrections de `v0.3.25`, jamais
+  taguée), le pilote monté, un nocturne vert.
 
 Ce que la décision dit aussi : ce que devient la boutique `pilote-certif`
 (laissée fermée, rouverte avec des clés live pour vendre, ou supprimée par
