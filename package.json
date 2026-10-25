@@ -1,7 +1,7 @@
 {
   "name": "minshop",
   "type": "module",
-  "version": "0.3.24",
+  "version": "0.3.25",
   "private": true,
   "repository": {
     "type": "git",
@@ -93,7 +93,7 @@
   },
   "overrides": {
     "miniflare": {
-      "undici": "^7.29.0",
+      "undici": "^7.30.1",
       "sharp": "^0.35.5"
     }
   }
