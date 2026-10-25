@@ -172,10 +172,11 @@ les suivre seul.
 2. **Le RPO.** Une archive par nuit, mais l'heure à laquelle GitHub lance le
    cron varie d'une nuit à l'autre, et l'écart a déjà dépassé 24 heures. Deux
    remèdes : un second déclenchement dans la journée qui ne lance que la
-   sauvegarde de la production (un changement du nocturne, en `v0.3.26`), ou
-   une dérogation qui définit le RPO comme « une archive par nuit », avec
-   l'archive que prend chaque déploiement. Recommandation : **le second
-   déclenchement**, qui ferme la ligne au lieu de la redéfinir.
+   sauvegarde de la production (un changement du nocturne, dans une version
+   suivante du socle), ou une dérogation qui définit le RPO comme « une
+   archive par nuit », avec l'archive que prend chaque déploiement.
+   Recommandation : **le second déclenchement**, qui ferme la ligne au lieu
+   de la redéfinir.
 3. **L'échec réseau temporaire.** Aucune étape ne l'a rejoué tel quel.
    Recommandation : **la tenir par les preuves de la section 2**, en l'écrivant
    ici, plutôt que d'inventer une panne pour la campagne.
