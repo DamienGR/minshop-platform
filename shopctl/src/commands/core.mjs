@@ -266,16 +266,14 @@ function statusCommand(args, reporter) {
   return 0;
 }
 
-/** The version an upgrade targets, from `--to`. `state`, when given, lends the
- *  usage error a suggestion. */
-export function resolveTarget(value, state = null) {
+/** The version an upgrade targets, from `--to`. A missing one gets no
+ *  suggestion: before the fetch, the clone's tags may be stale (certification,
+ *  step 10). */
+export function resolveTarget(value) {
   if (value === undefined) {
-    const suggestion = state ? (state.core.behind.at(-1) ?? state.core.latest) : null;
     throw usageError(
       '--to est obligatoire.',
-      suggestion
-        ? `Une mise à niveau nomme la version qu'elle prend : --to v${suggestion}. \`shopctl core status\` liste les versions publiées.`
-        : 'Une mise à niveau nomme la version qu\'elle prend : --to v1.1.0. Rien n\'est deviné ici.',
+      'Une mise à niveau nomme la version qu\'elle prend : --to v1.1.0. `shopctl core status` liste les versions publiées ; rien n\'est deviné ici.',
     );
   }
   const tag = tagForVersion(String(value));

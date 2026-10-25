@@ -173,8 +173,9 @@ from the shop's origin brings none: `core status` names a declared tag the
 clone lacks instead of blaming the manifest, and an upgrade fetches the core's
 tags BEFORE it reads where the shop is. It then branches `socle/<tag>`,
 merges, bumps the manifest, re-renders the generated files, runs the gates the
-shop now carries, and with `--open-pr` opens the pull request. It never deploys and never merges a pull request:
-production stays behind the GitHub Environment. It refuses a dirty tree, a
+shop now carries, and with `--open-pr` opens the pull request. It never deploys
+and never merges a pull request: production stays behind the GitHub
+Environment. It refuses a dirty tree, a
 downgrade, and a version that rewrites a published migration (ADR 0006); a
 conflict is named file by file WITH its ownership and left in the tree, because
 resolving it is git work there. The fleet is DECLARED in `fleet.json` next to
