@@ -63,4 +63,19 @@ describe('the workflows', () => {
     // One step in two files: the nightly's copy is the one that would drift.
     expect(new Set(steps.map(({ step }) => step.slice(step.indexOf('run: |')))).size).toBe(1);
   });
+
+  // `.nvmrc` names a major, and setup-node resolves a major to the newest
+  // version cached on the runner image, which trails Node's releases by weeks.
+  // Astro 7.4 requires 22.23.4, the security release of 2026-10-20; the image
+  // still had 22.23.3, and engine-strict refused every install of that
+  // Dependabot pull request. check-latest asks Node's own list instead.
+  it('installs the newest Node of the .nvmrc line, not the one the image cached', () => {
+    const steps = workflows.flatMap(({ file, text }) =>
+      [...text.matchAll(/uses: actions\/setup-node@v\d+\n((?: {8,}.*\n)+)/g)]
+        .map((match) => ({ file, step: match[1] }))
+        .filter(({ step }) => step.includes('node-version-file: .nvmrc')),
+    );
+    expect(steps.length).toBeGreaterThan(10);
+    expect(steps.filter(({ step }) => !/^ +check-latest: true$/m.test(step)).map(({ file }) => file)).toEqual([]);
+  });
 });

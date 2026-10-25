@@ -1,7 +1,7 @@
 {
   "name": "minshop",
   "type": "module",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "private": true,
   "repository": {
     "type": "git",
@@ -11,7 +11,7 @@
     "shopctl": "shopctl/bin/shopctl.mjs"
   },
   "engines": {
-    "node": ">=22.12.0 <23",
+    "node": ">=22.23.4 <23",
     "npm": ">=10.9.0"
   },
   "scripts": {

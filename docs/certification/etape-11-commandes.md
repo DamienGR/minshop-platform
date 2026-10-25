@@ -78,7 +78,7 @@ Prérequis : la pull request de `v0.3.25` fusionnée sur le socle.
 ```sh
 P=<chemin>/shop-pilote-certif
 git -C "$P" switch main && git -C "$P" pull && git -C "$P" status --short     # rien
-cd "$P" && nvm use 22
+cd "$P" && nvm install 22
 gh repo set-default DamienGR/shop-pilote-certif
 unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
 COMPTE_B=$(awk '/^  productionAccountId:/ {print $2}' client/client.yaml)
