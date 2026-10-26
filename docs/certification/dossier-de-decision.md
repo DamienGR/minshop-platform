@@ -18,6 +18,12 @@ Mis à jour le 2026-10-25 au soir, pendant l'étape 11 : la production est en
 vert, audit des dépendances compris, et les décisions de la section 5 sont
 prises.
 
+Mis à jour le 2026-10-26 : `v0.3.27` est publiée et la montée du pilote
+ouverte (#40) ; les quatre pages légales sont en ligne, sans marqueur. Deux
+décisions s'ajoutent à la section 5 : la relecture juridique et la validation
+comptable attendent la première boutique réelle, sous dérogation (section 3),
+et la recette se fait pour de vrai.
+
 Les sections 3 et 6 se signent sur un exemplaire gardé hors du dépôt : celui-ci
 est public par ses boutiques.
 
@@ -29,7 +35,7 @@ est public par ses boutiques.
 | rapport de sécurité | [rapport-securite.md](rapport-securite.md) | neuf lignes tenues sur le staging, la porte distante 17/17 sur la production ; l'audit des dépendances, rouge les 24 et 25 octobre, vert de nouveau en `v0.3.26` |
 | rapport de performance | [rapport-performance.md](rapport-performance.md) | cinq lignes tenues ; le CPU au plan gratuit, sous dérogation (section 3) |
 | preuve de restauration | étape 8, pull request #20 du pilote | restauration sur B en 29 min 21 s, 26 tables identiques à l'archive |
-| validation TVA/facturation | étape 11, section 3 de la fiche | à obtenir |
+| validation TVA/facturation | étape 11, section 3 de la fiche | reportée à la première boutique réelle, sous dérogation (section 3) ; le courrier et ses cinq questions sont prêts, hors du dépôt |
 | checklist de lancement | [mise-en-ligne.md](../operations/mise-en-ligne.md) | écrite à l'étape 9, complétée aux étapes 10 et 11 |
 | documentation de support | section 4 | complète en `v0.3.25`, à relire |
 | décision go/no-go | section 6 | à prendre |
@@ -109,9 +115,9 @@ gratuit sous dérogation (section 5, décision 1).
 
 | Ligne | État | Preuve |
 |---|---|---|
-| revue des pages légales | **ouverte** | les quatre pages de la production sont des squelettes (fiche de l'étape 11) |
-| revue du consentement aux CGV | **ouverte** | le mécanisme tient (étape 4) ; le texte accepté reste à écrire, puis `termsVersion` à 2 |
-| revue TVA et facturation | **ouverte** | l'expert-comptable (fiche, section 3) |
+| revue des pages légales | sous dérogation (section 3) | les quatre pages de la production écrites en entier, sans marqueur, l'identité fictive du vendeur annoncée en tête de chacune ; la relecture par un conseil attend la première boutique réelle |
+| revue du consentement aux CGV | sous dérogation (section 3) | le mécanisme tient (étape 4) ; le texte complet en ligne, `termsVersion` à 2 (#39) ; sa relecture avec celle des pages |
+| revue TVA et facturation | sous dérogation (section 3) | `invoiceStrategy` reste `pending-validation` ; les questions de la fiche (section 3) vont à l'expert-comptable de la première boutique réelle |
 | commande réelle, remboursement réel | tenues | étape 10 : `tspzkyxggc`, 6,90 €, remboursée par l'administration (#32) |
 | e-mails dans Gmail, Outlook et Apple Mail | Gmail tenu ; Outlook et Apple Mail sous dérogation | section 3 |
 | recette par une personne extérieure | **ouverte** | [recette.md](../operations/recette.md) |
@@ -129,6 +135,8 @@ Sur une ligne du §8, donc exigées par le critère de sortie :
 | CSP : `script-src` et `style-src` (§8.4) | 2026-10-06 | un script injecté s'exécuterait ; aucune voie d'injection connue (Markdown sans HTML, échappement d'Astro) | l'inventaire des scripts en ligne est fait | |
 | achat sur Safari, iPhone (§8.5) | 2026-10-23 | un défaut propre à WebKit, de rendu ou de formulaire | un iPhone est disponible, ou la porte navigateur gagne un projet WebKit | |
 | e-mails dans Outlook et Apple Mail (§8.8) | 2026-10-25 | un rendu propre à ces messageries | la première commande réelle d'un commerçant qui lit ses alertes dans Outlook | |
+| relecture des pages légales et du consentement aux CGV (§8.8) | 2026-10-26 | un texte de commerçant non conforme, ou un point du parcours (la case, le bouton de paiement, le récapitulatif) qu'un conseil jugerait insuffisant, à reprendre dans le socle | la première boutique réelle : ses textes et son parcours relus avant sa mise en ligne | |
+| validation TVA et facturation (§8.8) | 2026-10-26 | une réponse qui demande ce que le socle n'a pas : une facture numérotée, la franchise en base, ou le reçu de la boutique comme valeur de `invoiceStrategy` | la première boutique réelle : la réponse écrite de son expert-comptable avant sa mise en ligne | |
 
 Hors du §8, prévues au même §6 sans date : à dater en les signant.
 
@@ -139,8 +147,9 @@ Hors du §8, prévues au même §6 sans date : à dater en les signant.
 | critère 320 px de WCAG 1.4.10 (jalon 5) | un débordement horizontal sur un très petit écran, mesuré et non gaté ; le §8.5 demande le zoom à 200 %, tenu | une boutique annonce la conformité WCAG, ou la porte navigateur le gate | |
 | CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) | |
 
-Les décisions de la section 5 n'en ajoutent pas d'autre : le RPO se ferme par
-`v0.3.27`, l'échec réseau temporaire est tenu par les preuves de la section 2.
+Outre le CPU (décision 1) et les deux relectures (décision 4), les décisions
+de la section 5 n'en ajoutent pas : le RPO se ferme par `v0.3.27`, l'échec
+réseau temporaire est tenu par les preuves de la section 2.
 
 ## 4. Documentation du §12
 
@@ -196,21 +205,44 @@ les suivre seul.
    d'autre à cette heure-là ;
 3. l'échec réseau temporaire est **tenu par les preuves** de la section 2.
 
+**Décidé par Damien le 2026-10-26**, deux questions que le pilote pose
+lui-même : c'est une boutique de démonstration, au vendeur fictif, qui ne sert
+qu'à éprouver le parcours de certification.
+
+4. la **relecture juridique** des pages légales et du consentement aux CGV, et
+   la **validation comptable** de la TVA et de la facturation, sont
+   **reportées à la première boutique réelle**, sous deux dérogations
+   (section 3) : un conseil ou un expert-comptable n'apprendrait rien d'un
+   vendeur qui n'existe pas. Le pilote garde `invoiceStrategy:
+   pending-validation`, et la [mise en ligne](../operations/mise-en-ligne.md)
+   d'une boutique demande les deux avant sa première vente. La décision de la
+   section 6 sera un **go sous conditions** ;
+5. la **recette** se fait **pour de vrai** : en production, paiement réel,
+   par une personne extérieure (fiche, section 4).
+
 ## 6. Décision (point F)
 
 Conditions d'un **go** :
 
 - chaque critère de la section 2 tenu, ou sous une dérogation signée à la
   section 3 ;
-- la validation écrite de l'expert-comptable, et `invoiceStrategy` qui en dit
-  le résultat (ADR 0010 : sans elle, aucune boutique ne passe en production
-  pour vendre) ;
 - le procès-verbal de recette signé, sans anomalie bloquante ;
 - `v0.3.26` publiée (elle porte les corrections de `v0.3.25`, jamais
   taguée), le pilote monté, un nocturne vert — fait le 2026-10-25 (#37,
   `Deploy` 40236611288, nocturne 40237706569) ;
 - `v0.3.27` publiée, le pilote monté, un run de l'après-midi vert : la ligne
   RPO.
+
+Les conditions du go (section 5, décision 4), que la première boutique réelle
+tient avant sa première vente :
+
+- ses pages légales et son parcours d'achat relus par un conseil (fiche,
+  section 2) ; ce qu'il demande au socle se corrige dans le socle ;
+- la réponse écrite de son expert-comptable aux cinq questions de la fiche
+  (section 3), et `invoiceStrategy` qui en dit le résultat (ADR 0010 : sans
+  elle, aucune boutique ne passe en production pour vendre) ; une facture
+  numérotée ou la franchise en base, si la réponse les demande, se
+  construisent dans le socle avant cette vente.
 
 Ce que la décision dit aussi : ce que devient la boutique `pilote-certif`
 (laissée fermée, rouverte avec des clés live pour vendre, ou supprimée par
@@ -221,7 +253,7 @@ dans le projet).
 | | |
 |---|---|
 | Décision | ☐ go ☐ go sous conditions ☐ no-go |
-| Conditions, s'il y en a | |
+| Conditions, s'il y en a | les deux conditions ci-dessus, tenues par la première boutique réelle avant sa première vente |
 | Date | |
 | Pour l'agence | |
 | Pour le commerçant du pilote | |

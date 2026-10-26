@@ -140,6 +140,14 @@ voient les clients. Ensuite, dans Admin → Réglages :
   en squelette, étape 11 de la certification). Avant la première commande,
   `legal.termsVersion` dans `src/store.config.ts` nomme le texte publié ;
   il monte à chaque changement que l'acheteur devrait réaccepter.
+- [ ] la **TVA et la facturation** validées par écrit par l'expert-comptable
+  du commerçant, sur les questions de la section 3 de la
+  [fiche de l'étape 11](../certification/etape-11-commandes.md), et
+  `commerce.invoiceStrategy` qui en dit le résultat : un manifeste qui porte
+  encore `pending-validation` ne vend pas ([ADR 0010](../architecture/decisions/0010-tva-facturation-et-consentement.md)).
+  Une facture numérotée ou la franchise en base, si la réponse les demande,
+  se construisent dans le socle avant la première vente (la certification
+  les a reportées à la première boutique réelle).
 
 Les contenus sont saisis sur B, jamais recopiés depuis A (ADR 0015) : le
 catalogue par l'administration, ou par `shopctl catalog import --env production`
