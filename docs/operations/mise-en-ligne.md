@@ -182,6 +182,15 @@ gh workflow run nightly.yml
 Attendu : `Production backup` vert, `backup verify` qui ouvre l'archive avec la
 clé ; `Production error rate and quotas` vert.
 
+Enfin la **recette**, sur la boutique publique, avec un vrai paiement
+remboursé : le commerçant, ou une personne qu'il désigne et qui n'a ni
+développé ni exploité la boutique, avec le [modèle](recette.md) seul.
+
+- [ ] le procès-verbal signé, sans anomalie bloquante. Il marque la
+  livraison : la boutique ne s'annonce qu'après. La certification n'a pas
+  fait faire la sienne au pilote, dont le vendeur est fictif : la première
+  boutique réelle est la première à passer par une personne extérieure.
+
 ## 7. Détruire la copie de l'agence
 
 Sur le compte A, une fois la production saisie et contrôlée :

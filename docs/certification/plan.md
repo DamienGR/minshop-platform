@@ -1175,7 +1175,9 @@ quatre pages légales saisies, sans marqueur. Damien a reporté la relecture
 juridique et la validation comptable à la première boutique réelle, sous
 deux dérogations (§6) : le vendeur du pilote n'existe pas, et ce qu'un
 conseil ou un expert-comptable dirait de lui ne vaudrait pour personne. La
-recette se fait pour de vrai, en production, avec un paiement réel.
+recette, d'abord voulue réelle, est tenue par les preuves des étapes 4 à 11,
+qui ont joué chacun de ses scénarios ; la personne extérieure attend la
+recette de livraison de la première boutique réelle, sous dérogation (§6).
 
 ## 5. Livrables du jalon 10
 
@@ -1277,3 +1279,16 @@ recette se fait pour de vrai, en production, avec un paiement réel.
   le reçu de la boutique comme valeur de `invoiceStrategy` —, un
   développement avant la première vente. À rouvrir à la première boutique
   réelle, avec les questions de la section 3 de la fiche.
+- **recette par une personne extérieure** (étape 11, écrite le 2026-10-26) :
+  le procès-verbal ferait confirmer au vendeur fictif du pilote des textes
+  qui ne sont pas les siens, et chaque scénario du
+  [modèle](../operations/recette.md) a déjà été joué, en test et en réel, par
+  les étapes 4 à 11 ([dossier](dossier-de-decision.md), section 5). Mesures
+  compensatoires : ces preuves, scénario par scénario ; la porte navigateur
+  et la porte distante à chaque version ; la
+  [mise en ligne](../operations/mise-en-ligne.md) demande la recette et son
+  procès-verbal signé avant que la boutique s'annonce. Risque restant : ce
+  que seule une personne extérieure voit, un libellé ou un chemin qu'elle ne
+  suit pas sans explication orale ; et l'alerte du commerçant, jamais lue en
+  production. À rouvrir à la recette de livraison de la première boutique
+  réelle.
