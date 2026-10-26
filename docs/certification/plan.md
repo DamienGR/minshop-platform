@@ -1164,7 +1164,11 @@ une boutique de démonstration : ses pages légales portent une identité
 fictive, signalée en tête de chacune. La montée a trouvé deux défauts de
 `core upgrade`, corrigés en `v0.3.27` : un conflit sur `wrangler.jsonc`,
 fichier généré, arrêtait la fusion, et une montée reprise lisait son point
-de départ dans le dernier tag local plutôt que dans la boutique.
+de départ dans le dernier tag local plutôt que dans la boutique. Les pages en
+ligne ont montré deux défauts du socle, corrigés en `v0.3.28` : la meta
+description collait les mots de part et d'autre d'un saut de ligne
+(« parcours decertification »), et chaque page légale affichait son titre deux
+fois, les squelettes de 0040 le répétant en tête du texte.
 
 Le 2026-10-26, `v0.3.27` publiée et la montée du pilote ouverte (#40), les
 quatre pages légales saisies, sans marqueur. Damien a reporté la relecture
