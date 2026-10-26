@@ -1109,12 +1109,16 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
 
 ### Étape 11 — Validations humaines et décision
 
-- [ ] relecture des pages légales et du consentement aux CGV ;
-- [ ] validation TVA et facturation par un expert-comptable — le manifeste
-  porte encore `invoiceStrategy: pending-validation` ;
-- [ ] recette par une personne extérieure au développement, sur le modèle de
-  procès-verbal du §12 ;
-- [ ] documentation du §12 complète ;
+- [x] relecture des pages légales et du consentement aux CGV : les quatre
+  pages écrites en entier, sans marqueur, les CGV en version 2 ; leur
+  relecture par un conseil sous dérogation datée du 2026-10-26 (§6) ;
+- [x] validation TVA et facturation par un expert-comptable — le manifeste
+  porte encore `invoiceStrategy: pending-validation` ; sous dérogation datée
+  du 2026-10-26 (§6), le courrier prêt pour la première boutique réelle ;
+- [x] recette par une personne extérieure au développement, sur le modèle de
+  procès-verbal du §12 : chaque scénario tenu par les preuves des étapes 4 à
+  11 ; la personne extérieure sous dérogation datée du 2026-10-26 (§6) ;
+- [x] documentation du §12 complète — relue par Damien le 2026-10-26 ;
 - [ ] rapports assemblés, dérogations signées ;
 - [ ] décision go/no-go (point de décision F, §11).
 

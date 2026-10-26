@@ -25,6 +25,11 @@ comptable attendent la première boutique réelle, sous dérogation (section 3),
 et la recette du pilote est tenue par les preuves des étapes, la personne
 extérieure reportée à la même boutique.
 
+Mis à jour le 2026-10-26 au soir : la production est en `v0.3.28` (montée
+#42, `Deploy` 40365454643), qui corrige les deux défauts que ses pages
+légales ont montrés ; Damien a relu la documentation du §12, et répondu aux
+deux questions de la section 6.
+
 Les sections 3 et 6 se signent sur un exemplaire gardé hors du dépôt : celui-ci
 est public par ses boutiques.
 
@@ -38,7 +43,7 @@ est public par ses boutiques.
 | preuve de restauration | étape 8, pull request #20 du pilote | restauration sur B en 29 min 21 s, 26 tables identiques à l'archive |
 | validation TVA/facturation | étape 11, section 3 de la fiche | reportée à la première boutique réelle, sous dérogation (section 3) ; le courrier et ses cinq questions sont prêts, hors du dépôt |
 | checklist de lancement | [mise-en-ligne.md](../operations/mise-en-ligne.md) | écrite à l'étape 9, complétée aux étapes 10 et 11 |
-| documentation de support | section 4 | complète en `v0.3.25`, à relire |
+| documentation de support | section 4 | complète en `v0.3.25`, relue par Damien le 2026-10-26 |
 | décision go/no-go | section 6 | à prendre |
 
 ## 2. Critères du §8
@@ -150,8 +155,9 @@ Hors du §8, prévues au même §6 sans date : à dater en les signant.
 | CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) | |
 
 Outre le CPU (décision 1), les deux relectures (décision 4) et la recette
-(décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO se ferme par `v0.3.27`, l'échec
-réseau temporaire est tenu par les preuves de la section 2.
+(décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO se
+ferme par `v0.3.27`, l'échec réseau temporaire est tenu par les preuves de la
+section 2.
 
 ## 4. Documentation du §12
 
@@ -175,6 +181,10 @@ réseau temporaire est tenu par les preuves de la section 2.
 Trois guides sont en anglais : ils s'adressent aux contributeurs du socle. Les
 traduire n'est nécessaire que si un commerçant ou un prestataire français doit
 les suivre seul.
+
+Les quatre documents écrits pour l'étape 11 (la recette, le remboursement,
+les responsabilités, les sous-traitants) ont été relus par Damien le
+2026-10-26, comme un commerçant les lirait, sans remarque.
 
 ## 5. Décisions à prendre avant le go/no-go
 
@@ -270,11 +280,16 @@ réelle tient avant sa première vente :
 - sa recette par une personne extérieure, avec le modèle seul, et le
   procès-verbal signé de son commerçant, sans anomalie bloquante.
 
-Ce que la décision dit aussi : ce que devient la boutique `pilote-certif`
-(laissée fermée, rouverte avec des clés live pour vendre, ou supprimée par
-`shopctl destroy --env production`), et ce qui est promis au premier client
-(les limites du plan gratuit, `/mnt/project-files/analyses/limites-tiers-gratuits.md`
-dans le projet).
+Ce que la décision dit aussi, répondu par Damien le 2026-10-26 :
+
+- la boutique `pilote-certif` **reste fermée** : aucune clé de paiement en
+  place, le panier dit la commande momentanément indisponible. Elle sert de
+  boutique de référence, montée à chaque version du socle. La rouvrir pour
+  vendre demanderait un vrai vendeur et ses propres textes ; la supprimer,
+  `shopctl destroy --env production` ;
+- au premier client sont promises **les limites du plan gratuit**
+  (`/mnt/project-files/analyses/limites-tiers-gratuits.md` dans le projet),
+  celles que la dérogation du CPU accepte.
 
 | | |
 |---|---|
