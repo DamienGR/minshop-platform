@@ -22,7 +22,8 @@ Mis à jour le 2026-10-26 : `v0.3.27` est publiée et la montée du pilote
 ouverte (#40) ; les quatre pages légales sont en ligne, sans marqueur. Deux
 décisions s'ajoutent à la section 5 : la relecture juridique et la validation
 comptable attendent la première boutique réelle, sous dérogation (section 3),
-et la recette se fait pour de vrai.
+et la recette du pilote est tenue par les preuves des étapes, la personne
+extérieure reportée à la même boutique.
 
 Les sections 3 et 6 se signent sur un exemplaire gardé hors du dépôt : celui-ci
 est public par ses boutiques.
@@ -120,8 +121,8 @@ gratuit sous dérogation (section 5, décision 1).
 | revue TVA et facturation | sous dérogation (section 3) | `invoiceStrategy` reste `pending-validation` ; les questions de la fiche (section 3) vont à l'expert-comptable de la première boutique réelle |
 | commande réelle, remboursement réel | tenues | étape 10 : `tspzkyxggc`, 6,90 €, remboursée par l'administration (#32) |
 | e-mails dans Gmail, Outlook et Apple Mail | Gmail tenu ; Outlook et Apple Mail sous dérogation | section 3 |
-| recette par une personne extérieure | **ouverte** | [recette.md](../operations/recette.md) |
-| textes définitifs sous la responsabilité du marchand | **ouverte** | la [matrice des responsabilités](../operations/responsabilites.md) et le procès-verbal de recette, à signer |
+| recette par une personne extérieure | sous dérogation (section 3) | chaque scénario de [recette.md](../operations/recette.md) joué par les étapes 4 à 11 (section 5, décision 5) ; la personne extérieure attend la recette de livraison de la première boutique réelle |
+| textes définitifs sous la responsabilité du marchand | sous dérogation (section 3) | la [matrice des responsabilités](../operations/responsabilites.md) ; le procès-verbal qui le fait confirmer au commerçant se signe à la même recette |
 
 ## 3. Dérogations à signer
 
@@ -137,6 +138,7 @@ Sur une ligne du §8, donc exigées par le critère de sortie :
 | e-mails dans Outlook et Apple Mail (§8.8) | 2026-10-25 | un rendu propre à ces messageries | la première commande réelle d'un commerçant qui lit ses alertes dans Outlook | |
 | relecture des pages légales et du consentement aux CGV (§8.8) | 2026-10-26 | un texte de commerçant non conforme, ou un point du parcours (la case, le bouton de paiement, le récapitulatif) qu'un conseil jugerait insuffisant, à reprendre dans le socle | la première boutique réelle : ses textes et son parcours relus avant sa mise en ligne | |
 | validation TVA et facturation (§8.8) | 2026-10-26 | une réponse qui demande ce que le socle n'a pas : une facture numérotée, la franchise en base, ou le reçu de la boutique comme valeur de `invoiceStrategy` | la première boutique réelle : la réponse écrite de son expert-comptable avant sa mise en ligne | |
+| recette par une personne extérieure, et son procès-verbal (§8.8) | 2026-10-26 | ce que seule une personne extérieure voit : un libellé, un chemin, un scénario qu'elle ne suit pas sans explication orale. Chaque scénario n'a été joué que par ceux qui ont construit la boutique, et l'alerte du commerçant n'a jamais été lue en production | la recette de livraison de la première boutique réelle, par son commerçant, procès-verbal signé ([mise en ligne](../operations/mise-en-ligne.md), section 6) | |
 
 Hors du §8, prévues au même §6 sans date : à dater en les signant.
 
@@ -147,8 +149,8 @@ Hors du §8, prévues au même §6 sans date : à dater en les signant.
 | critère 320 px de WCAG 1.4.10 (jalon 5) | un débordement horizontal sur un très petit écran, mesuré et non gaté ; le §8.5 demande le zoom à 200 %, tenu | une boutique annonce la conformité WCAG, ou la porte navigateur le gate | |
 | CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) | |
 
-Outre le CPU (décision 1) et les deux relectures (décision 4), les décisions
-de la section 5 n'en ajoutent pas : le RPO se ferme par `v0.3.27`, l'échec
+Outre le CPU (décision 1), les deux relectures (décision 4) et la recette
+(décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO se ferme par `v0.3.27`, l'échec
 réseau temporaire est tenu par les preuves de la section 2.
 
 ## 4. Documentation du §12
@@ -217,8 +219,31 @@ qu'à éprouver le parcours de certification.
    pending-validation`, et la [mise en ligne](../operations/mise-en-ligne.md)
    d'une boutique demande les deux avant sa première vente. La décision de la
    section 6 sera un **go sous conditions** ;
-5. la **recette** se fait **pour de vrai** : en production, paiement réel,
-   par une personne extérieure (fiche, section 4).
+5. la **recette** du pilote est **tenue par les preuves** des étapes 4 à 11,
+   et la personne extérieure attend la recette de livraison de la première
+   boutique réelle, sous dérogation (section 3). Damien l'avait d'abord voulue
+   réelle, en production avec un paiement ; il l'a revue le même jour :
+   chaque scénario du modèle a déjà été joué, en test et en réel, et le
+   procès-verbal ferait signer au vendeur fictif qu'il répond de textes qui
+   ne sont pas les siens.
+
+Où chaque scénario de [recette.md](../operations/recette.md) a été joué :
+
+| Scénarios | Preuve |
+|---|---|
+| V1 à V7 : vitrine, recherche, variantes, panier, stock, livraison, case des CGV | étape 4, le §8.1 ligne par ligne, sur ordinateur et sur mobile (#9 du pilote) |
+| V8 : code promotionnel | étape 4, `CERTIF10` : la remise, la TVA calculée après elle |
+| V9, V10 : payer, l'e-mail de confirmation | étape 4 en mode test ; étape 10 en réel, `tspzkyxggc`, l'e-mail lu dans Gmail |
+| V11 : les pages du pied de page | étape 11 : les quatre pages légales complètes, sans marqueur (`pages-apres.txt`) |
+| T1, T2 : téléphone | étape 4 sur mobile ; étapes 6 et 9, l'achat complet sur Chrome Android |
+| A1 : connexion | étapes 5 et 9 : la porte de sécurité, le compteur des échecs, Turnstile en production |
+| A2 : l'alerte du commerçant | étape 4, sur le staging ; sautée en production à l'étape 10, faute de destinataire, posé depuis |
+| A3 : expédition et son e-mail | étape 4 |
+| A4 : remboursement | étape 4 depuis Stripe, partiel puis total ; étape 10 en réel, depuis l'administration |
+| A5 : export CSV | étape 4 |
+| A6, A7 : créer, épuiser, désactiver un produit | étape 4, cinq produits créés puis désactivés ; étape 10, l'article à 1 €, désactivé, sa fiche en 404 depuis `v0.3.24` |
+| A8 : modifier une page de contenu | étape 11 : les quatre textes saisis dans l'éditeur, le refus d'un texte à marqueur (`v0.3.25`) |
+| A9 : le menu du pied de page | étape 4 : les quatre pages légales ajoutées par Admin → Navigation |
 
 ## 6. Décision (point F)
 
@@ -226,15 +251,14 @@ Conditions d'un **go** :
 
 - chaque critère de la section 2 tenu, ou sous une dérogation signée à la
   section 3 ;
-- le procès-verbal de recette signé, sans anomalie bloquante ;
 - `v0.3.26` publiée (elle porte les corrections de `v0.3.25`, jamais
   taguée), le pilote monté, un nocturne vert — fait le 2026-10-25 (#37,
   `Deploy` 40236611288, nocturne 40237706569) ;
 - `v0.3.27` publiée, le pilote monté, un run de l'après-midi vert : la ligne
   RPO.
 
-Les conditions du go (section 5, décision 4), que la première boutique réelle
-tient avant sa première vente :
+Les conditions du go (section 5, décisions 4 et 5), que la première boutique
+réelle tient avant sa première vente :
 
 - ses pages légales et son parcours d'achat relus par un conseil (fiche,
   section 2) ; ce qu'il demande au socle se corrige dans le socle ;
@@ -242,7 +266,9 @@ tient avant sa première vente :
   (section 3), et `invoiceStrategy` qui en dit le résultat (ADR 0010 : sans
   elle, aucune boutique ne passe en production pour vendre) ; une facture
   numérotée ou la franchise en base, si la réponse les demande, se
-  construisent dans le socle avant cette vente.
+  construisent dans le socle avant cette vente ;
+- sa recette par une personne extérieure, avec le modèle seul, et le
+  procès-verbal signé de son commerçant, sans anomalie bloquante.
 
 Ce que la décision dit aussi : ce que devient la boutique `pilote-certif`
 (laissée fermée, rouverte avec des clés live pour vendre, ou supprimée par
@@ -253,7 +279,7 @@ dans le projet).
 | | |
 |---|---|
 | Décision | ☐ go ☐ go sous conditions ☐ no-go |
-| Conditions, s'il y en a | les deux conditions ci-dessus, tenues par la première boutique réelle avant sa première vente |
+| Conditions, s'il y en a | les trois conditions ci-dessus, tenues par la première boutique réelle avant sa première vente |
 | Date | |
 | Pour l'agence | |
 | Pour le commerçant du pilote | |
