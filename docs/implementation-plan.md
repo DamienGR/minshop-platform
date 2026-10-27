@@ -2866,9 +2866,9 @@ les tests d'exploitation et de restauration.
 
 ## 13. Après le pilote
 
-Pistes notées pendant le pilote et reportées après le MVP. Aucune n'est
-engagée : chacune demande sa propre décision, et un ADR quand elle en contredit
-un.
+Pistes notées pendant le pilote et reportées après le MVP. Chacune demande sa
+propre décision, et un ADR quand elle en contredit un ; seule la 13.2 est
+décidée et engagée.
 
 ### 13.1 Un compte Cloudflare payant mutualisé
 
@@ -2903,3 +2903,18 @@ plusieurs boutiques.
 Sources relevées le 2026-10-15 sur developers.cloudflare.com : tarifs et
 limites de Workers, limites de D1, rôles et permissions de Workers, offres de
 Cloudflare for SaaS.
+
+### 13.2 Une certification courte par boutique
+
+Notée et décidée le 2026-10-27, après la décision du jalon 10. La campagne du
+pilote a pris trois semaines parce qu'elle certifiait le socle ; une boutique
+de quelques heures, vendue quelques centaines d'euros, ne peut pas la
+rejouer. Engagée : une boutique hérite de la certification du socle tant
+qu'elle porte un tag publié au moins égal à `v0.3.28` sans diverger d'un
+fichier du socle, `shopctl certify --env production` juge en lecture seule ce
+qui lui est propre, et un fichier d'attestations consigne la recette du
+commerçant ([parcours court](certification/par-boutique.md)). La preview sur
+le compte de l'agence devient facultative : la production se construit
+directement sur le compte du client, fermée jusqu'à l'ouverture
+([ADR 0015](architecture/decisions/0015-cycle-de-vie-d-une-boutique.md),
+amendé le même jour).

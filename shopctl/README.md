@@ -67,6 +67,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl core upgrade --to <tag>` | 9 | Fusionne un tag du socle sur une branche et ouvre sa pull request. |
 | `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
 | `shopctl fleet upgrade --to <tag>` | 9 | La même mise à niveau, boutique par boutique, sans jamais déployer. |
+| `shopctl certify --env production` | après le pilote | Juge, en lecture seule, si la boutique est certifiable ; `--write` écrit le rapport. |
 
 ## `shopctl new`
 
@@ -235,8 +236,14 @@ pas le site.
 
 ## Le cycle de vie d'une boutique
 
-Quatre étapes, et la frontière entre le compte de l'agence et celui du client
-tombe entre la deuxième et la troisième
+Par défaut depuis le 2026-10-27, la boutique se construit directement en
+production sur le compte du client, fermée jusqu'à l'ouverture (mot de passe
+posé avant le premier déploiement, démonstration coupée, `noindex` tant
+qu'aucun moyen de paiement réel n'est ouvert), puis se certifie par
+`shopctl certify` ([parcours court](../docs/certification/par-boutique.md)).
+La preview privée sur le compte de l'agence est facultative. Avec elle, quatre
+étapes, et la frontière entre le compte de l'agence et celui du client tombe
+entre la deuxième et la troisième
 ([ADR 0015](../docs/architecture/decisions/0015-cycle-de-vie-d-une-boutique.md)) :
 
 | | Où | Commande |
@@ -270,6 +277,28 @@ sur celui de l'agence — le dispositif de la certification —,
 `cloudflare.productionAccountId` nomme ce second compte : les commandes
 `--env production` le visent, et `shopctl repo` le pose dans l'environnement
 GitHub `production`.
+
+## `shopctl certify`
+
+```sh
+npm run shopctl -- certify --env production            # juge, n'écrit rien
+npm run shopctl -- certify --env production --write    # et écrit le rapport
+```
+
+Le parcours court d'une boutique après le pilote
+([certification par boutique](../docs/certification/par-boutique.md)). Elle
+lit sept groupes — socle, arbre, compte, base, vitrine publique, dépôt,
+attestations — **sans rien écrire sur un compte** : `provision` en simulation,
+un `SELECT` qui masque les secrets dans la requête même, les commandes de
+lecture de `gh`. Chaque contrôle est la porte qui existe déjà ; chaque verdict
+est une fonction pure de `src/certify/judge.mjs`.
+
+Certifiable : aucun échec, rien à attester, rien de sauté. Sinon code 6, après
+le rapport. `--write` pose `client/certification/<date>/certify.json` et
+`certify.md`, versés par une pull request de la boutique, et le modèle de
+`client/certification/attestations.yaml` s'il manque. Le rapport ne porte
+aucune donnée personnelle, et les attestations refusent toute valeur qui
+contient « @ ».
 
 ## `shopctl destroy`
 

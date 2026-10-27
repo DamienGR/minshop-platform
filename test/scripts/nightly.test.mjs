@@ -63,13 +63,22 @@ describe('the nightly workflow', () => {
   });
 
   // Destroyed at the launch (ADR 0015), staging would turn the run red every
-  // night. A repository variable retires it, and the run says so.
-  it('retires the staging checks once staging is destroyed, and says so', () => {
-    const staging = workflow.slice(workflow.indexOf('  staging:'), workflow.indexOf('production-backup:'));
-    expect(staging).toMatch(/if: \$\{\{ needs\.detect\.outputs\.shop != '' && vars\.STAGING_RETIRED == '' && /);
-    const detect = workflow.slice(workflow.indexOf('  detect:'), workflow.indexOf('  staging:'));
+  // night. A repository variable retires it, and the run says so. A shop built
+  // straight on its production never had one (ADR 0015, amended 2026-10-27):
+  // the staging half runs only for a staging the shop DECLARES.
+  it('runs the staging checks only for a declared staging that is still there, and says why not', () => {
+    const staging = workflow.slice(workflow.indexOf('\n  staging:\n'), workflow.indexOf('production-backup:'));
+    expect(staging).toMatch(/if: \$\{\{ needs\.detect\.outputs\.staging == 'true' && /);
+    const detect = workflow.slice(workflow.indexOf('  detect:'), workflow.indexOf('\n  staging:\n'));
+    expect(detect).toMatch(/staging: \$\{\{ steps\.shop\.outputs\.staging \}\}/);
     expect(detect).toMatch(/STAGING_RETIRED: \$\{\{ vars\.STAGING_RETIRED \}\}/);
+    expect(detect).toMatch(/STAGING_URL: \$\{\{ vars\.STAGING_URL \}\}/);
+    expect(detect).toMatch(/manifest\.cloudflare\.stagingDomain/);
     expect(detect).toMatch(/::notice::Staging détruit/);
+    expect(detect).toMatch(/::notice::Aucun staging déclaré/);
+    // Retired wins over declared: the manifest of a launched shop still names
+    // the preview's hostname.
+    expect(detect.indexOf('STAGING_RETIRED" ]')).toBeLessThan(detect.indexOf('staging=true'));
   });
 
   it('runs the operator’s own commands rather than its own wrangler calls', () => {

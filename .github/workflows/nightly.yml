@@ -37,7 +37,10 @@
 #
 # Once staging is destroyed (`shopctl destroy --env staging`, at the launch —
 # ADR 0015), the repository variable STAGING_RETIRED — the date it went — turns
-# the staging half off, said in the run rather than red every night.
+# the staging half off, said in the run rather than red every night. A shop
+# that never had one — built straight on its production, the default since
+# 2026-10-27 — declares none (no stagingDomain, no STAGING_URL), and the run
+# says that instead.
 #
 # Each check that needs a credential runs only when its credential is
 # configured, and says so when it is skipped rather than passing silently:
@@ -53,7 +56,9 @@
 #                                 secret so it is masked (a variable, still
 #                                 accepted, is printed in clear)
 #   vars.STAGING_URL              the staging origin, when the manifest
-#                                 declares no stagingDomain (a workers.dev URL)
+#                                 declares no stagingDomain (a workers.dev URL);
+#                                 a REPOSITORY variable, which is how the run
+#                                 learns there is a staging at all
 #
 # in the `backup` environment, placed by `shopctl repo` from
 # CLOUDFLARE_API_TOKEN_BACKUP:
@@ -160,22 +165,33 @@ jobs:
     timeout-minutes: 5
     outputs:
       shop: ${{ steps.shop.outputs.slug }}
+      staging: ${{ steps.shop.outputs.staging }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      # A staging is DECLARED, never presumed: by the manifest's stagingDomain,
+      # or for one on workers.dev by the repository variable STAGING_URL. A shop
+      # built straight on its production (ADR 0015, amended 2026-10-27) has
+      # neither, and its night is the production's backup and watch, not a red
+      # staging job asking for an origin that was never meant to exist.
       - name: Read the manifest
         id: shop
         env:
           STAGING_RETIRED: ${{ vars.STAGING_RETIRED }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
         run: |
           if [ -f client/client.yaml ]; then
             slug="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.client.slug)")"
+            domain="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.cloudflare.stagingDomain ?? '')")"
             echo "slug=$slug" >> "$GITHUB_OUTPUT"
             if [ -n "$STAGING_RETIRED" ]; then
               echo "::notice::Staging détruit le $STAGING_RETIRED (variable STAGING_RETIRED) : ses contrôles ne tournent plus ; la production est sauvegardée et surveillée."
-            else
+            elif [ -n "$domain" ] || [ -n "$STAGING_URL" ]; then
+              echo "staging=true" >> "$GITHUB_OUTPUT"
               echo "Boutique : $slug — les contrôles de staging tournent."
+            else
+              echo "::notice::Aucun staging déclaré (ni cloudflare.stagingDomain, ni variable de dépôt STAGING_URL) : ses contrôles ne tournent pas ; la production est sauvegardée et surveillée."
             fi
           else
             echo "Pas de client/client.yaml : le socle n'a pas de staging à interroger."
@@ -186,7 +202,7 @@ jobs:
     # skipped one showed its expression verbatim. The shop is the repository.
     name: Staging
     needs: detect
-    if: ${{ needs.detect.outputs.shop != '' && vars.STAGING_RETIRED == '' && github.event.schedule != '17 15 * * *' }}
+    if: ${{ needs.detect.outputs.staging == 'true' && github.event.schedule != '17 15 * * *' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: staging
@@ -222,7 +238,7 @@ jobs:
           domain="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.cloudflare.stagingDomain ?? '')")"
           origin="${STAGING_URL:-${domain:+https://$domain}}"
           if [ -z "$origin" ]; then
-            echo "::error::Ni cloudflare.stagingDomain dans le manifeste, ni la variable STAGING_URL dans l'environnement staging."
+            echo "::error::Ni cloudflare.stagingDomain dans le manifeste, ni la variable de dépôt STAGING_URL."
             exit 1
           fi
           echo "url=$origin" >> "$GITHUB_OUTPUT"
