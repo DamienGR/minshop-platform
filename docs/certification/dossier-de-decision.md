@@ -30,6 +30,10 @@ Mis à jour le 2026-10-26 au soir : la production est en `v0.3.28` (montée
 légales ont montrés ; Damien a relu la documentation du §12, et répondu aux
 deux questions de la section 6.
 
+Mis à jour le 2026-10-27 : le premier run de l'après-midi, 40574601169, a
+sauvegardé la production en `v0.3.28`, et la ligne RPO est tenue (section 2).
+Il ne reste que les signatures de la section 3 et la décision de la section 6.
+
 Les sections 3 et 6 se signent sur un exemplaire gardé hors du dépôt : celui-ci
 est public par ses boutiques.
 
@@ -115,7 +119,7 @@ gratuit sous dérogation (section 5, décision 1).
 | mot de passe admin perdu | tenue | étape 8, le runbook suivi tel quel (#20) |
 | rollback Worker | tenue | étape 8 : la version précédente à 100 %, puis retour (#20) |
 | restauration complète, RTO ≤ 60 min | tenues | étape 8 : 29 min 21 s vers le compte B (#20) |
-| RPO ≤ 24 h | **à tenir par `v0.3.27`** (section 5, décision 2) | cinq nuits de suite à l'étape 8, la production chaque nuit depuis l'étape 9 ; mais GitHub lance le cron de 03:17 entre 8 et 9 h UTC, et deux archives ont été séparées de 24 h 54 sur le staging (18 → 19 octobre), 24 h 18 sur la production (24 → 25 octobre). `v0.3.27` sauvegarde la production une seconde fois, à 15:17 UTC : la ligne est tenue quand le pilote l'a prise et qu'un run de l'après-midi est vert |
+| RPO ≤ 24 h | tenue par `v0.3.27` (section 5, décision 2) | cinq nuits de suite à l'étape 8, la production chaque nuit depuis l'étape 9 ; mais GitHub lance le cron de 03:17 avec des heures de retard, et deux archives ont été séparées de 24 h 54 sur le staging (18 → 19 octobre), 24 h 18 sur la production (24 → 25 octobre). `v0.3.27` sauvegarde la production une seconde fois, à 15:17 UTC : le 2026-10-27, deux archives à 10 h 56 d'écart (09:08 et 20:04), la seconde prise par le premier run de l'après-midi, 40574601169, qui n'a lancé que la sauvegarde (#41) |
 
 ### 8.8 Conformité et validation humaine
 
@@ -155,9 +159,9 @@ Hors du §8, prévues au même §6 sans date : à dater en les signant.
 | CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) | |
 
 Outre le CPU (décision 1), les deux relectures (décision 4) et la recette
-(décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO se
-ferme par `v0.3.27`, l'échec réseau temporaire est tenu par les preuves de la
-section 2.
+(décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO est
+tenu par `v0.3.27` depuis le 2026-10-27, l'échec réseau temporaire par les
+preuves de la section 2.
 
 ## 4. Documentation du §12
 
@@ -265,7 +269,8 @@ Conditions d'un **go** :
   taguée), le pilote monté, un nocturne vert — fait le 2026-10-25 (#37,
   `Deploy` 40236611288, nocturne 40237706569) ;
 - `v0.3.27` publiée, le pilote monté, un run de l'après-midi vert : la ligne
-  RPO.
+  RPO — fait le 2026-10-27 (#40, `Deploy` 40352733778, run de l'après-midi
+  40574601169, en `v0.3.28`).
 
 Les conditions du go (section 5, décisions 4 et 5), que la première boutique
 réelle tient avant sa première vente :

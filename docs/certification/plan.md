@@ -1183,6 +1183,10 @@ recette, d'abord voulue réelle, est tenue par les preuves des étapes 4 à 11,
 qui ont joué chacun de ses scénarios ; la personne extérieure attend la
 recette de livraison de la première boutique réelle, sous dérogation (§6).
 
+Le 2026-10-27, la ligne RPO tenue : le premier run de l'après-midi
+(40574601169), lancé par GitHub à 20:03 au lieu de 15:17, n'a pris que la
+sauvegarde de la production, à 10 h 56 de celle du matin.
+
 ## 5. Livrables du jalon 10
 
 | Livrable | Produit par |
