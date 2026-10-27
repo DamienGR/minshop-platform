@@ -86,9 +86,11 @@ code 6, et chaque ligne dit quoi faire.
   l'opérateur un quart d'heure sur l'administration, et le socle les prouve.
   `--rate-limits` les ajoute.
 - **Lighthouse** passe par l'API PageSpeed Insights de Google, qui reçoit
-  l'URL publique de la boutique. Le quota anonyme est petit :
-  `PAGESPEED_API_KEY` (une clé d'API Google, gratuite) le lève. Une API qui ne
-  répond pas est un saut nommé, jamais un vert.
+  l'URL publique de la boutique. Elle demande en pratique `PAGESPEED_API_KEY`,
+  une clé d'API Google gratuite, l'API PageSpeed Insights activée : sans clé,
+  le quota est partagé par tous les appels anonymes, et il était épuisé dès le
+  premier appel le 2026-10-27, depuis deux réseaux. Une API qui ne répond pas
+  est un saut nommé, jamais un vert.
 - **La porte navigateur** demande Playwright et Chromium sur le poste
   (`npm ci`, `npx playwright install chromium`). Sans eux, elle est sautée et
   la boutique n'est pas certifiée.

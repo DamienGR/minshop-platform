@@ -73,8 +73,9 @@ export async function lighthousePages(origin, options = {}) {
  *
  * The key, when there is one, comes from PAGESPEED_API_KEY and goes in the
  * query string, which is how the API takes it; nothing here prints a URL.
- * Anonymous use has a small daily quota, and an exhausted one is an answer
- * like any other: a skip with its reason, never a pass.
+ * Anonymous calls share one quota, found spent on the first call from two
+ * networks (2026-10-27), so the key is needed in practice. An exhausted quota
+ * is an answer like any other: a skip with its reason, never a pass.
  *
  * @returns {Promise<{ document: object|null, error: string|null, hint?: string }>}
  */
