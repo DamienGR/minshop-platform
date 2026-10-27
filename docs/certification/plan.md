@@ -1119,8 +1119,11 @@ Fait avancer : jalon 7 (critère de sortie), §8.8.
   procès-verbal du §12 : chaque scénario tenu par les preuves des étapes 4 à
   11 ; la personne extérieure sous dérogation datée du 2026-10-26 (§6) ;
 - [x] documentation du §12 complète — relue par Damien le 2026-10-26 ;
-- [ ] rapports assemblés, dérogations signées ;
-- [ ] décision go/no-go (point de décision F, §11).
+- [x] rapports assemblés, dérogations acceptées — les dix de la section 3 du
+  dossier, par écrit et datées par Damien le 2026-10-27, sans signature ;
+- [x] décision go/no-go (point de décision F, §11) : **go sous conditions**,
+  le 2026-10-27, les trois conditions tenues par la première boutique réelle
+  avant sa première vente.
 
 Préparée le 2026-10-25, sans compte réel. La fiche de passage est
 [etape-11-commandes.md](etape-11-commandes.md) : ce qu'il faut remettre au
@@ -1185,7 +1188,12 @@ recette de livraison de la première boutique réelle, sous dérogation (§6).
 
 Le 2026-10-27, la ligne RPO tenue : le premier run de l'après-midi
 (40574601169), lancé par GitHub à 20:03 au lieu de 15:17, n'a pris que la
-sauvegarde de la production, à 10 h 56 de celle du matin.
+sauvegarde de la production, à 10 h 56 de celle du matin. Le même soir,
+Damien a accepté les dix dérogations par écrit, sans exemplaire signé, et
+décidé un **go sous conditions** : la relecture juridique, la validation
+comptable et la recette par une personne extérieure sont tenues par la
+première boutique réelle avant sa première vente. L'étape 11 est close, et
+avec elle le jalon 10.
 
 ## 5. Livrables du jalon 10
 

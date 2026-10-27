@@ -2450,19 +2450,22 @@ humaines — est dans le [plan de certification](certification/plan.md).
 
 #### Livrables
 
-- [ ] rapport de tests ;
-- [ ] rapport de sécurité ;
-- [ ] rapport de performance ;
-- [ ] preuve de restauration ;
-- [ ] validation TVA/facturation ;
-- [ ] checklist de lancement ;
-- [ ] documentation de support ;
-- [ ] décision go/no-go.
+- [x] rapport de tests ;
+- [x] rapport de sécurité ;
+- [x] rapport de performance ;
+- [x] preuve de restauration ;
+- [ ] validation TVA/facturation — sous dérogation, reportée à la première
+  boutique réelle, qui ne vend pas sans elle ;
+- [x] checklist de lancement ;
+- [x] documentation de support ;
+- [x] décision go/no-go — **go sous conditions**, le 2026-10-27
+  ([dossier de décision](certification/dossier-de-decision.md), section 6).
 
 #### Critère de sortie
 
-- [ ] Tous les critères de la section 8 sont satisfaits ou font l'objet d'une
-  dérogation écrite, datée et accompagnée d'une mesure compensatoire.
+- [x] Tous les critères de la section 8 sont satisfaits ou font l'objet d'une
+  dérogation écrite, datée et accompagnée d'une mesure compensatoire — les
+  dérogations acceptées par Damien le 2026-10-27 (dossier, section 3).
 
 ## 7. Organisation de la CI
 
@@ -2846,20 +2849,20 @@ les tests d'exploitation et de restauration.
 
 ## 12. Documentation obligatoire avant commercialisation
 
-- [ ] architecture et ADR ;
-- [ ] guide de création d'une boutique ;
-- [ ] guide d'import de catalogue ;
-- [ ] guide de personnalisation du thème ;
-- [ ] procédure Stripe et Resend ;
-- [ ] procédure de déploiement ;
-- [ ] procédure de sauvegarde et restauration ;
-- [ ] procédure de mise à niveau du socle ;
-- [ ] procédure d'incident et de violation de données ;
-- [ ] procédure de remboursement ;
-- [ ] procédure de départ d'un client ;
-- [ ] matrice des responsabilités agence/marchand ;
-- [ ] liste des sous-traitants techniques ;
-- [ ] modèle de recette et de procès-verbal de livraison.
+- [x] architecture et ADR ;
+- [x] guide de création d'une boutique ;
+- [x] guide d'import de catalogue ;
+- [x] guide de personnalisation du thème ;
+- [x] procédure Stripe et Resend ;
+- [x] procédure de déploiement ;
+- [x] procédure de sauvegarde et restauration ;
+- [x] procédure de mise à niveau du socle ;
+- [x] procédure d'incident et de violation de données ;
+- [x] procédure de remboursement ;
+- [x] procédure de départ d'un client ;
+- [x] matrice des responsabilités agence/marchand ;
+- [x] liste des sous-traitants techniques ;
+- [x] modèle de recette et de procès-verbal de livraison.
 
 ## 13. Après le pilote
 

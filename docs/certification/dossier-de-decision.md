@@ -32,14 +32,17 @@ deux questions de la section 6.
 
 Mis à jour le 2026-10-27 : le premier run de l'après-midi, 40574601169, a
 sauvegardé la production en `v0.3.28`, et la ligne RPO est tenue (section 2).
-Il ne reste que les signatures de la section 3 et la décision de la section 6.
+Le soir même, Damien a accepté les dix dérogations de la section 3 et décidé
+un **go sous conditions** (section 6).
 
-Les sections 3 et 6 se signent sur un exemplaire gardé hors du dépôt : celui-ci
-est public par ses boutiques.
+Les sections 3 et 6 devaient se signer sur un exemplaire gardé hors du dépôt.
+Damien les a acceptées par écrit, dans la session de l'agent, sans
+signature : le critère de sortie demande une dérogation écrite et datée, et
+ce dossier la porte.
 
 ## 1. Livrables du jalon 10
 
-| Livrable | Où | État au 2026-10-25 |
+| Livrable | Où | État au 2026-10-27 |
 |---|---|---|
 | rapport de tests | section 2 de ce dossier, d'après les étapes 3, 4, 6 et 7 | assemblé |
 | rapport de sécurité | [rapport-securite.md](rapport-securite.md) | neuf lignes tenues sur le staging, la porte distante 17/17 sur la production ; l'audit des dépendances, rouge les 24 et 25 octobre, vert de nouveau en `v0.3.26` |
@@ -48,7 +51,7 @@ est public par ses boutiques.
 | validation TVA/facturation | étape 11, section 3 de la fiche | reportée à la première boutique réelle, sous dérogation (section 3) ; le courrier et ses cinq questions sont prêts, hors du dépôt |
 | checklist de lancement | [mise-en-ligne.md](../operations/mise-en-ligne.md) | écrite à l'étape 9, complétée aux étapes 10 et 11 |
 | documentation de support | section 4 | complète en `v0.3.25`, relue par Damien le 2026-10-26 |
-| décision go/no-go | section 6 | à prendre |
+| décision go/no-go | section 6 | **go sous conditions**, le 2026-10-27 |
 
 ## 2. Critères du §8
 
@@ -133,30 +136,31 @@ gratuit sous dérogation (section 5, décision 1).
 | recette par une personne extérieure | sous dérogation (section 3) | chaque scénario de [recette.md](../operations/recette.md) joué par les étapes 4 à 11 (section 5, décision 5) ; la personne extérieure attend la recette de livraison de la première boutique réelle |
 | textes définitifs sous la responsabilité du marchand | sous dérogation (section 3) | la [matrice des responsabilités](../operations/responsabilites.md) ; le procès-verbal qui le fait confirmer au commerçant se signe à la même recette |
 
-## 3. Dérogations à signer
+## 3. Dérogations
 
 Chacune est écrite au §6 du plan, avec sa mesure compensatoire et ce qui la
-rouvre. Signer, c'est accepter le risque restant pour la commercialisation.
+rouvre. L'accepter, c'est accepter le risque restant pour la
+commercialisation : Damien l'a fait pour les dix le 2026-10-27.
 
 Sur une ligne du §8, donc exigées par le critère de sortie :
 
-| Dérogation | Écrite le | Risque restant | Se rouvre quand | Acceptée (date, signature) |
+| Dérogation | Écrite le | Risque restant | Se rouvre quand | Acceptée (date, par) |
 |---|---|---|---|---|
-| CSP : `script-src` et `style-src` (§8.4) | 2026-10-06 | un script injecté s'exécuterait ; aucune voie d'injection connue (Markdown sans HTML, échappement d'Astro) | l'inventaire des scripts en ligne est fait | |
-| achat sur Safari, iPhone (§8.5) | 2026-10-23 | un défaut propre à WebKit, de rendu ou de formulaire | un iPhone est disponible, ou la porte navigateur gagne un projet WebKit | |
-| e-mails dans Outlook et Apple Mail (§8.8) | 2026-10-25 | un rendu propre à ces messageries | la première commande réelle d'un commerçant qui lit ses alertes dans Outlook | |
-| relecture des pages légales et du consentement aux CGV (§8.8) | 2026-10-26 | un texte de commerçant non conforme, ou un point du parcours (la case, le bouton de paiement, le récapitulatif) qu'un conseil jugerait insuffisant, à reprendre dans le socle | la première boutique réelle : ses textes et son parcours relus avant sa mise en ligne | |
-| validation TVA et facturation (§8.8) | 2026-10-26 | une réponse qui demande ce que le socle n'a pas : une facture numérotée, la franchise en base, ou le reçu de la boutique comme valeur de `invoiceStrategy` | la première boutique réelle : la réponse écrite de son expert-comptable avant sa mise en ligne | |
-| recette par une personne extérieure, et son procès-verbal (§8.8) | 2026-10-26 | ce que seule une personne extérieure voit : un libellé, un chemin, un scénario qu'elle ne suit pas sans explication orale. Chaque scénario n'a été joué que par ceux qui ont construit la boutique, et l'alerte du commerçant n'a jamais été lue en production | la recette de livraison de la première boutique réelle, par son commerçant, procès-verbal signé ([mise en ligne](../operations/mise-en-ligne.md), section 6) | |
+| CSP : `script-src` et `style-src` (§8.4) | 2026-10-06 | un script injecté s'exécuterait ; aucune voie d'injection connue (Markdown sans HTML, échappement d'Astro) | l'inventaire des scripts en ligne est fait |  2026-10-27, Damien |
+| achat sur Safari, iPhone (§8.5) | 2026-10-23 | un défaut propre à WebKit, de rendu ou de formulaire | un iPhone est disponible, ou la porte navigateur gagne un projet WebKit |  2026-10-27, Damien |
+| e-mails dans Outlook et Apple Mail (§8.8) | 2026-10-25 | un rendu propre à ces messageries | la première commande réelle d'un commerçant qui lit ses alertes dans Outlook |  2026-10-27, Damien |
+| relecture des pages légales et du consentement aux CGV (§8.8) | 2026-10-26 | un texte de commerçant non conforme, ou un point du parcours (la case, le bouton de paiement, le récapitulatif) qu'un conseil jugerait insuffisant, à reprendre dans le socle | la première boutique réelle : ses textes et son parcours relus avant sa mise en ligne |  2026-10-27, Damien |
+| validation TVA et facturation (§8.8) | 2026-10-26 | une réponse qui demande ce que le socle n'a pas : une facture numérotée, la franchise en base, ou le reçu de la boutique comme valeur de `invoiceStrategy` | la première boutique réelle : la réponse écrite de son expert-comptable avant sa mise en ligne |  2026-10-27, Damien |
+| recette par une personne extérieure, et son procès-verbal (§8.8) | 2026-10-26 | ce que seule une personne extérieure voit : un libellé, un chemin, un scénario qu'elle ne suit pas sans explication orale. Chaque scénario n'a été joué que par ceux qui ont construit la boutique, et l'alerte du commerçant n'a jamais été lue en production | la recette de livraison de la première boutique réelle, par son commerçant, procès-verbal signé ([mise en ligne](../operations/mise-en-ligne.md), section 6) |  2026-10-27, Damien |
 
-Hors du §8, prévues au même §6 sans date : à dater en les signant.
+Hors du §8, prévues au même §6 sans date : datées par leur acceptation.
 
-| Dérogation | Risque restant | Se rouvre quand | Acceptée (date, signature) |
+| Dérogation | Risque restant | Se rouvre quand | Acceptée (date, par) |
 |---|---|---|---|
-| test de fumée avant promotion (§5.5, jalon 6) | une version cassée sert jusqu'au retour arrière que le test de fumée public nomme | Cloudflare ouvre les déploiements graduels à ce plan | |
-| approbation de production opposable (§9) | sans objet pour le pilote, dont les dépôts sont publics ; une boutique privée demande GitHub Pro, ou repose sur `--yes` et un seul ayant droit | une boutique en dépôt privé | |
-| critère 320 px de WCAG 1.4.10 (jalon 5) | un débordement horizontal sur un très petit écran, mesuré et non gaté ; le §8.5 demande le zoom à 200 %, tenu | une boutique annonce la conformité WCAG, ou la porte navigateur le gate | |
-| CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) | |
+| test de fumée avant promotion (§5.5, jalon 6) | une version cassée sert jusqu'au retour arrière que le test de fumée public nomme | Cloudflare ouvre les déploiements graduels à ce plan |  2026-10-27, Damien |
+| approbation de production opposable (§9) | sans objet pour le pilote, dont les dépôts sont publics ; une boutique privée demande GitHub Pro, ou repose sur `--yes` et un seul ayant droit | une boutique en dépôt privé |  2026-10-27, Damien |
+| critère 320 px de WCAG 1.4.10 (jalon 5) | un débordement horizontal sur un très petit écran, mesuré et non gaté ; le §8.5 demande le zoom à 200 %, tenu | une boutique annonce la conformité WCAG, ou la porte navigateur le gate |  2026-10-27, Damien |
+| CPU au plan gratuit de Workers (§8.6, rapport de performance ; écrite le 2026-10-25) | une boutique dont le trafic rend réguliers les dépassements de 10 ms, que la charge de vingt acheteurs n'a pas produits | la surveillance nocturne relève une invocation arrêtée (erreur 1102) |  2026-10-27, Damien |
 
 Outre le CPU (décision 1), les deux relectures (décision 4) et la recette
 (décision 5), les décisions de la section 5 n'en ajoutent pas : le RPO est
@@ -215,7 +219,7 @@ les responsabilités, les sous-traitants) ont été relus par Damien le
 **Décidé par Damien le 2026-10-25**, les trois recommandations suivies :
 
 1. le CPU reste au **plan gratuit, sous dérogation** : écrite au §6 du plan
-   et à la section 3, à signer ;
+   et à la section 3, acceptée le 2026-10-27 ;
 2. le RPO est tenu par **un second déclenchement** : `v0.3.27` sauvegarde la
    production une seconde fois chaque jour, à 15:17 UTC, et ne lance rien
    d'autre à cette heure-là ;
@@ -263,8 +267,8 @@ Où chaque scénario de [recette.md](../operations/recette.md) a été joué :
 
 Conditions d'un **go** :
 
-- chaque critère de la section 2 tenu, ou sous une dérogation signée à la
-  section 3 ;
+- chaque critère de la section 2 tenu, ou sous une dérogation acceptée à la
+  section 3 — fait le 2026-10-27 ;
 - `v0.3.26` publiée (elle porte les corrections de `v0.3.25`, jamais
   taguée), le pilote monté, un nocturne vert — fait le 2026-10-25 (#37,
   `Deploy` 40236611288, nocturne 40237706569) ;
@@ -298,8 +302,12 @@ Ce que la décision dit aussi, répondu par Damien le 2026-10-26 :
 
 | | |
 |---|---|
-| Décision | ☐ go ☐ go sous conditions ☐ no-go |
+| Décision | **go sous conditions** |
 | Conditions, s'il y en a | les trois conditions ci-dessus, tenues par la première boutique réelle avant sa première vente |
-| Date | |
-| Pour l'agence | |
-| Pour le commerçant du pilote | |
+| Date | 2026-10-27, 21:02 UTC |
+| Pour l'agence | Damien, par écrit dans la session de l'agent, sans signature |
+| Pour le commerçant du pilote | sans objet : le vendeur du pilote est fictif |
+
+La commercialisation peut commencer : la première boutique réelle se
+construit, et ne vend qu'une fois les trois conditions tenues, ce que sa
+[mise en ligne](../operations/mise-en-ligne.md) demande case par case.
