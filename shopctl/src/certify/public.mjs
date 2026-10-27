@@ -73,8 +73,9 @@ export async function lighthousePages(origin, options = {}) {
  *
  * The key, when there is one, comes from PAGESPEED_API_KEY and goes in the
  * query string, which is how the API takes it; nothing here prints a URL.
- * Anonymous use has a small daily quota, and an exhausted one is an answer
- * like any other: a skip with its reason, never a pass.
+ * Anonymous calls share one quota, found spent on the first call from two
+ * networks (2026-10-27), so the key is needed in practice. An exhausted quota
+ * is an answer like any other: a skip with its reason, never a pass.
  *
  * @returns {Promise<{ document: object|null, error: string|null, hint?: string }>}
  */
@@ -166,7 +167,23 @@ export async function runBrowserGate(root, origin, { run = spawnAsync, env = pro
     .map((key) => `${counts[key]} ${{ passed: 'passé(s)', failed: 'en échec', flaky: 'instable(s)', skipped: 'sauté(s) avec leur raison' }[key]}`)
     .join(', ');
   if (result.status === 0) return { status: 'ok', message: `porte navigateur distante : ${said || 'verte'}` };
-  return { status: 'fail', message: `porte navigateur distante : ${said || `sortie ${result.status}`}.`, hint: lastLines(output) };
+  const failed = failedTests(output);
+  return {
+    status: 'fail',
+    message: `porte navigateur distante : ${said || `sortie ${result.status}`}.`,
+    hint: failed.length
+      ? [...failed, `Le détail : BASE_URL=${origin} npm run test:browser:remote`].join('\n    ')
+      : lastLines(output),
+  };
+}
+
+/** The failed tests as Playwright's closing summary lists them,
+ *  `[project] › file:line:col › title ───`: the last lines of its output are
+ *  the counts, which say how many failed but not which. */
+function failedTests(output, count = 6) {
+  const titles = [...output.matchAll(/^[ \t]*\[([\w-]+)\] › (\S+?):\d+:\d+ › (.+?)[ \t─]*$/gm)]
+    .map(([, project, file, title]) => `[${project}] ${title} (${file})`);
+  return [...new Set(titles)].slice(0, count);
 }
 
 function lastLines(text, count = 6) {

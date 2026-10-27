@@ -105,7 +105,8 @@ de la recette (docs/certification/par-boutique.md).
 
 Lit le compte par wrangler, le dépôt par gh, et mesure quatre pages avec
 l'API PageSpeed Insights de Google (l'URL publique de la boutique lui est
-envoyée ; PAGESPEED_API_KEY lève le quota anonyme). Aucune donnée personnelle
+envoyée ; PAGESPEED_API_KEY est nécessaire en pratique, le quota anonyme
+étant épuisé). Aucune donnée personnelle
 dans le rapport : les secrets, le mot de passe et le destinataire des alertes
 sont lus masqués, l'expéditeur réduit à son domaine.
 

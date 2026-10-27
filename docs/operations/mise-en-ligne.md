@@ -180,9 +180,13 @@ la clé ; `Production error rate and quotas` vert ; « Aucun staging déclaré �
 en avis, sans preview.
 
 Puis, depuis la session qui a provisionné la production (section 2), `gh`
-authentifié :
+authentifié. La porte navigateur demande Chromium sur le poste, et Lighthouse
+une clé d'API Google (gratuite, l'API PageSpeed Insights activée) : sans elle,
+le quota anonyme est épuisé et les quatre mesures sont sautées.
 
 ```sh
+npx playwright install chromium        # une fois par poste
+read -rs PAGESPEED_API_KEY && export PAGESPEED_API_KEY
 npm run shopctl -- certify --env production
 ```
 
