@@ -26,6 +26,7 @@ npm run shopctl -- destroy --env staging --confirm <slug>
 npm run shopctl -- privacy export --env production --email <adresse>
 npm run shopctl -- privacy anonymize --env production --email <adresse> --confirm <slug>
 npm run shopctl -- monitor --env production   # taux d'erreur, quotas du plan gratuit
+npm run shopctl -- certify --env production --write   # certification de la boutique, lecture seule
 npm run shopctl -- core status          # quelle version cette boutique porte
 npm run shopctl -- core upgrade --to v1.1.0 --open-pr
 npm run shopctl -- fleet status         # depuis l'espace de travail de l'agence
@@ -119,7 +120,10 @@ its local simulator, and the dashboard's Empty Bucket for the keys nobody
 printed (wrangler 4 lists no object: a nightly archive, an image uploaded
 through the admin). Destroying staging tells the operator to set the repository
 variable `STAGING_RETIRED`, which turns the Nightly's staging half off rather
-than leaving it red every night. It also removes the sessions KV namespace, which nothing
+than leaving it red every night. A shop built straight on its production (the
+default since ADR 0015's amendment of 2026-10-27) never had one: the Nightly
+runs its staging half only for a DECLARED staging — `stagingDomain`, or the
+repository variable `STAGING_URL`. It also removes the sessions KV namespace, which nothing
 in the tree names: the Astro adapter binds `SESSION` in the built
 configuration and wrangler provisions it at the first deploy as
 `<worker>-session`, so `destroy` looks it up on the account by that title.
@@ -205,7 +209,10 @@ Tests: `test/scripts/shopctl.test.mjs` (creation), `repo.test.mjs` (forge),
 `provision.test.mjs`, `deploy.test.mjs` and `destroy.test.mjs` (account,
 environment, deployment, teardown), `nightly.test.mjs` (the nightly workflow
 as text), `monitor.test.mjs` (the supervision,
-against `test/fixtures/graphql-double.mjs` in its own process), `backup.test.mjs` and `restore.test.mjs`
+against `test/fixtures/graphql-double.mjs` in its own process), `certify.test.mjs` (the
+short certification: every verdict pure, the masked settings read on the real
+migrations, the forge through the gh double, the public pages and PageSpeed
+Insights against a server in the test's own process), `backup.test.mjs` and `restore.test.mjs`
 (the archive and the round trip), `privacy.test.mjs` (the map, the erasure and
 the second buyer who must not be touched), run by `npm test` and `npm run verify`. The first builds a real core from this repository's index,
 tags it, and runs the real binary against it. The last two install
@@ -236,3 +243,30 @@ per isolate —, and treats an unreachable or
 refusing API as exit 5 — never as a quiet night. The endpoint follows
 `CLOUDFLARE_API_BASE_URL`, the variable wrangler honours, which is how the
 suite points it at its double.
+
+## Certifying one shop
+
+`shopctl certify --env production` is the short certification
+(`docs/certification/par-boutique.md`): the pilot's campaign certified the
+CORE, and a shop inherits it while it carries a published core tag at or above
+`CERTIFIED_FLOOR` (`shopctl/src/certify/judge.mjs`) and diverges from no core
+file it has not declared — never from payment, stock, auth, secrets or the
+schema (`SENSITIVE_CORE`). What is proper to the shop is read in seven groups,
+READ-ONLY on every account: `core status`'s state, the tree gates and
+`check:secrets --history`, `provision --dry-run --json` run in-process with a
+silent reporter, one `SELECT` on the production settings that masks secrets,
+the password hash and the alert recipient IN SQL (`SETTINGS_SQL`), the public
+pages, the remote security and browser gates (spawned asynchronously: a
+`spawnSync` would deadlock on an origin the same process serves), Lighthouse
+through the PageSpeed Insights API (`PAGESPEED_API_URL` overrides it like
+`CLOUDFLARE_API_BASE_URL` does for `monitor`), the forge through `gh`'s read
+commands, and `client/certification/attestations.yaml`, a closed schema read
+by the manifest's own YAML reader that refuses any `@`.
+
+Every verdict is a pure function in `judge.mjs`; the command only reads. A
+group that cannot be asked (gh absent, an account refused) is a `skip` with
+its reason, and the next group runs. Certified means no `fail`, no `todo`, no
+`skip`; otherwise exit 6, after the document. `--write` puts
+`client/certification/<date>/certify.{json,md}` in the shop's tree — committed,
+so every line goes through `redact()` and an address mask on the way out — and
+the attestations template when there is none.

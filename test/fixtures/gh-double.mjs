@@ -22,8 +22,11 @@
  *   config          { git_protocol }        what `gh config get` answers
  *   hosts           { host: { git_protocol } }  what `gh config get --host` answers
  *                                           first, as `gh auth login` writes it
- *   repos           { "owner/name": { visibility, environments, secrets, pulls } }
+ *   repos           { "owner/name": { visibility, environments, secrets, pulls, runs } }
  *                   an environment: { secrets, reviewers, branchPolicy, branches }
+ *                   `secrets` at the top: the repository's own, outside any environment
+ *                   a run: { databaseId, workflow, createdAt, status, conclusion, headSha, jobs }
+ *                   a job: { name, status, conclusion, completedAt, steps: [{ name, conclusion }] }
  *   users           { login: id }
  *   refuseReviewers boolean                 the free-plan private-repo refusal
  *   calls           [{ argv, stdin }]       appended to on every invocation
@@ -154,6 +157,24 @@ if (argv[0] === 'api') {
     }
   }
 
+  // One environment, read: the shape GitHub gives it, protection rules and
+  // branch policy included, from what the PUT above stored.
+  const environmentGet = path?.match(/^repos\/([^/]+\/[^/]+)\/environments\/([^/]+)$/);
+  if (environmentGet && method === 'GET') {
+    const [, name, environment] = environmentGet;
+    const target = state.repos[name]?.environments?.[environment];
+    if (!target) fail('gh: Not Found (HTTP 404)');
+    const reviewers = Array.from({ length: target.reviewers ?? 0 }, (_, index) => ({ type: 'User', reviewer: { id: index + 1 } }));
+    done(JSON.stringify({
+      name: environment,
+      protection_rules: [
+        ...(reviewers.length > 0 ? [{ type: 'required_reviewers', reviewers }] : []),
+        ...(target.branchPolicy ? [{ type: 'branch_policy' }] : []),
+      ],
+      deployment_branch_policy: target.branchPolicy ?? null,
+    }));
+  }
+
   const environmentPut = path?.match(/^repos\/([^/]+\/[^/]+)\/environments\/(.+)$/);
   if (environmentPut && method === 'PUT') {
     const [, name, environment] = environmentPut;
@@ -186,7 +207,8 @@ if (argv[0] === 'secret' && argv[1] === 'list') {
   const repo = state.repos[flag('--repo')];
   const environment = flag('--env');
   if (!repo) fail('gh: Not Found (HTTP 404)');
-  const secrets = repo.environments?.[environment]?.secrets ?? {};
+  // Without --env, the repository's own secrets, as the real gh lists them.
+  const secrets = environment ? repo.environments?.[environment]?.secrets ?? {} : repo.secrets ?? {};
   if (has('--json')) done(JSON.stringify(Object.keys(secrets).map((name) => ({ name }))));
   done(Object.keys(secrets).map((name) => `${name}\t2026-08-31`).join('\n'));
 }
@@ -203,6 +225,28 @@ if (argv[0] === 'secret' && argv[1] === 'set') {
   // and the reason this command is wrapped rather than reimplemented.
   repo.environments[environment].secrets[name] = stdin.trim();
   done(`✓ Set Actions secret ${name} for ${flag('--repo')}`);
+}
+
+/**
+ * Workflow runs, and the jobs of one: what `certify` reads of the Deploy and
+ * Nightly workflows. Listed newest first by the caller, so they are stored
+ * here in any order — the real list's order is not a promise either.
+ */
+if (argv[0] === 'run' && argv[1] === 'list') {
+  const repo = state.repos[flag('--repo')];
+  if (!repo) fail('gh: Not Found (HTTP 404)');
+  const workflow = flag('--workflow');
+  const limit = Number(flag('--limit') ?? 20);
+  const runs = (repo.runs ?? []).filter((run) => !workflow || run.workflow === workflow).slice(0, limit);
+  done(JSON.stringify(runs.map(({ jobs: _jobs, workflow: _workflow, ...run }) => run)));
+}
+
+if (argv[0] === 'run' && argv[1] === 'view') {
+  const repo = state.repos[flag('--repo')];
+  if (!repo) fail('gh: Not Found (HTTP 404)');
+  const run = (repo.runs ?? []).find((entry) => String(entry.databaseId) === argv[2]);
+  if (!run) fail(`could not find any workflow run with ID ${argv[2]}`);
+  done(JSON.stringify({ jobs: run.jobs ?? [] }));
 }
 
 /**

@@ -6,9 +6,14 @@ quel ordre, et qui fait quoi. Les critères eux-mêmes restent ceux du
 [plan d'implémentation](../implementation-plan.md) (§8, §9, jalon 10) ; ce
 document ne les redéfinit pas, il les ordonne.
 
-Il est écrit pour être rejoué : la même campagne certifie le pilote, puis
-chaque nouvelle boutique (plan §1, « une campagne de certification réutilisable
-pour chaque nouvelle boutique »).
+Il était écrit pour être rejoué par chaque nouvelle boutique (plan §1, « une
+campagne de certification réutilisable pour chaque nouvelle boutique »). La
+campagne a certifié le socle, et c'est ce coût-là qui ne se rejoue pas :
+depuis le 2026-10-27, une boutique après le pilote suit le
+[parcours court](par-boutique.md) — hériter d'un socle certifié,
+`shopctl certify`, et les attestations de sa recette. La campagne complète ne
+revient que pour une boutique qui modifie le paiement, le stock,
+l'authentification ou le schéma du socle.
 
 ## 1. Point de départ
 
