@@ -326,6 +326,32 @@ describe('the remote gates', () => {
     expect(await runBrowserGate(root, 'https://atelier-durand.fr', { run: missing })).toMatchObject({ status: 'skip', hint: expect.stringContaining('playwright install') });
     const green = async () => ({ status: 0, stdout: '  52 passed (1.2m)\n  9 skipped\n', stderr: '' });
     expect(await runBrowserGate(root, 'https://atelier-durand.fr', { run: green })).toMatchObject({ status: 'ok', message: expect.stringContaining('52 passé(s)') });
+
+    // Playwright's closing summary, as the pilot's production printed it: the
+    // hint names the failed tests, not the counts the message already gives.
+    const red = async () => ({
+      status: 1,
+      stdout: [
+        '  1) [desktop] › test/browser/a11y.spec.mjs:52:1 › le panier garni n’a aucune violation WCAG A/AA ──',
+        '',
+        '    Error: expect(locator).toBeVisible() failed',
+        '',
+        '  2 failed',
+        '    [desktop] › test/browser/a11y.spec.mjs:52:1 › le panier garni n’a aucune violation WCAG A/AA ───',
+        '    [phone] › test/browser/a11y.spec.mjs:52:1 › le panier garni n’a aucune violation WCAG A/AA ─────',
+        '  19 skipped',
+        '  81 passed (3.5m)',
+        '',
+      ].join('\n'),
+      stderr: '',
+    });
+    const failed = await runBrowserGate(root, 'https://atelier-durand.fr', { run: red });
+    expect(failed).toMatchObject({ status: 'fail', message: 'porte navigateur distante : 81 passé(s), 2 en échec, 19 sauté(s) avec leur raison.' });
+    expect(failed.hint.split('\n    ')).toEqual([
+      '[desktop] le panier garni n’a aucune violation WCAG A/AA (test/browser/a11y.spec.mjs)',
+      '[phone] le panier garni n’a aucune violation WCAG A/AA (test/browser/a11y.spec.mjs)',
+      'Le détail : BASE_URL=https://atelier-durand.fr npm run test:browser:remote',
+    ]);
   });
 });
 

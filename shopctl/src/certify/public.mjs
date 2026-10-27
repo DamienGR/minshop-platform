@@ -166,7 +166,23 @@ export async function runBrowserGate(root, origin, { run = spawnAsync, env = pro
     .map((key) => `${counts[key]} ${{ passed: 'passé(s)', failed: 'en échec', flaky: 'instable(s)', skipped: 'sauté(s) avec leur raison' }[key]}`)
     .join(', ');
   if (result.status === 0) return { status: 'ok', message: `porte navigateur distante : ${said || 'verte'}` };
-  return { status: 'fail', message: `porte navigateur distante : ${said || `sortie ${result.status}`}.`, hint: lastLines(output) };
+  const failed = failedTests(output);
+  return {
+    status: 'fail',
+    message: `porte navigateur distante : ${said || `sortie ${result.status}`}.`,
+    hint: failed.length
+      ? [...failed, `Le détail : BASE_URL=${origin} npm run test:browser:remote`].join('\n    ')
+      : lastLines(output),
+  };
+}
+
+/** The failed tests as Playwright's closing summary lists them,
+ *  `[project] › file:line:col › title ───`: the last lines of its output are
+ *  the counts, which say how many failed but not which. */
+function failedTests(output, count = 6) {
+  const titles = [...output.matchAll(/^[ \t]*\[([\w-]+)\] › (\S+?):\d+:\d+ › (.+?)[ \t─]*$/gm)]
+    .map(([, project, file, title]) => `[${project}] ${title} (${file})`);
+  return [...new Set(titles)].slice(0, count);
 }
 
 function lastLines(text, count = 6) {
