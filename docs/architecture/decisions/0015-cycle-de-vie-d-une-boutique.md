@@ -1,6 +1,8 @@
 # ADR 0015 — Cycle de vie d'une boutique, de la construction à la livraison
 
-- **Statut** : Accepté ; amendé le 2026-10-27 (la preview devient facultative)
+- **Statut** : Accepté ; amendé le 2026-10-27 (la preview devient facultative) ;
+  frontière entre les comptes remplacée par
+  l'[ADR 0019](0019-compte-cloudflare-mutualise.md)
 - **Date** : 2026-08-31
 - **Jalon** : 6
 

@@ -81,9 +81,30 @@ describe('the nightly workflow', () => {
     expect(detect.indexOf('STAGING_RETIRED" ]')).toBeLessThan(detect.indexOf('staging=true'));
   });
 
+  // On the shared account (ADR 0019) the shop's repository holds no Cloudflare
+  // token: the fleet's Nightly backs production up and watches it, and every
+  // step here that needs a token stands aside, said once.
+  it('leaves the account to the fleet when MINSHOP_FLEET names one', () => {
+    for (const job of ['production-backup', 'production-watch']) {
+      const body = workflow.slice(workflow.indexOf(`  ${job}:`));
+      expect(body.match(/^ {4}if: (.*)$/m)[1], job).toContain("vars.MINSHOP_FLEET == ''");
+    }
+    const staging = workflow.slice(workflow.indexOf('\n  staging:\n'), workflow.indexOf('production-backup:'));
+    const step = (name) => staging.slice(staging.indexOf(`- name: ${name}`)).split('\n      - name:')[0];
+    expect(step('Back up staging')).toMatch(/if: \$\{\{ vars\.MINSHOP_FLEET == '' \}\}/);
+    expect(step('Error rate and quotas')).toMatch(/vars\.MINSHOP_FLEET == ''/);
+    // The restore follows the backup's outcome, skipped with it.
+    expect(step('Restore it into a throwaway database')).toMatch(/steps\.backup\.outcome == 'success'/);
+    expect(step('Leave the account to the fleet')).toMatch(/if: \$\{\{ vars\.MINSHOP_FLEET != '' \}\}/);
+    // The remote gates need no Cloudflare token, and keep running.
+    expect(step('Remote security gate')).not.toMatch(/MINSHOP_FLEET/);
+  });
+
   it('runs the operator’s own commands rather than its own wrangler calls', () => {
     expect(workflow).toMatch(/shopctl\.mjs backup --env staging --upload/);
-    expect(workflow).toMatch(/shopctl\.mjs restore --env staging --from "\$ARCHIVE" --local/);
+    // The pull before the restore: an uploaded archive leaves in the pool the
+    // media it did not re-read, and the drill restores those too.
+    expect(workflow).toMatch(/shopctl\.mjs backup pull "\$ARCHIVE" --env staging --json \| tee pull\.json\n\s+node shopctl\/bin\/shopctl\.mjs restore --env staging --from "\$ARCHIVE" --local/);
     expect(workflow).toMatch(/shopctl\.mjs monitor --env staging/);
     expect(workflow).not.toMatch(/wrangler (deploy|d1|r2|secret)/);
   });
@@ -91,6 +112,7 @@ describe('the nightly workflow', () => {
   it('reads each command’s exit status and not the pipe’s', () => {
     const piped = runs.filter((body) => body.includes('| tee'));
     expect(piped).toHaveLength(6);
+    expect(runs.filter((body) => (body.match(/\| tee/g) ?? []).length > 1)).toHaveLength(1);
     for (const body of piped) expect(body).toContain('set -euo pipefail');
   });
 

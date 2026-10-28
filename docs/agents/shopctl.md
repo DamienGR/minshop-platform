@@ -82,6 +82,89 @@ Access that is how a fresh shop is tried, on a public production it is an order
 form that takes no payment, from the first deploy until Stripe is configured.
 Once installed, the setting is the merchant's and a re-run leaves it alone.
 
+On the shared account of ADR 0019 a resource's name no longer proves whose it
+is: two shops that derive the same names find each other's database, and
+`provision` adopts a database by its name. So the database carries a MARKER
+(`shopctl/src/owner.mjs`): one row in `_minshop_owner`, the repository —
+`origin` as configured, `owner/repo` lowercased — and the slug. `provision`
+writes it as soon as the database exists, completes it once the tree has an
+`origin`, and claims an unmarked database (every one provisioned before the
+ADR, on its merchant's own account). Every other command that finds the
+database by name — `deploy`, `destroy`, `restore`, and through
+`openEnvironment()` `backup`, `privacy`, `admin` and `certify` — reads the
+marker before anything else and refuses one naming another repository or
+another slug, or naming a repository a tree with no `origin` cannot prove it
+is (exit 4); an unmarked database is a warning. The way out is `provision
+--claim <slug>`, the slug typed: a repository renamed or transferred is the
+case it exists for. The marker is never backed up, never restored and never
+exported, so an archive of one shop restored into another leaves the target's
+own. `fleet status` / `fleet verify` add the other half: two shops of the
+registry whose manifests claim one name — a `workerName`, a database, a
+hostname — fail both, since the registry's slug check cannot see two slugs
+deriving the same resources. `shopctl new` asks the same question before it
+clones, of the `fleet.json` found walking up from where it runs: a slug the
+registry lists (cloned here or not), or a name a registered manifest already
+derives, is refused (exit 3); an unreadable registry is a warning, left to
+`fleet verify`.
+
+No Cloudflare token can be limited to one shop's database, so on the shared
+account the tokens live in ONE repository, the fleet's — the directory of
+`fleet.json` — and no shop's repository holds any
+(`shopctl/src/commands/fleet-repository.mjs`). `fleet init` renders its
+workflows from `shopctl/templates/fleet/`: a Deploy that checks out the shop a
+registry entry's `repository` names and runs that shop's own `provision` and
+`deploy`, and a Nightly matrix (backups one shop at a time, for the account's
+API limit) of `backup`, `backup verify` and `monitor` at the account's plan. Both refuse a
+shop below `FLEET_MINIMUM_CORE` (`shopctl/src/fleet.mjs`), the first core that
+marks its database. `fleet repo` is `repo` for that repository: public by
+default (GitHub Free has environment secrets on a public repository only), the
+account read from the managed shops' manifests, which must agree. `repo --fleet
+<owner/repo>` is the shop's half: the variable `MINSHOP_FLEET`, no environment,
+leftover Cloudflare secrets named with the `gh secret delete` that removes them
+— never deleted. The core's own `deploy.yml` refuses to run, and `nightly.yml`
+skips every step that needs a token, once that variable is set; `certify`
+judges such a shop from the fleet repository (its environments, its secrets,
+the shop's `fleet.json` line and matrix jobs) plus the absence of any token in
+the shop's own.
+
+`fleet usage` (`shopctl/src/commands/fleet-usage.mjs`) is the account's
+`monitor`: on Workers Paid every included volume is the ACCOUNT's, so no shop
+can be judged against one. One GraphQL request (`shopctl/src/analytics.mjs`,
+shared with `monitor`) reads the month so far — Workers requests and CPU, D1
+rows and storage, R2 operations by class and storage, KV operations — and
+`projectBill()` projects flows linearly and takes stocks as they stand, priced
+from `PAID_PLAN` (relevé du 2026-10-28; a price change is an edit there and in
+its test). SaaS hostnames have no dataset: one per production Worker invoked,
+an estimate on the safe side. It fails (6) past `--budget`, or when the
+account carries `ACCOUNT_LIMITS.target` (200) Workers — the day to open the
+next account, before the ceiling of 250 crons. A volume past what is included
+is reported, never failed: it is billed, not blocked. The fleet Nightly runs it
+once a night with the first shop's shopctl and `vars.MINSHOP_MONTHLY_BUDGET`.
+`--plan free` is an account starting with one or two very small shops: no bill,
+but the free plan's DAILY quotas are the account's, so it sums the shops of the
+busiest UTC day (`summariseFreeUsage`) and judges them at `monitor`'s 70 %
+(`FREE_PLAN`, `THRESHOLDS`), plus stopped invocations, D1 sizes and the five
+crons (`ACCOUNT_LIMITS.free`). The fleet Nightly takes the plan from
+`vars.MINSHOP_ACCOUNT_PLAN`, `paid` when unset, and passes it to `monitor` too.
+
+A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
+ADR 0019) has one resource wrangler does not cover: the merchant's domain as a
+custom hostname of that zone. `shopctl/src/saas.mjs` speaks to the Cloudflare
+API for it, with `CLOUDFLARE_API_TOKEN` (« Zone : Read » and « SSL and
+Certificates : Edit » on the zone) and never a `wrangler login` session.
+`provision` creates it — HTTP validation, TLS 1.2 at least — before the
+merchant's CNAME exists, and prints the one line to send them (`CNAME <domain>
+→ <fallback origin>`); `deploy` refuses a hostname that is missing, or still
+pending unless `--skip-smoke` (or `--url`) says the smoke test is not aimed at
+it — the first deploy of a shop whose domain switches at launch; `destroy`
+deletes it after the Worker, and refuses to start without the token rather than
+leave a hostname behind. The zone's fallback origin is set once, by hand: a
+proxied `AAAA 100::` record named in SSL/TLS → Custom Hostnames, which
+`provision` reads and warns about. Routing several hostnames of one zone to
+several Workers is what the real trial of the plan's lot 3 has to prove before
+a shop depends on it; until then the fallback is the merchant's zone on the
+shared account, with no `saasZone`.
+
 `admin password` writes the administration's password hash into an
 environment's database: read from STDIN (typed twice without echo, or a file),
 hashed by the shop's own `src/features/auth/password.ts` in a child Node with

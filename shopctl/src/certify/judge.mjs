@@ -16,6 +16,7 @@
  * diverges from no core file it has not named.
  */
 import { compareVersions } from '../version.mjs';
+import { FLEET_FILE } from '../fleet.mjs';
 
 /** The oldest core version a shop may be certified on: the pilot's campaign
  *  closed on it (2026-10-27). Raised only for a security fix. */
@@ -166,6 +167,13 @@ export function judgeAccount(result, workerSecrets, required) {
   } else {
     findings.push(ok(`base et buckets présents (${(result.steps ?? []).length} ressources)`));
   }
+  // A dry run that found a FOREIGN marker refused before writing its document,
+  // so what reaches here is own or unmarked (ADR 0019).
+  if (result.owner?.verdict === 'own') {
+    findings.push(ok(`base marquée pour cette boutique${result.owner.repository ? ` (${result.owner.repository})` : ''}`));
+  } else if (result.owner?.verdict === 'unmarked' && missing.length === 0) {
+    findings.push(warn('la base ne porte pas le marqueur de sa boutique (ADR 0019).', '`shopctl provision --env production` le pose.'));
+  }
   for (const check of result.jurisdictionChecks ?? []) {
     if (check.ok === false) findings.push(fail(`${check.resource} hors de la juridiction ${check.expected}.`, 'Une juridiction ne se change pas (ADR 0004).'));
     else if (check.ok === null) findings.push(warn(`${check.resource} : juridiction non publiée par l'API, à confirmer dans le tableau de bord.`));
@@ -179,11 +187,29 @@ export function judgeAccount(result, workerSecrets, required) {
     else if (exposure.public) findings.push(fail(`le bucket des ${label} est public (${exposure.devUrl ?? exposure.domains.join(', ')}).`, 'Coupez l\'URL r2.dev et détachez le domaine.'));
     else findings.push(ok(`bucket des ${label} privé`));
   }
+  // Served through the SaaS zone (ADR 0019): the domain reaches the shop only
+  // once the merchant's CNAME is in and the certificate issued.
+  if (result.hostname) {
+    const { hostname } = result;
+    if (hostname.action === null) findings.push(warn(`${hostname.hostname} : nom d'hôte non vérifié, CLOUDFLARE_API_TOKEN absent.`));
+    else if (hostname.active) findings.push(ok(`${hostname.hostname} servi par la zone ${hostname.zone}, certificat actif`));
+    else {
+      findings.push(fail(
+        `${hostname.hostname} n'est pas actif sur la zone ${hostname.zone} (état ${hostname.status ?? 'absent'}, certificat ${hostname.ssl ?? 'absent'}).`,
+        `CNAME ${hostname.hostname} → ${hostname.cname ?? `l'origine de repli de ${hostname.zone}`} chez le registrar du commerçant, puis \`shopctl provision --env production\`.`,
+      ));
+    }
+  }
   if (result.exposure?.images?.devUrl && (result.exposure.images.domains ?? []).length === 0) {
     findings.push(warn('les images sont servies par une URL r2.dev, qui n\'est pas un domaine de production.'));
   }
   if (result.retention?.action !== 'keep') {
-    findings.push(warn('règle de conservation des sauvegardes absente ou illisible.', '`shopctl provision --env production` la pose.'));
+    findings.push(warn(
+      result.retention?.action === 'update'
+        ? 'règle de conservation des sauvegardes antérieure à v0.3.32 : le pool de médias ne peut pas servir.'
+        : 'règles de conservation des sauvegardes absentes ou illisibles.',
+      '`shopctl provision --env production` les pose : archives à 90 jours par leur préfixe, pool de médias à 180.',
+    ));
   }
   if (workerSecrets === null) {
     findings.push(fail(`le Worker ${result.resources?.worker ?? 'de production'} n'est pas déployé.`));
@@ -352,20 +378,43 @@ export function judgeLighthouse(label, document) {
 export function judgeForge(read, { slug, head, now }) {
   const findings = [];
   const environmentSecrets = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SHOPCTL_BACKUP_KEY'];
+  // On the shared account (ADR 0019) everything below is read from the fleet
+  // repository, and the commands that set it up are the fleet's.
+  const fleet = read.fleet ?? null;
+  const setup = fleet ? 'shopctl fleet repo' : 'shopctl repo';
+  if (fleet) {
+    findings.push(ok(`déployée par le dépôt de flotte ${fleet.repository}`));
+    const listed = fleet.entry?.repository;
+    if (fleet.registry !== 'read') {
+      findings.push(fail(`${FLEET_FILE} de ${fleet.repository} ${fleet.registry === 'absent' ? 'introuvable' : 'illisible'} : la flotte ne sait pas déployer ${slug}.`, '`shopctl fleet init`, puis committez et poussez le dépôt de flotte.'));
+    } else if (!fleet.entry) {
+      findings.push(fail(`${slug} n'est pas inscrite dans le ${FLEET_FILE} de ${fleet.repository}.`, `Ajoutez { "slug": "${slug}", "path": "…", "repository": "${fleet.shop}" }, committez et poussez.`));
+    } else if (!listed || listed.toLowerCase() !== fleet.shop.toLowerCase()) {
+      findings.push(fail(`le ${FLEET_FILE} de ${fleet.repository} inscrit ${slug} ${listed ? `avec le dépôt ${listed}` : 'sans dépôt'}, pas ${fleet.shop}.`, `"repository": "${fleet.shop}".`));
+    } else {
+      findings.push(ok(`inscrite dans le ${FLEET_FILE} de ${fleet.repository}`));
+    }
+    findings.push(fleet.leftovers.length > 0
+      ? fail(
+        `le dépôt de la boutique porte encore ${fleet.leftovers.map((entry) => `${entry.name}${entry.env ? ` (${entry.env})` : ''}`).join(', ')} : un jeton du compte mutualisé ouvre toutes les boutiques.`,
+        fleet.leftovers.map((entry) => `gh secret delete ${entry.name}${entry.env ? ` --env ${entry.env}` : ''} --repo ${fleet.shop}`).join(' ; '),
+      )
+      : ok('aucun secret Cloudflare dans le dépôt de la boutique'));
+  }
 
   const production = read.environments.production;
   if (!production) {
-    findings.push(fail('pas d\'environnement production sur le dépôt.', '`shopctl repo` le crée, avec ses secrets.'));
+    findings.push(fail('pas d\'environnement production sur le dépôt.', `\`${setup}\` le crée, avec ses secrets.`));
   } else {
     findings.push(production.reviewers > 0
       ? ok(`environnement production : ${plural(production.reviewers, 'relecteur')} obligatoire${production.reviewers > 1 ? 's' : ''}`)
-      : warn('environnement production sans relecteur obligatoire : un déploiement de production part sans approbation.', '`shopctl repo --reviewer <login>`.'));
+      : warn('environnement production sans relecteur obligatoire : un déploiement de production part sans approbation.', `\`${setup} --reviewer <login>\`.`));
   }
   const backup = read.environments.backup;
   if (!backup) {
-    findings.push(fail('pas d\'environnement backup : la production n\'est pas sauvegardée chaque nuit.', '`shopctl repo` avec CLOUDFLARE_API_TOKEN_BACKUP.'));
+    findings.push(fail('pas d\'environnement backup : la production n\'est pas sauvegardée chaque nuit.', `\`${setup}\` avec CLOUDFLARE_API_TOKEN_BACKUP.`));
   } else if (!backup.customBranches || backup.branches.length !== 1 || backup.branches[0] !== read.defaultBranch) {
-    findings.push(fail(`l'environnement backup n'est pas limité à ${read.defaultBranch} (${backup.customBranches ? backup.branches.join(', ') || 'aucune branche' : 'toutes les branches'}).`, 'Ses secrets lisent la production : `shopctl repo` le restreint.'));
+    findings.push(fail(`l'environnement backup n'est pas limité à ${read.defaultBranch} (${backup.customBranches ? backup.branches.join(', ') || 'aucune branche' : 'toutes les branches'}).`, `Ses secrets lisent la production : \`${setup}\` le restreint.`));
   } else {
     findings.push(ok(`environnement backup limité à ${read.defaultBranch}`));
   }
@@ -373,7 +422,7 @@ export function judgeForge(read, { slug, head, now }) {
     if (!read.environments[name]) continue;
     const absent = environmentSecrets.filter((secret) => !(read.secrets[name] ?? []).includes(secret));
     findings.push(absent.length > 0
-      ? fail(`${name} : ${absent.join(', ')} absent${absent.length > 1 ? 's' : ''}.`, '`shopctl repo` les pose.')
+      ? fail(`${name} : ${absent.join(', ')} absent${absent.length > 1 ? 's' : ''}.`, `\`${setup}\` les pose.`)
       : ok(`${name} : ${environmentSecrets.join(', ')} posés`));
   }
   const monitor = ['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'].filter((secret) => !read.secrets.repository.includes(secret));
@@ -388,7 +437,8 @@ export function judgeForge(read, { slug, head, now }) {
     findings.push(fail(`dernier déploiement de production : ${deploy.conclusion ?? deploy.status} (${day(deploy.at)}).`));
   } else {
     findings.push(ok(`dernier déploiement de production vert (${day(deploy.at)}, ${deploy.sha.slice(0, 7)})`));
-    if (head && deploy.sha !== head) {
+    // A fleet's run carries the FLEET repository's commit, not the shop's.
+    if (head && !fleet && deploy.sha !== head) {
       findings.push(warn(`la production porte ${deploy.sha.slice(0, 7)} et cet arbre ${head.slice(0, 7)} : le rapport juge un arbre qui n'est pas déployé.`));
     }
   }

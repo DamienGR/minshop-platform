@@ -22,6 +22,46 @@ pas l'indexer (`noindex`, depuis `v0.3.29`). Les deux dernières tombent
 d'elles-mêmes au premier moyen de paiement réel. N'annoncer la boutique qu'à
 la fin.
 
+## Sur le compte mutualisé
+
+Une nouvelle boutique se construit sur le compte Cloudflare de l'agence
+([ADR 0019](../architecture/decisions/0019-compte-cloudflare-mutualise.md)),
+et non plus sur un compte du commerçant. La liste ci-dessous reste la bonne ;
+six sections changent ainsi :
+
+- **0. Prérequis** : le commerçant n'ouvre pas de compte Cloudflare. Il garde
+  son domaine chez son registrar, ouvre Resend et Stripe à son nom, et ajoutera
+  un CNAME à la section 2. Côté agence, une fois pour toutes : le compte
+  mutualisé (Workers Paid, ou Free le temps d'une ou deux très petites
+  boutiques, la variable `MINSHOP_ACCOUNT_PLAN` du dépôt de flotte le dit ; un
+  seul Super Administrator, clé de sécurité matérielle), sa zone SaaS et son origine de repli (SSL/TLS → Custom
+  Hostnames), le dépôt de flotte (`shopctl fleet init` puis `fleet repo`), et
+  un widget Turnstile par lot de dix noms d'hôte. Le manifeste porte
+  `cloudflare.accountId` = le compte mutualisé et `cloudflare.saasZone` = la
+  zone SaaS, sans `productionAccountId` ;
+- **1. Le dépôt** : aucun jeton Cloudflare dans le dépôt de la boutique.
+  `npm run shopctl -- repo --fleet <propriétaire/flotte>` (ou `shopctl new
+  --create-repo --fleet` à la création), puis la boutique inscrite dans le
+  `fleet.json` du dépôt de flotte avec son `repository`, par une pull request
+  de la flotte. Les relecteurs de la production et le jeton de lecture de
+  `monitor` sont ceux de la flotte ;
+- **2 et 3. Ressources et mot de passe** : depuis le poste de l'opérateur, avec
+  son propre jeton du compte mutualisé (exporté sans écho, jamais posé dans un
+  dépôt). `provision --env production` crée aussi le nom d'hôte personnalisé et
+  affiche le CNAME à transmettre au commerçant : `<domaine> → <origine de
+  repli>`. Le certificat suit seul une fois le CNAME en place ;
+- **4. Le premier déploiement** : par le Deploy de la flotte,
+  `gh workflow run deploy.yml -R <propriétaire/flotte> -f shop=<slug> -f environment=production`.
+  Il refuse un nom d'hôte encore en attente : attendre le CNAME, ou relancer
+  plus tard ;
+- **6. Certifier** : le nocturne est celui de la flotte
+  (`gh workflow run nightly.yml -R <propriétaire/flotte>`), qui sauvegarde et
+  surveille chaque boutique de `fleet.json`. `certify` lit la flotte seule ;
+- **7 et 8.** Une preview vit sur le même compte : elle se détruit sans changer
+  de compte, `npm run shopctl -- destroy --env staging --confirm <slug>`. Les
+  notifications du compte vont à l'agence seule : aucun commerçant n'est
+  membre du compte mutualisé.
+
 ## 0. Prérequis sur le compte du client (B)
 
 - [ ] double authentification ; R2 activé ; **Workers & Pages ouvert une
