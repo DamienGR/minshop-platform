@@ -1,7 +1,7 @@
 # Compte mutualisé — essai réel de Cloudflare for SaaS (lot 3 de l'ADR 0019)
 
 Fiche de passage pour le poste de Damien, sur son feu vert du 2026-10-28.
-L'[ADR 0019](../architecture/decisions/0019-compte-cloudflare-mutualise.md)
+**Passée le soir même : essai vert** (§4). L'[ADR 0019](../architecture/decisions/0019-compte-cloudflare-mutualise.md)
 demande qu'« une route par nom d'hôte vers des Workers distincts » soit prouvée
 par un essai réel avant qu'une boutique n'en dépende : c'est cet essai. Il
 précède le lot 8, la migration de `pilote-certif` vers le compte mutualisé.
@@ -62,8 +62,22 @@ lot 8 et des boutiques suivantes.
    commerçants, mais il est dans chacun d'eux : en changer plus tard fait
    changer leur CNAME à tous. Pas studiomaestro.fr, qui est sur A et ne peut pas
    être sur deux comptes. Le plus simple : l'acheter par Cloudflare Registrar
-   depuis le compte mutualisé, la zone y naît active. Sinon : Add a domain →
-   Free → serveurs de noms changés chez le registrar → attendre « Active ».
+   depuis le compte mutualisé, la zone y naît active. Sinon, un domaine déjà
+   servi ailleurs passe dans cet ordre, sans coupure (dg-tech.dev le
+   2026-10-28, depuis OVH) :
+   - exporter sa zone chez l'hébergeur DNS actuel (OVH : Zone DNS → Modifier en
+     mode textuel) : c'est la référence ;
+   - si DNSSEC est actif (`dig +short DS <zone>` répond), le couper chez le
+     registrar, puis attendre que le DS ait quitté le registre et la durée de
+     vie du DS en plus (30 min pour .dev). Changer les serveurs de noms avant
+     coupe le domaine entier, site et e-mail, pour tout résolveur qui valide ;
+   - Add a domain → Free, chaque A, AAAA et CNAME importé en **DNS only** ;
+   - comparer l'import à l'export, nom par nom : l'analyse rapide ne trouve que
+     les noms qu'elle devine (elle avait manqué `strates`, un CNAME vers
+     Netlify) ;
+   - changer les serveurs de noms chez le registrar, puis attendre « Active ».
+     Laisser l'ancienne zone intacte deux jours : le registre garde l'ancienne
+     délégation en cache jusqu'à trois heures.
 3. **L'origine de repli.** Dans la zone SaaS, DNS → Add record : type `AAAA`,
    nom `fallback`, contenu `100::`, **Proxied** (nuage orange). Puis SSL/TLS →
    Custom Hostnames → activer Cloudflare for SaaS (le tableau de bord peut
@@ -130,13 +144,62 @@ node scripts/saas-trial.mjs clean --zone <zone SaaS> --domain miijot.fr
 ```
 
 supprime les deux Workers puis les deux noms d'hôte. Restent à la main les deux
-CNAME de miijot.fr sur B. Le résultat entre dans l'ADR 0019 (Vérification),
-le plan §13.1 et les notes de version, par une pull request du socle.
+CNAME de miijot.fr sur B, dont la suppression se vérifie hors du tableau de
+bord : `dig essai-a.miijot.fr` doit répondre `NXDOMAIN`. Le résultat entre dans
+l'ADR 0019 (Vérification), le plan §13.1 et les notes de version, par une pull
+request du socle.
+
+## 4. Résultat du 2026-10-28
+
+**Essai vert**, à 22 h 56 UTC, sur le compte mutualisé (`305a2bac…`), zone SaaS
+dg-tech.dev. Les quatre points ci-dessus tiennent :
+
+```
+$ node scripts/saas-trial.mjs verify --zone dg-tech.dev --domain miijot.fr; echo "code $?"
+Compte 305a2bac…, zone SaaS dg-tech.dev (a58e7a67…), origine de repli fallback.dg-tech.dev : active.
+  ✓ essai-a.miijot.fr — nom d'hôte active, certificat active (créé il y a 4 min)
+  ✓ essai-b.miijot.fr — nom d'hôte active, certificat active (créé il y a 4 min)
+  ✓ essai-a.miijot.fr — HTTP 200 en HTTPS, servi par minshop-essai-a, chemin transmis (cf-ray a51d88428f925fcb-CDG)
+  ✓ essai-b.miijot.fr — HTTP 200 en HTTPS, servi par minshop-essai-b, chemin transmis (cf-ray a51d88435a313cbd-CDG)
+  ✓ fallback.dg-tech.dev — sans route, n'atteint aucun Worker (HTTP 522)
+  ✓ minshop-essai-a.<sous-domaine>.workers.dev — fermé (HTTP 404)
+  ✓ minshop-essai-b.<sous-domaine>.workers.dev — fermé (HTTP 404)
+
+Essai vert (2026-10-28T22:56:11.986Z) : chaque nom d'hôte mène à son Worker, en HTTPS, et rien d'autre n'y mène.
+code 0
+```
+
+- `prepare` (code 0) : `wrangler deploy` a accepté la route `essai-a.miijot.fr/*`
+  posée sur la zone dg-tech.dev, telle que la rend le socle.
+- Lus de l'extérieur à 22 h 55 UTC, certificat vérifié : chaque nom renvoyait son
+  Worker. Certificats émis par « Cloudflare TLS Issuing ECC CA 4 » (SSL.com),
+  un nom par certificat, valables jusqu'au 2027-01-26.
+- `clean` a supprimé les Workers et les noms d'hôte : les deux noms ont répondu
+  `error code: 1014` (CNAME vers la zone d'un autre compte, sans nom d'hôte qui
+  l'accueille) tant que leurs CNAME restaient sur B, puis `NXDOMAIN`.
+
+Deux écarts à la fiche, acceptés pour l'essai, à lever ou à assumer avant le
+lot 8 :
+
+- **la double authentification** de l'utilisateur du compte est une
+  application (TOTP), pas une clé matérielle (§1.1) : une clé est à poser avant
+  que le compte ne porte une production ;
+- **dg-tech.dev n'est pas réservé à cet usage** (§1.2) : il porte aussi le site
+  de l'agence (Netlify, en DNS only) et ses redirections d'e-mail (MX d'OVH).
+  Ce DNS vit désormais dans le compte des boutiques. L'adresse de connexion du
+  compte est elle-même en @dg-tech.dev : ses codes de secours, rangés hors de
+  cette adresse, sont ce qui rouvre le compte si la zone tombe.
+
+La migration de dg-tech.dev depuis OVH a suivi l'ordre du §1.2 ; le site, ses
+sous-domaines et les e-mails ont répondu à l'identique avant et après la
+bascule (registre .dev à 23 h 43, zone active à 23 h 45, heure de Paris).
+Sortie complète et certificats archivés hors dépôt
+(`~/certif-archives/essai-saas/`).
 
 ## Ce qui suit : le lot 8
 
 La migration du pilote suit la [sortie client, §1 bis](../operations/sortie-client.md)
-à l'envers ; sa fiche vient une fois l'essai vert. Trois points à préparer
+à l'envers ; sa fiche vient une fois l'essai vert. Quatre points à préparer
 d'ici là :
 
 - **le dépôt de flotte** : un dépôt GitHub de l'agence, public (GitHub Free
@@ -152,4 +215,6 @@ d'ici là :
   de la zone SaaS (`images-certif-minshop.<zone SaaS>`), que la fiche du
   lot 8 retiendra ;
 - **un widget Turnstile** sur le compte mutualisé, pour le lot de dix noms
-  d'hôte dont `certif-minshop.miijot.fr` sera le premier.
+  d'hôte dont `certif-minshop.miijot.fr` sera le premier ;
+- **une clé de sécurité matérielle** sur l'utilisateur du compte mutualisé,
+  l'écart du §4.
