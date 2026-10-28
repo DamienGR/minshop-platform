@@ -34,7 +34,7 @@ import {
   resourceNames,
 } from '../../../scripts/manifest.mjs';
 import { setupRepository } from './repo.mjs';
-import { nearestRegistry, readRegistry } from '../fleet.mjs';
+import { fleetRepositoryName, nearestRegistry, readRegistry } from '../fleet.mjs';
 import { assertForgeReady, defaultOwner, gitProtocol, repositoryNameFor, repositoryUrl } from '../forge.mjs';
 import { RESERVED_THEME_IDS, SHOP_SIGNATURES_DIR, SIGNATURES_DIR, THEMES_DIR, isValidThemeId, normalizeThemeId } from '../../../scripts/themes.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
@@ -115,6 +115,7 @@ export const NEW_OPTIONS = {
   '--account': 'value',
   '--reviewer': 'value',
   '--owner': 'value',
+  '--fleet': 'value',
 };
 
 export const newUsage = `Usage: shopctl new <slug> [options]
@@ -137,6 +138,8 @@ export const newUsage = `Usage: shopctl new <slug> [options]
                       (enveloppe la CLI gh)
   --owner <compte>    Compte ou organisation GitHub du dépôt déduit
   --reviewer <login>  Relecteur obligatoire en production, avec --create-repo
+  --fleet <dépôt>     Avec --create-repo, sur le compte mutualisé : le dépôt de
+                      flotte la déploie, aucun secret Cloudflare n'est posé
   --no-install        Ne pas installer les dépendances
   --no-verify         Ne pas exécuter la vérification minimale
   --json              Rapport de création lisible par une machine
@@ -343,6 +346,8 @@ export function runNew(args, reporter) {
   // the clone already does it. Deriving it later would leave a shop whose
   // `origin` was added by a different step than every other shop's.
   const createRepo = args.values['--create-repo'] === true;
+  const fleet = args.values['--fleet'] === undefined ? null : fleetRepositoryName(args.values['--fleet']);
+  if (fleet && !createRepo) throw usageError('--fleet ne vaut qu\'avec --create-repo.', 'Sans dépôt créé, `shopctl repo --fleet <dépôt>` le pose ensuite depuis la boutique.');
   const originUrl = args.values['--origin']
     ? String(args.values['--origin'])
     : createRepo
@@ -562,6 +567,7 @@ export function runNew(args, reporter) {
           .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean),
+        fleet,
         json: reporter.json,
         // `new` emits its own document; a second one on the same stdout would
         // break every caller that pipes it into a parser.

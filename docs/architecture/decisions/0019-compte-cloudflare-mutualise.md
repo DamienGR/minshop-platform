@@ -162,7 +162,11 @@ d'hôte, puis destruction sur le compte mutualisé.
   dans un seul compte ;
 - le rendu de production route le nom d'hôte sur la zone SaaS et ferme
   `workers.dev` ;
-- `shopctl repo` ne pose plus de secret Cloudflare dans le dépôt d'une boutique,
+- `shopctl repo --fleet` ne pose aucun secret Cloudflare dans le dépôt d'une
+  boutique, les workflows de la boutique laissent alors le compte à la flotte,
   et `shopctl certify` y vérifie l'absence de jeton plutôt que sa présence ;
+  `shopctl fleet repo` pose les jetons dans le seul dépôt de flotte, dont les
+  workflows refusent une boutique sous le socle v0.3.32
+  (`test/scripts/fleet-repository.test.mjs`) ;
 - une seconde sauvegarde d'une boutique inchangée ne réécrit aucun média ;
 - la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.

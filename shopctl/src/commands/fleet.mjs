@@ -9,8 +9,10 @@
  *   fleet verify    the same facts turned into an exit code, for CI
  *   fleet report    the version report of plan §5.7, as JSON or as a table
  *   fleet upgrade   one branch, one merge and one pull request per shop
+ *   fleet init      the fleet repository's workflows (fleet-repository.mjs)
+ *   fleet repo      the fleet repository on GitHub, and its credentials
  *
- * Two properties hold across all four, and both are about a fleet rather than a
+ * Two properties hold across the four, and both are about a fleet rather than a
  * shop.
  *
  * **One failing shop does not stop the others.** A missing checkout, a dirty
@@ -38,6 +40,7 @@ import { loadFleet, selectShops } from '../fleet.mjs';
 import { coreRemoteUrl, publishedCoreTags } from '../upgrade.mjs';
 import { latestVersion, versionFromTag } from '../version.mjs';
 import { coreState, stateFindings, upgradeShop } from './core.mjs';
+import { initFleet, setupFleetRepository } from './fleet-repository.mjs';
 
 export const FLEET_OPTIONS = {
   '--to': 'tag',
@@ -46,9 +49,12 @@ export const FLEET_OPTIONS = {
   '--branch': 'nom',
   '--base': 'branche',
   '--format': 'json|text',
+  '--origin': 'url',
+  '--owner': 'compte',
+  '--reviewer': 'login',
 };
 
-export const FLEET_FLAGS = ['--dry-run', '--no-verify', '--open-pr', '--offline', '--strict', '--abort-on-conflict'];
+export const FLEET_FLAGS = ['--dry-run', '--no-verify', '--open-pr', '--offline', '--strict', '--abort-on-conflict', '--private', '--no-push'];
 
 export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
 
@@ -56,6 +62,9 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
   shopctl fleet verify                 Les mêmes faits, en code de sortie
   shopctl fleet report --format json   Le rapport de versions de la flotte
   shopctl fleet upgrade --to <tag>     Une branche, une fusion, une pull request par boutique
+  shopctl fleet init                   Écrire les workflows du dépôt de flotte (ADR 0019)
+  shopctl fleet repo                   Créer le dépôt de flotte, ses environnements et
+                                       les secrets du compte mutualisé
 
   --registry <chemin>   Registre de flotte. Défaut : le fleet.json le plus proche.
   --only <slugs>        Se limiter à ces boutiques (séparées par des virgules).
@@ -70,14 +79,32 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
   --strict              verify : un avertissement devient un échec.
   --offline             Ne pas interroger le dépôt du socle.
   --format <json|text>  report : forme du rapport. Défaut : text.
+  --origin <url>        repo : dépôt de flotte. Défaut : le remote « origin », ou
+                        <owner>/minshop-fleet.
+  --owner <compte>      repo : compte GitHub du dépôt déduit.
+  --reviewer <login>    repo : relecteur obligatoire des déploiements de production.
+  --private             repo : créer le dépôt privé. Défaut : public, seul à
+                        porter secrets d'environnement et relecteurs en GitHub Free.
+  --no-push             repo : ne pas pousser la branche.
   --json                Rapport lisible par une machine.
+
+Sur le compte mutualisé (ADR 0019), les jetons Cloudflare vivent dans le dépôt de
+flotte et nulle part ailleurs. fleet repo les lit dans l'environnement :
+
+  CLOUDFLARE_API_TOKEN[_STAGING|_PRODUCTION]  déploiement
+  CLOUDFLARE_API_TOKEN_BACKUP                 sauvegarde nocturne (lecture D1,
+                                              écriture R2)
+  CLOUDFLARE_API_TOKEN_MONITOR                surveillance (lecture seule)
+  SHOPCTL_BACKUP_KEY                          clé des archives
+  SHOPS_READ_TOKEN                            lecture des dépôts de boutique
+                                              privés, facultatif
 
 Une mise à niveau de flotte ne déploie rien et ne fusionne aucune pull request.
 Elle propose une version à plusieurs boutiques ; chacune la prend quand un humain
 approuve la sienne.
 `;
 
-const SUBCOMMANDS = new Set(['status', 'verify', 'report', 'upgrade']);
+const SUBCOMMANDS = new Set(['status', 'verify', 'report', 'upgrade', 'init', 'repo']);
 
 export function runFleet(args, reporter) {
   const [sub, ...rest] = args.positionals;
@@ -87,6 +114,8 @@ export function runFleet(args, reporter) {
     throw usageError(`fleet ${sub} ne prend pas d'argument positionnel ; reçu « ${rest.join('", "')} ».`, fleetUsage.trim());
   }
   if (sub === 'upgrade') return upgradeFleet(args, reporter);
+  if (sub === 'init') return initFleet(args, reporter);
+  if (sub === 'repo') return setupFleetRepository(args, reporter);
   return reportFleet(args, reporter, sub);
 }
 

@@ -466,6 +466,75 @@ describe('the repository', () => {
     expect(watch).toMatch(/- name: Install dependencies\n\s+if: \$\{\{ env\.CLOUDFLARE_API_TOKEN != '' \}\}/);
     expect(readFileSync(join(CORE, '.github/workflows/deploy.yml'), 'utf8')).toMatch(/name: Deploy \$\{\{ inputs\.shop \}\} \(\$\{\{ inputs\.environment \}\}\)/);
   });
+
+  // The fleet's workflows (ADR 0019) name the shop in each matrix job.
+  it('looks for the jobs and steps the fleet\'s workflows actually name', () => {
+    const nightly = readFileSync(join(CORE, 'shopctl/templates/fleet/nightly.yml'), 'utf8');
+    const backup = nightly.slice(nightly.indexOf('  production-backup:'), nightly.indexOf('  production-watch:'));
+    const watch = nightly.slice(nightly.indexOf('  production-watch:'));
+    expect(backup).toMatch(/name: Production backup \(\$\{\{ matrix\.slug \}\}\)\n/);
+    expect(backup).toMatch(/- name: Verify the archive\n/);
+    expect(watch).toMatch(/name: Production error rate and quotas \(\$\{\{ matrix\.slug \}\}\)\n/);
+    expect(watch).toMatch(/- name: Install dependencies\n/);
+    expect(readFileSync(join(CORE, 'shopctl/templates/fleet/deploy.yml'), 'utf8')).toMatch(/name: Deploy \$\{\{ inputs\.shop \}\} \(\$\{\{ inputs\.environment \}\}\)/);
+  });
+
+  // On the shared account (ADR 0019) a shop's repository holds no Cloudflare
+  // secret and a variable naming the fleet; everything else is read there.
+  describe('a shop of the fleet', () => {
+    const FLEET = 'agence/minshop-fleet';
+    const readFleet = ({ shopPatch = {}, entry = undefined } = {}) => {
+      const target = shop({ forge: true, slug: 'atelier-forge' });
+      const fleet = forgeState(FLEET, target.slug)[FLEET];
+      fleet.runs = fleet.runs.map((run) => ({
+        ...run,
+        jobs: run.jobs.map((candidate) => (candidate.name.startsWith('Production') ? { ...candidate, name: `${candidate.name} (${target.slug})` } : candidate)),
+      }));
+      const listed = entry === undefined ? { slug: target.slug, path: 'shop-atelier-forge', repository: target.nameWithOwner } : entry;
+      fleet.files = { 'fleet.json': JSON.stringify({ schemaVersion: 1, shops: listed ? [listed] : [{ slug: 'autre', path: 'x' }] }) };
+      target.github({
+        repos: {
+          [target.nameWithOwner]: { visibility: 'public', defaultBranch: 'main', branches: ['main'], variables: { MINSHOP_FLEET: FLEET }, secrets: {}, environments: {}, ...shopPatch },
+          [FLEET]: fleet,
+        },
+      });
+      process.env.PATH = `${target.binDir}:${previous.PATH}`;
+      process.env.GH_DOUBLE_STATE = target.ghState;
+      return { target, read: readForge(target.nameWithOwner, { cwd: target.root, slug: target.slug }) };
+    };
+
+    it('reads the fleet repository, this shop\'s jobs in it, and its line of fleet.json', () => {
+      const { target, read: forge } = readFleet();
+      expect(forge.fleet).toEqual({ repository: FLEET, shop: target.nameWithOwner, registry: 'read', entry: { slug: target.slug, repository: target.nameWithOwner }, leftovers: [] });
+      expect(forge.environments.production).toMatchObject({ reviewers: 1 });
+      expect(forge.nightly.backup.at).toBe('2026-11-02T15:30:00Z');
+      expect(forge.nightly.watch.at).toBe('2026-11-02T03:25:00Z');
+      // The fleet's run carries the fleet's commit: no warning against the shop's.
+      const findings = judgeForge(forge, { slug: target.slug, head: '9999999aaa', now: NOW });
+      expect(failing(findings)).toEqual([]);
+      expect(findings.map((finding) => finding.message)).toEqual(expect.arrayContaining([
+        `déployée par le dépôt de flotte ${FLEET}`,
+        'aucun secret Cloudflare dans le dépôt de la boutique',
+      ]));
+    });
+
+    it('refuses a Cloudflare secret left in the shop\'s repository, with the command that removes it', () => {
+      const { target, read: forge } = readFleet({
+        shopPatch: { secrets: { MONITOR_CLOUDFLARE_API_TOKEN: 'x' }, environments: { production: { secrets: { CLOUDFLARE_API_TOKEN: 'x' } } } },
+      });
+      expect(forge.fleet.leftovers).toEqual([{ env: null, name: 'MONITOR_CLOUDFLARE_API_TOKEN' }, { env: 'production', name: 'CLOUDFLARE_API_TOKEN' }]);
+      const [finding] = judgeForge(forge, { slug: target.slug, head: null, now: NOW }).filter((entry) => entry.status === 'fail');
+      expect(finding.message).toMatch(/porte encore MONITOR_CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_TOKEN \(production\)/);
+      expect(finding.hint).toContain(`gh secret delete CLOUDFLARE_API_TOKEN --env production --repo ${target.nameWithOwner}`);
+    });
+
+    it('refuses a shop the fleet does not list, or lists with another repository', () => {
+      const absent = readFleet({ entry: null });
+      expect(failing(judgeForge(absent.read, { slug: absent.target.slug, head: null, now: NOW }))).toEqual([expect.stringContaining("n'est pas inscrite")]);
+      const elsewhere = readFleet({ entry: { slug: 'atelier-forge', path: 'x', repository: 'agence/autre-depot' } });
+      expect(failing(judgeForge(elsewhere.read, { slug: elsewhere.target.slug, head: null, now: NOW }))).toEqual([expect.stringContaining('avec le dépôt agence/autre-depot')]);
+    });
+  });
 });
 
 // ── the attestations ────────────────────────────────────────────────────────

@@ -42,6 +42,13 @@
 # 2026-10-27 — declares none (no stagingDomain, no STAGING_URL), and the run
 # says that instead.
 #
+# A shop on the shared Cloudflare account (ADR 0019) holds no Cloudflare token:
+# none can be limited to one shop's database. The repository variable
+# MINSHOP_FLEET (set by `shopctl repo --fleet`) names the fleet repository whose
+# own Nightly backs its production up and watches it; here, the suite, the audit
+# and the staging's remote gates still run, and the steps that need a token say
+# where they went instead.
+#
 # Each check that needs a credential runs only when its credential is
 # configured, and says so when it is skipped rather than passing silently:
 #
@@ -180,7 +187,11 @@ jobs:
         env:
           STAGING_RETIRED: ${{ vars.STAGING_RETIRED }}
           STAGING_URL: ${{ vars.STAGING_URL }}
+          FLEET: ${{ vars.MINSHOP_FLEET }}
         run: |
+          if [ -n "$FLEET" ]; then
+            echo "::notice::Boutique du compte mutualisé : sa production est sauvegardée et surveillée par le Nightly du dépôt de flotte $FLEET (ADR 0019)."
+          fi
           if [ -f client/client.yaml ]; then
             slug="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.client.slug)")"
             domain="$(node --input-type=module -e "import { resolveShop } from './shopctl/src/shop.mjs'; console.log(resolveShop(process.cwd()).manifest.cloudflare.stagingDomain ?? '')")"
@@ -243,11 +254,20 @@ jobs:
           fi
           echo "url=$origin" >> "$GITHUB_OUTPUT"
 
+      # On the shared account the token these three steps need is not in this
+      # repository: said once, rather than three red steps.
+      - name: Leave the account to the fleet
+        if: ${{ vars.MINSHOP_FLEET != '' }}
+        env:
+          FLEET: ${{ vars.MINSHOP_FLEET }}
+        run: echo "::notice::Compte mutualisé (ADR 0019) : sauvegarde, restauration d'essai et surveillance du staging sautées, aucun jeton Cloudflare dans le dépôt de la boutique ($FLEET les porte)."
+
       # The archive stays on the runner for the restore below and goes to the
       # environment's `-backups` bucket, on the shop's account and in its
       # jurisdiction (decided 2026-10-06). Never to a GitHub artifact.
       - name: Back up staging
         id: backup
+        if: ${{ vars.MINSHOP_FLEET == '' }}
         run: |
           set -euo pipefail
           node shopctl/bin/shopctl.mjs backup --env staging --upload --json | tee backup.json
@@ -291,7 +311,7 @@ jobs:
         run: npm run test:browser:remote
 
       - name: Error rate and quotas
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && vars.MINSHOP_FLEET == '' }}
         run: |
           set -euo pipefail
           node shopctl/bin/shopctl.mjs monitor --env staging --hours 24 --json | tee monitor.json
@@ -344,7 +364,7 @@ jobs:
   production-backup:
     name: Production backup
     needs: detect
-    if: ${{ needs.detect.outputs.shop != '' }}
+    if: ${{ needs.detect.outputs.shop != '' && vars.MINSHOP_FLEET == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: backup
@@ -409,7 +429,7 @@ jobs:
   production-watch:
     name: Production error rate and quotas
     needs: detect
-    if: ${{ needs.detect.outputs.shop != '' && github.event.schedule != '17 15 * * *' }}
+    if: ${{ needs.detect.outputs.shop != '' && vars.MINSHOP_FLEET == '' && github.event.schedule != '17 15 * * *' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

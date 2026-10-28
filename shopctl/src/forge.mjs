@@ -353,6 +353,38 @@ export function setEnvironmentSecret(nameWithOwner, environment, name, value, { 
   return { name, environment };
 }
 
+/** One secret of the repository itself, outside any environment: over
+ *  standard input, like an environment's. */
+export function setRepositorySecret(nameWithOwner, name, value, { cwd } = {}) {
+  gh(['secret', 'set', name, '--repo', nameWithOwner], { cwd, input: `${value}` });
+  return { name };
+}
+
+/** One repository variable. Not a secret: a variable is printed in clear in
+ *  every log that reads it, which is what makes it the right place for a
+ *  repository's NAME and the wrong one for anything else. */
+export function setRepositoryVariable(nameWithOwner, name, value, { cwd } = {}) {
+  gh(['variable', 'set', name, '--body', String(value), '--repo', nameWithOwner], { cwd });
+  return { name, value };
+}
+
+/** A repository variable's value, or null when it is not set. */
+export function repositoryVariable(nameWithOwner, name, { cwd } = {}) {
+  const result = gh(['api', `repos/${nameWithOwner}/actions/variables/${name}`], { cwd, allowFailure: true });
+  if (result.status !== 0) return null;
+  const value = parseDocument(result.stdout)?.value;
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** One file of a repository's default branch, as text, or null. */
+export function repositoryFile(nameWithOwner, path, { cwd } = {}) {
+  const result = gh(['api', `repos/${nameWithOwner}/contents/${path}`], { cwd, allowFailure: true });
+  if (result.status !== 0) return null;
+  const document = parseDocument(result.stdout);
+  if (typeof document?.content !== 'string') return null;
+  return Buffer.from(document.content, document.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
+}
+
 /** The numeric id of a GitHub login, for the reviewers list. */
 export function userId(login, { cwd } = {}) {
   const result = gh(['api', `users/${login}`, '--jq', '.id'], { cwd, allowFailure: true });

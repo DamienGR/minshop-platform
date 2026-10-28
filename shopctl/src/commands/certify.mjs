@@ -46,13 +46,17 @@ import {
   branchPolicies,
   environmentProtection,
   environmentSecrets,
+  environments as environmentNames,
   originUrl,
   parseGithubRemote,
   repository,
+  repositoryFile,
   repositorySecrets,
+  repositoryVariable,
   runJobs,
   workflowRuns,
 } from '../forge.mjs';
+import { FLEET_FILE, FLEET_VARIABLE } from '../fleet.mjs';
 import { runShopGates, describeGateFailure } from '../gates.mjs';
 import { capture } from '../process.mjs';
 import { Reporter } from '../report.mjs';
@@ -359,12 +363,52 @@ function forgeGroup(context) {
   return [{ status: 'ok', message: `dépôt ${nameWithOwner}` }, ...judgeForge(read, { slug, head, now })];
 }
 
+/** Secrets a shop's repository must not hold once a fleet deploys it. */
+const FLEET_LEFTOVERS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'];
+
 /**
- * Everything the forge group judges, read through gh. Workflow runs are
- * listed once per workflow and a run's jobs read once, whichever question
- * asks for them.
+ * Everything the forge group judges, read through gh.
+ *
+ * A shop on the shared account (ADR 0019) is judged where its credentials and
+ * runs are: the fleet repository its MINSHOP_FLEET variable names — its
+ * environments, its secrets, this shop's line of its fleet.json and this
+ * shop's jobs in its Deploy and Nightly — plus the one thing its own
+ * repository must show, which is no Cloudflare secret at all.
  */
 export function readForge(nameWithOwner, { cwd, slug }) {
+  const fleet = repositoryVariable(nameWithOwner, FLEET_VARIABLE, { cwd });
+  if (!fleet) return readRepository(nameWithOwner, { cwd, slug });
+
+  const leftovers = repositorySecrets(nameWithOwner, { cwd })
+    .filter((name) => FLEET_LEFTOVERS.includes(name))
+    .map((name) => ({ env: null, name }));
+  for (const env of environmentNames(nameWithOwner, { cwd })) {
+    for (const name of environmentSecrets(nameWithOwner, env, { cwd }).filter((secret) => FLEET_LEFTOVERS.includes(secret))) leftovers.push({ env, name });
+  }
+  let entry = null;
+  let registry = 'absent';
+  const text = repositoryFile(fleet, FLEET_FILE, { cwd });
+  if (text !== null) {
+    try {
+      const shops = JSON.parse(text)?.shops;
+      entry = (Array.isArray(shops) ? shops : []).find((candidate) => candidate?.slug === slug) ?? null;
+      registry = 'read';
+    } catch {
+      registry = 'unreadable';
+    }
+  }
+  return {
+    ...readRepository(fleet, { cwd, slug, suffix: ` (${slug})` }),
+    fleet: { repository: fleet, shop: nameWithOwner, registry, entry: entry ? { slug: entry.slug, repository: entry.repository ?? null } : null, leftovers },
+  };
+}
+
+/**
+ * One repository's environments, secrets and runs. Workflow runs are listed
+ * once per workflow and a run's jobs read once, whichever question asks for
+ * them. `suffix` names the shop in a fleet's matrix jobs.
+ */
+function readRepository(nameWithOwner, { cwd, slug, suffix = '' }) {
   const info = repository(nameWithOwner, { cwd });
   if (!info) {
     throw new ShopctlError(`gh ne trouve pas le dépôt ${nameWithOwner}.`, { kind: 'precondition', hint: 'Vérifiez `gh auth status` et les droits du compte sur ce dépôt.' });
@@ -415,8 +459,8 @@ export function readForge(nameWithOwner, { cwd, slug }) {
     secrets,
     deploy: latestJob('deploy.yml', `Deploy ${slug} (production)`),
     nightly: {
-      backup: latestJob('nightly.yml', 'Production backup'),
-      watch: latestJob('nightly.yml', 'Production error rate and quotas'),
+      backup: latestJob('nightly.yml', `Production backup${suffix}`),
+      watch: latestJob('nightly.yml', `Production error rate and quotas${suffix}`),
     },
   };
 }

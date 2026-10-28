@@ -2897,7 +2897,8 @@ Engagée en huit lots, dans cet ordre :
    par nom d'hôte vers le Worker de sa boutique (`cloudflare.saasZone`, code
    livré en v0.3.32), après un essai réel sur le compte ;
 4. le dépôt de flotte : les jetons du compte, Deploy et Nightly pour tout le
-   parc ; plus aucun jeton Cloudflare dans le dépôt d'une boutique ;
+   parc ; plus aucun jeton Cloudflare dans le dépôt d'une boutique (`shopctl
+   fleet init`, `fleet repo` et `repo --fleet`, livrés en v0.3.32) ;
 5. les sauvegardes aux médias dédupliqués : sans elles, chaque archive recopie
    toutes les images, ce que ni la facture R2 ni la limite d'API du compte
    (1 200 requêtes par 5 minutes) ne tiennent à l'échelle du parc ;

@@ -22,9 +22,11 @@
  *   config          { git_protocol }        what `gh config get` answers
  *   hosts           { host: { git_protocol } }  what `gh config get --host` answers
  *                                           first, as `gh auth login` writes it
- *   repos           { "owner/name": { visibility, environments, secrets, pulls, runs } }
+ *   repos           { "owner/name": { visibility, environments, secrets, variables, files, pulls, runs } }
  *                   an environment: { secrets, reviewers, branchPolicy, branches }
  *                   `secrets` at the top: the repository's own, outside any environment
+ *                   `variables`: { NAME: value }, the repository's Actions variables
+ *                   `files`: { path: text }, the default branch's contents
  *                   a run: { databaseId, workflow, createdAt, status, conclusion, headSha, jobs }
  *                   a job: { name, status, conclusion, completedAt, steps: [{ name, conclusion }] }
  *   users           { login: id }
@@ -200,6 +202,24 @@ if (argv[0] === 'api') {
     done(JSON.stringify({ name: environment }));
   }
 
+  // A repository variable, read as the API gives it.
+  const variable = path?.match(/^repos\/([^/]+\/[^/]+)\/actions\/variables\/([^/]+)$/);
+  if (variable && method === 'GET') {
+    const [, name, key] = variable;
+    const value = state.repos[name]?.variables?.[key];
+    if (value === undefined) fail('gh: Not Found (HTTP 404)');
+    done(JSON.stringify({ name: key, value }));
+  }
+
+  // A file of the default branch, base64 as the contents API sends it.
+  const contents = path?.match(/^repos\/([^/]+\/[^/]+)\/contents\/(.+)$/);
+  if (contents && method === 'GET') {
+    const [, name, file] = contents;
+    const text = state.repos[name]?.files?.[file];
+    if (text === undefined) fail('gh: Not Found (HTTP 404)');
+    done(JSON.stringify({ path: file, encoding: 'base64', content: Buffer.from(text).toString('base64') }));
+  }
+
   fail(`gh-double: unhandled api call "${argv.join(' ')}"`, 2);
 }
 
@@ -218,13 +238,30 @@ if (argv[0] === 'secret' && argv[1] === 'set') {
   const repo = state.repos[flag('--repo')];
   const environment = flag('--env');
   if (!repo) fail('gh: Not Found (HTTP 404)');
-  if (!repo.environments?.[environment]) fail(`gh: environment ${environment} not found (HTTP 404)`);
   if (!stdin.trim()) fail('gh: a value is required');
+  // Without --env, a secret of the repository itself.
+  if (!environment) {
+    repo.secrets = repo.secrets ?? {};
+    repo.secrets[name] = stdin.trim();
+    done(`✓ Set Actions secret ${name} for ${flag('--repo')}`);
+  }
+  if (!repo.environments?.[environment]) fail(`gh: environment ${environment} not found (HTTP 404)`);
   // Stored so a test can assert WHAT was placed; the real gh encrypts it as a
   // libsodium sealed box, which is precisely the step shopctl cannot do itself
   // and the reason this command is wrapped rather than reimplemented.
   repo.environments[environment].secrets[name] = stdin.trim();
   done(`✓ Set Actions secret ${name} for ${flag('--repo')}`);
+}
+
+if (argv[0] === 'variable' && argv[1] === 'set') {
+  const name = argv[2];
+  const repo = state.repos[flag('--repo')];
+  if (!repo) fail('gh: Not Found (HTTP 404)');
+  const body = flag('--body');
+  if (body === null) fail('gh: a value is required');
+  repo.variables = repo.variables ?? {};
+  repo.variables[name] = body;
+  done(`✓ Created variable ${name} for ${flag('--repo')}`);
 }
 
 /**

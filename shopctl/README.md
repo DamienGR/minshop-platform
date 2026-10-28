@@ -67,6 +67,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl core upgrade --to <tag>` | 9 | Fusionne un tag du socle sur une branche et ouvre sa pull request. |
 | `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
 | `shopctl fleet upgrade --to <tag>` | 9 | La même mise à niveau, boutique par boutique, sans jamais déployer. |
+| `shopctl fleet init \| repo` | après le pilote | Le dépôt de flotte du compte mutualisé (ADR 0019) : ses workflows, puis le dépôt GitHub et ses secrets. |
 | `shopctl certify --env production` | après le pilote | Juge, en lecture seule, si la boutique est certifiable ; `--write` écrit le rapport. |
 
 ## `shopctl new`
@@ -485,6 +486,40 @@ Une boutique que personne n'y a inscrite n'est pas dans la flotte : la commande
 qui lit cette liste écrit. Une boutique en défaut n'arrête pas les autres — son
 échec est rapporté contre elle, et le code de sortie est non nul à la fin.
 
+**Sur le compte Cloudflare mutualisé** (ADR 0019), le répertoire de `fleet.json`
+devient un dépôt à part entière, le **dépôt de flotte**, et chaque boutique qu'il
+déploie y porte son dépôt GitHub : `"repository": "agence/shop-premiere-boutique"`.
+Aucun jeton Cloudflare ne se limite à la base d'une boutique ; les jetons vivent
+donc là, et nulle part ailleurs :
+
+```sh
+npm run shopctl -- fleet init                         # workflows Deploy et Nightly du parc
+git add -A && git commit -m "Flotte"
+npm run shopctl -- fleet repo --reviewer <login>      # dépôt public, environnements, secrets
+npm run shopctl -- repo --fleet agence/minshop-fleet  # depuis chaque boutique
+```
+
+`fleet init` écrit `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`
+et `.github/fleet/shops.mjs` depuis les modèles de `shopctl/templates/fleet/` ;
+relancé, il les réécrit. Le Deploy du parc extrait la boutique choisie et y lance
+`shopctl provision` puis `shopctl deploy`, avec le shopctl de **son** socle ; le
+Nightly sauvegarde la production de chaque boutique deux fois par jour, une à la
+fois, la vérifie, et la surveille. Une boutique sous le socle v0.3.32, qui ne
+marque pas sa base, est refusée avant `npm ci`.
+
+`fleet repo` crée le dépôt **public** par défaut (`--private` sinon) : sous
+GitHub Free, seul un dépôt public a des secrets d'environnement et des relecteurs
+obligatoires. Les jetons viennent de l'environnement — `CLOUDFLARE_API_TOKEN`
+(ou `_STAGING`, `_PRODUCTION`), `CLOUDFLARE_API_TOKEN_BACKUP`,
+`CLOUDFLARE_API_TOKEN_MONITOR`, `SHOPCTL_BACKUP_KEY`, et `SHOPS_READ_TOKEN` quand
+les dépôts de boutique sont privés —, le compte des manifestes des boutiques
+inscrites, qui doivent tous nommer le même.
+
+`repo --fleet` pose la variable `MINSHOP_FLEET` dans le dépôt de la boutique et
+aucun environnement : le Deploy de la boutique refuse alors de tourner, son
+Nightly saute ce qui demande un jeton, et un jeton resté d'avant est nommé avec
+la commande qui le retire.
+
 **Côté socle**, publier une version passe par une porte :
 
 ```sh
@@ -550,7 +585,8 @@ vrai `shopctl new` depuis un socle réel tagué deux fois : thème et manifeste
 inchangés (hors `coreVersion`), conflit volontaire signalé fichier par fichier,
 migration additive appliquée aux quarante-trois vraies migrations et écriture de
 l'ancienne version toujours acceptée par le nouveau schéma. `release.test.mjs`
-tient la porte de publication.
+tient la porte de publication. `fleet-repository.test.mjs` écrit et relit les
+workflows du dépôt de flotte et pose ses secrets contre le double de `gh`.
 
 `test/scripts/repo.test.mjs`, `provision.test.mjs` et `deploy.test.mjs`
 installent `test/fixtures/wrangler-double.mjs` et `test/fixtures/gh-double.mjs`

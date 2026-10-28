@@ -81,6 +81,25 @@ describe('the nightly workflow', () => {
     expect(detect.indexOf('STAGING_RETIRED" ]')).toBeLessThan(detect.indexOf('staging=true'));
   });
 
+  // On the shared account (ADR 0019) the shop's repository holds no Cloudflare
+  // token: the fleet's Nightly backs production up and watches it, and every
+  // step here that needs a token stands aside, said once.
+  it('leaves the account to the fleet when MINSHOP_FLEET names one', () => {
+    for (const job of ['production-backup', 'production-watch']) {
+      const body = workflow.slice(workflow.indexOf(`  ${job}:`));
+      expect(body.match(/^ {4}if: (.*)$/m)[1], job).toContain("vars.MINSHOP_FLEET == ''");
+    }
+    const staging = workflow.slice(workflow.indexOf('\n  staging:\n'), workflow.indexOf('production-backup:'));
+    const step = (name) => staging.slice(staging.indexOf(`- name: ${name}`)).split('\n      - name:')[0];
+    expect(step('Back up staging')).toMatch(/if: \$\{\{ vars\.MINSHOP_FLEET == '' \}\}/);
+    expect(step('Error rate and quotas')).toMatch(/vars\.MINSHOP_FLEET == ''/);
+    // The restore follows the backup's outcome, skipped with it.
+    expect(step('Restore it into a throwaway database')).toMatch(/steps\.backup\.outcome == 'success'/);
+    expect(step('Leave the account to the fleet')).toMatch(/if: \$\{\{ vars\.MINSHOP_FLEET != '' \}\}/);
+    // The remote gates need no Cloudflare token, and keep running.
+    expect(step('Remote security gate')).not.toMatch(/MINSHOP_FLEET/);
+  });
+
   it('runs the operator’s own commands rather than its own wrangler calls', () => {
     expect(workflow).toMatch(/shopctl\.mjs backup --env staging --upload/);
     expect(workflow).toMatch(/shopctl\.mjs restore --env staging --from "\$ARCHIVE" --local/);

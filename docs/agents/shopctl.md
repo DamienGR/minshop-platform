@@ -107,6 +107,26 @@ registry lists (cloned here or not), or a name a registered manifest already
 derives, is refused (exit 3); an unreadable registry is a warning, left to
 `fleet verify`.
 
+No Cloudflare token can be limited to one shop's database, so on the shared
+account the tokens live in ONE repository, the fleet's — the directory of
+`fleet.json` — and no shop's repository holds any
+(`shopctl/src/commands/fleet-repository.mjs`). `fleet init` renders its
+workflows from `shopctl/templates/fleet/`: a Deploy that checks out the shop a
+registry entry's `repository` names and runs that shop's own `provision` and
+`deploy`, and a Nightly matrix (backups one shop at a time, for the account's
+API limit) of `backup`, `backup verify` and `monitor --plan paid`. Both refuse a
+shop below `FLEET_MINIMUM_CORE` (`shopctl/src/fleet.mjs`), the first core that
+marks its database. `fleet repo` is `repo` for that repository: public by
+default (GitHub Free has environment secrets on a public repository only), the
+account read from the managed shops' manifests, which must agree. `repo --fleet
+<owner/repo>` is the shop's half: the variable `MINSHOP_FLEET`, no environment,
+leftover Cloudflare secrets named with the `gh secret delete` that removes them
+— never deleted. The core's own `deploy.yml` refuses to run, and `nightly.yml`
+skips every step that needs a token, once that variable is set; `certify`
+judges such a shop from the fleet repository (its environments, its secrets,
+the shop's `fleet.json` line and matrix jobs) plus the absence of any token in
+the shop's own.
+
 A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
 ADR 0019) has one resource wrangler does not cover: the merchant's domain as a
 custom hostname of that zone. `shopctl/src/saas.mjs` speaks to the Cloudflare
