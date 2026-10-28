@@ -2895,7 +2895,7 @@ Engagée en huit lots, dans cet ordre :
    refuse deux boutiques revendiquant un même nom de ressource ou d'hôte ;
 3. les domaines par Cloudflare for SaaS : un CNAME chez le commerçant, une route
    par nom d'hôte vers le Worker de sa boutique (`cloudflare.saasZone`, code
-   livré en v0.3.32), après un essai réel sur le compte ;
+   livré en v0.3.32), après un essai réel sur le compte, vert le 2026-10-28 ;
 4. le dépôt de flotte : les jetons du compte, Deploy et Nightly pour tout le
    parc ; plus aucun jeton Cloudflare dans le dépôt d'une boutique (`shopctl
    fleet init`, `fleet repo` et `repo --fleet`, livrés en v0.3.32) ;
@@ -2916,9 +2916,14 @@ Engagée en huit lots, dans cet ordre :
    répète la sortie d'un client dans l'autre sens.
 
 L'essai du lot 3 et le lot 8 touchent de vrais comptes : Damien a donné son
-feu vert le 2026-10-28. L'essai se joue par `scripts/saas-trial.mjs`, selon sa
-[fiche](certification/compte-mutualise-essai-saas.md), avant la migration du
-pilote.
+feu vert le 2026-10-28. L'essai s'est joué le soir même par
+`scripts/saas-trial.mjs`, selon sa
+[fiche](certification/compte-mutualise-essai-saas.md) : **vert** à 22 h 56 UTC,
+chaque nom d'hôte mène à son Worker en HTTPS et rien d'autre n'y mène. La zone
+SaaS est dg-tech.dev. Deux écarts à la fiche (§4) : la double authentification
+du compte mutualisé est une application, et une clé matérielle est à poser
+avant le lot 8 ; dg-tech.dev, choisi par Damien, porte aussi le site et les
+e-mails de l'agence.
 
 Sources relevées le 2026-10-15 puis le 2026-10-28 sur developers.cloudflare.com :
 tarifs et limites de Workers, D1, R2 et KV, tarifs d'Observability au

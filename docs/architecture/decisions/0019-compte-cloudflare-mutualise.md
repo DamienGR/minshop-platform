@@ -89,10 +89,11 @@ est marquée pour une autre boutique.
 l'agence sur le compte mutualisé est la zone SaaS ; le commerçant garde son DNS
 où il est et y ajoute un CNAME et sa validation ; une route par nom d'hôte mène
 au Worker de sa boutique. `workers.dev` reste fermé en production (ADR 0013).
-Une route par nom d'hôte vers des Workers distincts doit être prouvée par un
+Une route par nom d'hôte vers des Workers distincts devait être prouvée par un
 essai réel avant qu'une boutique n'en dépende (`scripts/saas-trial.mjs`, sa
-fiche `docs/certification/compte-mutualise-essai-saas.md`) ; si elle ne tient
-pas, la zone du commerçant sur le compte mutualisé est la solution de repli.
+fiche `docs/certification/compte-mutualise-essai-saas.md`) : elle l'a été le
+2026-10-28. Si elle avait échoué, la zone du commerçant sur le compte
+mutualisé était la solution de repli.
 
 **Aucun jeton du compte n'est posé dans le dépôt d'une boutique.** Un dépôt de
 flotte unique, à l'agence, détient les jetons du compte (déploiement,
@@ -196,4 +197,10 @@ d'hôte, puis destruction sur le compte mutualisé.
   compte, et échoue au-delà du budget ou à deux cents Workers ; avec
   `--plan free`, il additionne les boutiques d'un même jour contre les quotas
   du compte et échoue à cinq Workers (`test/scripts/fleet-usage.test.mjs`) ;
+- l'essai réel du lot 3, vert le 2026-10-28 sur le compte mutualisé
+  (`scripts/saas-trial.mjs`, sortie dans sa fiche) : deux noms d'hôte de
+  miijot.fr, zone d'un autre compte en DNS seul, servis en HTTPS chacun par son
+  Worker par une route de la zone SaaS, leurs certificats émis par validation
+  HTTP en quatre minutes ; l'origine de repli sans route n'atteint aucun Worker
+  et `workers.dev` reste fermé ;
 - la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.
