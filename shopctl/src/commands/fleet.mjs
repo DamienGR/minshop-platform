@@ -11,6 +11,7 @@
  *   fleet upgrade   one branch, one merge and one pull request per shop
  *   fleet init      the fleet repository's workflows (fleet-repository.mjs)
  *   fleet repo      the fleet repository on GitHub, and its credentials
+ *   fleet usage     the shared account's month and its bill (fleet-usage.mjs)
  *
  * Two properties hold across the four, and both are about a fleet rather than a
  * shop.
@@ -41,6 +42,7 @@ import { coreRemoteUrl, publishedCoreTags } from '../upgrade.mjs';
 import { latestVersion, versionFromTag } from '../version.mjs';
 import { coreState, stateFindings, upgradeShop } from './core.mjs';
 import { initFleet, setupFleetRepository } from './fleet-repository.mjs';
+import { FLEET_USAGE_OPTIONS, runFleetUsage } from './fleet-usage.mjs';
 
 export const FLEET_OPTIONS = {
   '--to': 'tag',
@@ -52,6 +54,7 @@ export const FLEET_OPTIONS = {
   '--origin': 'url',
   '--owner': 'compte',
   '--reviewer': 'login',
+  ...FLEET_USAGE_OPTIONS,
 };
 
 export const FLEET_FLAGS = ['--dry-run', '--no-verify', '--open-pr', '--offline', '--strict', '--abort-on-conflict', '--private', '--no-push'];
@@ -65,6 +68,8 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
   shopctl fleet init                   Écrire les workflows du dépôt de flotte (ADR 0019)
   shopctl fleet repo                   Créer le dépôt de flotte, ses environnements et
                                        les secrets du compte mutualisé
+  shopctl fleet usage                  Consommation du mois du compte mutualisé et
+                                       facture projetée (Workers Paid)
 
   --registry <chemin>   Registre de flotte. Défaut : le fleet.json le plus proche.
   --only <slugs>        Se limiter à ces boutiques (séparées par des virgules).
@@ -86,6 +91,8 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
   --private             repo : créer le dépôt privé. Défaut : public, seul à
                         porter secrets d'environnement et relecteurs en GitHub Free.
   --no-push             repo : ne pas pousser la branche.
+  --account <id>        usage : le compte mutualisé. Défaut : CLOUDFLARE_ACCOUNT_ID.
+  --budget <dollars>    usage : échouer (code 6) si la facture projetée le dépasse.
   --json                Rapport lisible par une machine.
 
 Sur le compte mutualisé (ADR 0019), les jetons Cloudflare vivent dans le dépôt de
@@ -99,12 +106,16 @@ flotte et nulle part ailleurs. fleet repo les lit dans l'environnement :
   SHOPS_READ_TOKEN                            lecture des dépôts de boutique
                                               privés, facultatif
 
+fleet usage lit CLOUDFLARE_API_TOKEN, un jeton « Account Analytics : Read » du
+compte mutualisé. Il échoue aussi quand le compte porte deux cents Workers : le
+jour d'ouvrir le suivant, avant le plafond de 250 crons.
+
 Une mise à niveau de flotte ne déploie rien et ne fusionne aucune pull request.
 Elle propose une version à plusieurs boutiques ; chacune la prend quand un humain
 approuve la sienne.
 `;
 
-const SUBCOMMANDS = new Set(['status', 'verify', 'report', 'upgrade', 'init', 'repo']);
+const SUBCOMMANDS = new Set(['status', 'verify', 'report', 'upgrade', 'init', 'repo', 'usage']);
 
 export function runFleet(args, reporter) {
   const [sub, ...rest] = args.positionals;
@@ -116,6 +127,7 @@ export function runFleet(args, reporter) {
   if (sub === 'upgrade') return upgradeFleet(args, reporter);
   if (sub === 'init') return initFleet(args, reporter);
   if (sub === 'repo') return setupFleetRepository(args, reporter);
+  if (sub === 'usage') return runFleetUsage(args, reporter);
   return reportFleet(args, reporter, sub);
 }
 

@@ -124,6 +124,14 @@ clé, et `monitor --plan paid` (le compte est en Workers Paid ; les quotas du
 plan gratuit ne s'appliquent à aucune boutique). Une boutique en échec n'arrête
 pas les autres, et son job porte son slug.
 
+Ce qui remplace ces quotas, c'est la facture : chaque nuit, `shopctl fleet
+usage` compare la consommation du mois du compte entier aux volumes inclus dans
+Workers Paid et projette la facture. Le job échoue si elle dépasse la variable
+`MINSHOP_MONTHLY_BUDGET` du dépôt de flotte, ou si le compte porte deux cents
+Workers : c'est le moment d'ouvrir un second compte (ADR 0019), avant le
+plafond de 250 crons. Son rapport classe les Workers les plus actifs : une
+dérive de la facture a presque toujours une boutique.
+
 ### Ce qui reste manuel
 
 - **Notifications du compte Cloudflare** : abonner l'adresse de l'opérateur et

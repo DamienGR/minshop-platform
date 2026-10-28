@@ -154,11 +154,24 @@ describe('the fleet\'s workflows', () => {
     expect(backup).toMatch(/shopctl\.mjs backup verify "\$ARCHIVE"/);
     expect(backup).not.toMatch(/shopctl\.mjs restore/);
     expect(backup).not.toMatch(/github\.event\.schedule/);
-    const watch = nightly.slice(nightly.indexOf('  production-watch:'));
+    const watch = nightly.slice(nightly.indexOf('  production-watch:'), nightly.indexOf('  account-usage:'));
     expect(watch).toMatch(/CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.MONITOR_CLOUDFLARE_API_TOKEN \}\}/);
     expect(watch).not.toMatch(/environment:/);
     expect(watch).toMatch(/--plan paid/);
     expect(watch).toMatch(/github\.event\.schedule != '17 15 \* \* \*'/);
+  });
+
+  // Lot 7 of plan §13.1: the account's month, once a night, with the read-only
+  // token — never the backup environment's, never a matrix of shops.
+  it('asks the shared account for its month once a night, against the budget variable', () => {
+    const account = nightly.slice(nightly.indexOf('  account-usage:'));
+    expect(account.length).toBeLessThan(nightly.length);
+    expect(account).toMatch(/CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.MONITOR_CLOUDFLARE_API_TOKEN \}\}/);
+    expect(account).toMatch(/BUDGET: \$\{\{ vars\.MINSHOP_MONTHLY_BUDGET \}\}/);
+    expect(account).not.toMatch(/environment:|strategy:/);
+    expect(account).toMatch(/github\.event\.schedule != '17 15 \* \* \*'/);
+    expect(account).toMatch(/args=\(fleet usage --json\)/);
+    expect(account.indexOf("Check the shop's core")).toBeLessThan(account.indexOf('fleet usage'));
   });
 
   it('never substitutes an expression into a shell script, and reads the command\'s exit status', () => {

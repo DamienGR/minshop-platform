@@ -175,4 +175,7 @@ d'hôte, puis destruction sur le compte mutualisé.
   média, un bucket encore sous la règle unique d'avant v0.3.32 ne réutilise rien,
   et une archive au format 1 se restaure toujours (`test/scripts/backup.test.mjs`,
   `test/scripts/restore.test.mjs`) ;
+- `shopctl fleet usage` projette la facture du mois depuis les volumes du
+  compte, et échoue au-delà du budget ou à deux cents Workers
+  (`test/scripts/fleet-usage.test.mjs`) ;
 - la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.

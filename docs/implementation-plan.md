@@ -2909,7 +2909,8 @@ Engagée en huit lots, dans cet ordre :
    (`docs/operations/`, avec la mise en ligne, les responsabilités et les
    runbooks de fuite de secret et de violation de données, en v0.3.32) ;
 7. la supervision du compte : la consommation du mois contre les volumes inclus,
-   et la facture projetée ;
+   et la facture projetée (`shopctl fleet usage`, lancé par le Nightly de la
+   flotte, en v0.3.32) ;
 8. la migration du pilote de son compte client vers le compte mutualisé, qui
    répète la sortie d'un client dans l'autre sens.
 

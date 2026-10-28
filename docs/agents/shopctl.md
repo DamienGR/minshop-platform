@@ -127,6 +127,20 @@ judges such a shop from the fleet repository (its environments, its secrets,
 the shop's `fleet.json` line and matrix jobs) plus the absence of any token in
 the shop's own.
 
+`fleet usage` (`shopctl/src/commands/fleet-usage.mjs`) is the account's
+`monitor`: on Workers Paid every included volume is the ACCOUNT's, so no shop
+can be judged against one. One GraphQL request (`shopctl/src/analytics.mjs`,
+shared with `monitor`) reads the month so far — Workers requests and CPU, D1
+rows and storage, R2 operations by class and storage, KV operations — and
+`projectBill()` projects flows linearly and takes stocks as they stand, priced
+from `PAID_PLAN` (relevé du 2026-10-28; a price change is an edit there and in
+its test). SaaS hostnames have no dataset: one per production Worker invoked,
+an estimate on the safe side. It fails (6) past `--budget`, or when the
+account carries `ACCOUNT_LIMITS.target` (200) Workers — the day to open the
+next account, before the ceiling of 250 crons. A volume past what is included
+is reported, never failed: it is billed, not blocked. The fleet Nightly runs it
+once a night with the first shop's shopctl and `vars.MINSHOP_MONTHLY_BUDGET`.
+
 A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
 ADR 0019) has one resource wrangler does not cover: the merchant's domain as a
 custom hostname of that zone. `shopctl/src/saas.mjs` speaks to the Cloudflare

@@ -68,6 +68,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
 | `shopctl fleet upgrade --to <tag>` | 9 | La même mise à niveau, boutique par boutique, sans jamais déployer. |
 | `shopctl fleet init \| repo` | après le pilote | Le dépôt de flotte du compte mutualisé (ADR 0019) : ses workflows, puis le dépôt GitHub et ses secrets. |
+| `shopctl fleet usage` | après le pilote | La consommation du mois du compte mutualisé contre les volumes de Workers Paid, et la facture projetée. |
 | `shopctl certify --env production` | après le pilote | Juge, en lecture seule, si la boutique est certifiable ; `--write` écrit le rapport. |
 
 ## `shopctl new`
@@ -532,6 +533,25 @@ inscrites, qui doivent tous nommer le même.
 aucun environnement : le Deploy de la boutique refuse alors de tourner, son
 Nightly saute ce qui demande un jeton, et un jeton resté d'avant est nommé avec
 la commande qui le retire.
+
+Sur Workers Paid, les volumes inclus sont ceux du **compte**, partagés par toutes
+ses boutiques : aucune n'a plus de quota à elle. `fleet usage` pose la question
+au compte entier, avec le jeton de surveillance :
+
+```sh
+CLOUDFLARE_API_TOKEN=… npm run shopctl -- fleet usage --account <id> --budget 20
+```
+
+Chaque volume facturé (requêtes et CPU des Workers, lignes et stockage D1,
+opérations et stockage R2, opérations KV, noms d'hôte SaaS estimés à un par
+Worker de production) est comparé à ce que le plan inclut, projeté sur le mois,
+puis chiffré. La commande échoue (code 6) si la facture projetée dépasse
+`--budget`, ou si le compte porte deux cents Workers, le jour d'ouvrir le
+suivant, avant le plafond de 250 crons. Un volume au-delà de l'inclus est
+signalé, pas en échec : il est facturé, pas bloqué. Le Nightly de la flotte la
+lance chaque nuit ; le budget est la variable `MINSHOP_MONTHLY_BUDGET` du dépôt
+de flotte, posée à la main :
+`gh variable set MINSHOP_MONTHLY_BUDGET --body 20 -R <propriétaire/flotte>`.
 
 **Côté socle**, publier une version passe par une porte :
 

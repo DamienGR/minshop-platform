@@ -11,7 +11,12 @@
 #     restored there;
 #   - production's error rate (`shopctl monitor --plan paid`: the shared account
 #     is on Workers Paid, so the free plan's quotas are not this shop's), with a
-#     token that reads analytics and nothing else.
+#     token that reads analytics and nothing else;
+#   - the account's month (`shopctl fleet usage`, plan §13.1 lot 7): every
+#     volume Workers Paid bills against what it includes, the projected bill
+#     against the repository variable MINSHOP_MONTHLY_BUDGET when it is set,
+#     and the Workers the account carries against the two hundred it aims at.
+#     Asked once a night, with the first shop's shopctl and the same token.
 #
 # One shop at a time for the backups: the shared account answers 1 200 API
 # calls per five minutes, dashboard included, and a shop's first backup is two
@@ -35,6 +40,8 @@
 #                                   Read, Memberships and User Details Read
 #     MONITOR_CLOUDFLARE_ACCOUNT_ID
 #     SHOPS_READ_TOKEN              only when the shops' repositories are private
+#   and, set by hand, the repository variable:
+#     MINSHOP_MONTHLY_BUDGET        dollars; above it the projected bill fails
 name: Nightly
 
 on:
@@ -202,5 +209,64 @@ jobs:
         with:
           name: nightly-${{ matrix.slug }}-production-${{ github.run_id }}
           path: shop/monitor-production.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  account-usage:
+    name: Shared account usage and projected bill
+    needs: shops
+    if: ${{ needs.shops.outputs.matrix != '[]' && github.event.schedule != '17 15 * * *' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
+      BUDGET: ${{ vars.MINSHOP_MONTHLY_BUDGET }}
+
+    steps:
+      # shopctl ships with the core, not with the fleet: any shop's copy asks
+      # the same question of the account, and it needs no dependency.
+      - name: Check out the first shop
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ fromJSON(needs.shops.outputs.matrix)[0].repository }}
+          token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          path: shop
+
+      - name: Check out the fleet
+        uses: actions/checkout@v6
+        with:
+          path: fleet
+
+      - name: Check the shop's core
+        run: node fleet/.github/fleet/shops.mjs core shop
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: shop/.nvmrc
+          check-latest: true
+
+      - name: Usage of the month and projected bill
+        working-directory: shop
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt de flotte : la consommation du compte n'est pas suivie."
+            exit 1
+          fi
+          args=(fleet usage --json)
+          if [ -n "$BUDGET" ]; then
+            args+=(--budget "$BUDGET")
+          fi
+          node shopctl/bin/shopctl.mjs "${args[@]}" | tee usage.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-account-usage-${{ github.run_id }}
+          path: shop/usage.json
           retention-days: 30
           if-no-files-found: ignore
