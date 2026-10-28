@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * The part of Cloudflare's REST API that wrangler does not cover and shopctl
- * calls itself: zones, and Cloudflare for SaaS custom hostnames (ADR 0019).
+ * calls itself: zones, and Cloudflare for SaaS custom hostnames (ADR 0019) —
+ * plus the account's workers.dev subdomain, which `scripts/saas-trial.mjs`
+ * reads to prove workers.dev closed.
  *
  * A separate process for the reason `graphql-double.mjs` gives: the suites run
  * shopctl with `spawnSync`, which blocks the test's own event loop. It prints
@@ -12,6 +14,8 @@
  *   zones      [{ id, name, account }]                         zones by account
  *   fallback   { <zoneId>: { origin, status } }               fallback origins
  *   hostnames  [{ id, zone, hostname, status, ssl: { status } }]
+ *   subdomain  string    the account's workers.dev subdomain; absent, it is
+ *                        refused as an account that never opened Workers is
  *   activate   boolean   a created hostname is active at once (the merchant's
  *                        CNAME already in place), rather than pending
  *   refuse     number    answer every call with this HTTP status and an error
@@ -37,6 +41,10 @@ function answer(state, method, url, body) {
     const name = url.searchParams.get('name');
     const account = url.searchParams.get('account.id');
     return ok((state.zones ?? []).filter((zone) => zone.name === name && (!account || zone.account === account)));
+  }
+
+  if (method === 'GET' && /^\/accounts\/[^/]+\/workers\/subdomain$/.test(path)) {
+    return state.subdomain ? ok({ subdomain: state.subdomain }) : error(404, 10007, 'This account does not have a workers.dev subdomain');
   }
 
   const zoneMatch = path.match(/^\/zones\/([^/]+)\/custom_hostnames(?:\/(.+))?$/);

@@ -163,7 +163,12 @@ proxied `AAAA 100::` record named in SSL/TLS → Custom Hostnames, which
 `provision` reads and warns about. Routing several hostnames of one zone to
 several Workers is what the real trial of the plan's lot 3 has to prove before
 a shop depends on it; until then the fallback is the merchant's zone on the
-shared account, with no `saasZone`.
+shared account, with no `saasZone`. The trial is `scripts/saas-trial.mjs`, run
+by an operator against the real account (its sheet:
+`docs/certification/compte-mutualise-essai-saas.md`): it calls `saas.mjs` and
+the clone's wrangler with the route the manifest renders, so a change to
+either reaches it, and `test/scripts/saas-trial.test.mjs` rehearses it on the
+API double.
 
 `admin password` writes the administration's password hash into an
 environment's database: read from STDIN (typed twice without echo, or a file),

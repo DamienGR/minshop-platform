@@ -90,8 +90,9 @@ l'agence sur le compte mutualisé est la zone SaaS ; le commerçant garde son DN
 où il est et y ajoute un CNAME et sa validation ; une route par nom d'hôte mène
 au Worker de sa boutique. `workers.dev` reste fermé en production (ADR 0013).
 Une route par nom d'hôte vers des Workers distincts doit être prouvée par un
-essai réel avant qu'une boutique n'en dépende ; si elle ne tient pas, la zone du
-commerçant sur le compte mutualisé est la solution de repli.
+essai réel avant qu'une boutique n'en dépende (`scripts/saas-trial.mjs`, sa
+fiche `docs/certification/compte-mutualise-essai-saas.md`) ; si elle ne tient
+pas, la zone du commerçant sur le compte mutualisé est la solution de repli.
 
 **Aucun jeton du compte n'est posé dans le dépôt d'une boutique.** Un dépôt de
 flotte unique, à l'agence, détient les jetons du compte (déploiement,

@@ -2915,8 +2915,10 @@ Engagée en huit lots, dans cet ordre :
 8. la migration du pilote de son compte client vers le compte mutualisé, qui
    répète la sortie d'un client dans l'autre sens.
 
-L'essai du lot 3 et le lot 8 touchent de vrais comptes, et attendent chacun le
-feu vert de Damien.
+L'essai du lot 3 et le lot 8 touchent de vrais comptes : Damien a donné son
+feu vert le 2026-10-28. L'essai se joue par `scripts/saas-trial.mjs`, selon sa
+[fiche](certification/compte-mutualise-essai-saas.md), avant la migration du
+pilote.
 
 Sources relevées le 2026-10-15 puis le 2026-10-28 sur developers.cloudflare.com :
 tarifs et limites de Workers, D1, R2 et KV, tarifs d'Observability au
