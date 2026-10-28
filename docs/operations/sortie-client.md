@@ -42,7 +42,8 @@ Deux départs sont possibles, et le second contient le premier :
 
 S'il quitte aussi Cloudflare : une archive pleine (`backup` sans `--no-media`,
 qui emporte les octets des images et des fichiers vendus), copiée hors du
-bucket par `backup pull`, et la clé. Le format est documenté par
+bucket par `backup pull`, qui rapatrie aussi les médias que l'archive a
+laissés dans le pool du bucket, et la clé. Le format est documenté par
 `shopctl/src/backup/archive.mjs` : un manifeste en clair, un corps gzip puis
 AES-256-GCM, un fichier par objet.
 

@@ -14,8 +14,10 @@
 #     token that reads analytics and nothing else.
 #
 # One shop at a time for the backups: the shared account answers 1 200 API
-# calls per five minutes, dashboard included, and a backup is one call per
-# object it copies. A shop's failure is its own: `fail-fast: false`.
+# calls per five minutes, dashboard included, and a shop's first backup is two
+# calls per object it copies — the later ones read and write only what the
+# backups bucket's media pool does not have yet. A shop's failure is its own:
+# `fail-fast: false`.
 #
 # What stays in each shop's repository, which needs no Cloudflare token: the
 # suite on a clean D1, the dependency audit, and the remote gates against a

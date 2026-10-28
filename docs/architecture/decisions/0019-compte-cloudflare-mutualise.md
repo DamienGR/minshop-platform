@@ -88,7 +88,10 @@ son code, Verify et les montées du socle.
 
 **Les sauvegardes restent par boutique** (ADR 0005, un bucket `-backups` par
 environnement) **et leurs médias sont dédupliqués** : un objet déjà présent dans
-le bucket de sauvegarde n'est ni relu ni réécrit.
+le bucket de sauvegarde n'est ni relu ni réécrit, tant que sa copie survit aux
+archives qui la nomment. Le bucket expire les archives à 90 jours par leur
+préfixe et son pool de médias à 180 ; une copie de plus de 83 jours est
+remplacée par une nouvelle, et rien n'est jamais supprimé à la main.
 
 **La sortie d'un client est une migration** : sauvegarde, provisioning et
 restauration sur le compte du commerçant, ses clés ressaisies, bascule du nom
@@ -168,5 +171,8 @@ d'hôte, puis destruction sur le compte mutualisé.
   `shopctl fleet repo` pose les jetons dans le seul dépôt de flotte, dont les
   workflows refusent une boutique sous le socle v0.3.32
   (`test/scripts/fleet-repository.test.mjs`) ;
-- une seconde sauvegarde d'une boutique inchangée ne réécrit aucun média ;
+- une seconde sauvegarde d'une boutique inchangée ne relit ni ne réécrit aucun
+  média, un bucket encore sous la règle unique d'avant v0.3.32 ne réutilise rien,
+  et une archive au format 1 se restaure toujours (`test/scripts/backup.test.mjs`,
+  `test/scripts/restore.test.mjs`) ;
 - la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.

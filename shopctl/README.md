@@ -326,6 +326,8 @@ place est un teardown qui supprime ce que personne ne voulait perdre.
 ```sh
 npm run shopctl -- backup keygen                       # une fois, avant tout
 npm run shopctl -- backup --env production
+npm run shopctl -- backup --env production --upload    # copie aussi dans -backups
+npm run shopctl -- backup pull <id> --env production   # la rapatrie, ou la complète
 npm run shopctl -- backup list
 npm run shopctl -- backup verify <id>
 npm run shopctl -- backup prune --keep 30 --keep-days 90
@@ -362,6 +364,17 @@ sans être restaurée** — `backup list` et `backup verify` lisent le manifeste
 sans déchiffrer cent corps pour trouver le bon — et elle se **relit sans
 Cloudflare**, donc dans un autre compte, ce qui est la condition d'une sortie
 propre du client.
+
+**Dans le bucket `-backups`, un média n'est copié qu'une fois**
+([ADR 0019](../docs/architecture/decisions/0019-compte-cloudflare-mutualise.md)).
+`--upload` scelle chaque objet dans le pool du bucket (`pool/`), et les
+archives suivantes nomment cette copie au lieu de relire l'objet : la
+sauvegarde d'une boutique inchangée ne lit ni n'écrit plus aucun média. Le
+bucket expire ses archives à 90 jours et son pool à 180, et une copie n'est
+reprise que si elle survit à l'archive qui la nomme. Une archive prise avec
+`--upload` ne porte donc localement que ce qu'elle a lu : `backup pull <id>`
+la complète depuis le pool, et `restore` le demande avant d'écrire quoi que ce
+soit.
 
 **Le manifeste en clair est authentifié avec le corps.** Il est passé à AES-GCM
 comme donnée additionnelle : une archive ne peut pas être ré-étiquetée pour

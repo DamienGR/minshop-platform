@@ -53,8 +53,10 @@ antérieure ramène l'ancien secret
   la mettre à la place de l'ancienne, supprimer le secret GitHub
   `SHOPCTL_BACKUP_KEY` puis relancer `shopctl repo` (le secret n'est posé que
   s'il est absent). Les archives existantes restent fermées par l'ancienne :
-  la garder le temps que la rétention (90 jours) les emporte, ou les supprimer
-  si l'ancienne clé est réputée connue d'un tiers.
+  la garder le temps que la rétention les emporte (90 jours pour les archives,
+  180 pour les médias du pool `pool/` du bucket `-backups`, qui recommence
+  sous la nouvelle clé), ou les supprimer si l'ancienne clé est réputée connue
+  d'un tiers.
 
 ## 3. Mesurer l'exposition
 

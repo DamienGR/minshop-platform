@@ -204,7 +204,12 @@ export function judgeAccount(result, workerSecrets, required) {
     findings.push(warn('les images sont servies par une URL r2.dev, qui n\'est pas un domaine de production.'));
   }
   if (result.retention?.action !== 'keep') {
-    findings.push(warn('règle de conservation des sauvegardes absente ou illisible.', '`shopctl provision --env production` la pose.'));
+    findings.push(warn(
+      result.retention?.action === 'update'
+        ? 'règle de conservation des sauvegardes antérieure à v0.3.32 : le pool de médias ne peut pas servir.'
+        : 'règles de conservation des sauvegardes absentes ou illisibles.',
+      '`shopctl provision --env production` les pose : archives à 90 jours par leur préfixe, pool de médias à 180.',
+    ));
   }
   if (workerSecrets === null) {
     findings.push(fail(`le Worker ${result.resources?.worker ?? 'de production'} n'est pas déployé.`));

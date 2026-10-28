@@ -102,7 +102,9 @@ describe('the nightly workflow', () => {
 
   it('runs the operator’s own commands rather than its own wrangler calls', () => {
     expect(workflow).toMatch(/shopctl\.mjs backup --env staging --upload/);
-    expect(workflow).toMatch(/shopctl\.mjs restore --env staging --from "\$ARCHIVE" --local/);
+    // The pull before the restore: an uploaded archive leaves in the pool the
+    // media it did not re-read, and the drill restores those too.
+    expect(workflow).toMatch(/shopctl\.mjs backup pull "\$ARCHIVE" --env staging --json \| tee pull\.json\n\s+node shopctl\/bin\/shopctl\.mjs restore --env staging --from "\$ARCHIVE" --local/);
     expect(workflow).toMatch(/shopctl\.mjs monitor --env staging/);
     expect(workflow).not.toMatch(/wrangler (deploy|d1|r2|secret)/);
   });
@@ -110,6 +112,7 @@ describe('the nightly workflow', () => {
   it('reads each command’s exit status and not the pipe’s', () => {
     const piped = runs.filter((body) => body.includes('| tee'));
     expect(piped).toHaveLength(6);
+    expect(runs.filter((body) => (body.match(/\| tee/g) ?? []).length > 1)).toHaveLength(1);
     for (const body of piped) expect(body).toContain('set -euo pipefail');
   });
 

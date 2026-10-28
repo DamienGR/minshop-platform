@@ -32,17 +32,20 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  addRetentionRule,
+  POOL_RULE,
+  RETENTION_RULE,
+  addLifecycleRule,
   applyMigrations,
   bucketExposure,
   createBucket,
   createDatabase,
   databaseInfo,
-  hasRetentionRule,
+  lifecycleRules,
   listBuckets,
   listDatabases,
   listSecrets,
   putSecret,
+  removeLifecycleRule,
   verifyBucketJurisdiction,
   whoami,
   expectedAccount,
@@ -53,7 +56,8 @@ import { ShopctlError, verificationError } from '../errors.mjs';
 import { applyScript, query } from '../backup/store.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { renderWrangler, resourceNames, wranglerSubstitutions } from '../../../scripts/manifest.mjs';
-import { DEFAULT_KEEP_DAYS } from '../backup/archive.mjs';
+import { DEFAULT_KEEP_DAYS, archivePrefix } from '../backup/archive.mjs';
+import { POOL_KEEP_DAYS, POOL_PREFIX } from '../backup/pool.mjs';
 import { describeOwner, judgeOwner, markOwner, ownerRefusal, readClaim, readOwner, shopRepository } from '../owner.mjs';
 import { cnameInstruction, createCustomHostname, fallbackOrigin, findCustomHostname, hostnameState, locateHostname } from '../saas.mjs';
 
@@ -342,24 +346,48 @@ export async function runProvision(args, reporter) {
   // A bucket can only express an age, not "keep the last N", and that is
   // acceptable here because the nightly run keeps adding recent archives; the
   // rule `backup prune` applies locally, both bounds at once, is unchanged.
+  //
+  // Two rules since v0.3.32 (ADR 0019): the archives by their prefix, and the
+  // media pool for twice as long, so that a pooled copy outlives the archives
+  // that name it (backup/pool.mjs). A bucket still on the single bucket-wide
+  // rule has it replaced; until then its backups simply reuse nothing.
   reporter.section('Conservation des sauvegardes');
+  const wantedRules = [
+    { name: RETENTION_RULE, prefix: archivePrefix(manifest.client.slug, env), days: DEFAULT_KEEP_DAYS, what: 'archives' },
+    { name: POOL_RULE, prefix: POOL_PREFIX, days: POOL_KEEP_DAYS, what: 'médias du pool' },
+  ];
+  const describeRule = (rule) => `${rule.what} (${rule.prefix}) expirées après ${rule.days} jours`;
   let retention = null;
-  if (dryRun && !bucketsInJurisdiction.includes(names.backups)) {
-    reporter.todo(`${names.backups} — les objets de plus de ${DEFAULT_KEEP_DAYS} jours seraient expirés`);
+  const rules = dryRun && !bucketsInJurisdiction.includes(names.backups) ? [] : lifecycleRules(names.backups, { cwd: root, jurisdiction });
+  if (rules === null) {
+    reporter.warn(
+      `${names.backups} — les règles de cycle de vie n'ont pas pu être lues.`,
+      `Vérifiez dans le tableau de bord : ${wantedRules.map(describeRule).join(' ; ')}.`,
+    );
   } else {
-    const present = hasRetentionRule(names.backups, { cwd: root, jurisdiction });
-    if (present === true) {
-      retention = { days: DEFAULT_KEEP_DAYS, action: 'keep' };
-      reporter.ok(`${names.backups} — règle de conservation déjà posée`);
-    } else if (present === null) {
-      reporter.warn(`${names.backups} — les règles de cycle de vie n'ont pas pu être lues.`, `Vérifiez dans le tableau de bord qu'une règle expire les objets après ${DEFAULT_KEEP_DAYS} jours.`);
-    } else if (dryRun) {
-      reporter.todo(`${names.backups} — les objets de plus de ${DEFAULT_KEEP_DAYS} jours seraient expirés`);
-    } else {
-      addRetentionRule(names.backups, DEFAULT_KEEP_DAYS, { cwd: root, jurisdiction });
-      retention = { days: DEFAULT_KEEP_DAYS, action: 'create' };
-      reporter.ok(`${names.backups} — objets expirés après ${DEFAULT_KEEP_DAYS} jours`);
+    const outcomes = wantedRules.map((wanted) => {
+      const found = rules.find((rule) => rule.name === wanted.name);
+      if (found && found.enabled && found.prefix === wanted.prefix && found.days === wanted.days) return { ...wanted, action: 'keep' };
+      return { ...wanted, action: found ? 'update' : 'create', found };
+    });
+    for (const outcome of outcomes) {
+      if (outcome.action === 'keep') reporter.ok(`${names.backups} — ${describeRule(outcome)}`);
+      else if (dryRun) reporter.todo(`${names.backups} — ${describeRule(outcome)}${outcome.action === 'update' ? ' (règle à remplacer)' : ''}`);
+      else {
+        if (outcome.found) removeLifecycleRule(names.backups, outcome.name, { cwd: root, jurisdiction });
+        addLifecycleRule(names.backups, outcome, { cwd: root, jurisdiction });
+        reporter.ok(`${names.backups} — ${describeRule(outcome)}${outcome.action === 'update' ? ' (règle remplacée)' : ''}`);
+      }
     }
+    const action = outcomes.every((outcome) => outcome.action === 'keep')
+      ? 'keep'
+      : outcomes.some((outcome) => outcome.action === 'update') ? 'update' : 'create';
+    retention = {
+      days: DEFAULT_KEEP_DAYS,
+      poolDays: POOL_KEEP_DAYS,
+      action,
+      rules: outcomes.map(({ name, prefix, days, action: ruleAction }) => ({ name, prefix, days, action: ruleAction })),
+    };
   }
 
   // ── The merchant's domain, on the SaaS zone ───────────────────────────────

@@ -2901,7 +2901,9 @@ Engagée en huit lots, dans cet ordre :
    fleet init`, `fleet repo` et `repo --fleet`, livrés en v0.3.32) ;
 5. les sauvegardes aux médias dédupliqués : sans elles, chaque archive recopie
    toutes les images, ce que ni la facture R2 ni la limite d'API du compte
-   (1 200 requêtes par 5 minutes) ne tiennent à l'échelle du parc ;
+   (1 200 requêtes par 5 minutes) ne tiennent à l'échelle du parc (pool de
+   médias scellés dans le bucket `-backups`, archives au format 2, livrés en
+   v0.3.32) ;
 6. la documentation d'exploitation : la sortie d'un client devient une
    migration, Cloudflare devient un sous-traitant ultérieur de l'agence ;
 7. la supervision du compte : la consommation du mois contre les volumes inclus,

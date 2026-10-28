@@ -276,12 +276,16 @@ jobs:
       # Into the runner's own D1, which is thrown away with it: the archive
       # opens with the key, every table goes back, and the comparison against
       # the archive's digests holds — the RPO half of jalon 8, every night.
+      # The pull first: the backup did not re-read the media the bucket's pool
+      # already had (ADR 0019), so the drill brings them back from there and
+      # checks them, which is the one read those copies get.
       - name: Restore it into a throwaway database
         if: ${{ steps.backup.outcome == 'success' }}
         env:
           ARCHIVE: ${{ steps.backup.outputs.id }}
         run: |
           set -euo pipefail
+          node shopctl/bin/shopctl.mjs backup pull "$ARCHIVE" --env staging --json | tee pull.json
           node shopctl/bin/shopctl.mjs restore --env staging --from "$ARCHIVE" --local --json | tee restore.json
 
       - name: Remote security gate
@@ -356,6 +360,7 @@ jobs:
           name: nightly-${{ needs.detect.outputs.shop }}-${{ github.run_id }}
           path: |
             backup.json
+            pull.json
             restore.json
             monitor.json
           retention-days: 30
