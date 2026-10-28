@@ -42,8 +42,9 @@ const server = createServer((request, response) => {
     state.requests = [...(state.requests ?? []), { path: request.url, authorization: request.headers.authorization ?? null, query: parsed.query ?? null, variables: parsed.variables ?? null }];
     writeFileSync(STATE, JSON.stringify(state, null, 2));
 
-    // `fleet usage` asks for every dataset at once; `monitor` for one each time.
-    const account = parsed.query?.includes('kvOperationsAdaptiveGroups')
+    // `fleet usage` asks for several datasets at once, D1 storage among them;
+    // `monitor` for one each time.
+    const account = parsed.query?.includes('d1StorageAdaptiveGroups')
       ? (state.usage ?? {})
       : parsed.query?.includes('workersInvocationsAdaptive')
         ? { workersInvocationsAdaptive: state.worker ?? [] }

@@ -2910,7 +2910,8 @@ Engagée en huit lots, dans cet ordre :
    runbooks de fuite de secret et de violation de données, en v0.3.32) ;
 7. la supervision du compte : la consommation du mois contre les volumes inclus,
    et la facture projetée (`shopctl fleet usage`, lancé par le Nightly de la
-   flotte, en v0.3.32) ;
+   flotte, en v0.3.32) ; pour un compte qui démarre en Workers Free, le jour le
+   plus chargé contre les quotas du compte et ses cinq crons (`--plan free`) ;
 8. la migration du pilote de son compte client vers le compte mutualisé, qui
    répète la sortie d'un client dans l'autre sens.
 

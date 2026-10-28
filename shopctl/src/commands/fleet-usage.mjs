@@ -1,7 +1,8 @@
 /**
- * `shopctl fleet usage` — what the shared account has consumed this month,
- * against what Workers Paid includes, and the bill that projects to (ADR 0019,
- * plan §13.1 lot 7).
+ * `shopctl fleet usage` — what the shared account has consumed, against what
+ * its plan allows: on Workers Paid, the month against what the plan includes
+ * and the bill that projects to; on Workers Free, the busiest UTC day against
+ * the daily quotas (ADR 0019, plan §13.1 lot 7).
  *
  * `monitor` asks about ONE shop: its error rate, and on the free plan its daily
  * quotas. On the shared account no shop has a quota of its own — every volume
@@ -26,6 +27,16 @@
  * next account, not the day the 251st cron is refused. A volume past what is
  * included is reported, never failed: it is billed, not blocked.
  *
+ * `--plan free` is the account's first months, with one or two very small
+ * shops (ADR 0019). There the quotas `monitor --plan free` judges per shop are
+ * the ACCOUNT's: 100 000 requests and 5 million D1 rows read a day for every
+ * shop together, and past them every page of every shop fails until midnight
+ * UTC. One shop's figures against the whole quota would miss the sum, so this
+ * judges the account's busiest day at the monitor's 70 %, the invocations
+ * Cloudflare stopped, D1 storage, and the five crons of the plan — one per
+ * environment, the ceiling the second shop's preview already nears. Each of
+ * them is the day to go Paid, which lifts every limit within minutes.
+ *
  * One GraphQL request, read-only, with the monitor's token (Account Analytics:
  * Read). No wrangler: it has nothing to ask about a tree, and runs from any
  * checkout that carries shopctl — the fleet's nightly uses the first shop's.
@@ -42,6 +53,7 @@
  */
 import { graphql } from '../analytics.mjs';
 import { preconditionError, usageError, verificationError } from '../errors.mjs';
+import { FREE_PLAN, STOPPED_STATUSES, THRESHOLDS } from './monitor.mjs';
 
 /** Workers Paid, as published on developers.cloudflare.com (relevé du
  *  2026-10-28, ADR 0019). In dollars; a volume per month unless it says GB. */
@@ -62,16 +74,23 @@ export const PAID_PLAN = Object.freeze({
   ]),
 });
 
-/** One cron per Worker, a `*` /5 in every environment: the plan's ceiling is
- *  250, and the account is meant to stop at two hundred shops. */
-export const ACCOUNT_LIMITS = Object.freeze({ crons: 250, target: 200 });
+/** One cron per Worker, a `*` /5 in every environment. Paid: a ceiling of 250,
+ *  and the account is meant to stop at two hundred shops. Free: five, and the
+ *  fifth environment leaves no room for another. */
+export const ACCOUNT_LIMITS = Object.freeze({
+  paid: Object.freeze({ crons: 250, target: 200 }),
+  free: Object.freeze({ crons: 5, target: 5 }),
+});
+
+/** D1 on Workers Free: a size per database and a total per account. */
+export const FREE_STORAGE = Object.freeze({ databaseBytes: 500_000_000, accountBytes: 5_000_000_000 });
 
 /** R2's operation classes. Deletes and aborts are free; anything not named
  *  here is counted as class A, the dearer one, rather than dropped. */
 const R2_CLASS_B = new Set(['HeadBucket', 'HeadObject', 'GetObject', 'UsageSummary', 'GetBucketEncryption', 'GetBucketLocation', 'GetBucketCors', 'GetBucketLifecycleConfiguration']);
 const R2_FREE = new Set(['DeleteObject', 'DeleteBucket', 'AbortMultipartUpload', 'DeleteObjects']);
 
-export const FLEET_USAGE_OPTIONS = { '--account': 'id', '--budget': 'dollars' };
+export const FLEET_USAGE_OPTIONS = { '--account': 'id', '--budget': 'dollars', '--plan': 'free|paid' };
 
 const USAGE_QUERY = `query Usage($account: String!, $since: Time!, $until: Time!, $sinceDate: Date!, $untilDate: Date!) {
   viewer {
@@ -103,7 +122,28 @@ const USAGE_QUERY = `query Usage($account: String!, $since: Time!, $until: Time!
   }
 }`;
 
+/** The free plan's quotas are per UTC day: each day's figures, account-wide. */
+const FREE_QUERY = `query FreeUsage($account: String!, $since: Time!, $until: Time!, $sinceDate: Date!, $untilDate: Date!) {
+  viewer {
+    accounts(filter: { accountTag: $account }) {
+      workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: $since, datetime_leq: $until }) {
+        sum { requests }
+        dimensions { date scriptName status }
+      }
+      d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date_geq: $sinceDate, date_leq: $untilDate }) {
+        sum { rowsRead rowsWritten }
+        dimensions { date }
+      }
+      d1StorageAdaptiveGroups(limit: 10000, filter: { date_geq: $sinceDate, date_leq: $untilDate }) {
+        max { databaseSizeBytes }
+        dimensions { databaseId }
+      }
+    }
+  }
+}`;
+
 const GB = 1_000_000_000;
+const MB = 1_000_000;
 
 /** The month so far, in UTC: from its first instant to now, and how much of it
  *  that is — the ratio the projection divides by. */
@@ -112,6 +152,82 @@ export function monthWindow(now = new Date()) {
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const elapsed = Math.max(now.getTime() - since.getTime(), 3_600_000);
   return { since, until: now, elapsedShare: Math.min(1, elapsed / (next.getTime() - since.getTime())) };
+}
+
+/** Yesterday and today in UTC: yesterday is the last whole day a quota was
+ *  counted on, today the one that is still counting. */
+export function dayWindow(now = new Date()) {
+  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  return { since, until: now };
+}
+
+/**
+ * The account's days, for the free plan. Pure.
+ *
+ * Every figure is the busiest DAY's, since that is the one a daily quota
+ * bites on; the Workers are those invoked in the window, each with its own
+ * stopped invocations, so the report can name the shop that stopped.
+ */
+export function summariseFreeUsage(account) {
+  const days = new Map();
+  const day = (date) => {
+    const entry = days.get(date) ?? { date, requests: 0, rowsRead: 0, rowsWritten: 0 };
+    days.set(date, entry);
+    return entry;
+  };
+  const scripts = new Map();
+  for (const group of account?.workersInvocationsAdaptive ?? []) {
+    const requests = group.sum?.requests ?? 0;
+    day(group.dimensions?.date ?? '').requests += requests;
+    const name = group.dimensions?.scriptName ?? '(inconnu)';
+    const script = scripts.get(name) ?? { name, requests: 0, stopped: 0 };
+    script.requests += requests;
+    if (STOPPED_STATUSES.has(group.dimensions?.status)) script.stopped += requests;
+    scripts.set(name, script);
+  }
+  for (const group of account?.d1AnalyticsAdaptiveGroups ?? []) {
+    const entry = day(group.dimensions?.date ?? '');
+    entry.rowsRead += group.sum?.rowsRead ?? 0;
+    entry.rowsWritten += group.sum?.rowsWritten ?? 0;
+  }
+  const sizes = new Map();
+  for (const group of account?.d1StorageAdaptiveGroups ?? []) {
+    const id = group.dimensions?.databaseId ?? '';
+    sizes.set(id, Math.max(sizes.get(id) ?? 0, group.max?.databaseSizeBytes ?? 0));
+  }
+  const peak = (field) => Math.max(0, ...[...days.values()].map((entry) => entry[field]));
+  const workers = [...scripts.values()].sort((a, b) => b.requests - a.requests || a.name.localeCompare(b.name));
+  return {
+    days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    busiest: { requests: peak('requests'), rowsRead: peak('rowsRead'), rowsWritten: peak('rowsWritten') },
+    stopped: workers.reduce((all, script) => all + script.stopped, 0),
+    workers,
+    d1: { largestBytes: Math.max(0, ...sizes.values()), totalBytes: [...sizes.values()].reduce((all, size) => all + size, 0) },
+  };
+}
+
+/** Judge the account's day against the free plan. Pure, one check per quota. */
+export function evaluateFreeUsage(usage) {
+  const share = (used, limit) => (limit > 0 ? used / limit : 0);
+  const quota = (name, used, limit, unit) => {
+    const value = share(used, limit);
+    return { name, ok: value < THRESHOLDS.quotaShare, judged: true, value, detail: `${quantity(used)} sur ${quantity(limit)} ${unit} (${percentage(value)}, seuil ${percentage(THRESHOLDS.quotaShare)})` };
+  };
+  return [
+    quota('requêtes Workers du compte', usage.busiest.requests, FREE_PLAN.requestsPerDay, 'par jour'),
+    quota('lignes D1 lues du compte', usage.busiest.rowsRead, FREE_PLAN.d1RowsReadPerDay, 'par jour'),
+    quota('lignes D1 écrites du compte', usage.busiest.rowsWritten, FREE_PLAN.d1RowsWrittenPerDay, 'par jour'),
+    {
+      name: 'invocations arrêtées',
+      ok: usage.stopped === 0,
+      judged: true,
+      value: usage.stopped,
+      detail: `${usage.stopped} invocation(s) arrêtée(s) par Cloudflare pour ressources dépassées (erreur 1102), ${FREE_PLAN.cpuMsPerRequest} ms de CPU par requête au plan gratuit`,
+    },
+    quota('base D1 la plus grosse', usage.d1.largestBytes / MB, FREE_STORAGE.databaseBytes / MB, 'Mo'),
+    quota('stockage D1 du compte', usage.d1.totalBytes / MB, FREE_STORAGE.accountBytes / MB, 'Mo'),
+    workersCheck(usage.workers.length, ACCOUNT_LIMITS.free, 'depuis hier'),
+  ];
 }
 
 /**
@@ -207,6 +323,7 @@ export function projectBill(usage, { elapsedShare, plan = PAID_PLAN }) {
 // French figures without Intl: the CLI's output must not depend on the ICU
 // data the runner's Node was built with.
 const dollars = (amount) => `${amount.toFixed(2).replace('.', ',')} $`;
+const percentage = (share) => `${(share * 100).toFixed(share < 0.1 ? 2 : 0).replace('.', ',')} %`;
 const quantity = (value) =>
   value >= 1000 ? String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : String(Math.round(value * 100) / 100).replace('.', ',');
 
@@ -214,9 +331,12 @@ export async function runFleetUsage(args, reporter) {
   const account = args.values['--account'] ?? process.env.CLOUDFLARE_ACCOUNT_ID;
   if (!account) throw usageError('fleet usage demande le compte mutualisé.', 'Passez --account <id>, ou posez CLOUDFLARE_ACCOUNT_ID.');
   if (!/^[0-9a-f]{32}$/.test(account)) throw usageError(`« ${account} » n'est pas un identifiant de compte Cloudflare.`);
+  const plan = args.values['--plan'] || 'paid';
+  if (plan !== 'free' && plan !== 'paid') throw usageError(`--plan « ${plan} » est inconnu.`, 'Valeurs : free, paid.');
   const budgetValue = args.values['--budget'];
   const budget = budgetValue === undefined || budgetValue === '' ? null : Number(budgetValue);
   if (budget !== null && !(Number.isFinite(budget) && budget > 0)) throw usageError(`--budget « ${budgetValue} » n'est pas un montant en dollars.`);
+  if (budget !== null && plan === 'free') throw usageError('--budget ne s\'applique qu\'au plan payant : le plan gratuit n\'a pas de facture, il a des quotas.');
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) {
     throw preconditionError(
@@ -224,9 +344,38 @@ export async function runFleetUsage(args, reporter) {
       'Le jeton de surveillance du compte mutualisé suffit : « Account Analytics : Read ». En CI, MONITOR_CLOUDFLARE_API_TOKEN du dépôt de flotte.',
     );
   }
+  return plan === 'free' ? freeUsage({ account, token }, reporter) : paidUsage({ account, token, budget }, reporter);
+}
 
+function report(reporter, checks) {
+  for (const check of checks) {
+    if (!check.judged) reporter.todo(`${check.name} — ${check.detail}`);
+    else if (check.ok) reporter.ok(`${check.name} — ${check.detail}`);
+    else reporter.fail(`${check.name} — ${check.detail}`);
+  }
+}
+
+function busiest(reporter, scripts, unit) {
+  if (scripts.length === 0) return;
+  reporter.section('Les plus actifs');
+  for (const script of scripts.slice(0, 5)) reporter.step(`    ${script.name} — ${unit(script)}`);
+}
+
+/** One cron per environment: as many Workers as the plan aims at is the day
+ *  to act, before the next environment is refused. */
+function workersCheck(active, limits, period) {
+  return {
+    name: 'Workers du compte',
+    ok: active < limits.target,
+    judged: true,
+    value: active,
+    detail: `${active} Worker(s) invoqué(s) ${period}, un cron chacun : ${limits.target} visés par compte, ${limits.crons} au plus`,
+  };
+}
+
+async function paidUsage({ account, token, budget }, reporter) {
   const window = monthWindow();
-  reporter.section(`Compte ${account} — du ${window.since.toISOString().slice(0, 10)} à maintenant (${Math.round(window.elapsedShare * 100)} % du mois)`);
+  reporter.section(`Compte ${account} — Workers Paid, du ${window.since.toISOString().slice(0, 10)} à maintenant (${Math.round(window.elapsedShare * 100)} % du mois)`);
   const data = await graphql(USAGE_QUERY, {
     account,
     since: window.since.toISOString(),
@@ -245,40 +394,25 @@ export async function runFleetUsage(args, reporter) {
   }
 
   reporter.section('Facture projetée');
-  const checks = [];
   const overBudget = budget !== null && bill.total > budget;
-  checks.push({
-    name: 'facture projetée',
-    ok: !overBudget,
-    judged: budget !== null,
-    value: bill.total,
-    detail: `${dollars(bill.total)} pour le mois, abonnement de ${dollars(bill.subscription)} compris${budget !== null ? ` (budget ${dollars(budget)})` : ''}`,
-  });
-  const active = usage.workers.scripts.length;
-  checks.push({
-    name: 'Workers du compte',
-    ok: active < ACCOUNT_LIMITS.target,
-    judged: true,
-    value: active,
-    detail: `${active} Worker(s) invoqué(s) ce mois, un cron chacun : ${ACCOUNT_LIMITS.target} visés par compte, ${ACCOUNT_LIMITS.crons} au plus`,
-  });
-  for (const check of checks) {
-    if (!check.judged) reporter.todo(`${check.name} — ${check.detail}`);
-    else if (check.ok) reporter.ok(`${check.name} — ${check.detail}`);
-    else reporter.fail(`${check.name} — ${check.detail}`);
-  }
-
-  if (usage.workers.scripts.length > 0) {
-    reporter.section('Les plus actifs');
-    for (const script of usage.workers.scripts.slice(0, 5)) {
-      reporter.step(`    ${script.name} — ${quantity(script.requests)} requête(s), ${quantity(script.cpuMs)} ms de CPU`);
-    }
-  }
+  const checks = [
+    {
+      name: 'facture projetée',
+      ok: !overBudget,
+      judged: budget !== null,
+      value: bill.total,
+      detail: `${dollars(bill.total)} pour le mois, abonnement de ${dollars(bill.subscription)} compris${budget !== null ? ` (budget ${dollars(budget)})` : ''}`,
+    },
+    workersCheck(usage.workers.scripts.length, ACCOUNT_LIMITS.paid, 'ce mois'),
+  ];
+  report(reporter, checks);
+  busiest(reporter, usage.workers.scripts, (script) => `${quantity(script.requests)} requête(s), ${quantity(script.cpuMs)} ms de CPU`);
 
   const failures = checks.filter((check) => !check.ok);
   reporter.result({
     command: 'fleet usage',
     ok: failures.length === 0,
+    plan: 'paid',
     account,
     window: { since: window.since.toISOString(), until: window.until.toISOString(), elapsedShare: window.elapsedShare },
     usage,
@@ -292,6 +426,40 @@ export async function runFleetUsage(args, reporter) {
       overBudget
         ? 'Lisez les plus actifs ci-dessus : la dérive a une boutique. Le budget se règle par --budget (variable MINSHOP_MONTHLY_BUDGET du dépôt de flotte).'
         : 'Le compte porte les boutiques qu\'il vise : la suivante s\'ouvre sur un second compte, sur le même modèle (ADR 0019).',
+    );
+  }
+  return 0;
+}
+
+async function freeUsage({ account, token }, reporter) {
+  const window = dayWindow();
+  reporter.section(`Compte ${account} — Workers Free, quotas du compte, jour UTC le plus chargé depuis le ${window.since.toISOString().slice(0, 10)}`);
+  const data = await graphql(FREE_QUERY, {
+    account,
+    since: window.since.toISOString(),
+    until: window.until.toISOString(),
+    sinceDate: window.since.toISOString().slice(0, 10),
+    untilDate: window.until.toISOString().slice(0, 10),
+  }, token);
+  const usage = summariseFreeUsage(data.viewer?.accounts?.[0]);
+  const checks = evaluateFreeUsage(usage);
+  report(reporter, checks);
+  busiest(reporter, usage.workers, (script) => `${quantity(script.requests)} requête(s)${script.stopped > 0 ? `, ${script.stopped} arrêtée(s)` : ''}`);
+
+  const failures = checks.filter((check) => !check.ok);
+  reporter.result({
+    command: 'fleet usage',
+    ok: failures.length === 0,
+    plan: 'free',
+    account,
+    window: { since: window.since.toISOString(), until: window.until.toISOString() },
+    usage,
+    checks,
+  });
+  if (failures.length > 0) {
+    throw verificationError(
+      `${failures.map((check) => check.name).join(', ')} : seuil franchi sur le compte mutualisé.`,
+      'Les quotas du plan gratuit sont ceux du compte : toutes ses boutiques tombent ensemble. Passer le compte en Workers Paid lève ces limites en quelques minutes, sans redéployer ; puis --plan paid et la variable MINSHOP_ACCOUNT_PLAN du dépôt de flotte (ADR 0019).',
     );
   }
   return 0;

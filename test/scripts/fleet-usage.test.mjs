@@ -1,6 +1,7 @@
 /**
  * `shopctl fleet usage` — the shared account's month against what Workers Paid
- * includes (ADR 0019, plan §13.1 lot 7).
+ * includes, or its busiest day against the free plan's quotas (ADR 0019, plan
+ * §13.1 lot 7).
  *
  * The prices are pure functions, so each one is a test here rather than a
  * surprise on the invoice; the command itself runs against the GraphQL double,
@@ -14,7 +15,18 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
-import { ACCOUNT_LIMITS, PAID_PLAN, monthWindow, projectBill, summariseUsage } from '../../shopctl/src/commands/fleet-usage.mjs';
+import {
+  ACCOUNT_LIMITS,
+  FREE_STORAGE,
+  PAID_PLAN,
+  dayWindow,
+  evaluateFreeUsage,
+  monthWindow,
+  projectBill,
+  summariseFreeUsage,
+  summariseUsage,
+} from '../../shopctl/src/commands/fleet-usage.mjs';
+import { FREE_PLAN } from '../../shopctl/src/commands/monitor.mjs';
 import { OPERATOR_ENV } from '../helpers/operator-env.mjs';
 
 const BIN = new URL('../../shopctl/bin/shopctl.mjs', import.meta.url).pathname;
@@ -22,6 +34,8 @@ const DOUBLE = new URL('../fixtures/graphql-double.mjs', import.meta.url).pathna
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 
 const worker = (name, requests, cpuMs = 0) => ({ sum: { requests, cpuTimeUs: cpuMs * 1000 }, dimensions: { scriptName: name } });
+const day = (name, requests, { date = '2026-11-02', status = 'success' } = {}) => ({ sum: { requests }, dimensions: { date, scriptName: name, status } });
+const rows = (rowsRead, rowsWritten, date = '2026-11-02') => ({ sum: { rowsRead, rowsWritten }, dimensions: { date } });
 const nothing = summariseUsage({});
 const line = (bill, key) => bill.lines.find((entry) => entry.key === key);
 
@@ -145,6 +159,60 @@ describe('the projected bill', () => {
   });
 });
 
+describe('the free plan, account-wide', () => {
+  it('starts yesterday in UTC, the last whole day a quota was counted on', () => {
+    expect(dayWindow(new Date('2026-11-01T03:17:00Z')).since.toISOString()).toBe('2026-10-31T00:00:00.000Z');
+  });
+
+  // The quota is the account's day: two shops add up, and two days do not.
+  it('adds the shops of one day, and keeps the busiest day', () => {
+    const usage = summariseFreeUsage({
+      workersInvocationsAdaptive: [
+        day('minshop-a-production', 30_000, { date: '2026-11-01' }),
+        day('minshop-b-production', 30_000, { date: '2026-11-01' }),
+        day('minshop-a-production', 50_000, { date: '2026-11-02' }),
+      ],
+      d1AnalyticsAdaptiveGroups: [rows(1_000_000, 10, '2026-11-01'), rows(2_000_000, 5, '2026-11-01'), rows(500, 90_000, '2026-11-02')],
+    });
+    expect(usage.busiest).toEqual({ requests: 60_000, rowsRead: 3_000_000, rowsWritten: 90_000 });
+    expect(usage.workers.map((script) => script.name)).toEqual(['minshop-a-production', 'minshop-b-production']);
+  });
+
+  it('names the Worker whose invocations Cloudflare stopped', () => {
+    const usage = summariseFreeUsage({
+      workersInvocationsAdaptive: [day('minshop-a-production', 10), day('minshop-b-production', 3, { status: 'exceededResources' }), day('minshop-b-production', 7)],
+    });
+    expect(usage.stopped).toBe(3);
+    expect(usage.workers.find((script) => script.name === 'minshop-b-production')).toMatchObject({ requests: 10, stopped: 3 });
+    expect(evaluateFreeUsage(usage).find((check) => check.name === 'invocations arrêtées')).toMatchObject({ ok: false, value: 3 });
+  });
+
+  it('judges each quota at the monitor\'s 70 %', () => {
+    const quiet = summariseFreeUsage({ d1AnalyticsAdaptiveGroups: [rows(FREE_PLAN.d1RowsReadPerDay * 0.69, 0)] });
+    const busy = summariseFreeUsage({ d1AnalyticsAdaptiveGroups: [rows(FREE_PLAN.d1RowsReadPerDay * 0.7, 0)] });
+    const read = (usage) => evaluateFreeUsage(usage).find((check) => check.name === 'lignes D1 lues du compte').ok;
+    expect(read(quiet)).toBe(true);
+    expect(read(busy)).toBe(false);
+  });
+
+  it('judges the largest database and the account\'s D1 storage', () => {
+    const size = (databaseId, databaseSizeBytes) => ({ max: { databaseSizeBytes }, dimensions: { databaseId } });
+    const checks = evaluateFreeUsage(summariseFreeUsage({ d1StorageAdaptiveGroups: [size('a', FREE_STORAGE.databaseBytes * 0.8), size('b', 1_000)] }));
+    expect(checks.find((check) => check.name === 'base D1 la plus grosse').ok).toBe(false);
+    expect(checks.find((check) => check.name === 'stockage D1 du compte').ok).toBe(true);
+  });
+
+  // One cron per environment and five per account: the fifth leaves no room
+  // for another, which is the day to go Paid.
+  it('fails at five Workers, the crons the free plan allows', () => {
+    const workers = (count) => summariseFreeUsage({ workersInvocationsAdaptive: Array.from({ length: count }, (_, index) => day(`minshop-s${index}-production`, 10)) });
+    const crons = (count) => evaluateFreeUsage(workers(count)).find((check) => check.name === 'Workers du compte').ok;
+    expect(ACCOUNT_LIMITS.free.crons).toBe(5);
+    expect(crons(4)).toBe(true);
+    expect(crons(5)).toBe(false);
+  });
+});
+
 describe('shopctl fleet usage', () => {
   const doubles = [];
   afterEach(() => {
@@ -211,18 +279,48 @@ describe('shopctl fleet usage', () => {
   // The day to open the next account is the day it reaches the shops it aims
   // at, not the day Cloudflare refuses the 251st cron.
   it('fails when the account carries as many Workers as it aims at', async () => {
-    const workers = Array.from({ length: ACCOUNT_LIMITS.target }, (_, index) => worker(`minshop-s${index}-production`, 10));
+    const workers = Array.from({ length: ACCOUNT_LIMITS.paid.target }, (_, index) => worker(`minshop-s${index}-production`, 10));
     const api = await analytics({ usage: { workersInvocationsAdaptive: workers } });
     const { status, report } = usage([], env(api.origin));
 
     expect(status).toBe(EXIT_CODES.verification);
-    expect(report.checks.find((check) => check.name === 'Workers du compte')).toMatchObject({ ok: false, value: ACCOUNT_LIMITS.target });
+    expect(report.checks.find((check) => check.name === 'Workers du compte')).toMatchObject({ ok: false, value: ACCOUNT_LIMITS.paid.target });
   });
 
   it('refuses without an account, with a malformed one, or with a budget that is not an amount', () => {
     expect(usage([], { CLOUDFLARE_API_TOKEN: 'analytics-read-token' }).status).toBe(EXIT_CODES.usage);
     expect(usage(['--account', 'agence'], { CLOUDFLARE_API_TOKEN: 'analytics-read-token' }).status).toBe(EXIT_CODES.usage);
     expect(usage(['--account', ACCOUNT, '--budget', 'beaucoup'], { CLOUDFLARE_API_TOKEN: 'analytics-read-token' }).status).toBe(EXIT_CODES.usage);
+    expect(usage(['--account', ACCOUNT, '--plan', 'pro'], { CLOUDFLARE_API_TOKEN: 'analytics-read-token' }).status).toBe(EXIT_CODES.usage);
+  });
+
+  // The free plan has quotas, not a bill: a budget there would be judged
+  // against nothing.
+  it('refuses a budget on the free plan', () => {
+    expect(usage(['--account', ACCOUNT, '--plan', 'free', '--budget', '5'], { CLOUDFLARE_API_TOKEN: 'analytics-read-token' }).status).toBe(EXIT_CODES.usage);
+  });
+
+  it('on the free plan, asks for the account\'s days since yesterday and passes a quiet one', async () => {
+    const api = await analytics({ usage: { workersInvocationsAdaptive: [day('minshop-a-production', 3000)], d1AnalyticsAdaptiveGroups: [rows(40_000, 200)] } });
+    const { status, stderr, report } = usage(['--plan', 'free'], env(api.origin));
+
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(report).toMatchObject({ ok: true, plan: 'free', usage: { busiest: { requests: 3000, rowsRead: 40_000 } } });
+    expect(report.bill).toBeUndefined();
+    const [request] = api.read().requests;
+    expect(request.query).toContain('dimensions { date scriptName status }');
+    expect(request.query).not.toContain('r2OperationsAdaptiveGroups');
+    expect(Date.parse(request.variables.until) - Date.parse(request.variables.since)).toBeLessThanOrEqual(2 * 86_400_000);
+  });
+
+  // Two shops of 40 000 requests each: neither one alone near its quota, the
+  // account past 70 % of the one they share.
+  it('on the free plan, fails when the shops together near a quota they share', async () => {
+    const api = await analytics({ usage: { workersInvocationsAdaptive: [day('minshop-a-production', 40_000), day('minshop-b-production', 40_000)] } });
+    const { status, report } = usage(['--plan', 'free'], env(api.origin));
+
+    expect(status).toBe(EXIT_CODES.verification);
+    expect(report.checks.find((check) => check.name === 'requêtes Workers du compte')).toMatchObject({ ok: false, value: 0.8 });
   });
 
   it('needs the analytics token before asking anything', () => {

@@ -114,7 +114,7 @@ account the tokens live in ONE repository, the fleet's — the directory of
 workflows from `shopctl/templates/fleet/`: a Deploy that checks out the shop a
 registry entry's `repository` names and runs that shop's own `provision` and
 `deploy`, and a Nightly matrix (backups one shop at a time, for the account's
-API limit) of `backup`, `backup verify` and `monitor --plan paid`. Both refuse a
+API limit) of `backup`, `backup verify` and `monitor` at the account's plan. Both refuse a
 shop below `FLEET_MINIMUM_CORE` (`shopctl/src/fleet.mjs`), the first core that
 marks its database. `fleet repo` is `repo` for that repository: public by
 default (GitHub Free has environment secrets on a public repository only), the
@@ -140,6 +140,12 @@ account carries `ACCOUNT_LIMITS.target` (200) Workers — the day to open the
 next account, before the ceiling of 250 crons. A volume past what is included
 is reported, never failed: it is billed, not blocked. The fleet Nightly runs it
 once a night with the first shop's shopctl and `vars.MINSHOP_MONTHLY_BUDGET`.
+`--plan free` is an account starting with one or two very small shops: no bill,
+but the free plan's DAILY quotas are the account's, so it sums the shops of the
+busiest UTC day (`summariseFreeUsage`) and judges them at `monitor`'s 70 %
+(`FREE_PLAN`, `THRESHOLDS`), plus stopped invocations, D1 sizes and the five
+crons (`ACCOUNT_LIMITS.free`). The fleet Nightly takes the plan from
+`vars.MINSHOP_ACCOUNT_PLAN`, `paid` when unset, and passes it to `monitor` too.
 
 A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
 ADR 0019) has one resource wrangler does not cover: the merchant's domain as a

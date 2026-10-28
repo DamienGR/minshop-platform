@@ -35,7 +35,10 @@ documentation de Cloudflare :
 
 - **plafonds par compte en Paid** : 250 crons, 500 Workers, 1 000 espaces KV,
   50 000 bases D1. Chaque environnement porte le cron `*/5` de
-  `wrangler.template.jsonc` : les crons mordent les premiers ;
+  `wrangler.template.jsonc` : les crons mordent les premiers. **En Free** : 5
+  crons, 100 Workers, 10 bases D1 de 500 Mo et 5 Go en tout, et des quotas
+  quotidiens qui sont ceux du compte (100 000 requêtes, 5 millions de lignes
+  D1 lues et 100 000 écrites), remis à zéro à minuit UTC ;
 - **jetons** : aucune permission D1 ne se limite à une base ; un jeton R2 ne se
   limite à des buckets que par l'API S3, pas par wrangler ni l'API REST ; les
   rôles par Worker (2026-09-15) couvrent le déploiement et les secrets d'un
@@ -57,6 +60,17 @@ test du socle (ADR 0002) reste à part, avec ses propres jetons. Le compte d'une
 boutique reste `cloudflare.accountId` dans son manifeste. Quand un compte
 approche son plafond de crons, deux cents boutiques visées, un second compte
 s'ouvre sur le même modèle ; une boutique ne se répartit jamais sur deux.
+
+**Le compte peut démarrer en Workers Free**, le temps d'une ou deux très
+petites boutiques (retenu par Damien le 2026-10-28). Ses quotas sont alors partagés : les boutiques réunies
+tiennent dans ce qu'une seule tenait sur son propre compte gratuit (environ
+2 000 visites par jour, note sur les limites des tiers gratuits du
+2026-10-16), et une boutique qui les épuise fait tomber toutes les autres
+jusqu'à minuit UTC. Cinq crons font cinq environnements au plus. Le compte
+passe en Paid au premier signal de `shopctl fleet usage --plan free` (70 %
+d'un quota du jour, une invocation arrêtée, une base proche de sa taille,
+cinq Workers) ; le passage lève les limites en quelques minutes, sans
+redéployer.
 
 **Stripe, Resend et le nom de domaine restent au nom du commerçant** : l'ADR
 0002 tient pour eux, et l'agence reste hors du flux d'argent. Cloudflare devient
@@ -102,7 +116,9 @@ d'hôte, puis destruction sur le compte mutualisé.
 - le coût Cloudflare devient un abonnement de 5 $ par mois et l'usage au-delà :
   environ 5 $ jusqu'à une trentaine de boutiques, 11 $ pour cent, 44 $ pour deux
   cent cinquante, sur des hypothèses de trafic qui restent à mesurer ; les
-  limites du plan gratuit ne s'appliquent plus à aucune boutique ;
+  limites du plan gratuit ne s'appliquent plus à aucune boutique. Tant que le
+  compte démarre en Free, il ne coûte rien, et ses boutiques partagent une même
+  panne de quota : c'est le prix de ces 5 $ ;
 - le commerçant n'ouvre plus de compte Cloudflare : son prérequis devient un
   CNAME chez son registrar, et la dépendance de planning de l'ADR 0002 rétrécit
   d'autant ;
@@ -176,6 +192,7 @@ d'hôte, puis destruction sur le compte mutualisé.
   et une archive au format 1 se restaure toujours (`test/scripts/backup.test.mjs`,
   `test/scripts/restore.test.mjs`) ;
 - `shopctl fleet usage` projette la facture du mois depuis les volumes du
-  compte, et échoue au-delà du budget ou à deux cents Workers
-  (`test/scripts/fleet-usage.test.mjs`) ;
+  compte, et échoue au-delà du budget ou à deux cents Workers ; avec
+  `--plan free`, il additionne les boutiques d'un même jour contre les quotas
+  du compte et échoue à cinq Workers (`test/scripts/fleet-usage.test.mjs`) ;
 - la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.

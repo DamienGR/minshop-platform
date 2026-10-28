@@ -68,7 +68,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl fleet status \| verify \| report` | 9 | L'état de la flotte déclarée, en table, en verdict ou en JSON. |
 | `shopctl fleet upgrade --to <tag>` | 9 | La même mise à niveau, boutique par boutique, sans jamais déployer. |
 | `shopctl fleet init \| repo` | après le pilote | Le dépôt de flotte du compte mutualisé (ADR 0019) : ses workflows, puis le dépôt GitHub et ses secrets. |
-| `shopctl fleet usage` | après le pilote | La consommation du mois du compte mutualisé contre les volumes de Workers Paid, et la facture projetée. |
+| `shopctl fleet usage` | après le pilote | La consommation du compte mutualisé : la facture projetée en Workers Paid, les quotas du jour en Workers Free. |
 | `shopctl certify --env production` | après le pilote | Juge, en lecture seule, si la boutique est certifiable ; `--write` écrit le rapport. |
 
 ## `shopctl new`
@@ -552,6 +552,16 @@ signalé, pas en échec : il est facturé, pas bloqué. Le Nightly de la flotte 
 lance chaque nuit ; le budget est la variable `MINSHOP_MONTHLY_BUDGET` du dépôt
 de flotte, posée à la main :
 `gh variable set MINSHOP_MONTHLY_BUDGET --body 20 -R <propriétaire/flotte>`.
+
+Un compte qui démarre en Workers Free, le temps d'une ou deux très petites
+boutiques, n'a pas de facture mais des quotas quotidiens, et ce sont ceux du
+compte : `fleet usage --plan free` additionne les boutiques du jour UTC le plus
+chargé contre 100 000 requêtes, 5 millions de lignes D1 lues et 100 000
+écrites, et échoue à 70 % de l'un d'eux, sur une invocation arrêtée, sur une
+base proche de ses 500 Mo, ou à cinq Workers (les cinq crons du plan). Le
+Nightly de la flotte prend le plan dans la variable `MINSHOP_ACCOUNT_PLAN`
+(`paid` si elle est absente) ; `--budget` n'a pas de sens au plan gratuit, et
+la commande le refuse.
 
 **Côté socle**, publier une version passe par une porte :
 

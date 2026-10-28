@@ -32,8 +32,9 @@ six sections changent ainsi :
 - **0. Prérequis** : le commerçant n'ouvre pas de compte Cloudflare. Il garde
   son domaine chez son registrar, ouvre Resend et Stripe à son nom, et ajoutera
   un CNAME à la section 2. Côté agence, une fois pour toutes : le compte
-  mutualisé (Workers Paid, un seul Super Administrator, clé de sécurité
-  matérielle), sa zone SaaS et son origine de repli (SSL/TLS → Custom
+  mutualisé (Workers Paid, ou Free le temps d'une ou deux très petites
+  boutiques, la variable `MINSHOP_ACCOUNT_PLAN` du dépôt de flotte le dit ; un
+  seul Super Administrator, clé de sécurité matérielle), sa zone SaaS et son origine de repli (SSL/TLS → Custom
   Hostnames), le dépôt de flotte (`shopctl fleet init` puis `fleet repo`), et
   un widget Turnstile par lot de dix noms d'hôte. Le manifeste porte
   `cloudflare.accountId` = le compte mutualisé et `cloudflare.saasZone` = la

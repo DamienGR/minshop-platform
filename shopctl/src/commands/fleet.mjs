@@ -68,8 +68,9 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
   shopctl fleet init                   Écrire les workflows du dépôt de flotte (ADR 0019)
   shopctl fleet repo                   Créer le dépôt de flotte, ses environnements et
                                        les secrets du compte mutualisé
-  shopctl fleet usage                  Consommation du mois du compte mutualisé et
-                                       facture projetée (Workers Paid)
+  shopctl fleet usage                  Consommation du compte mutualisé : facture
+                                       projetée (Workers Paid) ou quotas du jour
+                                       (Workers Free, --plan free)
 
   --registry <chemin>   Registre de flotte. Défaut : le fleet.json le plus proche.
   --only <slugs>        Se limiter à ces boutiques (séparées par des virgules).
@@ -92,7 +93,9 @@ export const fleetUsage = `Usage: shopctl fleet <sous-commande> [options]
                         porter secrets d'environnement et relecteurs en GitHub Free.
   --no-push             repo : ne pas pousser la branche.
   --account <id>        usage : le compte mutualisé. Défaut : CLOUDFLARE_ACCOUNT_ID.
-  --budget <dollars>    usage : échouer (code 6) si la facture projetée le dépasse.
+  --plan <free|paid>    usage : plan Workers du compte. Défaut : paid.
+  --budget <dollars>    usage : échouer (code 6) si la facture projetée le dépasse
+                        (plan payant seulement).
   --json                Rapport lisible par une machine.
 
 Sur le compte mutualisé (ADR 0019), les jetons Cloudflare vivent dans le dépôt de
@@ -108,7 +111,9 @@ flotte et nulle part ailleurs. fleet repo les lit dans l'environnement :
 
 fleet usage lit CLOUDFLARE_API_TOKEN, un jeton « Account Analytics : Read » du
 compte mutualisé. Il échoue aussi quand le compte porte deux cents Workers : le
-jour d'ouvrir le suivant, avant le plafond de 250 crons.
+jour d'ouvrir le suivant, avant le plafond de 250 crons. Au plan gratuit, il juge
+le jour le plus chargé du compte contre ses quotas quotidiens, partagés par
+toutes les boutiques, et les cinq crons du plan : le jour de passer en Paid.
 
 Une mise à niveau de flotte ne déploie rien et ne fusionne aucune pull request.
 Elle propose une version à plusieurs boutiques ; chacune la prend quand un humain

@@ -32,7 +32,7 @@ ne signe pas à sa place.
 
 | Sujet | Ce que fait l'agence | Ce que fait le commerçant |
 |---|---|---|
-| Hébergement Cloudflare | ouvre et paie le compte mutualisé (Workers Paid), le refacture dans la maintenance, en est seul administrateur ; Cloudflare est son sous-traitant ultérieur ([sous-traitants](sous-traitants.md)) | autorise ce sous-traitant ultérieur dans le contrat ; n'est pas membre du compte |
+| Hébergement Cloudflare | ouvre et paie le compte mutualisé (Workers Paid, ou Free au démarrage), le refacture dans la maintenance, en est seul administrateur ; Cloudflare est son sous-traitant ultérieur ([sous-traitants](sous-traitants.md)) | autorise ce sous-traitant ultérieur dans le contrat ; n'est pas membre du compte |
 | Construction et thème | crée la boutique depuis un tag du socle, applique le thème, la provisionne | valide la preview privée, puis la recette |
 | Mises à jour du socle | publie les versions, propose la montée par pull request, déploie après approbation | approuve la mise en production quand le contrat le prévoit |
 | Sécurité de la plateforme | portes de sécurité à chaque commit, secrets tirés par boutique, audit des dépendances chaque nuit | garde son mot de passe d'administration, n'ajoute pas d'accès |

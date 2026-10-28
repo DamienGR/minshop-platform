@@ -9,14 +9,19 @@
 #     one run hours late still leaves every gap below 24 h — to the shop's own
 #     `-backups` bucket, then verified with the key on the runner, never
 #     restored there;
-#   - production's error rate (`shopctl monitor --plan paid`: the shared account
-#     is on Workers Paid, so the free plan's quotas are not this shop's), with a
-#     token that reads analytics and nothing else;
-#   - the account's month (`shopctl fleet usage`, plan §13.1 lot 7): every
-#     volume Workers Paid bills against what it includes, the projected bill
+#   - production's error rate (`shopctl monitor`), with a token that reads
+#     analytics and nothing else;
+#   - the account (`shopctl fleet usage`, plan §13.1 lot 7). On Workers Paid:
+#     every volume billed against what the plan includes, the projected bill
 #     against the repository variable MINSHOP_MONTHLY_BUDGET when it is set,
 #     and the Workers the account carries against the two hundred it aims at.
-#     Asked once a night, with the first shop's shopctl and the same token.
+#     On Workers Free: the account's busiest day against the daily quotas every
+#     shop shares, and its five crons. Asked once a night, with the first
+#     shop's shopctl and the same token.
+#
+# The account's plan is the repository variable MINSHOP_ACCOUNT_PLAN, `paid`
+# when unset (ADR 0019). `monitor` takes it too: on the free plan it still
+# judges one shop's quotas and stopped invocations, and `fleet usage` the sum.
 #
 # One shop at a time for the backups: the shared account answers 1 200 API
 # calls per five minutes, dashboard included, and a shop's first backup is two
@@ -40,8 +45,10 @@
 #                                   Read, Memberships and User Details Read
 #     MONITOR_CLOUDFLARE_ACCOUNT_ID
 #     SHOPS_READ_TOKEN              only when the shops' repositories are private
-#   and, set by hand, the repository variable:
-#     MINSHOP_MONTHLY_BUDGET        dollars; above it the projected bill fails
+#   and, set by hand, the repository variables:
+#     MINSHOP_ACCOUNT_PLAN          free or paid; paid when unset
+#     MINSHOP_MONTHLY_BUDGET        dollars, paid plan only; above it the
+#                                   projected bill fails
 name: Nightly
 
 on:
@@ -170,6 +177,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
+      PLAN: ${{ vars.MINSHOP_ACCOUNT_PLAN || 'paid' }}
 
     steps:
       - name: Check out the shop
@@ -201,7 +209,7 @@ jobs:
             echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt de flotte : la production n'est pas surveillée."
             exit 1
           fi
-          node shopctl/bin/shopctl.mjs monitor --env production --shop "$SHOP" --plan paid --hours 24 --json | tee monitor-production.json
+          node shopctl/bin/shopctl.mjs monitor --env production --shop "$SHOP" --plan "$PLAN" --hours 24 --json | tee monitor-production.json
 
       - name: Keep the report
         if: always()
@@ -213,7 +221,7 @@ jobs:
           if-no-files-found: ignore
 
   account-usage:
-    name: Shared account usage and projected bill
+    name: Shared account usage
     needs: shops
     if: ${{ needs.shops.outputs.matrix != '[]' && github.event.schedule != '17 15 * * *' }}
     runs-on: ubuntu-latest
@@ -222,6 +230,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
+      PLAN: ${{ vars.MINSHOP_ACCOUNT_PLAN || 'paid' }}
       BUDGET: ${{ vars.MINSHOP_MONTHLY_BUDGET }}
 
     steps:
@@ -248,7 +257,7 @@ jobs:
           node-version-file: shop/.nvmrc
           check-latest: true
 
-      - name: Usage of the month and projected bill
+      - name: Account usage against its plan
         working-directory: shop
         run: |
           set -euo pipefail
@@ -256,8 +265,8 @@ jobs:
             echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt de flotte : la consommation du compte n'est pas suivie."
             exit 1
           fi
-          args=(fleet usage --json)
-          if [ -n "$BUDGET" ]; then
+          args=(fleet usage --plan "$PLAN" --json)
+          if [ -n "$BUDGET" ] && [ "$PLAN" = paid ]; then
             args+=(--budget "$BUDGET")
           fi
           node shopctl/bin/shopctl.mjs "${args[@]}" | tee usage.json

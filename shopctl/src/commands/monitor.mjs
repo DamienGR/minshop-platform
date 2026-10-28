@@ -164,7 +164,7 @@ const percent = (share) => `${(share * 100).toFixed(share < 0.1 ? 2 : 0)} %`;
  * `exceededMemory` are the names Logpush and tail events give the same thing,
  * accepted so the count never depends on which one an API answers with.
  */
-const STOPPED_STATUSES = new Set(['exceededResources', 'exceededCpu', 'exceededMemory']);
+export const STOPPED_STATUSES = new Set(['exceededResources', 'exceededCpu', 'exceededMemory']);
 
 /** Sum the per-status groups into one figure. CPU time comes in microseconds. */
 export function summariseWorker(groups) {
