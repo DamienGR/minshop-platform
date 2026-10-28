@@ -48,6 +48,10 @@ Quatre règles valent pour tous :
   brute de ces runbooks se lance avec `CLOUDFLARE_ACCOUNT_ID=<id>` devant, l'id
   du compte de l'environnement (`cloudflare.accountId`, ou
   `cloudflare.productionAccountId` pour la production). `shopctl` le fait seul.
+  Sur le compte mutualisé (ADR 0019), une commande brute atteint toutes les
+  boutiques : le nom de la ressource (`minshop-<slug>-<env>…`) se relit avant
+  de l'exécuter. `shopctl` relit le marqueur de propriétaire de la base ;
+  wrangler, non.
 
 ## Supervision
 
@@ -108,6 +112,17 @@ fois le staging détruit (étape 9), la variable de dépôt `STAGING_RETIRED`
 
 Le run nocturne qui échoue est une notification que GitHub envoie déjà ; il n'y
 a pas de second canal à entretenir.
+
+### Sur le compte mutualisé
+
+Le dépôt d'une boutique du compte mutualisé ne porte aucun jeton Cloudflare
+(ADR 0019) : la variable `MINSHOP_FLEET` y nomme le dépôt de flotte, et son
+Nightly ne garde que la suite, l'audit et les portes distantes. Le Nightly du
+dépôt de flotte fait le reste pour chaque boutique de `fleet.json`, une à la
+fois : la sauvegarde de la production à 03:17 et 15:17 UTC, contrôlée avec la
+clé, et `monitor --plan paid` (le compte est en Workers Paid ; les quotas du
+plan gratuit ne s'appliquent à aucune boutique). Une boutique en échec n'arrête
+pas les autres, et son job porte son slug.
 
 ### Ce qui reste manuel
 

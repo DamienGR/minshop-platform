@@ -2905,7 +2905,9 @@ Engagée en huit lots, dans cet ordre :
    médias scellés dans le bucket `-backups`, archives au format 2, livrés en
    v0.3.32) ;
 6. la documentation d'exploitation : la sortie d'un client devient une
-   migration, Cloudflare devient un sous-traitant ultérieur de l'agence ;
+   migration, Cloudflare devient un sous-traitant ultérieur de l'agence
+   (`docs/operations/`, avec la mise en ligne, les responsabilités et les
+   runbooks de fuite de secret et de violation de données, en v0.3.32) ;
 7. la supervision du compte : la consommation du mois contre les volumes inclus,
    et la facture projetée ;
 8. la migration du pilote de son compte client vers le compte mutualisé, qui
