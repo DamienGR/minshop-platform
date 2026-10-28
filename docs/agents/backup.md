@@ -25,8 +25,11 @@ Six properties hold, and each one is a test:
   file stops being complete at the first migration nobody updates it for, and
   the table missing from the list is the table missing from the archive —
   silently, until a restore. Left out: `sqlite_*`, `_cf_*`, `d1_migrations`
-  (that is the schema, not the data), and the FTS5 index with its shadow tables,
-  which migration 0003's triggers rebuild as the rows go back in.
+  (that is the schema, not the data), the FTS5 index with its shadow tables,
+  which migration 0003's triggers rebuild as the rows go back in, and
+  `_minshop_owner`, the marker saying which shop the DATABASE belongs to
+  (ADR 0019, `shopctl/src/owner.mjs`): carried in an archive, it would follow
+  one shop's data into another's database and stamp it with the source's name.
 - **an archive is a directory of ordinary files** — `manifest.json` in the clear,
   `data.bin` (gzip then AES-256-GCM), `objects/<hash>.bin` per R2 object. The
   manifest carries the schema version, per-table row counts and checksums, and

@@ -62,6 +62,7 @@ import { repositoryPath } from '../backup/archive.mjs';
 import { keyId, loadKey } from '../backup/crypto.mjs';
 import { SMOKE_WAIT_SECONDS, originFromDeployOutput, runSmoke } from '../smoke.mjs';
 import { environmentHost, resourceNames } from '../../../scripts/manifest.mjs';
+import { guardOwner } from '../owner.mjs';
 
 export const DEPLOY_OPTIONS = {
   '--env': 'environnement',
@@ -207,6 +208,10 @@ export async function runDeploy(args, reporter) {
   }
   const databaseId = database.uuid ?? database.database_id;
   reporter.ok(`${names.database} (${databaseId}), ${names.images}, ${names.files} — juridiction ${jurisdiction}`);
+  // Before the backup, the migrations and the upload: on a shared account
+  // (ADR 0019) the database found by this name may be another shop's, and
+  // everything below would write into it.
+  guardOwner({ database: names.database, root, manifest, env, reporter });
 
   // Re-asked at every deploy, not only at provisioning. The bucket holds the
   // merchant's paid downloads and it is one dashboard click from being public;

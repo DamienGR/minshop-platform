@@ -32,7 +32,7 @@
  */
 import { existsSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { CLIENT_MANIFEST, loadManifest } from '../../../scripts/manifest.mjs';
+import { CLIENT_MANIFEST, detectFleetCollisions, loadManifest } from '../../../scripts/manifest.mjs';
 import { ShopctlError, usageError, verificationError } from '../errors.mjs';
 import { loadFleet, selectShops } from '../fleet.mjs';
 import { coreRemoteUrl, publishedCoreTags } from '../upgrade.mjs';
@@ -113,6 +113,9 @@ export function surveyFleet(cwd, { registry, only, offline = false } = {}) {
     if (repository) published = publishedCoreTags(repository, { cwd: fleet.root });
   }
 
+  // Every manifest that could be read, for the one question no shop can
+  // answer about itself: does another one claim the same names?
+  const claims = [];
   const shops = selected.map((entry) => {
     const at = relative(cwd, entry.root) || '.';
     if (!entry.exists) {
@@ -157,6 +160,9 @@ export function surveyFleet(cwd, { registry, only, offline = false } = {}) {
       };
     }
 
+    // Valid manifests only, as `detectFleetCollisions` asks: one mid-upgrade
+    // may lack a field the names are derived from.
+    if ((loaded.errors ?? []).length === 0) claims.push({ file: entry.slug, manifest: loaded.manifest });
     try {
       const state = coreState(
         { root: entry.root, manifest: loaded.manifest, file: loaded.file, errors: loaded.errors },
@@ -169,6 +175,12 @@ export function surveyFleet(cwd, { registry, only, offline = false } = {}) {
       return { ...entry, at, ok: false, findings: [{ status: 'fail', message: error.message }] };
     }
   });
+
+  for (const finding of collisionFindings(claims)) {
+    const shop = shops.find((candidate) => candidate.slug === finding.slug);
+    shop.findings.push({ status: 'fail', message: finding.message });
+    shop.ok = false;
+  }
 
   const versions = shops.map((shop) => shop.state?.core.merged).filter(Boolean);
   return {
@@ -187,6 +199,41 @@ export function surveyFleet(cwd, { registry, only, offline = false } = {}) {
       shops: shops.filter((shop) => shop.state?.core.merged === version).map((shop) => shop.slug),
     })),
   };
+}
+
+/**
+ * Two shops of the fleet that claim one name, as one finding per shop and per
+ * neighbour.
+ *
+ * `config:validate` asks this of the manifests ONE tree carries; the fleet is
+ * the only place that sees every shop's. On one shared account (ADR 0019) a
+ * worker or database name claimed twice is one set of orders for two shops,
+ * and a hostname claimed twice is served by whichever deployed last. The
+ * registry already refuses two entries with one slug (`fleet.mjs`); what it
+ * cannot see is two slugs deriving the same resources through `workerName`.
+ *
+ * @param {Array<{ file: string, manifest: object }>} claims `file` is the slug
+ * @returns {Array<{ slug: string, message: string }>}
+ */
+export function collisionFindings(claims) {
+  const shared = new Map();
+  for (const collision of detectFleetCollisions(claims)) {
+    for (const slug of collision.files) {
+      for (const other of collision.files.filter((candidate) => candidate !== slug)) {
+        const key = `${slug}\u0000${other}`;
+        if (!shared.has(key)) shared.set(key, { slug, other, values: [] });
+        const values = shared.get(key).values;
+        if (!values.includes(collision.value)) values.push(collision.value);
+      }
+    }
+  }
+  return [...shared.values()].map(({ slug, other, values }) => ({
+    slug,
+    message:
+      `« ${other} » revendique les mêmes identifiants : ${values.slice(0, 3).join(', ')}` +
+      `${values.length > 3 ? ` et ${values.length - 3} autre(s)` : ''}. ` +
+      'Sur un compte mutualisé, les deux boutiques se partageraient ces ressources (ADR 0019) : donnez à l\'une un cloudflare.workerName ou un domaine à elle.',
+  }));
 }
 
 /** The `core` remote of a shop tree, asked of git rather than of the manifest.

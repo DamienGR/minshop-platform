@@ -166,6 +166,13 @@ export function judgeAccount(result, workerSecrets, required) {
   } else {
     findings.push(ok(`base et buckets présents (${(result.steps ?? []).length} ressources)`));
   }
+  // A dry run that found a FOREIGN marker refused before writing its document,
+  // so what reaches here is own or unmarked (ADR 0019).
+  if (result.owner?.verdict === 'own') {
+    findings.push(ok(`base marquée pour cette boutique${result.owner.repository ? ` (${result.owner.repository})` : ''}`));
+  } else if (result.owner?.verdict === 'unmarked' && missing.length === 0) {
+    findings.push(warn('la base ne porte pas le marqueur de sa boutique (ADR 0019).', '`shopctl provision --env production` le pose.'));
+  }
   for (const check of result.jurisdictionChecks ?? []) {
     if (check.ok === false) findings.push(fail(`${check.resource} hors de la juridiction ${check.expected}.`, 'Une juridiction ne se change pas (ADR 0004).'));
     else if (check.ok === null) findings.push(warn(`${check.resource} : juridiction non publiée par l'API, à confirmer dans le tableau de bord.`));

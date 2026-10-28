@@ -60,6 +60,7 @@ import {
 import { ShopctlError, inputError, preconditionError, verificationError } from '../errors.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { resourceNames } from '../../../scripts/manifest.mjs';
+import { guardOwner } from '../owner.mjs';
 
 export const DESTROY_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id', '--confirm': 'slug' };
 
@@ -151,6 +152,10 @@ export function runDestroy(args, reporter) {
     if (entry.exists) reporter.warn(`${entry.kind} ${entry.name}`);
     else reporter.ok(`${entry.kind} ${entry.name} — déjà absent`);
   }
+
+  // Before the first deletion: on a shared account (ADR 0019) a database of
+  // this name may be another shop's, and so may everything named beside it.
+  if (database) guardOwner({ database: names.database, root, manifest, env, reporter });
 
   if (present.every((entry) => !entry.exists)) {
     reporter.result({ command: 'destroy', ok: true, dryRun, shop: manifest.client.slug, env, account: { id: account.id, name: account.name }, removed: [], remaining: [] });

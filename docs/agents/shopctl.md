@@ -82,6 +82,27 @@ Access that is how a fresh shop is tried, on a public production it is an order
 form that takes no payment, from the first deploy until Stripe is configured.
 Once installed, the setting is the merchant's and a re-run leaves it alone.
 
+On the shared account of ADR 0019 a resource's name no longer proves whose it
+is: two shops that derive the same names find each other's database, and
+`provision` adopts a database by its name. So the database carries a MARKER
+(`shopctl/src/owner.mjs`): one row in `_minshop_owner`, the repository —
+`origin` as configured, `owner/repo` lowercased — and the slug. `provision`
+writes it as soon as the database exists, completes it once the tree has an
+`origin`, and claims an unmarked database (every one provisioned before the
+ADR, on its merchant's own account). Every other command that finds the
+database by name — `deploy`, `destroy`, `restore`, and through
+`openEnvironment()` `backup`, `privacy`, `admin` and `certify` — reads the
+marker before anything else and refuses one naming another repository or
+another slug, or naming a repository a tree with no `origin` cannot prove it
+is (exit 4); an unmarked database is a warning. The way out is `provision
+--claim <slug>`, the slug typed: a repository renamed or transferred is the
+case it exists for. The marker is never backed up, never restored and never
+exported, so an archive of one shop restored into another leaves the target's
+own. `fleet status` / `fleet verify` add the other half: two shops of the
+registry whose manifests claim one name — a `workerName`, a database, a
+hostname — fail both, since the registry's slug check cannot see two slugs
+deriving the same resources.
+
 `admin password` writes the administration's password hash into an
 environment's database: read from STDIN (typed twice without echo, or a file),
 hashed by the shop's own `src/features/auth/password.ts` in a child Node with

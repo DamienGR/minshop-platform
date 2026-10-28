@@ -2886,12 +2886,13 @@ l'ADR 0001 tient. Stripe, Resend et le nom de domaine restent au nom du
 commerçant. Le plafond d'un compte est de 250 crons, un par environnement : on
 vise deux cents boutiques par compte, puis un second compte sur le même modèle.
 
-Engagée en huit lots, chacun dans sa pull request, et dans cet ordre :
+Engagée en huit lots, dans cet ordre :
 
 1. la décision écrite : l'ADR 0019, les statuts des ADR 0002 et 0015 ;
-2. la garde d'isolement : un slug unique dans `fleet.json`, et un marqueur de
-   propriétaire sans lequel `provision` et `destroy` ne touchent pas une
-   ressource existante ;
+2. la garde d'isolement, livrée en v0.3.32 : un marqueur de propriétaire dans
+   chaque base (dépôt et slug), que `provision` pose et que toute commande qui
+   trouve la base par son nom relit avant d'y toucher, et `fleet verify` qui
+   refuse deux boutiques revendiquant un même nom de ressource ou d'hôte ;
 3. les domaines par Cloudflare for SaaS : un CNAME chez le commerçant, une route
    par nom d'hôte vers le Worker de sa boutique, après un essai réel sur le
    compte ;

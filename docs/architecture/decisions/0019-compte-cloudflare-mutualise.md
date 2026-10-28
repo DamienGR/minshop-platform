@@ -65,9 +65,11 @@ un fournisseur de l'agence, refacturé dans la maintenance.
 **L'isolement d'exécution de l'ADR 0001 ne change pas** : chaque boutique garde
 son Worker, sa base D1, ses buckets, son espace KV et ses secrets. Ce qui
 séparait deux boutiques en plus, leurs comptes distincts, est remplacé par deux
-gardes : un slug est **unique dans le registre de flotte** (`fleet.json`,
-ADR 0016), et le provisioning ne reprend une ressource existante que si elle
-porte le **marqueur de sa boutique**.
+gardes : deux boutiques du **registre de flotte** (`fleet.json`, ADR 0016) ne
+revendiquent jamais un même slug, un même nom de ressource ni un même nom
+d'hôte, et chaque base porte le **marqueur de sa boutique** (son dépôt et son
+slug) : une commande qui trouve une base par son nom refuse d'y toucher si elle
+est marquée pour une autre boutique.
 
 **Le domaine du commerçant arrive par Cloudflare for SaaS.** Une zone de
 l'agence sur le compte mutualisé est la zone SaaS ; le commerçant garde son DNS
@@ -152,9 +154,10 @@ d'hôte, puis destruction sur le compte mutualisé.
 
 ## Vérification
 
-- `shopctl fleet verify` refuse deux boutiques au même slug ou au même nom
-  d'hôte, et `shopctl provision` refuse de reprendre une ressource sans le
-  marqueur de sa boutique ;
+- `shopctl fleet verify` refuse deux boutiques qui revendiquent un même nom de
+  ressource ou d'hôte ; `shopctl provision` refuse de reprendre une base marquée
+  pour une autre boutique, et `deploy`, `destroy`, `restore`, `backup`,
+  `privacy` et `admin` refusent d'y toucher (`test/scripts/owner.test.mjs`) ;
 - `test/scripts/tenant-isolation.test.mjs` continue de construire deux boutiques
   dans un seul compte ;
 - le rendu de production route le nom d'hôte sur la zone SaaS et ferme

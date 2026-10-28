@@ -54,8 +54,9 @@ import { applyScript, query } from '../backup/store.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { renderWrangler, resourceNames, wranglerSubstitutions } from '../../../scripts/manifest.mjs';
 import { DEFAULT_KEEP_DAYS } from '../backup/archive.mjs';
+import { describeOwner, judgeOwner, markOwner, ownerRefusal, readClaim, readOwner, shopRepository } from '../owner.mjs';
 
-export const PROVISION_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id' };
+export const PROVISION_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id', '--claim': 'slug' };
 
 export const provisionUsage = `Usage: shopctl provision --env <staging|production> [options]
 
@@ -63,6 +64,8 @@ export const provisionUsage = `Usage: shopctl provision --env <staging|productio
   --dry-run                   Interroger le compte et n'écrire nulle part.
   --account <id>              Compte Cloudflare attendu, si le manifeste ne le déclare pas.
   --shop <slug>               Manifeste à utiliser quand l'arbre en contient plusieurs.
+  --claim <slug>              Réécrire le marqueur d'une base marquée pour un autre
+                              dépôt (dépôt renommé ou transféré). Le slug, saisi.
   --json                      Rapport lisible par une machine.
 
 Crée ou confirme, pour cette boutique et cet environnement :
@@ -74,6 +77,11 @@ Crée ou confirme, pour cette boutique et cet environnement :
 
 La commande est rejouable : elle relit le compte à chaque étape, ne recrée rien
 et reprend une exécution interrompue sans option particulière.
+
+La base porte le marqueur de sa boutique (le dépôt et le slug) : une base
+existante marquée pour une autre boutique est refusée avant toute écriture,
+puisque sur un compte mutualisé deux boutiques au même nom se partageraient
+leurs données (ADR 0019).
 `;
 
 /**
@@ -129,6 +137,10 @@ export function runProvision(args, reporter) {
   const { manifest, root } = shop;
   const names = resourceNames(manifest, { env });
   const jurisdiction = manifest.cloudflare.jurisdiction;
+  const slug = manifest.client.slug;
+  // Read before the account is asked anything: a typo here should not cost
+  // the operator a round of wrangler calls.
+  const claim = readClaim(args.values['--claim'], slug);
 
   reporter.section(`Compte Cloudflare`);
   const identity = whoami({ cwd: root });
@@ -177,6 +189,15 @@ export function runProvision(args, reporter) {
     databaseId = created.uuid;
     record('base D1', names.database, 'create', `juridiction ${jurisdiction}, ${databaseId}`);
   }
+
+  // ── Whose database ────────────────────────────────────────────────────────
+  //
+  // Asked of an existing database before anything else is created or written:
+  // on a shared account (ADR 0019) a database found by its name may be another
+  // shop's, and adopting it would deploy this shop onto that one's orders. A
+  // new database is marked at once, so a run that stops before the buckets
+  // still leaves it claimed.
+  const owner = markDatabase({ database: names.database, existing: Boolean(existing), root, slug, env, claim, dryRun, reporter });
 
   // ── R2 ────────────────────────────────────────────────────────────────────
   const buckets = [['bucket images', names.images], ['bucket fichiers', names.files], ['bucket sauvegardes', names.backups]];
@@ -398,6 +419,7 @@ export function runProvision(args, reporter) {
     jurisdiction,
     resources: names,
     databaseId,
+    owner,
     steps,
     jurisdictionChecks: checks,
     exposure: { files: filesExposure, images: imagesExposure, backups: backupsExposure },
@@ -424,6 +446,53 @@ export function runProvision(args, reporter) {
     );
   }
   return 0;
+}
+
+/**
+ * Read the database's marker, decide, and write it — or say what would be
+ * written, in a dry run.
+ *
+ * A database marked for another shop stops the run here, before the buckets,
+ * unless the operator typed `--claim <slug>`: the case it exists for is a
+ * repository renamed or transferred, where the marker is stale and the data is
+ * this shop's. An unmarked one is claimed, because every database provisioned
+ * before ADR 0019 is unmarked and lives on its merchant's own account, where
+ * no other shop could have taken the name.
+ *
+ * @returns {{ repository: string|null, verdict: string, action: 'create'|'keep'|'update'|'claim' }}
+ */
+function markDatabase({ database, existing, root, slug, env, claim, dryRun, reporter }) {
+  const repository = shopRepository(root);
+  const marker = existing ? readOwner(database, { cwd: root }) : null;
+  const verdict = judgeOwner(marker, { repository, slug });
+  const owner = describeOwner({ repository, slug });
+
+  let action;
+  if (verdict === 'foreign' || verdict === 'unproven') {
+    if (!claim) throw ownerRefusal(verdict, { database, marker, repository, slug, env });
+    action = 'claim';
+    reporter.warn(`${database} était marquée pour ${describeOwner(marker)} ; marqueur ${dryRun ? 'à réécrire' : 'réécrit'} pour ${owner} (--claim).`);
+  } else if (verdict === 'unmarked') {
+    action = 'create';
+    if (dryRun) reporter.todo(`${database} serait marquée pour ${owner}`);
+    else reporter.ok(`${database} — marquée pour ${owner}${existing ? ' (base antérieure au marqueur)' : ''}`);
+  } else if (!marker.repository && repository) {
+    action = 'update';
+    if (dryRun) reporter.todo(`${database} — le marqueur serait complété du dépôt ${repository}`);
+    else reporter.ok(`${database} — marqueur complété du dépôt ${repository}`);
+  } else {
+    action = 'keep';
+    reporter.ok(`${database} — marquée pour ${describeOwner(marker)}`);
+  }
+
+  if (!dryRun && action !== 'keep') markOwner(database, { cwd: root, repository, slug });
+  if (!repository && action !== 'keep') {
+    reporter.warn(
+      'cet arbre n\'a pas de remote origin : le marqueur ne nomme que le slug.',
+      'Relancez `shopctl provision` une fois le dépôt créé (`shopctl repo`) : il complète le marqueur, et seul le dépôt distingue deux boutiques au même slug.',
+    );
+  }
+  return { repository, verdict, action };
 }
 
 /** The setting Admin → Réglages → Paiements writes: the methods switched OFF. */

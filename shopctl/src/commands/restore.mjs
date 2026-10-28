@@ -51,6 +51,7 @@ import { applyScript, countRows, putObject, query, readSchema, readTables } from
 import { DATA_FILE, authenticatedHeader, readArchive } from '../backup/archive.mjs';
 import { keyId, keyMatches, loadKey, open } from '../backup/crypto.mjs';
 import { backupContext } from './backup.mjs';
+import { guardOwner } from '../owner.mjs';
 
 const LOCAL_DATABASE_ID = '00000000-0000-4000-8000-00000000c0de';
 
@@ -205,6 +206,9 @@ export function runRestore(args, reporter) {
       );
     }
     const databaseId = database.uuid ?? database.database_id;
+    // A restore with --overwrite replaces what is there: on a shared account
+    // (ADR 0019) the database of this name has to be proven this shop's first.
+    guardOwner({ database: names.database, root, manifest, env, reporter });
     renderEnvironmentConfig({ root, manifest, env, databaseId });
     reporter.ok(`${names.database} (${databaseId}) — wrangler.jsonc rendu`);
   }
