@@ -260,7 +260,8 @@ jobs:
         if: ${{ vars.MINSHOP_FLEET != '' }}
         env:
           FLEET: ${{ vars.MINSHOP_FLEET }}
-        run: echo "::notice::Compte mutualisé (ADR 0019) : sauvegarde, restauration d'essai et surveillance du staging sautées, aucun jeton Cloudflare dans le dépôt de la boutique ($FLEET les porte)."
+        run: |
+          echo "::notice::Compte mutualisé (ADR 0019) : sauvegarde, restauration d'essai et surveillance du staging sautées, aucun jeton Cloudflare dans le dépôt de la boutique ($FLEET les porte)."
 
       # The archive stays on the runner for the restore below and goes to the
       # environment's `-backups` bucket, on the shop's account and in its
