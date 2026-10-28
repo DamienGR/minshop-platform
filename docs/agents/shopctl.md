@@ -101,7 +101,11 @@ exported, so an archive of one shop restored into another leaves the target's
 own. `fleet status` / `fleet verify` add the other half: two shops of the
 registry whose manifests claim one name — a `workerName`, a database, a
 hostname — fail both, since the registry's slug check cannot see two slugs
-deriving the same resources.
+deriving the same resources. `shopctl new` asks the same question before it
+clones, of the `fleet.json` found walking up from where it runs: a slug the
+registry lists (cloned here or not), or a name a registered manifest already
+derives, is refused (exit 3); an unreadable registry is a warning, left to
+`fleet verify`.
 
 A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
 ADR 0019) has one resource wrangler does not cover: the merchant's domain as a

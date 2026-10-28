@@ -57,18 +57,25 @@ export function findRegistry(cwd = process.cwd(), explicit = undefined) {
     if (!existsSync(path)) throw inputError(`aucun registre de flotte à ${path}.`);
     return path;
   }
+  const found = nearestRegistry(cwd);
+  if (found) return found;
+  throw preconditionError(
+    `aucun ${FLEET_FILE} trouvé depuis ${cwd}.`,
+    `Le registre de flotte est déclaré, jamais deviné : une boutique que personne n'a inscrite n'est pas dans la flotte. Écrivez ${FLEET_FILE} à côté des boutiques, ou passez --registry :\n\n${FLEET_EXAMPLE}`,
+  );
+}
+
+/** `fleet.json` walking up from `cwd`, or null: for a command that asks the
+ *  fleet a question when there is one, and has nothing to ask otherwise. */
+export function nearestRegistry(cwd = process.cwd()) {
   let directory = resolve(cwd);
   for (;;) {
     const candidate = resolve(directory, FLEET_FILE);
     if (existsSync(candidate)) return candidate;
     const parent = dirname(directory);
-    if (parent === directory) break;
+    if (parent === directory) return null;
     directory = parent;
   }
-  throw preconditionError(
-    `aucun ${FLEET_FILE} trouvé depuis ${cwd}.`,
-    `Le registre de flotte est déclaré, jamais deviné : une boutique que personne n'a inscrite n'est pas dans la flotte. Écrivez ${FLEET_FILE} à côté des boutiques, ou passez --registry :\n\n${FLEET_EXAMPLE}`,
-  );
 }
 
 /**
