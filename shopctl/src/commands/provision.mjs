@@ -55,6 +55,7 @@ import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { renderWrangler, resourceNames, wranglerSubstitutions } from '../../../scripts/manifest.mjs';
 import { DEFAULT_KEEP_DAYS } from '../backup/archive.mjs';
 import { describeOwner, judgeOwner, markOwner, ownerRefusal, readClaim, readOwner, shopRepository } from '../owner.mjs';
+import { cnameInstruction, createCustomHostname, fallbackOrigin, findCustomHostname, hostnameState, locateHostname } from '../saas.mjs';
 
 export const PROVISION_OPTIONS = { '--env': 'environnement', '--shop': 'slug', '--account': 'id', '--claim': 'slug' };
 
@@ -74,6 +75,10 @@ Crée ou confirme, pour cette boutique et cet environnement :
   minshop-<slug>-<env>-db       la base D1, juridiction du manifeste
   minshop-<slug>-<env>-images   le bucket R2 des images produit
   minshop-<slug>-<env>-files    le bucket R2 privé des fichiers vendus
+
+et, en production, quand cloudflare.saasZone sert le domaine du commerçant
+(ADR 0019), son nom d'hôte personnalisé sur cette zone — par l'API de
+Cloudflare, avec CLOUDFLARE_API_TOKEN.
 
 La commande est rejouable : elle relit le compte à chaque étape, ne recrée rien
 et reprend une exécution interrompue sans option particulière.
@@ -122,7 +127,7 @@ export function renderEnvironmentConfig({ root, manifest, env, databaseId, out =
   return { out, substitutions };
 }
 
-export function runProvision(args, reporter) {
+export async function runProvision(args, reporter) {
   if (args.positionals.length > 0) {
     throw new ShopctlError(`provision ne prend pas d'argument positionnel ; reçu « ${args.positionals.join('", "')} ».`, {
       kind: 'usage',
@@ -357,6 +362,9 @@ export function runProvision(args, reporter) {
     }
   }
 
+  // ── The merchant's domain, on the SaaS zone ───────────────────────────────
+  const hostname = await ensureHostname({ manifest, env, account, dryRun, reporter });
+
   const failures = reporter.entries.filter((entry) => entry.status === 'fail');
 
   // ── Configuration, migrations, secrets ────────────────────────────────────
@@ -424,6 +432,7 @@ export function runProvision(args, reporter) {
     jurisdictionChecks: checks,
     exposure: { files: filesExposure, images: imagesExposure, backups: backupsExposure },
     retention,
+    hostname,
     config: config?.out ?? null,
     migrations,
     demoCheckout,
@@ -493,6 +502,58 @@ function markDatabase({ database, existing, root, slug, env, claim, dryRun, repo
     );
   }
   return { repository, verdict, action };
+}
+
+/**
+ * The merchant's domain as a custom hostname of the SaaS zone: found, or
+ * created, and its state said in the words the merchant needs.
+ *
+ * Created before the merchant's CNAME exists, on purpose: Cloudflare then
+ * validates it the moment the record appears, and the operator has the exact
+ * line to send the merchant now rather than on the morning of the launch. A
+ * pending hostname is a step to do, not a failure — `deploy` is what refuses
+ * to smoke-test a domain nothing answers on yet.
+ *
+ * @returns {null|{ hostname: string, zone: string, action: string|null, status: string|null, ssl: string|null, active: boolean, cname: string|null }}
+ */
+async function ensureHostname({ manifest, env, account, dryRun, reporter }) {
+  const located = await locateHostname({ manifest, env, account, reporter, required: !dryRun });
+  if (!located) return null;
+  const { hostname, zoneName, token, zone } = located;
+  const report = { hostname, zone: zoneName, action: null, status: null, ssl: null, active: false, cname: null };
+  if (!token) return report;
+
+  // Set once per zone, by hand (docs/agents/shopctl.md): every merchant's CNAME
+  // points at it, so a zone without one serves nobody.
+  const fallback = await fallbackOrigin(zone.id, { token });
+  report.cname = fallback?.origin ?? null;
+  if (fallback?.status === 'active') reporter.ok(`origine de repli de ${zoneName} : ${fallback.origin}`);
+  else {
+    reporter.warn(
+      `l'origine de repli de ${zoneName} est ${fallback ? `en état « ${fallback.status} »` : 'absente ou illisible'}.`,
+      `Réglage unique de la zone : un enregistrement proxifié (AAAA 100::) posé comme origine de repli, dans SSL/TLS → Custom Hostnames. Les CNAME des commerçants pointent vers lui.`,
+    );
+  }
+
+  let record = await findCustomHostname(zone.id, hostname, { token });
+  report.action = record ? 'keep' : 'create';
+  if (!record && dryRun) {
+    reporter.todo(`${hostname} serait créé comme nom d'hôte personnalisé de ${zoneName}`, cnameInstruction(hostname, fallback, zoneName));
+    return report;
+  }
+  if (!record) record = await createCustomHostname(zone.id, hostname, { token });
+
+  const state = hostnameState(record);
+  Object.assign(report, { status: state.status, ssl: state.ssl, active: state.active });
+  const created = report.action === 'create' ? 'créé' : 'déjà présent';
+  if (state.active) reporter.ok(`${hostname} — ${created}, actif, certificat actif`);
+  else {
+    reporter.todo(
+      `${hostname} — ${created}, en attente du DNS du commerçant (état ${state.status ?? 'inconnu'}, certificat ${state.ssl ?? 'inconnu'})`,
+      `${cnameInstruction(hostname, fallback, zoneName)}${state.errors.length > 0 ? ` Cloudflare dit : ${state.errors.join(' ; ')}.` : ''}`,
+    );
+  }
+  return report;
 }
 
 /** The setting Admin → Réglages → Paiements writes: the methods switched OFF. */

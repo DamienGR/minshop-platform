@@ -63,6 +63,7 @@ import { keyId, loadKey } from '../backup/crypto.mjs';
 import { SMOKE_WAIT_SECONDS, originFromDeployOutput, runSmoke } from '../smoke.mjs';
 import { environmentHost, resourceNames } from '../../../scripts/manifest.mjs';
 import { guardOwner } from '../owner.mjs';
+import { cnameInstruction, fallbackOrigin, findCustomHostname, hostnameState, locateHostname } from '../saas.mjs';
 
 export const DEPLOY_OPTIONS = {
   '--env': 'environnement',
@@ -82,7 +83,9 @@ export const deployUsage = `Usage: shopctl deploy --env <staging|production> [op
   --skip-verify               Ne pas relancer \`npm run verify\` (la CI l'a déjà fait).
   --skip-build                Réutiliser le build présent dans dist/.
   --skip-smoke                Ne pas interroger l'URL déployée. À n'utiliser que
-                              lorsque le réseau du runner ne peut pas l'atteindre.
+                              lorsque le réseau du runner ne peut pas l'atteindre,
+                              ou avant que le DNS du commerçant ne pointe sur la
+                              zone SaaS (cloudflare.saasZone).
   --url <origine>             Origine à interroger, si wrangler n'en annonce pas.
   --smoke-wait <secondes>     Attente au plus, tant que Cloudflare répond à la place
                               du Worker (propagation d'un nouveau nom). Défaut : ${SMOKE_WAIT_SECONDS}.
@@ -95,7 +98,9 @@ export const deployUsage = `Usage: shopctl deploy --env <staging|production> [op
 
 Les ressources doivent exister : \`shopctl provision --env <env>\` d'abord.
 En production, une sauvegarde chiffrée est prise avant les migrations ; si elle
-échoue, rien n'est déployé.
+échoue, rien n'est déployé. Quand cloudflare.saasZone sert le domaine du
+commerçant, son nom d'hôte personnalisé doit exister et être actif sur la zone
+(CLOUDFLARE_API_TOKEN pour le vérifier).
 `;
 
 /**
@@ -257,6 +262,12 @@ export async function runDeploy(args, reporter) {
       reporter.ok(`${names.images} — domaine d'images ${imagesDomain} attaché`);
     }
   }
+
+  // The route rendered below sends the merchant's domain to this Worker only
+  // if the SaaS zone knows it as a custom hostname (ADR 0019). Asked before the
+  // backup and the migrations, like the images domain: a deployment nobody can
+  // reach is found out here, not by the smoke test after the upload.
+  await checkHostname({ manifest, env, account, reporter, smokeElsewhere: args.values['--skip-smoke'] === true || args.values['--url'] !== undefined });
 
   // ── Configuration ─────────────────────────────────────────────────────────
   reporter.section('Configuration');
@@ -486,4 +497,42 @@ export function activeVersion(worker, { cwd }) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The merchant's domain, served through the SaaS zone: it has to exist there,
+ * and be active, for the smoke test to reach the shop.
+ *
+ * Missing is a refusal: `provision` creates it, and a deploy creates nothing.
+ * Pending — the merchant's CNAME not in yet — is a refusal too, unless the
+ * smoke test was pointed elsewhere or skipped on purpose: the first deploy of
+ * a shop whose domain switches over at launch is exactly that case, and it is
+ * the operator's to say, not this command's to guess.
+ */
+async function checkHostname({ manifest, env, account, reporter, smokeElsewhere }) {
+  const located = await locateHostname({ manifest, env, account, reporter, required: true });
+  if (!located) return;
+  const { hostname, zoneName, token, zone } = located;
+  const record = await findCustomHostname(zone.id, hostname, { token });
+  if (!record) {
+    throw preconditionError(
+      `${hostname} n'est pas un nom d'hôte personnalisé de ${zoneName}.`,
+      `Lancez \`shopctl provision --env ${env}\` d'abord : il le crée, et dit quel CNAME le commerçant doit poser.`,
+    );
+  }
+  const state = hostnameState(record);
+  if (state.active) {
+    reporter.ok(`${hostname} — actif sur ${zoneName}, certificat actif`);
+    return;
+  }
+  const instruction = cnameInstruction(hostname, await fallbackOrigin(zone.id, { token }), zoneName);
+  const detail = `${hostname} n'est pas encore actif sur ${zoneName} (état ${state.status ?? 'inconnu'}, certificat ${state.ssl ?? 'inconnu'})`;
+  if (smokeElsewhere) {
+    reporter.warn(`${detail} : la boutique ne répondra sur son domaine qu'une fois le DNS posé.`, instruction);
+    return;
+  }
+  throw preconditionError(
+    `${detail} : le test de fumée n'aurait rien à interroger.`,
+    `${instruction} Pour déployer avant la bascule du domaine, relancez avec --skip-smoke (ou --url vers une autre origine).`,
+  );
 }

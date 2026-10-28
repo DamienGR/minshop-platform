@@ -186,6 +186,19 @@ export function judgeAccount(result, workerSecrets, required) {
     else if (exposure.public) findings.push(fail(`le bucket des ${label} est public (${exposure.devUrl ?? exposure.domains.join(', ')}).`, 'Coupez l\'URL r2.dev et détachez le domaine.'));
     else findings.push(ok(`bucket des ${label} privé`));
   }
+  // Served through the SaaS zone (ADR 0019): the domain reaches the shop only
+  // once the merchant's CNAME is in and the certificate issued.
+  if (result.hostname) {
+    const { hostname } = result;
+    if (hostname.action === null) findings.push(warn(`${hostname.hostname} : nom d'hôte non vérifié, CLOUDFLARE_API_TOKEN absent.`));
+    else if (hostname.active) findings.push(ok(`${hostname.hostname} servi par la zone ${hostname.zone}, certificat actif`));
+    else {
+      findings.push(fail(
+        `${hostname.hostname} n'est pas actif sur la zone ${hostname.zone} (état ${hostname.status ?? 'absent'}, certificat ${hostname.ssl ?? 'absent'}).`,
+        `CNAME ${hostname.hostname} → ${hostname.cname ?? `l'origine de repli de ${hostname.zone}`} chez le registrar du commerçant, puis \`shopctl provision --env production\`.`,
+      ));
+    }
+  }
   if (result.exposure?.images?.devUrl && (result.exposure.images.domains ?? []).length === 0) {
     findings.push(warn('les images sont servies par une URL r2.dev, qui n\'est pas un domaine de production.'));
   }

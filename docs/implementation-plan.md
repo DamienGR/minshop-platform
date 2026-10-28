@@ -2894,8 +2894,8 @@ Engagée en huit lots, dans cet ordre :
    trouve la base par son nom relit avant d'y toucher, et `fleet verify` qui
    refuse deux boutiques revendiquant un même nom de ressource ou d'hôte ;
 3. les domaines par Cloudflare for SaaS : un CNAME chez le commerçant, une route
-   par nom d'hôte vers le Worker de sa boutique, après un essai réel sur le
-   compte ;
+   par nom d'hôte vers le Worker de sa boutique (`cloudflare.saasZone`, code
+   livré en v0.3.32), après un essai réel sur le compte ;
 4. le dépôt de flotte : les jetons du compte, Deploy et Nightly pour tout le
    parc ; plus aucun jeton Cloudflare dans le dépôt d'une boutique ;
 5. les sauvegardes aux médias dédupliqués : sans elles, chaque archive recopie

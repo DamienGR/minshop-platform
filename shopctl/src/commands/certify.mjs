@@ -272,12 +272,12 @@ function treeGroup(context) {
   return findings;
 }
 
-function accountGroup(context) {
+async function accountGroup(context) {
   const { root, manifest, values, deps } = context;
   const silent = silentReporter();
   const pass = Object.fromEntries(['--account', '--shop'].filter((key) => values[key] !== undefined).map((key) => [key, values[key]]));
   try {
-    (deps.provision ?? runProvision)({ positionals: [], values: { '--env': 'production', '--dry-run': true, '--json': true, ...pass } }, silent.reporter);
+    await (deps.provision ?? runProvision)({ positionals: [], values: { '--env': 'production', '--dry-run': true, '--json': true, ...pass } }, silent.reporter);
   } catch (error) {
     // A refused dry run still wrote its document first; one that stopped
     // before (an account that does not match) has only its error to give.

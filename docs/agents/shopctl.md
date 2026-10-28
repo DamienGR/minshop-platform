@@ -103,6 +103,24 @@ registry whose manifests claim one name — a `workerName`, a database, a
 hostname — fail both, since the registry's slug check cannot see two slugs
 deriving the same resources.
 
+A production served through a Cloudflare for SaaS zone (`cloudflare.saasZone`,
+ADR 0019) has one resource wrangler does not cover: the merchant's domain as a
+custom hostname of that zone. `shopctl/src/saas.mjs` speaks to the Cloudflare
+API for it, with `CLOUDFLARE_API_TOKEN` (« Zone : Read » and « SSL and
+Certificates : Edit » on the zone) and never a `wrangler login` session.
+`provision` creates it — HTTP validation, TLS 1.2 at least — before the
+merchant's CNAME exists, and prints the one line to send them (`CNAME <domain>
+→ <fallback origin>`); `deploy` refuses a hostname that is missing, or still
+pending unless `--skip-smoke` (or `--url`) says the smoke test is not aimed at
+it — the first deploy of a shop whose domain switches at launch; `destroy`
+deletes it after the Worker, and refuses to start without the token rather than
+leave a hostname behind. The zone's fallback origin is set once, by hand: a
+proxied `AAAA 100::` record named in SSL/TLS → Custom Hostnames, which
+`provision` reads and warns about. Routing several hostnames of one zone to
+several Workers is what the real trial of the plan's lot 3 has to prove before
+a shop depends on it; until then the fallback is the merchant's zone on the
+shared account, with no `saasZone`.
+
 `admin password` writes the administration's password hash into an
 environment's database: read from STDIN (typed twice without echo, or a file),
 hashed by the shop's own `src/features/auth/password.ts` in a child Node with
