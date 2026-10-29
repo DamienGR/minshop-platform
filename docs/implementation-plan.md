@@ -2923,7 +2923,11 @@ chaque nom d'hôte mène à son Worker en HTTPS et rien d'autre n'y mène. La zo
 SaaS est dg-tech.dev. Deux écarts à la fiche (§4) : la double authentification
 du compte mutualisé est une application, et une clé matérielle est à poser
 avant le lot 8 ; dg-tech.dev, choisi par Damien, porte aussi le site et les
-e-mails de l'agence.
+e-mails de l'agence. Le lot 8 a sa
+[fiche](certification/compte-mutualise-migration-pilote.md), répétée en
+doublure le 2026-10-28 : une heure et demie, cinq minutes de coupure, B détruit
+après une nuit verte de la flotte (`DamienGR/minshop-fleet`) ; les défauts
+trouvés sont corrigés en v0.3.33.
 
 Sources relevées le 2026-10-15 puis le 2026-10-28 sur developers.cloudflare.com :
 tarifs et limites de Workers, D1, R2 et KV, tarifs d'Observability au

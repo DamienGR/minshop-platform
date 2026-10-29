@@ -199,8 +199,9 @@ Sortie complète et certificats archivés hors dépôt
 ## Ce qui suit : le lot 8
 
 La migration du pilote suit la [sortie client, §1 bis](../operations/sortie-client.md)
-à l'envers ; sa fiche vient une fois l'essai vert. Quatre points à préparer
-d'ici là :
+à l'envers ; sa fiche, répétée en doublure le 2026-10-28, est
+[compte-mutualise-migration-pilote.md](compte-mutualise-migration-pilote.md).
+Les quatre points qu'elle prépare :
 
 - **le dépôt de flotte** : un dépôt GitHub de l'agence, public (GitHub Free
   n'a de secrets d'environnement que sur un dépôt public), créé par

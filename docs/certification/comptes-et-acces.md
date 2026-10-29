@@ -139,6 +139,7 @@ Workers », puis :
 | Workers R2 Storage, écriture | buckets dans leur juridiction, règle de cycle de vie, objets des sauvegardes |
 | Workers KV Storage, écriture | le namespace des sessions, que wrangler crée au premier `deploy` et que `destroy` supprime |
 | Workers Routes, écriture, sur la zone | le domaine personnalisé du Worker |
+| Zone, lecture, et SSL and Certificates, écriture, sur la zone SaaS (compte mutualisé) | le nom d'hôte personnalisé du commerçant (`cloudflare.saasZone`) : `provision` le crée, `deploy` le lit, `destroy` le supprime |
 | Account Settings et Memberships, lecture | `wrangler whoami`, que `shopctl` lit pour refuser le mauvais compte |
 | Account Analytics, lecture | `shopctl monitor --env staging` dans le nocturne |
 
