@@ -108,9 +108,9 @@ export function hostnameState(record) {
   return { id: record?.id ?? null, status, ssl, active: status === 'active' && ssl === 'active', errors };
 }
 
-/** The one DNS record the merchant adds, as it is typed at a registrar. */
+/** The one DNS record the merchant adds, as it is typed in their DNS. */
 export function cnameInstruction(hostname, fallback, zoneName) {
-  return `Chez le registrar du commerçant : CNAME ${hostname} → ${fallback?.origin ?? `l'origine de repli de ${zoneName}`}. La validation et le certificat suivent seuls (validation HTTP).`;
+  return `Dans le DNS du commerçant (chez son registrar, ou en DNS seul si sa zone est chez Cloudflare) : CNAME ${hostname} → ${fallback?.origin ?? `l'origine de repli de ${zoneName}`}. La validation et le certificat suivent seuls (validation HTTP).`;
 }
 
 /**

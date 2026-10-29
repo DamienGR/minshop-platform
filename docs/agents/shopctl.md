@@ -118,7 +118,10 @@ API limit) of `backup`, `backup verify` and `monitor` at the account's plan. Bot
 shop below `FLEET_MINIMUM_CORE` (`shopctl/src/fleet.mjs`), the first core that
 marks its database. `fleet repo` is `repo` for that repository: public by
 default (GitHub Free has environment secrets on a public repository only), the
-account read from the managed shops' manifests, which must agree. `repo --fleet
+account read from the managed shops' manifests, which must agree. Its backup
+key comes from `SHOPCTL_BACKUP_KEY` or the fleet's own `.shopctl/backup.key`,
+which `fleet init` writes into the fleet's `.gitignore`; a key in the fleet's
+git index is refused (exit 4) before anything is created or pushed. `repo --fleet
 <owner/repo>` is the shop's half: the variable `MINSHOP_FLEET`, no environment,
 leftover Cloudflare secrets named with the `gh secret delete` that removes them
 — never deleted. The core's own `deploy.yml` refuses to run, and `nightly.yml`

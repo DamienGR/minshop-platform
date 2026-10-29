@@ -24,7 +24,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { CLIENT_MANIFEST, ENVIRONMENTS, environmentAccount, loadManifest } from '../../../scripts/manifest.mjs';
 import { ShopctlError, inputError, preconditionError } from '../errors.mjs';
 import { FLEET_MINIMUM_CORE, findRegistry, readRegistry } from '../fleet.mjs';
-import { KEY_ENV, keyId, loadKey } from '../backup/crypto.mjs';
+import { DEFAULT_KEY_FILE, KEY_ENV, keyId, loadKey } from '../backup/crypto.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { capture } from '../process.mjs';
 import {
@@ -60,6 +60,9 @@ const TEMPLATES = resolve(CORE_ROOT, 'shopctl/templates/fleet');
 
 /** The repository a fleet is called when nothing names it. */
 export const FLEET_REPOSITORY_NAME = 'minshop-fleet';
+
+/** Where `loadKey` finds the backup key in the fleet's tree, as .gitignore says it. */
+const KEY_DIRECTORY = `/${dirname(DEFAULT_KEY_FILE)}/`;
 
 /** Where the fleet's monitor token comes from, and the shops' read token. */
 const MONITOR_FROM = 'CLOUDFLARE_API_TOKEN_MONITOR'; // secret-scan:ignore — a variable's name
@@ -113,21 +116,25 @@ export function initFleet(args, reporter) {
 
   // The shops' checkouts sit next to fleet.json, inside the fleet's working
   // tree: each is a repository of its own, and `git add -A` in the fleet
-  // would record it as an embedded repository nobody can clone.
+  // would record it as an embedded repository nobody can clone. The backup
+  // key is read from the fleet's own `.shopctl/` by `fleet repo`, and the
+  // fleet repository is public: committed, it would open every archive.
   const ignore = resolve(root, '.gitignore');
   const ignored = existsSync(ignore) ? readFileSync(ignore, 'utf8').split('\n').map((line) => line.trim()) : [];
-  const missing = fleet.shops
-    .map((shop) => relative(root, shop.root).split('\\').join('/'))
-    .filter((path) => path && !path.startsWith('..') && !isAbsolute(path))
-    .map((path) => `/${path}/`)
-    .filter((line) => !ignored.includes(line));
+  const missing = [
+    KEY_DIRECTORY,
+    ...fleet.shops
+      .map((shop) => relative(root, shop.root).split('\\').join('/'))
+      .filter((path) => path && !path.startsWith('..') && !isAbsolute(path))
+      .map((path) => `/${path}/`),
+  ].filter((line) => !ignored.includes(line));
   if (missing.length > 0) {
     if (dryRun) {
       reporter.todo(`.gitignore — ${missing.join(', ')} seraient ignorés`);
     } else {
       const before = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
       writeFileSync(ignore, `${before}${before && !before.endsWith('\n') ? '\n' : ''}${missing.join('\n')}\n`);
-      reporter.ok(`.gitignore — ${missing.join(', ')} ignorés (les boutiques sont des dépôts à part)`);
+      reporter.ok(`.gitignore — ${missing.join(', ')} ignorés (la clé de sauvegarde ne se publie pas, les boutiques sont des dépôts à part)`);
     }
   }
 
@@ -219,6 +226,16 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
   const missingFiles = Object.keys(FLEET_FILES).filter((path) => !existsSync(resolve(root, path)));
   if (missingFiles.length > 0) {
     throw preconditionError(`${missingFiles.join(', ')} absent${missingFiles.length > 1 ? 's' : ''} du dépôt de flotte.`, '`shopctl fleet init` les écrit ; committez-les, puis relancez.');
+  }
+  // Asked of the index, so a key only staged is caught too: the fleet
+  // repository is public, and this command pushes it.
+  const keyDirectory = dirname(DEFAULT_KEY_FILE);
+  const trackedKeys = capture('git', ['ls-files', '--', keyDirectory], { cwd: root }).stdout.trim();
+  if (trackedKeys) {
+    throw preconditionError(
+      `${trackedKeys.split('\n').join(', ')} est suivi par git dans le dépôt de flotte : la clé des archives de toutes les boutiques.`,
+      `\`git rm -r --cached ${keyDirectory}\`, \`shopctl fleet init\` (qui l'ignore), un commit, puis relancez. Un commit qui la portait et qui a déjà été poussé l'a publiée.`,
+    );
   }
 
   reporter.section('GitHub');

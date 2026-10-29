@@ -203,4 +203,7 @@ d'hôte, puis destruction sur le compte mutualisé.
   Worker par une route de la zone SaaS, leurs certificats émis par validation
   HTTP en quatre minutes ; l'origine de repli sans route n'atteint aucun Worker
   et `workers.dev` reste fermé ;
-- la migration du pilote suit `docs/operations/sortie-client.md` à l'envers.
+- la migration du pilote suit `docs/operations/sortie-client.md` à l'envers
+  (fiche `docs/certification/compte-mutualise-migration-pilote.md`), répétée en
+  doublure le 2026-10-28 de la sauvegarde sur B à sa destruction, nuit de la
+  flotte comprise ; ses défauts sont corrigés en v0.3.33.

@@ -36,9 +36,10 @@ Ni base, ni bucket, ni Worker ne se transfèrent d'un compte Cloudflare à un
 autre (ADR 0015) : la boutique est sauvegardée, recréée sur le compte du
 commerçant (B), restaurée, puis détruite sur le compte mutualisé. C'est la
 restauration chronométrée de l'étape 8 de la certification (29 min 21 s vers
-un compte neuf), suivie d'une bascule du domaine. Cette procédure n'a pas
-encore été exécutée de bout en bout : la migration du pilote vers le compte
-mutualisé (plan §13.1, lot 8) en fait le chemin inverse, et la corrigera.
+un compte neuf), suivie d'une bascule du domaine. Le chemin inverse, la
+migration du pilote vers le compte mutualisé (plan §13.1, lot 8), a été répété
+en doublure le 2026-10-28 ([sa fiche](../certification/compte-mutualise-migration-pilote.md)) :
+les corrections qu'il a apportées sont reprises ici.
 
 **Chez le commerçant, avant le jour J** — les prérequis de B de la
 [mise en ligne, §0](mise-en-ligne.md#0-prérequis-sur-le-compte-du-client-b) :
@@ -53,26 +54,36 @@ s'arrête pas.
 **Le jour J**, depuis l'arbre de la boutique, au commit encore sur le compte
 mutualisé, avec un jeton de ce compte :
 
-- [ ] fermer les commandes : Admin → Réglages, panier désactivé. Une commande
-  passée après la sauvegarde ci-dessous serait perdue ;
+- [ ] fermer les commandes : Admin → Réglages → Paiements, chaque moyen
+  désactivé (le panier désactivé ne suffit pas : l'achat immédiat et l'API de
+  commande passent sans lui). Puis attendre trente minutes, la durée d'une
+  session de paiement Stripe ouverte avant la fermeture. Une commande payée
+  après la sauvegarde ci-dessous serait perdue ;
 - [ ] la dernière sauvegarde, rapatriée en entier et contrôlée avec la clé :
   ```sh
   npm run shopctl -- backup --env production --upload
   npm run shopctl -- backup pull <id> --env production
   npm run shopctl -- backup verify <id>
   ```
-- [ ] un arbre de ce commit mis de côté pour la destruction finale :
-  `git worktree add ../<slug>-mutualise HEAD`.
+- [ ] un arbre de ce commit mis de côté pour la destruction finale, avec ses
+  dépendances (shopctl y appelle le wrangler de l'arbre) :
+  `git worktree add ../<slug>-mutualise HEAD && (cd ../<slug>-mutualise && npm ci)`.
 
 Puis, par une pull request de la boutique : `cloudflare.accountId` = B,
 `cloudflare.saasZone` retiré (le domaine redevient un domaine personnalisé du
-Worker, sur la zone de B). Fusionnée, depuis l'arbre à jour et avec les jetons
-de B :
+Worker, sur la zone de B), et `cloudflare.imagesDomain`, s'il est posé, changé
+pour un nom de la zone de B : le domaine personnalisé d'un bucket R2 est
+toujours dans une zone du compte du bucket. Fusionnée, depuis l'arbre à jour et
+avec les jetons de B :
 
 ```sh
 npm run shopctl -- provision --env production
 npm run shopctl -- restore --env production --from <id> --allow-production --confirm <slug>
 ```
+
+Entre les deux, le domaine d'images attaché au bucket d'images de B (tableau de
+bord → R2 → le bucket → Settings → Custom Domains) : `deploy` le refuse
+absent.
 
 La restauration remet les lignes, les images et le mot de passe
 d'administration, pas le coffre : ses clés étaient scellées par le
@@ -88,16 +99,19 @@ s'ouvrent plus. Ensuite :
   approuvé : le domaine personnalisé sur la zone de B, le test de fumée ;
 - [ ] Admin → Réglages, ressaisis : la clé Stripe restreinte et le secret de
   signature de l'endpoint (même URL, rien à changer chez Stripe), la clé
-  Resend, les clés du widget Turnstile de B. Puis le panier rouvert ;
+  Resend, les clés du widget Turnstile de B. Puis les moyens de paiement
+  réactivés ;
 - [ ] une commande réelle remboursée, comme à la recette.
 
 **Sur le compte mutualisé, une fois B vérifié**, depuis l'arbre mis de côté et
-avec un jeton du compte mutualisé : vider les buckets de la boutique, le
+avec un jeton du compte mutualisé : retirer le domaine d'images du bucket
+d'images (Settings → Custom Domains), puis vider les buckets de la boutique, le
 `-backups` compris (R2 refuse de supprimer un bucket qui porte des objets ;
 tableau de bord → R2 → le bucket → Settings → Empty Bucket), puis
 
 ```sh
-npm run shopctl -- destroy --env production --confirm <slug>
+npm run shopctl -- destroy --env production --confirm <slug> --dry-run
+npm run shopctl -- destroy --env production --confirm <slug> --yes
 ```
 
 qui supprime le Worker, le nom d'hôte personnalisé de la zone SaaS, les buckets

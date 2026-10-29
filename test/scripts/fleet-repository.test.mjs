@@ -205,8 +205,10 @@ describe('shopctl fleet init', () => {
     expect(fleet.read('.github/workflows/deploy.yml')).toMatch(new RegExp(`^# Généré par \`shopctl fleet init\` depuis le socle v${VERSION.replaceAll('.', '\\.')}\\.`));
     expect(fleet.read('.github/fleet/shops.mjs')).toContain(`const MINIMUM_CORE = '${FLEET_MINIMUM_CORE}';`);
     expect(fleet.read('.github/fleet/shops.mjs')).not.toContain('__');
-    // The shops are repositories of their own, inside the fleet's tree.
+    // The shops are repositories of their own, inside the fleet's tree; the
+    // backup key is read from it, and the fleet repository is public.
     expect(fleet.read('.gitignore')).toContain('/shop-boutique-a/\n');
+    expect(fleet.read('.gitignore')).toContain('/.shopctl/\n');
   });
 
   it('keeps what is current, rewrites what was edited, and adds no line twice', () => {
@@ -217,6 +219,7 @@ describe('shopctl fleet init', () => {
     expect(report.files.map((file) => file.action)).toEqual(['keep', 'replace', 'keep']);
     expect(fleet.read('.github/workflows/nightly.yml')).toMatch(/^# Généré par `shopctl fleet init`/);
     expect(fleet.read('.gitignore').match(/\/shop-boutique-a\//g)).toHaveLength(1);
+    expect(fleet.read('.gitignore').match(/\/\.shopctl\//g)).toHaveLength(1);
   });
 
   it('says which shops the fleet cannot reach, and writes nothing under --dry-run', () => {
@@ -345,6 +348,23 @@ describe('shopctl fleet repo', () => {
     const fleet = ready();
     const result = fleet.run(['fleet', 'repo'], { ...TOKENS, CLOUDFLARE_API_TOKEN_MONITOR: 'cf-deploie' });
     expect(result.status).toBe(EXIT_CODES.input);
+    expect(fleet.github().repos).toEqual({});
+  });
+
+  // `fleet repo` reads the key from the fleet's own .shopctl/, and pushes a
+  // public repository: a key in its index is refused before anything is created.
+  it('refuses a fleet whose index holds the backup key, staged or committed', () => {
+    const fleet = fleetWorkspace({ shops: [{ slug: 'boutique-a', path: 'shop-boutique-a', repository: 'agence/shop-boutique-a' }] });
+    fleet.run(['fleet', 'init']);
+    mkdirSync(join(fleet.root, '.shopctl'));
+    writeFileSync(join(fleet.root, '.shopctl/backup.key'), `${TOKENS.SHOPCTL_BACKUP_KEY}\n`);
+    spawnSync('git', ['add', '-f', '.shopctl/backup.key'], { cwd: fleet.root });
+    fleet.commit();
+    const result = fleet.run(['fleet', 'repo'], TOKENS);
+    expect(result.status).toBe(EXIT_CODES.precondition);
+    expect(result.stderr).toMatch(/\.shopctl\/backup\.key est suivi par git dans le dépôt de flotte/);
+    expect(result.stderr).toMatch(/git rm -r --cached \.shopctl/);
+    expect(`${result.stdout}${result.stderr}`).not.toContain(TOKENS.SHOPCTL_BACKUP_KEY);
     expect(fleet.github().repos).toEqual({});
   });
 

@@ -267,7 +267,7 @@ export async function runDeploy(args, reporter) {
   // if the SaaS zone knows it as a custom hostname (ADR 0019). Asked before the
   // backup and the migrations, like the images domain: a deployment nobody can
   // reach is found out here, not by the smoke test after the upload.
-  await checkHostname({ manifest, env, account, reporter, smokeElsewhere: args.values['--skip-smoke'] === true || args.values['--url'] !== undefined });
+  const hostnamePending = await checkHostname({ manifest, env, account, reporter, smokeElsewhere: args.values['--skip-smoke'] === true || args.values['--url'] !== undefined });
 
   // ── Configuration ─────────────────────────────────────────────────────────
   reporter.section('Configuration');
@@ -441,7 +441,15 @@ export async function runDeploy(args, reporter) {
     throw verificationError(message, hint);
   }
 
-  if (!json) reporter.section(`${manifest.client.slug} est en ligne en ${env}${origin ? ` sur ${origin}` : ''}.`);
+  // Before the switch, the domain still leads wherever it led — on a shop
+  // moving accounts, to the copy this one replaces.
+  if (!json) {
+    reporter.section(
+      hostnamePending
+        ? `${manifest.client.slug} est déployé en ${env}, mais https://${host} ne mène à lui qu'une fois son nom d'hôte actif.`
+        : `${manifest.client.slug} est en ligne en ${env}${origin ? ` sur ${origin}` : ''}.`,
+    );
+  }
   return 0;
 }
 
@@ -509,10 +517,12 @@ export function activeVersion(worker, { cwd }) {
  * smoke test was pointed elsewhere or skipped on purpose: the first deploy of
  * a shop whose domain switches over at launch is exactly that case, and it is
  * the operator's to say, not this command's to guess.
+ *
+ * @returns {Promise<boolean>} true when the hostname is still pending
  */
 async function checkHostname({ manifest, env, account, reporter, smokeElsewhere }) {
   const located = await locateHostname({ manifest, env, account, reporter, required: true });
-  if (!located) return;
+  if (!located) return false;
   const { hostname, zoneName, token, zone } = located;
   const record = await findCustomHostname(zone.id, hostname, { token });
   if (!record) {
@@ -524,13 +534,13 @@ async function checkHostname({ manifest, env, account, reporter, smokeElsewhere 
   const state = hostnameState(record);
   if (state.active) {
     reporter.ok(`${hostname} — actif sur ${zoneName}, certificat actif`);
-    return;
+    return false;
   }
   const instruction = cnameInstruction(hostname, await fallbackOrigin(zone.id, { token }), zoneName);
   const detail = `${hostname} n'est pas encore actif sur ${zoneName} (état ${state.status ?? 'inconnu'}, certificat ${state.ssl ?? 'inconnu'})`;
   if (smokeElsewhere) {
     reporter.warn(`${detail} : la boutique ne répondra sur son domaine qu'une fois le DNS posé.`, instruction);
-    return;
+    return true;
   }
   throw preconditionError(
     `${detail} : le test de fumée n'aurait rien à interroger.`,

@@ -196,7 +196,7 @@ export function judgeAccount(result, workerSecrets, required) {
     else {
       findings.push(fail(
         `${hostname.hostname} n'est pas actif sur la zone ${hostname.zone} (état ${hostname.status ?? 'absent'}, certificat ${hostname.ssl ?? 'absent'}).`,
-        `CNAME ${hostname.hostname} → ${hostname.cname ?? `l'origine de repli de ${hostname.zone}`} chez le registrar du commerçant, puis \`shopctl provision --env production\`.`,
+        `CNAME ${hostname.hostname} → ${hostname.cname ?? `l'origine de repli de ${hostname.zone}`} dans le DNS du commerçant, puis \`shopctl provision --env production\`.`,
       ));
     }
   }
