@@ -2959,3 +2959,43 @@ le compte de l'agence devient facultative : la production se construit
 directement sur le compte du client, fermée jusqu'à l'ouverture
 ([ADR 0015](architecture/decisions/0015-cycle-de-vie-d-une-boutique.md),
 amendé le même jour).
+
+### 13.3 Les points relais et les expéditions par Boxtal
+
+Notée le 2026-10-26 (ticket #123), proposée le 2026-10-30 et **pas encore
+décidée** : le client choisit un point relais à la commande, et la boutique
+traite la commande jusqu'à ce point. Les points relais sont hors périmètre
+(§2.2, [ADR 0007](architecture/decisions/0007-perimetre-fonctionnel.md)) ;
+l'[ADR 0020](architecture/decisions/0020-expeditions-par-boxtal.md), au statut
+« Proposé », en ferait une option de l'offre, éteinte par défaut et certifiée
+avant la première vente qui s'en sert.
+
+Damien a fixé le 2026-10-30 un agrégateur plutôt que Mondial Relay en direct,
+puis un seul prestataire pour toutes les expéditions : **Boxtal**, sans
+abonnement, pour la recherche des points, les étiquettes à domicile et en
+relais, et le suivi. Shippo sort de l'offre, son code reste désactivé ;
+Sendcloud est le repli. La recherche des points est faite par le serveur et
+sans JavaScript obligatoire, et Stripe passe par l'étape `/checkout` dès qu'un
+tarif relais existe.
+
+Si l'ADR est accepté, en six lots, dans cet ordre :
+
+1. la décision écrite : l'ADR 0020 accepté, les statuts de l'ADR 0007, des
+   §2.1 et §2.2, du README et des sous-traitants ; un compte de test Boxtal,
+   et un corpus de réponses relevées dans son bac à sable (recherche,
+   cotation, expédition, suivi), qui dit aussi comment lever un achat
+   incertain ;
+2. les ports `PickupPointProvider` et `LabelProvider`, `labels.ts` devenu
+   l'adaptateur Shippo, l'adaptateur Boxtal et ses clés dans le coffre, testés
+   sur ce corpus ;
+3. l'étiquette à domicile achetée chez Boxtal depuis la fiche commande, le
+   suivi, Boxtal à la place de Shippo dans Réglages ;
+4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
+   l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
+   `delivery_method` et les colonnes du point (réservation, paiement en
+   attente, commande), classées pour l'effacement ;
+5. le point dans les e-mails, la fiche commande et l'export CSV, et
+   l'étiquette relais ;
+6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait
+   d'un vrai colis en relais, avec l'URL de suivi vérifiée ; la commande réelle
+   attend le feu vert de Damien.
