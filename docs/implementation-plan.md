@@ -2988,13 +2988,21 @@ Engagée en six lots, dans cet ordre :
 1. la décision écrite : l'ADR 0020 accepté, les statuts de l'ADR 0007, des
    §2.1 et §2.2 et du README (faits le 2026-10-30) ; un compte de test Boxtal,
    et un corpus de réponses relevées dans son bac à sable (recherche,
-   cotation, expédition, suivi), qui dit aussi comment lever un achat
-   incertain ;
+   expédition, étiquette, suivi), relevé le 2026-10-30 dans
+   `test/fixtures/boxtal/`. L'[ADR 0021](architecture/decisions/0021-boxtal-apres-le-bac-a-sable.md)
+   (proposé) en tire ce qui change :
+   - pas de devis en v3 : il passe par la v1, en option, et l'achat reste en
+     v3. Le devis v1 se relève à son tour dans le bac à sable, avec une
+     application v1 sur le compte de test ;
+   - pas d'idempotence : l'achat incertain se lève avec le commerçant ;
+   - l'étiquette relue à la demande ;
+   - l'URL de suivi rendue par Boxtal ;
 2. les ports `PickupPointProvider` et `LabelProvider`, `labels.ts` devenu
    l'adaptateur Shippo, l'adaptateur Boxtal et ses clés dans le coffre, testés
    sur ce corpus ;
-3. l'étiquette à domicile achetée chez Boxtal depuis la fiche commande, le
-   suivi, Boxtal à la place de Shippo dans Réglages et dans la liste des
+3. l'étiquette à domicile achetée chez Boxtal depuis la fiche commande, sur
+   une offre retenue dans Réglages, le suivi et son URL gardée sur la
+   commande, Boxtal à la place de Shippo dans Réglages et dans la liste des
    sous-traitants, qui décrit ce qu'une boutique fait tourner ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
    l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
