@@ -3022,15 +3022,25 @@ Engagée en six lots, dans cet ordre :
    (corpus `43` à `52`) : l'achat s'enregistre d'abord, le numéro arrive à la
    relecture du suivi, et la fiche offre « Relire le suivi » quand Boxtal
    tarde. Boxtal exige le téléphone du destinataire, que la boutique ne
-   demande pas encore : le commerçant le saisit à l'achat. Le demander à la
-   commande se décide avec le lot 4, qui fait passer tous les paiements par
-   `/checkout`. Le runbook
+   demandait pas : le commerçant le saisissait à l'achat, jusqu'au lot 4. Le
+   runbook
    [etiquette-incertaine](operations/runbooks/etiquette-incertaine.md) règle
    l'achat incertain et le doublon ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
    l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
    `delivery_method` et les colonnes du point (réservation, paiement en
-   attente, commande), classées pour l'effacement ;
+   attente, commande), classées pour l'effacement. Le téléphone du
+   destinataire se demande à la commande (décision de Damien, 2026-10-30),
+   avec l'adresse, dès que les clés v3 de Boxtal sont au coffre : une boutique
+   qui expédie à la main ne le collecte pas. L'étape `/checkout` le demande,
+   l'API JSON le lit dans `ship_to` et la page de Stripe le collecte ; il
+   entre dans l'instantané de l'adresse, que l'effacement réduit au pays, et
+   la fiche commande le préremplit à l'achat de l'étiquette (fait le
+   2026-10-30 : `features/shipping/recipient.ts`,
+   `test/integration/checkout-phone.mjs`). C'est une précision de l'ADR 0020,
+   qui le faisait demander par Stripe sur le parcours relais : ce parcours
+   passe par `/checkout`, qui le demandera là, comme pour les autres moyens
+   de paiement ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait

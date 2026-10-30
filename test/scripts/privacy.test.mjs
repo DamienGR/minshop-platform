@@ -225,6 +225,11 @@ describe('l’adresse réduite', () => {
       .toBe('{"country":"FR"}');
   });
 
+  it('efface le téléphone que la commande demande pour le transporteur', () => {
+    expect(redactAddress('{"name":"Jean","city":"Lyon","country":"FR","phone":"06 39 98 00 01"}'))
+      .toBe('{"country":"FR"}');
+  });
+
   it('laisse tomber un instantané illisible plutôt que de le deviner', () => {
     expect(redactAddress('{pas du json')).toBeNull();
     expect(redactAddress('[]')).toBeNull();

@@ -40,6 +40,7 @@ import type {
   ShipmentParty,
   ShippingQuoteProvider,
 } from '../provider.ts';
+import { plausiblePhone } from '../recipient.ts';
 import { boxtalContent, quoteContentCode } from './contents.ts';
 import { homeOffer } from './offers.ts';
 import { trackingMatchesReference } from './v3.ts';
@@ -183,12 +184,6 @@ export function completeSender(input: Partial<LabelSender>): LabelSender | null 
   return filled && /^[A-Z]{2}$/.test(sender.country) && sender.email.includes('@') && plausiblePhone(sender.phone)
     ? sender
     : null;
-}
-
-/** A phone a carrier can text: digits, with the usual separators and a leading +. */
-export function plausiblePhone(raw: string): boolean {
-  const value = raw.trim();
-  return /^\+?[\d\s.()-]+$/.test(value) && value.replace(/\D/g, '').length >= 8;
 }
 
 /** Prefill for the recipient: the last word is the family name. */

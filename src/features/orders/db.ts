@@ -14,6 +14,9 @@ export interface ShippingAddress {
   state: string | null;
   postal: string | null;
   country: string | null;
+  /** The recipient's phone, for the carrier. Present only when checkout asked
+   *  for it (features/shipping/recipient.ts); older snapshots have none. */
+  phone?: string | null;
 }
 
 export interface Order {

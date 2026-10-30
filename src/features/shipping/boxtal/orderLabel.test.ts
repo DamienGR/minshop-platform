@@ -5,7 +5,6 @@ import {
   parseBoxtalId,
   parseQuotedOffers,
   parseSender,
-  plausiblePhone,
   quotedOffers,
   splitName,
 } from './orderLabel.ts';
@@ -103,15 +102,6 @@ describe('the sender', () => {
 });
 
 describe('the recipient', () => {
-  it('takes a phone a carrier can text', () => {
-    expect(plausiblePhone('+33 6 98 76 54 32')).toBe(true);
-    expect(plausiblePhone('06.98.76.54.32')).toBe(true);
-    expect(plausiblePhone('(0)6-98-76-54-32')).toBe(true);
-    expect(plausiblePhone('')).toBe(false);
-    expect(plausiblePhone('12 34')).toBe(false);
-    expect(plausiblePhone('06 98 76 54 32 poste 2')).toBe(false);
-  });
-
   it('is prefilled from the delivery name, the last word as the family name', () => {
     expect(splitName('Jeanne Marie Essai')).toEqual({ firstName: 'Jeanne Marie', lastName: 'Essai' });
     expect(splitName('  Essai ')).toEqual({ firstName: '', lastName: 'Essai' });

@@ -30,6 +30,8 @@ import { getStoreSettings } from '../../features/settings/db';
 import { createConfigRatesCalculator } from '../../features/shipping/calculator';
 import { shippingFor } from '../../features/shipping/effective';
 import { shipmentWeightFor } from '../../features/shipping/lines';
+import { asksRecipientPhone, plausiblePhone } from '../../features/shipping/recipient';
+import { vaultReady } from '../../features/secrets/store';
 import { stripeAllowedCountries, stripeSessionDestination } from '../../features/payments/stripeCountries.ts';
 import { getConfig } from '../../config';
 import { consentFor, isAcceptance, readTermsGate } from '../../features/legal/terms';
@@ -56,10 +58,12 @@ interface ShipTo {
   state: string | null;
   postal: string;
   country: string;
+  /** Only when the shop asks for it (features/shipping/recipient.ts). */
+  phone?: string;
 }
 
 /** Validate an agent-supplied `ship_to` object; null if incomplete/invalid. */
-function parseShipTo(raw: unknown): ShipTo | null {
+function parseShipTo(raw: unknown, askPhone: boolean): ShipTo | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const s = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '');
@@ -69,10 +73,22 @@ function parseShipTo(raw: unknown): ShipTo | null {
   const city = s('city');
   const postal = s('postal');
   const country = s('country').toUpperCase();
+  const phone = s('phone');
   if (!/.+@.+\..+/.test(email) || !name || !line1 || !city || !postal || country.length !== 2) {
     return null;
   }
-  return { email, name, line1, line2: s('line2') || null, city, state: s('state') || null, postal, country };
+  if (askPhone && !plausiblePhone(phone)) return null;
+  return {
+    email,
+    name,
+    line1,
+    line2: s('line2') || null,
+    city,
+    state: s('state') || null,
+    postal,
+    country,
+    ...(askPhone && { phone }),
+  };
 }
 
 const MAX_CHECKOUT_LINES = 50;
@@ -370,6 +386,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
           hasCatchAll: false,
           options: quote.options,
           shipmentWeightGrams: quote.shipmentWeightGrams,
+          collectPhone: asksRecipientPhone(settings.configuredSecrets, vaultReady()),
         }
       : undefined;
 
@@ -532,6 +549,8 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   }
 
   const effectiveShipping = shippingFor(jsonSettings).config;
+  // The carrier's phone, asked as the browser checkout asks it (features/shipping/recipient.ts).
+  const askPhone = asksRecipientPhone(jsonSettings.configuredSecrets, vaultReady());
 
   // Resolve each { product_id | slug, quantity, variant_id?, extra_ids? } → a
   // priced line, validating active + variant choice + stock. All identifiers
@@ -769,6 +788,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
           hasCatchAll: false,
           options: hostedQuote.options,
           shipmentWeightGrams: hostedQuote.shipmentWeightGrams,
+          collectPhone: askPhone,
         }
       : undefined;
 
@@ -784,11 +804,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   let inAppQuote: ReturnType<typeof quoteFor> | null = null;
 
   if (needsShipTo) {
-    shipTo = parseShipTo((body as { ship_to?: unknown }).ship_to);
+    shipTo = parseShipTo((body as { ship_to?: unknown }).ship_to, askPhone);
     if (!shipTo) {
       return cjson(
         {
-          error: `A shipped ${method} order needs a "ship_to" address: { email, name, line1, city, postal, country }.`,
+          error: `A shipped ${method} order needs a "ship_to" address: { email, name, line1, city, postal, country${askPhone ? ', phone' : ''} }.`,
           available_methods: available,
         },
         400,
@@ -853,6 +873,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
           state: shipTo.state,
           postal: shipTo.postal,
           country: shipTo.country,
+          ...(shipTo.phone && { phone: shipTo.phone }),
         },
         reservationId: lnPublicId,
       });
@@ -954,6 +975,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
               state: shipTo.state,
               postal: shipTo.postal,
               country: shipTo.country,
+              ...(shipTo.phone && { phone: shipTo.phone }),
             },
             email: shipTo.email,
           },

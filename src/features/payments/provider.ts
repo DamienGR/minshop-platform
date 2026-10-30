@@ -55,6 +55,8 @@ export interface CreateCheckoutParams {
     options: ShippingOption[];
     /** Priced-at weight, snapshotted so the order can explain its shipping line. */
     shipmentWeightGrams?: number | null;
+    /** Also ask the recipient's phone, for the carrier (features/shipping/recipient.ts). */
+    collectPhone?: boolean;
   };
   /**
    * Set when the in-app step has ALREADY collected an address and a chosen rate

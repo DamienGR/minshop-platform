@@ -113,6 +113,9 @@ export function createStripeProvider(
         }),
         ...(params.allowPromotionCodes && { allow_promotion_codes: true }),
         ...(params.automaticTax && { automatic_tax: { enabled: true } }),
+        // Stripe keeps the phone apart from the address, in customer_details:
+        // settlement folds it back into the snapshot the order page reads.
+        ...(params.shipping?.collectPhone && { phone_number_collection: { enabled: true } }),
         ...(params.shipping && {
           shipping_address_collection: {
             allowed_countries: stripeAllowedCountries(
@@ -276,6 +279,7 @@ export function createStripeProvider(
               state: a.state ?? null,
               postal: a.postal_code ?? null,
               country: a.country ?? null,
+              ...(session.customer_details?.phone && { phone: session.customer_details.phone }),
             }
           : null;
 
