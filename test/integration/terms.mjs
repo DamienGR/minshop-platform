@@ -39,7 +39,7 @@ try {
        payment_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
        expires_at TEXT NOT NULL, terminal_at TEXT,
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-       terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, relay_point TEXT)`,
+       terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, relay_point TEXT, ship_address TEXT)`,
     `CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_session_id TEXT UNIQUE,
        public_id TEXT UNIQUE, email TEXT, amount_total_cents INTEGER NOT NULL,
        shipping_cents INTEGER NOT NULL DEFAULT 0, shipping_label TEXT,

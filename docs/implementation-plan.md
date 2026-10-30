@@ -3039,8 +3039,8 @@ Engagée en six lots, dans cet ordre :
    2026-10-30 : `features/shipping/recipient.ts`,
    `test/integration/checkout-phone.mjs`). C'est une précision de l'ADR 0020,
    qui le faisait demander par Stripe sur le parcours relais : ce parcours
-   passe par `/checkout`, qui le demandera là, comme pour les autres moyens
-   de paiement. Le tarif `relay` existe (fait le 2026-10-30, sans appelant à
+   passe par `/checkout`, qui le demande là, comme pour les autres moyens de
+   paiement. Le tarif `relay` existe (fait le 2026-10-30, sans appelant à
    la commande) : il nomme l'une des neuf offres relais du devis du bac à
    sable et se fixe au forfait ou au poids, comme un tarif à domicile ;
    l'éditeur le propose quand `features.relayPoints` est allumé au build ; le
@@ -3049,8 +3049,8 @@ Engagée en six lots, dans cet ordre :
    Le document passe en version 4. Une offre que le socle ne liste plus est
    refusée à l'enregistrement mais ne rend pas le document invalide : elle
    sort du choix. Le point se choisit à `/checkout` (fait le 2026-10-30 pour
-   Lightning, OpenNode et la démo : `features/shipping/relay.ts`, la
-   migration 0048, `test/integration/checkout-relay.mjs`). L'étape des tarifs
+   tous les moyens de paiement : `features/shipping/relay.ts`, la migration
+   0048, `test/integration/checkout-relay.mjs`). L'étape des tarifs
    cherche les points de chaque offre relais autour de l'adresse saisie, en
    cache une heure par offre et par adresse ; une offre dont la recherche
    échoue ou ne trouve rien sort du choix, et la commande continue. Un tarif
@@ -3062,9 +3062,22 @@ Engagée en six lots, dans cet ordre :
    prévoyait l'ADR 0020 : chaque moyen de paiement règle à partir de la même
    réservation. L'effacement réduit le point au pays sur la commande comme
    sur la réservation, que la carte des données personnelles atteint
-   désormais. La variable `RELAY_POINTS` (`on`) allume l'option dans un seul
-   environnement, pour la répéter sur le staging avant de la construire pour
-   la production ;
+   désormais. Un paiement par carte vers une zone qui a un tarif relais passe
+   aussi par `/checkout` (décision de Damien, 2026-10-30, qui s'écarte de
+   l'ADR 0020) : l'adresse et le téléphone s'y saisissent une seule fois, le
+   tarif et le point s'y choisissent, et la session Stripe ne reçoit que le
+   tarif choisi, sans collecte d'adresse ni de téléphone. Une zone sans tarif
+   relais garde le passage direct par la page de Stripe. Le webhook de Stripe
+   ne rend alors pas d'adresse : la réservation la garde (`ship_address`) et
+   `recordPaidOrder` la recopie sur la commande, puis l'efface. Une
+   réservation libérée avant que Stripe ait une session l'efface aussitôt ;
+   une réservation expirée ou en échec la garde trois jours, le temps des
+   relances de webhook de Stripe, et le balayage qui masque son lien d'invité
+   l'efface. Une session sans collecte d'adresse se vérifie en mode test
+   au lot 6, avec Stripe Tax, qui calcule alors l'impôt sur l'adresse de
+   facturation. La variable `RELAY_POINTS`
+   (`on`) allume l'option dans un seul environnement, pour la répéter sur le
+   staging avant de la construire pour la production ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait

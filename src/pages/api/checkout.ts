@@ -27,11 +27,17 @@ import {
   DEMO_CHECKOUT_TTL_SECONDS,
 } from '../../features/payments';
 import { getStoreSettings } from '../../features/settings/db';
-import { createConfigRatesCalculator, deliveryMethodOf } from '../../features/shipping/calculator';
+import {
+  allowedCountries,
+  createConfigRatesCalculator,
+  deliveryMethodOf,
+  zoneOffersRelay,
+} from '../../features/shipping/calculator';
 import { shippingFor } from '../../features/shipping/effective';
 import { shipmentWeightFor } from '../../features/shipping/lines';
 import { asksRecipientPhone, plausiblePhone } from '../../features/shipping/recipient';
 import { vaultReady } from '../../features/secrets/store';
+import { boxtalConfigured } from '../../features/settings/availability';
 import { stripeAllowedCountries, stripeSessionDestination } from '../../features/payments/stripeCountries.ts';
 import { getConfig } from '../../config';
 import { consentFor, isAcceptance, readTermsGate } from '../../features/legal/terms';
@@ -273,8 +279,20 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // billed whichever rate sorted first — both silently wrong once a merchant can
   // edit rates. Stripe collects the address itself and continues below.
   const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'demo'];
-  if (IN_APP_SHIPPING_RAILS.includes(selected) && shippingApplies) {
+  // ...except where the destination's zone holds a relay rate: Stripe's page
+  // offers a fixed list and no point, so a card payment goes through /checkout
+  // too, which asks the address and phone once and hands Stripe the chosen rate
+  // alone (ADR 0020; Damien, 2026-10-30). The cart's destination picks the zone.
+  const cartCountry =
+    String(form.get('country') ?? '').trim().toUpperCase() || allowedCountries(effectiveShipping)[0] || '*';
+  const cardThroughCheckout =
+    selected === 'stripe' &&
+    cfg.features.relayPoints &&
+    boxtalConfigured(settings.configuredSecrets, vaultReady()) &&
+    zoneOffersRelay(effectiveShipping, cartCountry);
+  if ((IN_APP_SHIPPING_RAILS.includes(selected) || cardThroughCheckout) && shippingApplies) {
     const params = new URLSearchParams({ method: selected });
+    if (cardThroughCheckout && cartCountry !== '*') params.set('country', cartCountry);
     if (productPublicId) {
       params.set('product_id', productPublicId);
       const vid = parsePublicId(form.get('variant_id'), 'variant');

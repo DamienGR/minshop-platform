@@ -116,6 +116,7 @@ export const fr = {
   'payment.setup.generic': 'Configurer',
   // Read in the buyer's wallet (Lightning) or on OpenNode's hosted page.
   'payment.invoice.description': '{boutique} — commande {reference}',
+  'payment.rail.stripe': 'Payer par carte',
   'payment.rail.lightning': 'Payer en Lightning',
   'payment.rail.opennode': 'Payer en bitcoin',
   'payment.rail.demo': 'Passer la commande de démonstration',

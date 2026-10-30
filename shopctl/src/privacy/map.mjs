@@ -87,6 +87,10 @@ export const COLUMN_POLICY = {
   },
   checkout_reservations: {
     relay_point: { action: 'address', why: 'La copie du point relais que la commande recopie au règlement.' },
+    ship_address: {
+      action: 'address',
+      why: "L'adresse saisie à /checkout pour un paiement par carte, effacée au règlement, ou trois jours après un abandon.",
+    },
   },
   pending_payments: {
     email: { action: 'subject', why: "L'adresse saisie à un paiement qui n'a jamais abouti." },
@@ -163,7 +167,8 @@ export const NOT_PERSONAL = {
  * reservation shares the order's public identifier because it exists first:
  * it is claimed before the shopper leaves, and the order is written from it.
  * A reservation that never became an order is reached by no one, and holds no
- * one: its cart, and at most a relay point, a business's address.
+ * one for long: its cart, at most a relay point (a business's address), and an
+ * address typed for a card payment, cleared three days after the checkout ended.
  */
 export const EXTRA_LINKS = [
   { table: 'checkout_reservations', column: 'public_id', via: 'public_id' },

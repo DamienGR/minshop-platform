@@ -8,6 +8,9 @@ import {
   allowedCountries,
   hasCatchAllZone,
   normalizeRate,
+  zoneOffersRelay,
+  deliveryMethodOf,
+  parseDeliveryMethod,
   FREE_SHIPPING_LABEL,
   type ShippingConfig,
   type WeightBand,
@@ -355,6 +358,26 @@ describe('relay points', () => {
     });
     expect(zonesRequireWeight(only(relayZone.zones[0]!.rates[2]!))).toBe(true);
     expect(zonesRequireWeight(only(relayZone.zones[0]!.rates[1]!))).toBe(false);
+  });
+
+  it('send a card payment through /checkout only where the zone holds one', () => {
+    const twoZones: ShippingConfig = {
+      enabled: true,
+      zones: [relayZone.zones[0]!, { countries: ['*'], rates: [{ label: 'Monde', amountCents: 1500 }], freeOverCents: null }],
+    };
+    expect(zoneOffersRelay(twoZones, 'FR')).toBe(true);
+    expect(zoneOffersRelay(twoZones, 'fr')).toBe(true);
+    expect(zoneOffersRelay(twoZones, 'BE')).toBe(false);
+    expect(zoneOffersRelay({ ...twoZones, enabled: false }, 'FR')).toBe(false);
+  });
+
+  it('record their delivery as data, read back strictly', () => {
+    expect(deliveryMethodOf({ label: 'Mondial Relay', amountCents: 390, relayOffer: 'MONR-CpourToi' })).toBe('relay');
+    expect(deliveryMethodOf({ label: 'Retrait', amountCents: 0, pickup: true })).toBe('pickup');
+    expect(deliveryMethodOf({ label: 'Point relais', amountCents: 690 })).toBe('shipping');
+    expect(parseDeliveryMethod('relay')).toBe('relay');
+    expect(parseDeliveryMethod('RELAY')).toBeNull();
+    expect(parseDeliveryMethod(null)).toBeNull();
   });
 });
 

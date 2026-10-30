@@ -3,7 +3,7 @@ import {
   visibleStockChanged,
   type StockTransitionPurger,
 } from '../products/stock.ts';
-import type { OrderItemInput } from './db';
+import type { OrderItemInput, ShippingAddress } from './db';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
 import type { TermsConsent } from '../legal/terms';
 import type { RelayPoint } from '../shipping/relay.ts';
@@ -179,12 +179,17 @@ async function releaseReservation(
   statements.push(
     db
       .prepare(
+        // A released reservation never settles, so its address goes with the
+        // hold. An expired or failed one still can — a paid webhook Stripe
+        // retried past the hold — and keeps it until the three-day sweep
+        // (sweepAbandonedGuestAccess) clears it.
         `UPDATE checkout_reservations
-            SET status = ?, terminal_at = CASE WHEN ? = 'released' THEN terminal_at ELSE datetime('now') END
+            SET status = ?, terminal_at = CASE WHEN ? = 'released' THEN terminal_at ELSE datetime('now') END,
+                ship_address = CASE WHEN ? = 'released' THEN NULL ELSE ship_address END
           WHERE public_id = ? AND status IN ('active', 'payment_pending')
           RETURNING public_id`,
       )
-      .bind(terminalStatus, terminalStatus, publicId),
+      .bind(terminalStatus, terminalStatus, terminalStatus, publicId),
   );
   const results = await db.batch<StockUpdateRow & { public_id?: string }>(statements);
   const released = Boolean(results.at(-1)?.results[0]);
@@ -313,6 +318,12 @@ export async function reserveInventory(
    * delivery.
    */
   relayPoint: RelayPoint | null = null,
+  /**
+   * The address /checkout took for a rail whose provider returns none: Stripe,
+   * once /checkout has asked it (the session then collects no address). Held
+   * only while the payment is open — settlement and release both clear it.
+   */
+  shipAddress: ShippingAddress | null = null,
 ): Promise<boolean> {
   if (items.length === 0 || !Number.isInteger(ttlSeconds) || ttlSeconds < 60) return false;
   await releaseExpiredReservations(db, 50, purger);
@@ -350,8 +361,8 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
@@ -365,6 +376,7 @@ export async function reserveInventory(
         consent?.acceptedAt ?? null,
         vatRateBps && vatRateBps > 0 ? vatRateBps : null,
         relayPoint ? JSON.stringify(relayPoint) : null,
+        shipAddress ? JSON.stringify(shipAddress) : null,
         ...checkValues,
       );
     // Release 1 writes no claims, so the decrement results sit at a different

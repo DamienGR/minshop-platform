@@ -294,6 +294,17 @@ export function zonesRequireWeight(cfg: ShippingConfig): boolean {
   });
 }
 
+/**
+ * Whether the zone serving `country` holds a relay rate. A card payment then
+ * goes through /checkout, the one surface where a point can be picked, rather
+ * than straight to Stripe's page, which offers only a fixed list (ADR 0020).
+ */
+export function zoneOffersRelay(cfg: ShippingConfig, country: string): boolean {
+  if (!cfg.enabled) return false;
+  const zone = shippingZoneFor(country, cfg.zones);
+  return zone !== null && zone.rates.map(normalizeRate).some((rate) => rate.pricing.type === 'relay');
+}
+
 /** Whether any zone accepts the rest of the world. Providers expand this into their
  *  own supported-country list; the core calculator stays provider-neutral. */
 export function hasCatchAllZone(cfg: ShippingConfig): boolean {

@@ -6,8 +6,12 @@
  * while Boxtal can search and buy, and only where its search finds a point;
  * that the point a shopper posts is believed only if the shop served it; that
  * the search is asked once per address and offer; and that the point rides the
- * reservation to the paid order, with `delivery_method` = `relay`. The pieces
- * are units of their own (features/shipping/relay.ts, the calculator).
+ * reservation to the paid order, with `delivery_method` = `relay`. And that a
+ * card payment to a zone with a relay rate takes the same steps, the address
+ * typed once: Stripe's session charges the chosen rate and asks nothing again,
+ * and its webhook settles an order that takes the address from the
+ * reservation. The pieces are units of their own (features/shipping/relay.ts,
+ * the calculator).
  *
  * Boxtal answers with the search recorded in its sandbox (test/fixtures/boxtal/
  * `02`: Mondial Relay around Paris 11e). The option is switched on by the
@@ -25,6 +29,7 @@ import { t } from '../../src/features/i18n/index.ts';
 
 const ORIGIN = 'https://store.test';
 const SECRETS_KEK = 'checkout-relay-suite-key-encryption-key';
+const WEBHOOK_SECRET = 'whsec_checkout_relay';
 const FORM = 'application/x-www-form-urlencoded';
 const PRODUCT = 'prod_rxy0000001';
 const ADDRESS = {
@@ -43,6 +48,10 @@ const MONDIAL_CODES = MONDIAL.content.map((entry) => entry.parcelPoint.code);
 /** Searches Boxtal was asked, by offer. */
 const searches = {};
 let openNodeCharges = 0;
+/** Every Checkout Session the Worker asked Stripe for, as posted. */
+const stripeSessions = [];
+/** A posted session's one rate field, `shipping_options[0][shipping_rate_data]…`. */
+const rateField = (session, name) => session.get(`shipping_options[0][shipping_rate_data]${name}`);
 
 const worker = await startBuiltWorker({
   vars: { CANONICAL_ORIGIN: ORIGIN, SECRETS_KEK, RELAY_POINTS: 'on' },
@@ -59,9 +68,40 @@ const worker = await startBuiltWorker({
       const id = `charge_relay_${++openNodeCharges}`;
       return Response.json({ data: { id, hosted_checkout_url: `https://checkout.opennode.com/${id}` } });
     }
+    if (url.hostname === 'api.stripe.com' && url.pathname === '/v1/checkout/sessions') {
+      stripeSessions.push(new URLSearchParams(await request.text()));
+      const id = `cs_test_relay${stripeSessions.length}`;
+      return Response.json({ id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}` });
+    }
+    // The rate a session made, read back at settlement: what the shop posted.
+    const rate = url.hostname === 'api.stripe.com' && url.pathname.match(/^\/v1\/shipping_rates\/shr_relay(\d+)$/);
+    if (rate) {
+      const posted = stripeSessions[Number(rate[1]) - 1];
+      return Response.json({
+        id: `shr_relay${rate[1]}`,
+        object: 'shipping_rate',
+        display_name: rateField(posted, '[display_name]'),
+        metadata: { delivery: rateField(posted, '[metadata][delivery]') },
+      });
+    }
     return new Response('unexpected outbound call', { status: 502 });
   },
 });
+
+/** Stripe's scheme: HMAC-SHA256 over `<timestamp>.<payload>`, hex, as v1. */
+async function stripeSignature(payload) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(WEBHOOK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${timestamp}.${payload}`));
+  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `t=${timestamp},v1=${hex}`;
+}
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -91,6 +131,13 @@ try {
     enabled: true,
     packageWeightGrams: 0,
     zones: [
+      // First, so it is what a form without a country falls back to.
+      {
+        name: 'Belgique',
+        countries: ['BE'],
+        freeOverCents: null,
+        rates: [{ label: 'Bpost à domicile', pricing: { type: 'flat', amountCents: 990 } }],
+      },
       {
         name: 'France',
         countries: ['FR'],
@@ -242,6 +289,118 @@ try {
     // The buyer stays the label's recipient and contact.
     assert.equal(JSON.parse(order.ship_address).phone, ADDRESS.phone);
   });
+
+  console.log('Par carte');
+
+  await secret('stripe_secret_key', 'sk_test_checkout_relay');
+  await secret('stripe_webhook_secret', WEBHOOK_SECRET);
+  const card = { method: 'stripe', product_id: PRODUCT, ...ADDRESS };
+  const toStripe = (fields) =>
+    fetch('/api/checkout', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': FORM },
+      body: new URLSearchParams({ method: 'stripe', product_id: PRODUCT, ...fields }).toString(),
+    });
+
+  await check('a card payment to a zone with a relay rate goes through /checkout first', async () => {
+    const sent = await toStripe({ country: 'FR' });
+    assert.equal(sent.status, 303);
+    const location = new URL(sent.headers.get('location'), ORIGIN);
+    assert.equal(location.pathname, '/checkout');
+    assert.equal(location.searchParams.get('method'), 'stripe');
+    assert.equal(location.searchParams.get('country'), 'FR');
+    assert.equal(stripeSessions.length, 0, 'Stripe was asked before the shopper chose a rate');
+    // The address form opens on the destination the cart was priced for.
+    const html = await (await fetch(`${location.pathname}${location.search}`)).text();
+    assert.match(html, /<option value="FR" selected/);
+  });
+
+  await check('a zone without a relay rate still goes straight to Stripe', async () => {
+    const sent = await toStripe({ country: 'BE' });
+    assert.equal(sent.status, 303);
+    assert.match(sent.headers.get('location'), /^https:\/\/checkout\.stripe\.com\//);
+    const session = stripeSessions.at(-1);
+    assert.equal(session.get('shipping_address_collection[allowed_countries][0]'), 'BE');
+    assert.equal(rateField(session, '[display_name]'), 'Bpost à domicile');
+  });
+
+  // The relay session, paid below: its number names its rate in the stub.
+  let relaySession = 0;
+
+  await check('Stripe charges the chosen relay rate, and asks for no address', async () => {
+    assert.deepEqual(pointCodes(await (await post({ ...card, shipping_label: 'Mondial Relay' })).text()), MONDIAL_CODES);
+    const placed = await post({ ...card, shipping_label: 'Mondial Relay', relay_point: MONDIAL_CODES[2] });
+    assert.equal(placed.status, 303, `the card order was not handed to Stripe: ${placed.status}`);
+    assert.match(placed.headers.get('location'), /^https:\/\/checkout\.stripe\.com\//);
+    relaySession = stripeSessions.length;
+    const session = stripeSessions[relaySession - 1];
+    assert.equal(session.get('shipping_address_collection[allowed_countries][0]'), null);
+    assert.equal(session.get('phone_number_collection[enabled]'), null);
+    assert.equal(session.get('customer_email'), ADDRESS.email);
+    assert.equal(rateField(session, '[display_name]'), 'Mondial Relay');
+    assert.equal(rateField(session, '[fixed_amount][amount]'), '390');
+    assert.equal(rateField(session, '[metadata][delivery]'), 'relay');
+    assert.equal(session.get('shipping_options[1][shipping_rate_data][display_name]'), null, 'another rate was offered');
+    // The address waits on the reservation, beside the point.
+    const reservation = await db
+      .prepare('SELECT ship_address, relay_point FROM checkout_reservations WHERE public_id = ?')
+      .bind(session.get('metadata[reservation_id]'))
+      .first();
+    assert.equal(JSON.parse(reservation.ship_address).phone, ADDRESS.phone);
+    assert.equal(JSON.parse(reservation.relay_point).code, MONDIAL_CODES[2]);
+  });
+
+  await check('the paid session settles an order with the address typed in the shop', async () => {
+    const session = stripeSessions[relaySession - 1];
+    const metadata = Object.fromEntries(
+      [...session].filter(([key]) => key.startsWith('metadata[')).map(([key, value]) => [key.slice(9, -1), value]),
+    );
+    // What Stripe sends once its page asked no address: no shipping_details.
+    const payload = JSON.stringify({
+      id: 'evt_checkout_relay_1',
+      object: 'event',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: `cs_test_relay${relaySession}`,
+          object: 'checkout.session',
+          currency: 'eur',
+          payment_status: 'paid',
+          payment_intent: 'pi_checkout_relay_1',
+          amount_total: 3900 + 390,
+          customer_details: { email: ADDRESS.email, phone: null },
+          metadata,
+          total_details: { amount_shipping: 390, amount_discount: 0, amount_tax: 0 },
+          shipping_cost: { amount_total: 390, shipping_rate: `shr_relay${relaySession}` },
+        },
+      },
+    });
+    const delivered = await fetch('/api/webhook/stripe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'stripe-signature': await stripeSignature(payload) },
+      body: payload,
+    });
+    assert.equal(delivered.status, 200, `the webhook was refused: ${delivered.status}`);
+    const order = await db
+      .prepare('SELECT delivery_method, shipping_label, shipping_cents, relay_point, ship_address FROM orders WHERE public_id = ?')
+      .bind(metadata.public_id)
+      .first();
+    assert.ok(order, 'the paid session wrote no order');
+    assert.equal(order.delivery_method, 'relay');
+    assert.equal(order.shipping_label, 'Mondial Relay');
+    assert.equal(order.shipping_cents, 390);
+    assert.equal(JSON.parse(order.relay_point).code, MONDIAL_CODES[2]);
+    const address = JSON.parse(order.ship_address);
+    assert.equal(address.line1, ADDRESS.line1);
+    assert.equal(address.phone, ADDRESS.phone);
+    // The order holds it now; the reservation lets it go.
+    const reservation = await db
+      .prepare('SELECT status, ship_address FROM checkout_reservations WHERE public_id = ?')
+      .bind(metadata.reservation_id)
+      .first();
+    assert.equal(reservation.status, 'settled');
+    assert.equal(reservation.ship_address, null);
+  });
 } finally {
   await worker.dispose();
 }
@@ -250,4 +409,4 @@ if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);
   process.exit(1);
 }
-console.log('\nLe point relais choisi à la commande arrive jusqu’à la commande payée.');
+console.log('\nLe point relais choisi à la commande arrive jusqu’à la commande payée, par carte comme en bitcoin.');

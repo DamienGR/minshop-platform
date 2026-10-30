@@ -38,9 +38,13 @@ import { getLightningBackend } from '../features/payments/lightning';
 import { mintLightningOrder } from '../features/payments/lightning-provider';
 import {
   DEMO_CHECKOUT_TTL_SECONDS,
+  STRIPE_CHECKOUT_TTL_SECONDS,
+  RESERVATION_EXPIRY_GRACE_SECONDS,
   isMethodEnabled,
   getPaymentProvider,
 } from '../features/payments';
+import { productImageUrl } from '../features/products/image';
+import { logSafe } from '../features/observability/logSafe';
 import {
   reserveInventory,
   releaseInventoryReservation,
@@ -59,8 +63,11 @@ const fld = (name: string) => (form?.get(name) ?? '').toString().trim();
 /**
  * The in-app shipping checkout, shared by every rail that cannot collect a
  * destination on its own hosted page: Lightning has no hosted page at all,
- * OpenNode's ignores addresses, and Demo has none. Stripe skips this — it collects
- * the address itself, after the session is created.
+ * OpenNode's ignores addresses, and Demo has none. Stripe usually skips this — it
+ * collects the address itself, after the session is created — but comes here
+ * where the destination's zone holds a relay rate: its page cannot offer a
+ * point, so the address, the rate and the point are all taken here, once, and
+ * the session charges the chosen rate alone (api/checkout.ts).
  *
  * Three steps: the address, the rate, and — for a relay rate (ADR 0020) — the
  * point, searched by the server around the address and listed as a form.
@@ -71,7 +78,7 @@ const fld = (name: string) => (form?.get(name) ?? '').toString().trim();
  * The rail arrives as a query param on the first hop and as a hidden field across
  * the address → shipping steps (the forms post to a bare /checkout).
  */
-const IN_APP_RAILS = ['lightning', 'opennode', 'demo'] as const;
+const IN_APP_RAILS = ['lightning', 'opennode', 'demo', 'stripe'] as const;
 type InAppRail = (typeof IN_APP_RAILS)[number];
 const requestedRail = (fld('method') || Astro.url.searchParams.get('method') || '').trim();
 const rail: InAppRail = (IN_APP_RAILS as readonly string[]).includes(requestedRail)
@@ -225,6 +232,12 @@ const DEMO_ADDRESS = {
   phone: '06 39 98 00 00',
 };
 const prefill = rail === 'demo' && !isPost ? DEMO_ADDRESS : null;
+// The destination the cart priced a card payment for, when it sent one here.
+const cartDestination = (Astro.url.searchParams.get('country') ?? '').toUpperCase();
+const cartCountry =
+  isCountryCode(cartDestination) && (shipsAnywhere || knownCountries.includes(cartDestination))
+    ? cartDestination
+    : null;
 const addr = {
   email: fld('email') || (prefill?.email ?? ''),
   name: fld('name') || (prefill?.name ?? ''),
@@ -233,7 +246,7 @@ const addr = {
   city: fld('city') || (prefill?.city ?? ''),
   state: fld('state') || (prefill?.state ?? ''),
   postal: fld('postal') || (prefill?.postal ?? ''),
-  country: (fld('country') || prefill?.country || geoDefault || knownCountries[0] || 'US').toUpperCase(),
+  country: (fld('country') || prefill?.country || cartCountry || geoDefault || knownCountries[0] || 'US').toUpperCase(),
   phone: askPhone ? fld('phone') || (prefill?.phone ?? '') : '',
 };
 
@@ -372,10 +385,22 @@ if (submitted) {
           // carry. Reservations keep using the ord_ public id.
           const { publicId, accessToken } = await claimOrderIdentity(env.DB);
           const reservedItems = reservationItems(lines);
+          const shippingAddress = {
+            name: addr.name,
+            line1: addr.line1,
+            line2: addr.line2 || null,
+            city: addr.city,
+            state: addr.state || null,
+            postal: addr.postal,
+            country: addr.country,
+            ...(askPhone && { phone: addr.phone }),
+          };
           const reservationTtl =
             rail === 'demo'
               ? DEMO_CHECKOUT_TTL_SECONDS
-              : cfg.payments.lightning.invoiceExpiryMinutes * 60 + 5 * 60;
+              : rail === 'stripe'
+                ? STRIPE_CHECKOUT_TTL_SECONDS + RESERVATION_EXPIRY_GRACE_SECONDS
+                : cfg.payments.lightning.invoiceExpiryMinutes * 60 + 5 * 60;
           const reserved = await reserveInventory(
             env.DB,
             publicId,
@@ -387,27 +412,20 @@ if (submitted) {
             consentFor(terms, termsAccepted),
             cfg.legal.vatRateBps,
             relayPoint,
+            // Stripe's webhook returns no address once its page asked none:
+            // the reservation carries this one to the order, and lets it go.
+            rail === 'stripe' ? shippingAddress : null,
           );
           if (!reserved) {
             await deleteGuestAccessIfUnsettled(env.DB, publicId);
             errors.push(t('checkout.error.stockGone'));
           } else {
-            const shippingAddress = {
-              name: addr.name,
-              line1: addr.line1,
-              line2: addr.line2 || null,
-              city: addr.city,
-              state: addr.state || null,
-              postal: addr.postal,
-              country: addr.country,
-              ...(askPhone && { phone: addr.phone }),
-            };
             const itemsJson = JSON.stringify(
               lines.map((l) => ({ id: l.product.id, v: l.variantId, q: l.qty, n: l.name, p: l.unitPriceCents })),
             );
             try {
-              // OpenNode and Demo reach their adapters with the rate ALREADY chosen,
-              // so they charge and snapshot the merchant's real configuration
+              // OpenNode, Demo and Stripe reach their adapters with the rate ALREADY
+              // chosen, so they charge and snapshot the merchant's real configuration
               // instead of ignoring shipping or guessing at the first option.
               if (rail !== 'lightning') {
                 const provider = await getPaymentProvider(rail);
@@ -417,7 +435,12 @@ if (submitted) {
                     amountCents: l.unitPriceCents,
                     currency,
                     quantity: l.qty,
+                    // Shown by Stripe's page; the bitcoin rails ignore it.
+                    imageUrl: new URL(productImageUrl(l.product.image_key, cfg.images.baseUrl), Astro.url.origin).href,
                   })),
+                  // Stripe-only options, as api/checkout.ts sets them.
+                  allowPromotionCodes: Astro.locals.settings.discountsEnabled ?? cfg.discounts.enabled,
+                  automaticTax: Astro.locals.settings.taxEnabled ?? cfg.tax.enabled,
                   successUrl: `${Astro.url.origin}/order/${accessToken}`,
                   cancelUrl: `${Astro.url.origin}/cart`,
                   orderItemsJson: itemsJson,
@@ -463,7 +486,9 @@ if (submitted) {
                 JSON.stringify({
                   event: rail === 'lightning' ? 'lightning_invoice_failed' : 'checkout_create_failed',
                   rail,
-                  message: error instanceof Error ? error.message : String(error),
+                  // Stripe now receives the shopper's e-mail from here, and its
+                  // refusals can quote it back (invariant 12).
+                  message: logSafe(error),
                 }),
               );
               errors.push(

@@ -40,7 +40,7 @@ shopctl/src/privacy/   map      ← declared, and GATED
   one past. Which ROWS are theirs is pure derivation: foreign keys to `orders`,
   plus the five tables keyed on a public id or the payment id, declared under
   their own gate — the checkout reservation among them, for the relay point it
-  hands to the order.
+  hands to the order and the address it holds while a card payment is open.
 - **the export is cleartext JSON, 0600, in `privacy/`** (gitignored). Article 20
   asks for a structured machine-readable format and the file is FOR the
   requester; encrypting it would only move the problem to sending the key. It

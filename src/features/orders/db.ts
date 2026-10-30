@@ -488,6 +488,33 @@ export async function recordPaidOrder(
     }
     throw new Error('inventory exception identity collision retry exhausted');
   };
+  // The terms acceptance and the VAT rate are READ OFF the reservation rather
+  // than passed in. Settlement runs in a webhook that never saw the shopper, so
+  // every rail would otherwise have to carry both through its own provider
+  // metadata — four chances to drop the fields a dispute and an audit turn on.
+  //
+  // Read here rather than joined in the INSERT so the rounding rule stays in
+  // ONE place: `vatIncludedCents` is what the tests exercise, and a SQL copy of
+  // the same arithmetic would eventually disagree with it. The insert's
+  // reservation guard still decides whether the row is written at all.
+  //
+  // The relay point travels the same way, and for the same reason. So does
+  // the address, when /checkout took it for a rail that returns none (a card
+  // payment that went through it: Stripe then collects no address).
+  const carried = o.reservationId
+    ? await db
+        .prepare(
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address FROM checkout_reservations WHERE public_id = ?',
+        )
+        .bind(o.reservationId)
+        .first<{
+          terms_version: string | null;
+          terms_accepted_at: string | null;
+          vat_rate_bps: number | null;
+          relay_point: string | null;
+          ship_address: string | null;
+        }>()
+    : null;
   const orderValues = [
     o.providerSessionId,
     publicId,
@@ -500,37 +527,13 @@ export async function recordPaidOrder(
     o.discountCents ?? 0,
     o.taxCents ?? 0,
     o.currency,
-    o.shippingAddress ? JSON.stringify(o.shippingAddress) : null,
+    o.shippingAddress ? JSON.stringify(o.shippingAddress) : (carried?.ship_address ?? null),
     o.paymentMethod ?? null,
     // Stripe PaymentIntent. Refund webhooks identify the charge and its payment
     // but not the session, so this is what charge.refunded resolves an order by.
     o.providerPaymentId ?? null,
   ] as const;
   const settlementStatuses = "('active', 'payment_pending', 'expired', 'failed')";
-  // The terms acceptance and the VAT rate are READ OFF the reservation rather
-  // than passed in. Settlement runs in a webhook that never saw the shopper, so
-  // every rail would otherwise have to carry both through its own provider
-  // metadata — four chances to drop the fields a dispute and an audit turn on.
-  //
-  // Read here rather than joined in the INSERT so the rounding rule stays in
-  // ONE place: `vatIncludedCents` is what the tests exercise, and a SQL copy of
-  // the same arithmetic would eventually disagree with it. The insert's
-  // reservation guard still decides whether the row is written at all.
-  //
-  // The relay point travels the same way, and for the same reason.
-  const carried = o.reservationId
-    ? await db
-        .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point FROM checkout_reservations WHERE public_id = ?',
-        )
-        .bind(o.reservationId)
-        .first<{
-          terms_version: string | null;
-          terms_accepted_at: string | null;
-          vat_rate_bps: number | null;
-          relay_point: string | null;
-        }>()
-    : null;
   const vatRateBps = carried?.vat_rate_bps ?? null;
   const carriedValues = [
     carried?.terms_version ?? null,
@@ -758,7 +761,8 @@ export async function recordPaidOrder(
     stmts.push(
       db
         .prepare(
-          `UPDATE checkout_reservations SET status = 'settled'
+          // The order now holds the address; the reservation lets it go.
+          `UPDATE checkout_reservations SET status = 'settled', ship_address = NULL
             WHERE public_id = ? AND status IN ${settlementStatuses} AND EXISTS (
               SELECT 1 FROM orders
                WHERE provider_session_id = ? AND settlement_token = ?
