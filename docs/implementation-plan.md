@@ -3040,7 +3040,15 @@ Engagée en six lots, dans cet ordre :
    `test/integration/checkout-phone.mjs`). C'est une précision de l'ADR 0020,
    qui le faisait demander par Stripe sur le parcours relais : ce parcours
    passe par `/checkout`, qui le demandera là, comme pour les autres moyens
-   de paiement ;
+   de paiement. Le tarif `relay` existe (fait le 2026-10-30, sans appelant à
+   la commande) : il nomme l'une des neuf offres relais du devis du bac à
+   sable et se fixe au forfait ou au poids, comme un tarif à domicile ;
+   l'éditeur le propose quand `features.relayPoints` est allumé au build ; le
+   calcul ne le chiffre que pour un appelant qui sait faire choisir un point
+   (`relayOffers`), et la livraison offerte reste une livraison à domicile.
+   Le document passe en version 4. Une offre que le socle ne liste plus est
+   refusée à l'enregistrement mais ne rend pas le document invalide : elle
+   sort du choix ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait

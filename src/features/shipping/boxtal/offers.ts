@@ -1,8 +1,9 @@
 /**
- * The Boxtal offers a merchant can retain for home delivery (ADR 0021): the
- * home offers the v1 quote returned in the sandbox (corpus `31`), under their
- * v3 code `<operator>-<service>`. `offers.test.ts` keeps this list equal to that
- * corpus, so an offer appears here only once Boxtal has been seen to sell it.
+ * The Boxtal offers a merchant can retain for home delivery (ADR 0021), and
+ * those a relay rate can name (ADR 0020): the offers the v1 quote returned in
+ * the sandbox (corpus `31`), under their v3 code `<operator>-<service>`.
+ * `offers.test.ts` keeps both lists equal to that corpus, so an offer appears
+ * here only once Boxtal has been seen to sell it.
  *
  * Copied rather than fetched: the settings page lists them without calling
  * Boxtal, and a label bought without the optional quote still knows the carrier
@@ -42,6 +43,26 @@ export const BOXTAL_HOME_OFFERS: readonly BoxtalOffer[] = [
   { code: 'UPSE-ExpressSaver', carrier: 'UPS', service: 'UPS Express Saver', carrierCode: 'ups', collection: 'COMPANY' },
   { code: 'UPSE-Express', carrier: 'UPS', service: 'UPS Express', carrierCode: 'ups', collection: 'COMPANY' },
 ];
+
+/**
+ * Delivered to a relay point or a locker. The offer fixes the network: a relay
+ * rate names one, and the checkout searches that offer's points.
+ */
+export const BOXTAL_RELAY_OFFERS: readonly BoxtalOffer[] = [
+  { code: 'MONR-CpourToi', carrier: 'Mondial Relay', service: 'C.pourToi®', carrierCode: 'mondialrelay', collection: 'DROPOFF_POINT' },
+  { code: 'POFR-ColissimoPickupStation', carrier: 'Colissimo', service: 'Colissimo France Pickup', carrierCode: 'colissimo', collection: 'POST_OFFICE' },
+  { code: 'CHRP-ChronoRelais', carrier: 'Chronopost', service: 'Chrono Relais', carrierCode: 'chronopost', collection: 'POST_OFFICE' },
+  { code: 'CHRP-ChronoRelaisPickup', carrier: 'Chronopost', service: 'Chrono Relais collecte', carrierCode: 'chronopost', collection: 'COMPANY' },
+  { code: 'CHRP-Chrono2ShopDirect', carrier: 'Chronopost', service: '2Shop Direct', carrierCode: 'chronopost', collection: 'DROPOFF_POINT' },
+  { code: 'CHRP-ChronoShoptoShop', carrier: 'Chronopost', service: 'Shop2Shop by Chronopost', carrierCode: 'chronopost', collection: 'DROPOFF_POINT' },
+  { code: 'SOGP-RelaisColis', carrier: 'Relais Colis', service: 'Relais Colis®', carrierCode: 'other', collection: 'DROPOFF_POINT' },
+  { code: 'COPR-CoprRelaisRelaisNat', carrier: 'Colis Privé', service: 'Colis Privé Relais', carrierCode: 'other', collection: 'DROPOFF_POINT' },
+  { code: 'UPSE-StandardAP', carrier: 'UPS', service: 'UPS Standard Access Point', carrierCode: 'ups', collection: 'COMPANY' },
+];
+
+export function relayOffer(code: string | null | undefined): BoxtalOffer | null {
+  return BOXTAL_RELAY_OFFERS.find((offer) => offer.code === code) ?? null;
+}
 
 export function homeOffer(code: string | null | undefined): BoxtalOffer | null {
   return BOXTAL_HOME_OFFERS.find((offer) => offer.code === code) ?? null;

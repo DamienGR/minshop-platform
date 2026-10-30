@@ -147,6 +147,30 @@ await check('an edit at the current revision succeeds and increments it', async 
   assert.equal(second.config.revision, 2);
 });
 
+await check('a relay rate saves as schema 4 and reads back whole', async () => {
+  // Schema 4, so a core that knows 3 at most fails closed on the document
+  // instead of dropping the relay rate it does not understand.
+  const db = await freshDb();
+  const relay = {
+    ...zone(),
+    countries: ['FR'],
+    rates: [
+      { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+      {
+        label: 'Mondial Relay',
+        pricing: { type: 'relay', offer: 'MONR-CpourToi', price: { type: 'flat', amountCents: 390 } },
+      },
+    ],
+  };
+  const saved = await saveRuntimeShippingConfig(db, 0, document({ zones: [relay] }));
+  assert.equal(saved.ok, true);
+  const raw = await readRaw(db);
+  assert.equal(JSON.parse(raw).schema, 4);
+  const parsed = parseRuntimeShippingConfig(raw);
+  assert.equal(parsed.status, 'valid');
+  assert.deepEqual(parsed.config.zones[0].rates[1].pricing, relay.rates[1].pricing);
+});
+
 await check('two writes from the same revision: exactly one wins', async () => {
   const db = await freshDb();
   await saveRuntimeShippingConfig(db, 0, document());

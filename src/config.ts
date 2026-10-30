@@ -34,6 +34,13 @@ export interface SiteConfig {
      * + session cookie) AND email configured (to send the link). See README → Accounts.
      */
     accounts: boolean;
+    /**
+     * Relay-point delivery (ADR 0020): the shipping editor offers relay rates,
+     * each naming a Boxtal relay offer. Off by default, switched on shop by
+     * shop once the core tag carrying it has been certified. A relay rate is
+     * offered at checkout only while the Boxtal keys are in the vault.
+     */
+    relayPoints: boolean;
   };
   /**
    * Terms of sale, and the consent an order records.
@@ -228,6 +235,7 @@ function defaultConfig(): SiteConfig {
     timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
       accounts: false, // magic-link customer login; needs AUTH_SECRET + email
+      relayPoints: false, // relay rates in the shipping editor; needs the Boxtal keys
     },
     legal: {
       termsSlug: 'conditions-generales-de-vente',

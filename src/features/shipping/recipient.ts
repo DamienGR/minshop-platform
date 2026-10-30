@@ -8,13 +8,11 @@
  * Pure: the checkout page, the JSON checkout and the tests read the same rule.
  */
 
-/** Whether checkout asks for the phone: the Boxtal v3 keys are in a usable vault. */
+import { boxtalConfigured } from '../settings/availability.ts';
+
+/** Whether checkout asks for the phone: whenever Boxtal can buy the label. */
 export function asksRecipientPhone(configuredSecrets: readonly string[], vault: boolean): boolean {
-  return (
-    vault &&
-    configuredSecrets.includes('boxtal_access_key') &&
-    configuredSecrets.includes('boxtal_secret_key')
-  );
+  return boxtalConfigured(configuredSecrets, vault);
 }
 
 /** A phone a carrier can text: digits, with the usual separators and a leading +. */

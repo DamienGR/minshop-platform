@@ -394,6 +394,9 @@ total, never per line.
   `features/payments/lightning/<name>.ts`; add a case to `getLightningBackend()`.
 - **A shipping zone/rate:** edit `shipping.zones` in `config.ts` default (or
   `store.config.ts`). Pure logic lives in `shipping/calculator.ts` — unit-test it.
+  A relay rate names a Boxtal relay offer (`BOXTAL_RELAY_OFFERS`) and is quoted
+  only to a caller that passes it in `relayOffers`: a surface that cannot let
+  the shopper pick a point never shows one.
 - **A migration:** `npx wrangler d1 migrations create minshop-db <name>` → edit →
   `npm run db:migrate` (local). A deployed environment is migrated by
   `shopctl deploy`, which backs production up first — never migrate it by hand.
