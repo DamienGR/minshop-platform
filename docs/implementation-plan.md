@@ -2989,19 +2989,27 @@ Engagée en six lots, dans cet ordre :
    §2.1 et §2.2 et du README (faits le 2026-10-30) ; un compte de test Boxtal,
    et un corpus de réponses relevées dans son bac à sable (recherche,
    expédition, étiquette, suivi), relevé le 2026-10-30 dans
-   `test/fixtures/boxtal/`. L'[ADR 0021](architecture/decisions/0021-boxtal-apres-le-bac-a-sable.md)
-   (proposé) en tire ce qui change :
+   `test/fixtures/boxtal/`. L'[ADR 0021](architecture/decisions/0021-boxtal-apres-le-bac-a-sable.md),
+   accepté par la fusion de la PR #137, en tire ce qui change :
    - pas de devis en v3 : il passe par la v1, en option, et l'achat reste en
-     v3. Le devis v1 se relève à son tour dans le bac à sable, avec une
-     application v1 sur le compte de test ;
+     v3. Le devis v1 est relevé à son tour, le même jour : le code d'offre v3
+     assemble ses codes de transporteur et de service ;
    - pas d'idempotence : l'achat incertain se lève avec le commerçant ;
    - l'étiquette relue à la demande ;
    - l'URL de suivi rendue par Boxtal ;
 2. les ports `PickupPointProvider` et `LabelProvider`, `labels.ts` devenu
    l'adaptateur Shippo, l'adaptateur Boxtal et ses clés dans le coffre, testés
-   sur ce corpus ;
+   sur ce corpus. L'adaptateur du devis v1 :
+   - désigne une offre par son code v3, `<transporteur>-<service>`, jamais par
+     le seul service (`DomicileFrance` existe chez `MONR` et chez `BMON`) ;
+   - ne demande que les offres retenues (`offers[N]`, les deux codes collés),
+     et ne garde que celles qu'il a demandées, puisque la v1 ignore sans
+     erreur un filtre qu'elle ne connaît pas (`35`) ;
+   - rend le prix hors taxes, celui que l'achat en v3 confirme ;
+   - se teste aussi sur l'offre absente (`38`) et les erreurs (`36`, `39`) ;
 3. l'étiquette à domicile achetée chez Boxtal depuis la fiche commande, sur
-   une offre retenue dans Réglages, le suivi et son URL gardée sur la
+   une offre retenue dans Réglages (une offre retenue que le devis ne rend pas
+   y est « non proposée pour ce colis »), le suivi et son URL gardée sur la
    commande, Boxtal à la place de Shippo dans Réglages et dans la liste des
    sous-traitants, qui décrit ce qu'une boutique fait tourner ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),

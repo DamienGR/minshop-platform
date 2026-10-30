@@ -1,6 +1,6 @@
 # ADR 0021 — Ce que le bac à sable de Boxtal change à l'ADR 0020
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #137 par Damien, le 2026-10-30)
 - **Date** : 2026-10-30
 - **Jalon** : après le pilote (plan §13.3) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0020](0020-expeditions-par-boxtal.md), sur cinq points
