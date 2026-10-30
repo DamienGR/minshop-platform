@@ -2999,7 +2999,11 @@ Engagée en six lots, dans cet ordre :
    - l'URL de suivi rendue par Boxtal ;
 2. les ports `PickupPointProvider` et `LabelProvider`, `labels.ts` devenu
    l'adaptateur Shippo, l'adaptateur Boxtal et ses clés dans le coffre, testés
-   sur ce corpus. L'adaptateur du devis v1 :
+   sur ce corpus (faits le 2026-10-30, sans appelant encore : les ports dans
+   `src/features/shipping/provider.ts`, avec un troisième pour le devis,
+   Boxtal dans `src/features/shipping/boxtal/`, quatre noms au coffre). Le
+   module Shippo ne partage encore que le type de résultat : la fiche commande
+   ne passe aux ports qu'au lot 3. L'adaptateur du devis v1 :
    - désigne une offre par son code v3, `<transporteur>-<service>`, jamais par
      le seul service (`DomicileFrance` existe chez `MONR` et chez `BMON`) ;
    - ne demande que les offres retenues (`offers[N]`, les deux codes collés),
