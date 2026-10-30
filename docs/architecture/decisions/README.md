@@ -40,4 +40,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0017](0017-effacement-et-portabilite.md) | Effacement et portabilité des données d'un acheteur | Accepté |
 | [0018](0018-administration-en-francais.md) | L'administration en français | Accepté |
 | [0019](0019-compte-cloudflare-mutualise.md) | Un compte Cloudflare mutualisé pour les boutiques | Accepté |
-| [0020](0020-points-relais.md) | Les points relais, option de l'offre | Proposé |
+| [0020](0020-expeditions-par-boxtal.md) | Boxtal pour toutes les expéditions, points relais compris | Proposé |
