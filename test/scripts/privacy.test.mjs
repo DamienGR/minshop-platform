@@ -170,7 +170,7 @@ describe('trouver une personne', () => {
     expect(rootPredicates('a@b.fr').map((entry) => entry.table)).toEqual(['orders', 'pending_payments']);
   });
 
-  /** The reach is the foreign keys plus the four tables that key on a public
+  /** The reach is the foreign keys plus the five tables that key on a public
    *  identifier. A buyer with no order reaches nothing, which is not an error. */
   it('descend des commandes vers ce qui y pend', () => {
     const linked = linkedPredicates(
@@ -178,6 +178,7 @@ describe('trouver une personne', () => {
       { order_items: ['order_id'], refunds: ['order_id'], products: [] },
     );
     expect(linked.map((entry) => entry.table)).toEqual([
+      'checkout_reservations',
       'order_guest_access',
       'order_item_ids',
       'order_items',
@@ -222,6 +223,11 @@ describe('l’adresse réduite', () => {
    *  sells to a whole country. */
   it('ne garde que le pays', () => {
     expect(redactAddress('{"name":"Jean","line1":"3 rue des Lilas","city":"Lyon","postal":"69003","country":"FR"}'))
+      .toBe('{"country":"FR"}');
+  });
+
+  it('efface le téléphone que la commande demande pour le transporteur', () => {
+    expect(redactAddress('{"name":"Jean","city":"Lyon","country":"FR","phone":"06 39 98 00 01"}'))
       .toBe('{"country":"FR"}');
   });
 
@@ -411,7 +417,7 @@ describe('la commande, contre une vraie base', () => {
     ]);
     expect(status).toBe(EXIT_CODES.ok);
     expect(report.dryRun).toBe(true);
-    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url', 'tracking_url']);
+    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url', 'tracking_url', 'relay_point']);
     expect(report.plan.find((entry) => entry.table === 'order_guest_access').action).toBe('supprimée');
     expect(report.plan.find((entry) => entry.table === 'order_notifications').columns).toEqual(['last_error', 'state', 'lease_expires_at']);
     expect(orderRow(target, 'ord_0000000001').email).toBe('Client@Example.FR');

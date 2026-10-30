@@ -167,6 +167,7 @@ const ship = order.ship_address
       state: string | null;
       postal: string | null;
       country: string | null;
+      phone?: string | null;
     })
   : null;
 // Domestic-only for now: international labels need a customs declaration this
@@ -289,6 +290,7 @@ const willEmailCustomer =
               ship.line2,
               [ship.city, ship.state, ship.postal].filter(Boolean).join(', '),
               ship.country,
+              ship.phone,
             ]
               .filter(Boolean)
               .join('\n')}
@@ -515,7 +517,7 @@ const willEmailCustomer =
                         </label>
                         <label class="block">
                           <span class="block text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.label.phone')}</span>
-                          <input name="to_phone" type="tel" required autocomplete="off" class="mt-1 w-full rounded-md border border-line bg-paper px-3 py-2" />
+                          <input name="to_phone" type="tel" value={ship?.phone ?? ''} required autocomplete="off" class="mt-1 w-full rounded-md border border-line bg-paper px-3 py-2" />
                         </label>
                       </div>
                       <p class="text-xs text-gray-500">{t('admin.orders.detail.label.recipientHint')}</p>

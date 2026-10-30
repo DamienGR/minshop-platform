@@ -34,6 +34,7 @@ import type {
   TrackingEvent,
   Weekday,
 } from '../provider.ts';
+import { pointsForWeight } from '../relay.ts';
 
 export const BOXTAL_V3_BASE = {
   sandbox: 'https://api.boxtal.build',
@@ -226,11 +227,6 @@ export function parsePickupPoints(content: unknown): PickupPoint[] {
       },
     ];
   });
-}
-
-/** Points that can take a parcel of this weight. A point that states no cap stays. */
-export function pointsForWeight(points: readonly PickupPoint[], weightGrams: number): PickupPoint[] {
-  return points.filter((point) => point.maxWeightGrams == null || point.maxWeightGrams >= weightGrams);
 }
 
 const SHIPMENT_STATUSES: readonly ShipmentStatus[] = ['PENDING', 'REQUESTED', 'CONFIRMED', 'CANCELLED'];

@@ -3022,15 +3022,62 @@ Engagée en six lots, dans cet ordre :
    (corpus `43` à `52`) : l'achat s'enregistre d'abord, le numéro arrive à la
    relecture du suivi, et la fiche offre « Relire le suivi » quand Boxtal
    tarde. Boxtal exige le téléphone du destinataire, que la boutique ne
-   demande pas encore : le commerçant le saisit à l'achat. Le demander à la
-   commande se décide avec le lot 4, qui fait passer tous les paiements par
-   `/checkout`. Le runbook
+   demandait pas : le commerçant le saisissait à l'achat, jusqu'au lot 4. Le
+   runbook
    [etiquette-incertaine](operations/runbooks/etiquette-incertaine.md) règle
    l'achat incertain et le doublon ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
    l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
    `delivery_method` et les colonnes du point (réservation, paiement en
-   attente, commande), classées pour l'effacement ;
+   attente, commande), classées pour l'effacement. Le téléphone du
+   destinataire se demande à la commande (décision de Damien, 2026-10-30),
+   avec l'adresse, dès que les clés v3 de Boxtal sont au coffre : une boutique
+   qui expédie à la main ne le collecte pas. L'étape `/checkout` le demande,
+   l'API JSON le lit dans `ship_to` et la page de Stripe le collecte ; il
+   entre dans l'instantané de l'adresse, que l'effacement réduit au pays, et
+   la fiche commande le préremplit à l'achat de l'étiquette (fait le
+   2026-10-30 : `features/shipping/recipient.ts`,
+   `test/integration/checkout-phone.mjs`). C'est une précision de l'ADR 0020,
+   qui le faisait demander par Stripe sur le parcours relais : ce parcours
+   passe par `/checkout`, qui le demande là, comme pour les autres moyens de
+   paiement. Le tarif `relay` existe (fait le 2026-10-30, sans appelant à
+   la commande) : il nomme l'une des neuf offres relais du devis du bac à
+   sable et se fixe au forfait ou au poids, comme un tarif à domicile ;
+   l'éditeur le propose quand `features.relayPoints` est allumé au build ; le
+   calcul ne le chiffre que pour un appelant qui sait faire choisir un point
+   (`relayOffers`), et la livraison offerte reste une livraison à domicile.
+   Le document passe en version 4. Une offre que le socle ne liste plus est
+   refusée à l'enregistrement mais ne rend pas le document invalide : elle
+   sort du choix. Le point se choisit à `/checkout` (fait le 2026-10-30 pour
+   tous les moyens de paiement : `features/shipping/relay.ts`, la migration
+   0048, `test/integration/checkout-relay.mjs`). L'étape des tarifs
+   cherche les points de chaque offre relais autour de l'adresse saisie, en
+   cache une heure par offre et par adresse ; une offre dont la recherche
+   échoue ou ne trouve rien sort du choix, et la commande continue. Un tarif
+   relais mène à une étape de plus, la liste des dix points les plus proches,
+   sans JavaScript ; un point posté n'est cru que si la recherche l'a servi.
+   Le point (offre, code, nom, adresse) entre dans la réservation, que
+   `recordPaidOrder` recopie sur la commande avec `delivery_method` = `relay`.
+   Le paiement en attente n'en garde pas de copie, contrairement à ce que
+   prévoyait l'ADR 0020 : chaque moyen de paiement règle à partir de la même
+   réservation. L'effacement réduit le point au pays sur la commande comme
+   sur la réservation, que la carte des données personnelles atteint
+   désormais. Un paiement par carte vers une zone qui a un tarif relais passe
+   aussi par `/checkout` (décision de Damien, 2026-10-30, qui s'écarte de
+   l'ADR 0020) : l'adresse et le téléphone s'y saisissent une seule fois, le
+   tarif et le point s'y choisissent, et la session Stripe ne reçoit que le
+   tarif choisi, sans collecte d'adresse ni de téléphone. Une zone sans tarif
+   relais garde le passage direct par la page de Stripe. Le webhook de Stripe
+   ne rend alors pas d'adresse : la réservation la garde (`ship_address`) et
+   `recordPaidOrder` la recopie sur la commande, puis l'efface. Une
+   réservation libérée avant que Stripe ait une session l'efface aussitôt ;
+   une réservation expirée ou en échec la garde trois jours, le temps des
+   relances de webhook de Stripe, et le balayage qui masque son lien d'invité
+   l'efface. Une session sans collecte d'adresse se vérifie en mode test
+   au lot 6, avec Stripe Tax, qui calcule alors l'impôt sur l'adresse de
+   facturation. La variable `RELAY_POINTS`
+   (`on`) allume l'option dans un seul environnement, pour la répéter sur le
+   staging avant de la construire pour la production ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait

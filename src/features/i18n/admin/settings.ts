@@ -106,7 +106,7 @@ export const settings = {
   'admin.settings.boxtal.environmentHint': 'Les clés du bac à sable n’ouvrent que le bac à sable, et celles de production que la production : changez les clés en même temps que l’environnement.',
   'admin.settings.boxtal.accessKey': 'Clé d’accès (API v3)',
   'admin.settings.boxtal.secretKey': 'Clé secrète (API v3)',
-  'admin.settings.boxtal.keysHint': 'Les clés de l’application API v3 créée dans votre espace Boxtal, jamais votre mot de passe. Elles servent à acheter l’étiquette et à lire le suivi.',
+  'admin.settings.boxtal.keysHint': 'Les clés de l’application API v3 créée dans votre espace Boxtal, jamais votre mot de passe. Elles servent à acheter l’étiquette et à lire le suivi. Une fois enregistrées, la commande demande aussi le téléphone du destinataire, que Boxtal exige.',
   'admin.settings.boxtal.quoteAccessKey': 'Clé d’accès du devis (API v1, facultative)',
   'admin.settings.boxtal.quoteSecretKey': 'Clé secrète du devis (API v1, facultative)',
   'admin.settings.boxtal.quoteKeysHint': 'Facultatives : avec les clés d’une application API v1, la page de la commande affiche le prix de chaque offre avant l’achat. Sans elles, les offres s’achètent sans prix affiché, et le prix arrive avec l’envoi.',

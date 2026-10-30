@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { answer, recorded, replay } from '../../../../test/helpers/boxtal-corpus.mjs';
 import { t } from '../../i18n/index.ts';
 import type { ShipmentParty, ShipmentRequest } from '../provider.ts';
+import { pointsForWeight } from '../relay.ts';
 import {
   boxtalLabels,
   boxtalPickupPoints,
@@ -9,7 +10,6 @@ import {
   isLocker,
   parsePickupPoints,
   pointMaxWeightGrams,
-  pointsForWeight,
   trackingMatchesReference,
   type BoxtalOptions,
 } from './v3.ts';

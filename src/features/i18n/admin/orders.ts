@@ -118,7 +118,7 @@ export const orders = {
   'admin.orders.detail.label.quoteFailed': 'Le devis de Boxtal n’a pas abouti ({erreur}) : les offres s’achètent sans prix affiché, et le prix arrive avec l’envoi.',
   'admin.orders.detail.label.noQuote': 'Sans les clés du devis dans Réglages, les offres s’achètent sans prix affiché : le prix arrive avec l’envoi.',
   'admin.orders.detail.label.recipient': 'Destinataire',
-  'admin.orders.detail.label.recipientHint': 'Boxtal exige le téléphone du destinataire : le transporteur s’en sert pour le prévenir. La boutique ne le demande pas encore à la commande ; saisissez celui que l’acheteur vous a donné.',
+  'admin.orders.detail.label.recipientHint': 'Boxtal exige le téléphone du destinataire : le transporteur s’en sert pour le prévenir. La commande le demande depuis que les clés Boxtal sont enregistrées ; pour une commande antérieure, saisissez celui que l’acheteur vous a donné.',
   'admin.orders.detail.label.firstName': 'Prénom',
   'admin.orders.detail.label.lastName': 'Nom',
   'admin.orders.detail.label.phone': 'Téléphone',
