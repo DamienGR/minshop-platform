@@ -25,6 +25,24 @@ describe('orderShippedEmail', () => {
     expect(msg.html).toContain('https://www.laposte.fr/outils/suivre-vos-envois?code=6A00000000000');
   });
 
+  it('links the carrier page the label provider returned, which no pattern here can build', () => {
+    // Mondial Relay's carries the sender's own code (`ens=`): ADR 0021.
+    const page = 'https://www.mondialrelay.com/public/permanent/tracking.aspx?ens=BDTEST&exp=12345678';
+    const msg = orderShippedEmail(
+      order({ tracking_carrier: 'mondialrelay', tracking_number: '12345678', tracking_url: page }),
+      'Boutique',
+    );
+    expect(msg.html).toContain(`href="${page}"`);
+    // Only an https page is a link: anything else falls back to the pattern.
+    const fallback = orderShippedEmail(order({ tracking_url: 'javascript:alert(1)' }), 'Boutique');
+    expect(fallback.html).not.toContain('javascript:');
+    expect(fallback.html).toContain('https://www.laposte.fr/outils/suivre-vos-envois?code=6A00000000000');
+    // A provider's quote cannot close the attribute it lands in.
+    const quoted = orderShippedEmail(order({ tracking_url: 'https://suivi.example/?n="><b>x</b>' }), 'Boutique');
+    expect(quoted.html).toContain('href="https://suivi.example/?n=%22%3E%3Cb%3Ex%3C/b%3E"');
+    expect(quoted.html).not.toContain('<b>x</b>');
+  });
+
   it('shows the number without an English "Other" when the carrier is unlisted', () => {
     const msg = orderShippedEmail(order({ tracking_carrier: 'other' }), 'Boutique');
     expect(msg.text).toContain('6A00000000000');

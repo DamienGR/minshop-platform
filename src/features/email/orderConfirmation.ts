@@ -5,7 +5,7 @@ import {
   productEmailImageUrl,
   type ImageDelivery,
 } from '../products/image';
-import { shippedCarrierName, trackingUrl } from '../orders/tracking';
+import { orderTrackingUrl, shippedCarrierName } from '../orders/tracking';
 import { t, formatNumber } from '../i18n/index.ts';
 import type { EmailMessage } from './provider';
 import {
@@ -234,7 +234,7 @@ export function orderShippedEmail(
 ): EmailMessage {
   const cfg = getConfig();
   const num = orderReference(order.public_id, order.id, cfg.orderNumber);
-  const url = trackingUrl(order.tracking_carrier, order.tracking_number);
+  const url = orderTrackingUrl(order);
   const carrier = shippedCarrierName(order.tracking_carrier);
   const orderUrl = guestOrderUrl ?? null;
 

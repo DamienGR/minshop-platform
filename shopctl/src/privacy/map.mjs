@@ -74,6 +74,7 @@ export const COLUMN_POLICY = {
     ship_address: { action: 'address', why: 'Nom, rue, ville et code postal du destinataire.' },
     tracking_number: { action: 'erase', why: "Désigne chez le transporteur un colis et l'adresse qui l'a reçu." },
     label_url: { action: 'erase', why: "L'étiquette porte l'adresse de livraison en toutes lettres." },
+    tracking_url: { action: 'erase', why: 'Ouvre le suivi du colis chez le transporteur, comme le numéro.' },
     provider_session_id: { action: 'processor', why: 'La session Stripe qui détient les mêmes données chez le sous-traitant.' },
     provider_payment_id: { action: 'processor', why: 'Le paiement Stripe : la ligne bancaire se rapproche par lui.' },
     refund_review_reason: { action: 'review', why: "Texte libre saisi par l'exploitant au moment d'un remboursement." },

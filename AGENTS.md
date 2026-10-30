@@ -199,7 +199,8 @@ src/
     payments/  provider (port) · stripe · opennode · lightning-provider · index (factory)
                lightning/  backend (port) · phoenixd · lnbits · index · rate · pending
     shipping/  calculator (zones + ShippingCalculator port) · provider (label, relay-point, quote ports)
-               labels (Shippo, which leaves the offer: ADR 0020) · labelStore · boxtal/ (v3 · quote on v1 · index)
+               labels (Shippo, disabled: ADR 0020) · labelStore (label state machine)
+               boxtal/  v3 · quote (v1) · offers · contents · orderLabel (the order page's steps) · index
     storage/   provider (port) · r2 · index (factory)
     email/     provider (port) · resend · cloudflare · index (factory) · orderConfirmation
     search/    provider (port) · fts · vector · index (factory) · query

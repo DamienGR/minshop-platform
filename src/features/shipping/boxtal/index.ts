@@ -1,6 +1,10 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { getSecret } from '../../secrets/store';
+import { getSetting } from '../../settings/db';
 import type { LabelProvider, PickupPointProvider, ShippingQuoteProvider } from '../provider.ts';
+import { boxtalContent } from './contents.ts';
+import { parseRetainedOffers } from './offers.ts';
+import type { LabelContext } from './orderLabel.ts';
 import { boxtalQuote } from './quote.ts';
 import { boxtalLabels, boxtalPickupPoints } from './v3.ts';
 
@@ -35,5 +39,52 @@ export async function getBoxtal(db: D1Database, sandbox: boolean): Promise<Boxta
       quoteAccessKey && quoteSecretKey
         ? boxtalQuote({ keys: { accessKey: quoteAccessKey, secretKey: quoteSecretKey }, sandbox })
         : null,
+  };
+}
+
+/** What Réglages keeps for Boxtal besides the keys. */
+export interface BoxtalSettings {
+  /** Sandbox unless the merchant switched to production. */
+  sandbox: boolean;
+  /** Retained home offers, known codes only. */
+  offers: string[];
+  /** The nature of contents every parcel declares; null until chosen. */
+  contentId: string | null;
+}
+
+export async function getBoxtalSettings(db: D1Database): Promise<BoxtalSettings> {
+  const [environment, offers, content] = await Promise.all([
+    getSetting(db, 'boxtal_environment'),
+    getSetting(db, 'boxtal_offers'),
+    getSetting(db, 'boxtal_content'),
+  ]);
+  return {
+    sandbox: environment !== 'live',
+    offers: parseRetainedOffers(offers),
+    contentId: boxtalContent(content)?.id ?? null,
+  };
+}
+
+/**
+ * Everything the order page's label steps need, or null without the v3 keys
+ * (the shop then ships by hand, as before: ADR 0020).
+ */
+export async function getBoxtalLabelContext(
+  db: D1Database,
+  currency: string,
+): Promise<{ settings: BoxtalSettings; ctx: LabelContext } | null> {
+  const settings = await getBoxtalSettings(db);
+  const boxtal = await getBoxtal(db, settings.sandbox);
+  if (!boxtal) return null;
+  return {
+    settings,
+    ctx: {
+      db,
+      labels: boxtal.labels,
+      quote: boxtal.quote,
+      offers: settings.offers,
+      contentId: settings.contentId,
+      currency,
+    },
   };
 }

@@ -3015,7 +3015,18 @@ Engagée en six lots, dans cet ordre :
    une offre retenue dans Réglages (une offre retenue que le devis ne rend pas
    y est « non proposée pour ce colis »), le suivi et son URL gardée sur la
    commande, Boxtal à la place de Shippo dans Réglages et dans la liste des
-   sous-traitants, qui décrit ce qu'une boutique fait tourner ;
+   sous-traitants, qui décrit ce qu'une boutique fait tourner (fait le
+   2026-10-30, en doublure sur le corpus : `boxtal/orderLabel.ts`, la
+   migration 0047, `test/integration/boxtal-labels.mjs`). Le bac à sable a
+   montré qu'une commande reste `PENDING` 14 à 20 s, sans suivi ni document
+   (corpus `43` à `52`) : l'achat s'enregistre d'abord, le numéro arrive à la
+   relecture du suivi, et la fiche offre « Relire le suivi » quand Boxtal
+   tarde. Boxtal exige le téléphone du destinataire, que la boutique ne
+   demande pas encore : le commerçant le saisit à l'achat. Le demander à la
+   commande se décide avec le lot 4, qui fait passer tous les paiements par
+   `/checkout`. Le runbook
+   [etiquette-incertaine](operations/runbooks/etiquette-incertaine.md) règle
+   l'achat incertain et le doublon ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
    l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
    `delivery_method` et les colonnes du point (réservation, paiement en

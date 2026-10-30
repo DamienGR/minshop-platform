@@ -36,7 +36,7 @@ signé : ce document ne le remplace pas.
 | Fournisseur | Activé par | Données personnelles reçues | Garanties de transfert |
 |---|---|---|---|
 | Cloudflare Access | la preview privée du staging (agence) | adresses e-mail des personnes admises à la preview | DPA de Cloudflare |
-| Shippo | une clé dans Admin → Réglages, pour acheter des étiquettes | nom, adresse et téléphone de livraison, poids du colis | DPA de Shippo, à vérifier |
+| Boxtal | ses clés dans Admin → Réglages, pour acheter des étiquettes | nom, adresse, téléphone et e-mail du destinataire, poids, dimensions et valeur du colis, que Boxtal transmet au transporteur choisi ; le devis facultatif ne reçoit que codes postaux et villes | DPA de Boxtal, à vérifier |
 | OpenNode, ou le nœud Lightning du commerçant (phoenixd, LNbits) | Admin → Réglages → Paiements | montant de la facture, aucune identité | DPA d'OpenNode, à vérifier ; un nœud du commerçant n'est pas un sous-traitant |
 | Workers AI et Vectorize (Cloudflare) | la recherche sémantique, binding ajouté à la main | textes du catalogue, aucune donnée d'acheteur | DPA de Cloudflare |
 

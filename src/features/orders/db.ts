@@ -40,8 +40,11 @@ export interface Order {
   fulfillment_status: string; // 'unfulfilled' | 'fulfilled'
   tracking_carrier: string | null;
   tracking_number: string | null;
+  /** The carrier's page for the parcel, as the label provider returned it
+   *  (Boxtal); null for a number typed by hand, which trackingUrl() links. */
+  tracking_url: string | null;
   fulfilled_at: string | null;
-  /** Purchased label PDF (Shippo), or null for manual fulfillment. */
+  /** Purchased label PDF (Shippo), or null: a Boxtal label is re-read on demand. */
   label_url: string | null;
   /** 'pickup' | 'shipping' | NULL (pre-0035 or no shipping). Unknown = shipping. */
   delivery_method: string | null;
@@ -370,7 +373,7 @@ export async function fulfillOrder(
     .prepare(
       `UPDATE orders
          SET fulfillment_status = 'fulfilled', tracking_carrier = ?, tracking_number = ?,
-             fulfilled_at = datetime('now')
+             tracking_url = NULL, fulfilled_at = datetime('now')
        WHERE id = ?
          AND NOT EXISTS (
            SELECT 1 FROM shipping_labels
@@ -393,7 +396,7 @@ export async function unfulfillOrder(db: D1Database, id: number): Promise<void> 
     .prepare(
       `UPDATE orders
          SET fulfillment_status = 'unfulfilled', tracking_carrier = NULL,
-             tracking_number = NULL, fulfilled_at = NULL
+             tracking_number = NULL, tracking_url = NULL, fulfilled_at = NULL
        WHERE id = ?`,
     )
     .bind(id)
