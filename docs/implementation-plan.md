@@ -2925,9 +2925,20 @@ du compte mutualisé est une application, et une clé matérielle est à poser
 avant le lot 8 ; dg-tech.dev, choisi par Damien, porte aussi le site et les
 e-mails de l'agence. Le lot 8 a sa
 [fiche](certification/compte-mutualise-migration-pilote.md), répétée en
-doublure le 2026-10-28 : une heure et demie, cinq minutes de coupure, B détruit
-après une nuit verte de la flotte (`DamienGR/minshop-fleet`) ; les défauts
-trouvés sont corrigés en v0.3.33.
+doublure le 2026-10-28 ; les défauts trouvés sont corrigés en v0.3.33.
+
+**Le lot 8 est fait**, les 29 et 30 octobre 2026 (§10 de la fiche) :
+pilote-certif sert depuis le compte mutualisé depuis le 29 à 21 h 24 UTC,
+déployé et sauvegardé par la flotte (`DamienGR/minshop-fleet`), et B a été
+détruit le 30 après le premier Nightly programmé de la flotte, vert. La
+coupure a duré vingt-six minutes vue du poste de Damien, pas les cinq
+annoncées : le cache négatif du DNS garde une réponse vide trente minutes.
+La clé matérielle, commandée, n'était pas arrivée : la migration s'est faite
+sous l'application d'authentification, et la clé se pose à réception. Ce que
+la migration a trouvé est corrigé en v0.3.34, dont un `provision` qui, depuis
+un arbre portant le rendu de B, posait le marqueur vers la base de B. Les huit
+lots sont livrés. Le compte est encore en Workers Free
+(`MINSHOP_ACCOUNT_PLAN=free`), et la nuit le juge contre les quotas du compte.
 
 Sources relevées le 2026-10-15 puis le 2026-10-28 sur developers.cloudflare.com :
 tarifs et limites de Workers, D1, R2 et KV, tarifs d'Observability au
