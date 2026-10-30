@@ -8,15 +8,25 @@ fichiers, sans appel réseau : la spécification OpenAPI de Boxtal ne suffit pas
 L'[ADR 0021](../../../docs/architecture/decisions/0021-boxtal-apres-le-bac-a-sable.md)
 tire de ces constats ce qui change à l'ADR 0020.
 
+Les fichiers `30` à `39` viennent de l'API v1, celle du devis, sur son serveur
+de test (`https://test.envoimoinscher.com/api/v1`), relevés le même jour avec
+l'application v1 du même compte. Le corps de leur réponse est le XML tel que
+Boxtal l'a rendu, en une chaîne. `40` à `42` reviennent à la v3, pour vérifier
+qu'un devis v1 désigne bien une offre v3.
+
 Chaque fichier garde la requête (`method`, `path`, `body`) et la réponse
 (`status`, `ms`, `contentType`, `body`), jamais un en-tête : aucune clé n'y
 figure. Les parties sont fictives (« Boutique Essai », « Jeanne Essai »,
 adresses en `example.com`) ; les points relais sont des commerces publics.
-Deux retouches seulement, après le relevé :
+Quatre retouches seulement, après le relevé :
 
 - les URL signées des étiquettes ont `Signature` et `Key-Pair-Id` masqués ;
 - les listes de points sont coupées (cinq points, deux par réseau dans `04`),
-  et `pointsReturned` donne le nombre de points de la réponse entière.
+  et `pointsReturned` donne le nombre de points de la réponse entière ;
+- `30` garde trois des 82 natures de contenu, et `contentsReturned` donne
+  leur nombre ;
+- le corps de `35` est celui de `31`, octet pour octet : il n'est pas recopié,
+  `sameBodyAs` y renvoie.
 
 ## Les fichiers
 
@@ -40,6 +50,18 @@ Deux retouches seulement, après le relevé :
 | `20`, `21` | `DELETE …/{id}`, puis `GET` | le doublon annulé : `CANCELLED` |
 | `22`, `23` | le suivi de `14` et `19`, 30 minutes plus tard | `SHIPPED`, l'historique allongé |
 | `25`, `26`, `27` | `DELETE` des deux commandes une fois `SHIPPED`, puis `GET` | `422`, `InvalidRequestException` : rien n'est annulé |
+| `30` | v1, `GET /contents` | les natures de contenu, codes de la v3 |
+| `31` | v1, `GET /cotation`, sans filtre | 27 offres de 11 transporteurs, en 8 s |
+| `32` | même devis, `offers[N]` : les offres de `10` et `11` | leurs prix, ceux de l'achat |
+| `33` | `offers[N]`, huit codes v3 supposés | sept offres : `UPSEEconomyAccessPoint` manque |
+| `34` | `operator=MONR` | les deux offres de Mondial Relay |
+| `35` | `offers[0]=MONR-CpourToi`, le code v3 | filtre ignoré : la réponse de `31` |
+| `36` | sans `code_contenu` | `400`, `bad_request` |
+| `37` | code postal `00000` | `200`, les mêmes offres et les mêmes prix |
+| `38` | 35 kg vers Rennes | `200` et aucune offre |
+| `39` | sans en-tête `Authorization` | `401`, `UnauthorizedException` |
+| `40`, `41` | v3, `POST /shipping-order` en `BMON-DomicileFrance`, puis `DELETE` | le prix du devis ; commande annulée |
+| `42` | v3, recherche de points en `MONRCpourToi`, sans tiret | `400`, `ValidShippingOfferCode` |
 
 ## Ce que le bac à sable a établi
 
@@ -77,15 +99,73 @@ Deux retouches seulement, après le relevé :
 - La commande naît `PENDING` et passe `CONFIRMED` en 14 s.
 - La réponse donne `deliveryPriceExclTax` : 8,11 € HT en Colissimo Access et
   4,19 € HT en Mondial Relay, pour 0,8 kg.
-- **Le prix n'est connu qu'après l'achat** : l'API v3 n'a pas de cotation.
+- **En v3, le prix n'est connu qu'après l'achat** : elle n'a pas de cotation.
 - Boxtal renvoie le devis à sa v1 (`GET /cotation`) :
   - une API dépréciée mais maintenue, en XML ;
   - un serveur de test à part, `test.envoimoinscher.com/api/v1` ;
   - les clés d'une application de type v1, distinctes de celles de la v3.
 
-  Rien n'est relevé ici, faute d'une application v1 sur le compte de test.
+  Elle est relevée plus bas, dans « Le devis v1 ».
 - Le compte qui commande est en paiement différé par prélèvement, pas en
   prépaiement (guide `getting-started-api-v3`).
+
+**Le devis v1.**
+
+- `GET /cotation` répond en XML, sur une seule ligne : une liste d'`offer`,
+  triée par prix hors taxes croissant. Chaque offre porte :
+  - `operator/code` et `service/code` (`MONR`, `CpourToi`), leurs libellés et
+    un logo ;
+  - `price/tax-exclusive` et `price/tax-inclusive`, en euros décimaux ;
+  - `collection` et `delivery` : le mode de remise (`DROPOFF_POINT`,
+    `POST_OFFICE`, `COMPANY`) et de livraison (`HOME`, `PICKUP_POINT`), avec
+    une date indicative ;
+  - `characteristics`, `options` et `mandatory_informations`, qui servent à
+    commander en v1. L'achat se fait en v3, qui ne les demande pas (`10`,
+    `11`, `40`).
+- **Le code d'offre v3 est `<transporteur>-<service>`.**
+  - Trois achats en v3 rendent, au centime, le prix hors taxes du devis :
+    `POFR-ColissimoAccess` à 8,11 € (`10`), `MONR-CpourToi` à 4,19 € (`11`)
+    et `BMON-DomicileFrance` à 6,23 € (`40`, annulé aussitôt en `41`).
+  - Onze autres codes formés ainsi passent la validation de la v3 : la
+    recherche de points de l'offre les accepte, en arrivée ou en départ
+    (`03` et dix recherches faites pour ce relevé).
+  - La v3 refuse un code qu'elle ne connaît pas, et le même code sans tiret :
+    `400`, `ValidationException.ValidShippingOfferCode` (`42`).
+
+  Le filtre de la v1, lui, colle les deux codes sans tiret :
+  `offers[0]=MONRCpourToi`.
+- **Un filtre faux ne filtre rien.** Le code v3 `MONR-CpourToi` en `offers[0]`
+  est ignoré sans erreur, et la réponse est le devis de tous les transporteurs
+  (`35`). L'adaptateur ne garde donc que les offres qu'il a demandées.
+- **Le devis se filtre toujours.** Sans filtre, il rend 27 offres et 138 Ko,
+  en 8 s au premier appel (`31`). Filtré, il répond en 0,3 à 1,4 s (`32` à
+  `34`).
+- **Une offre se désigne par le couple.** `DomicileFrance` existe chez `MONR`,
+  avec dépôt en point relais (8,10 € HT), et chez `BMON`, « Boxtal Mondial
+  Relay », avec enlèvement chez l'expéditeur (6,23 € HT).
+- **Une offre impossible manque, sans erreur.** À 35 kg, le devis rend `200`
+  et aucune offre (`38`). `UPSEEconomyAccessPoint` manque aussi (`33`), et la
+  v3 refuse `UPSE-EconomyAccessPoint` : ce code n'existe pas.
+- Le devis ne vérifie pas l'adresse : le code postal `00000` à Paris rend les
+  mêmes offres, aux mêmes prix (`37`).
+- Le TTC ne se recalcule pas depuis le HT : Boxtal arrondit chacun de son côté
+  (4,19 € HT pour 5,02 € TTC, 8,37 € HT pour 10,05 € TTC). La v3 ne rend que
+  le HT, et c'est lui que l'achat confirme.
+- Les dates partent de `collecte`, le jour même par défaut. L'achat de `10` a
+  compté la prise en charge le lendemain : elles restent indicatives.
+- Les natures de contenu sont celles de la v3 : `code_contenu=40110` est
+  `content:v1:40110` (`30`, `06`). La v1 en a une de plus, `100`, « Contenu
+  non spécifié ».
+- Un point relais du devis porte le code du transporteur : `MONR-41132` en v1,
+  `41132` en v3, le même point.
+- Les erreurs :
+  - un paramètre manquant rend `400`, `<error><code>bad_request</code>` et un
+    message en français (`36`), comme la spécification le dit ;
+  - sans authentification, `401` et `<UnauthorizedException>`, une autre forme
+    que celle de la spécification (`39`).
+- Les libellés de `mandatory_informations` sont échappés deux fois
+  (`l&amp;apos;envoi`). Ceux des transporteurs, des services et des options
+  ne le sont pas.
 
 **Pas d'idempotence, pas de liste.**
 
@@ -154,5 +234,4 @@ Deux retouches seulement, après le relevé :
 - Le format `PDF_10x15` : est-ce le bac à sable seul qui rend du A4 ?
 - Ce que coûte une commande réelle annulée avant la prise en charge.
 - Le webhook, de bout en bout, sur une boutique déployée.
-- Le devis v1 : son format, et si ses codes de transporteur et de service
-  donnent bien le code d'offre v3 (`MONR` + `CpourToi` → `MONR-CpourToi`).
+- Le devis sur le compte réel : ses prix restent-ils ceux de l'achat ?

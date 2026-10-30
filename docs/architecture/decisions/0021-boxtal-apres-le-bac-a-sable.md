@@ -76,6 +76,16 @@ commande.
 - À l'achat d'une étiquette, la fiche commande demande un devis à la v1 pour
   le colis, et montre ces offres avec leur prix. Le commerçant en choisit une ;
   l'étiquette s'achète en v3 sur cette offre.
+- Une offre se désigne par son code v3, `<transporteur>-<service>` : le
+  devis v1 rend ces deux codes, et un service seul ne suffit pas
+  (`DomicileFrance` existe chez `MONR` et chez `BMON`).
+- Le devis ne demande que les offres retenues (`offers[N]`, les deux codes
+  collés), et l'adaptateur ne garde que celles qu'il a demandées : la v1
+  ignore sans erreur un filtre qu'elle ne connaît pas, et rend alors toutes
+  ses offres. Une offre retenue que le devis ne rend pas n'est pas proposée
+  pour ce colis, par son poids ou sa destination ; la fiche commande le dit.
+- Le prix montré est le hors taxes : c'est celui que l'achat en v3 rend, au
+  centime près dans le bac à sable.
 - Sans clés v1, ou quand le devis échoue, la fiche commande montre les mêmes
   offres sans prix, et le prix s'affiche après l'achat.
 - L'achat ne dépend donc jamais de la v1. Le jour où Boxtal la retire, ou
@@ -134,11 +144,12 @@ Le reste de l'ADR 0020 tient tel quel :
 - le commerçant compare les prix au moment d'expédier, comme avec Shippo,
   mais seulement entre les offres qu'il a retenues ;
 - la boutique parle deux API de Boxtal, en JSON et en XML, avec deux paires de
-  clés. Le devis v1 se relève à son tour dans le bac à sable, avant le lot 2 :
-  il faut une application v1 sur le compte de test ;
-- le code d'une offre v3 (`MONR-CpourToi`) semble assembler les codes de
-  transporteur et de service que rend le devis v1. Le corpus v1 doit le
-  confirmer ;
+  clés. Le devis v1 est relevé dans le bac à sable (`30` à `42` du corpus) ;
+- le code d'une offre v3 assemble les codes de transporteur et de service du
+  devis v1 (`MONR` et `CpourToi` donnent `MONR-CpourToi`). Trois achats en v3
+  l'ont confirmé, chacun au prix hors taxes du devis ;
+- le devis sans filtre interroge tous les transporteurs : 8 s dans le bac à
+  sable. Filtré par les offres retenues, il répond en moins de 1,5 s ;
 - un achat incertain demande une action du commerçant, quand Shippo se
   rapprochait seul. Le cas est rare, mais pas exceptionnel : une réponse perdue
   suffit ;
@@ -183,6 +194,9 @@ Le reste de l'ADR 0020 tient tel quel :
   - le doublon accepté (`16`) puis annulé (`20`) ;
   - l'annulation refusée après la prise en charge (`25`) ;
   - le suivi et son `packageExternalId` (`14`, `19`) ;
+  - le devis filtré (`32`), le filtre ignoré dont l'adaptateur ne garde que
+    les offres demandées (`35`), l'offre absente (`38`) et les erreurs (`36`,
+    `39`) ;
 - `test/integration/shipping.mjs` mène un achat jusqu'à `uncertain`. Il refuse
   un identifiant collé dont le `packageExternalId` n'est pas celui de l'envoi,
   et accepte le bon ;

@@ -2992,8 +2992,8 @@ Engagée en six lots, dans cet ordre :
    `test/fixtures/boxtal/`. L'[ADR 0021](architecture/decisions/0021-boxtal-apres-le-bac-a-sable.md)
    (proposé) en tire ce qui change :
    - pas de devis en v3 : il passe par la v1, en option, et l'achat reste en
-     v3. Le devis v1 se relève à son tour dans le bac à sable, avec une
-     application v1 sur le compte de test ;
+     v3. Le devis v1 est relevé à son tour, le même jour : le code d'offre v3
+     assemble ses codes de transporteur et de service ;
    - pas d'idempotence : l'achat incertain se lève avec le commerçant ;
    - l'étiquette relue à la demande ;
    - l'URL de suivi rendue par Boxtal ;
