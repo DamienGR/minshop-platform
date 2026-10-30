@@ -198,7 +198,8 @@ src/
     orders/    db · number · reservations (atomic checkout stock holds)
     payments/  provider (port) · stripe · opennode · lightning-provider · index (factory)
                lightning/  backend (port) · phoenixd · lnbits · index · rate · pending
-    shipping/  calculator (zones + ShippingCalculator port)
+    shipping/  calculator (zones + ShippingCalculator port) · provider (label, relay-point, quote ports)
+               labels (Shippo, which leaves the offer: ADR 0020) · labelStore · boxtal/ (v3 · quote on v1 · index)
     storage/   provider (port) · r2 · index (factory)
     email/     provider (port) · resend · cloudflare · index (factory) · orderConfirmation
     search/    provider (port) · fts · vector · index (factory) · query
@@ -230,6 +231,7 @@ To swap/add a provider, write one adapter file + wire the factory:
 | `PaymentProvider` | `payments/provider.ts` | `payments/index.ts` | stripe, opennode, lightning |
 | `LightningBackend` | `payments/lightning/backend.ts` | `payments/lightning/index.ts` | phoenixd, lnbits |
 | `ShippingCalculator` | `shipping/calculator.ts` | (config-rates) | carrier rates (future) |
+| `LabelProvider`, `PickupPointProvider`, `ShippingQuoteProvider` | `shipping/provider.ts` | `shipping/boxtal/index.ts` | boxtal (v3; the quote on v1, optional) |
 | `StorageProvider` | `storage/provider.ts` | `storage/index.ts` | r2 |
 | `EmailProvider` | `email/provider.ts` | `email/index.ts` | resend, cloudflare |
 | `SearchProvider` | `search/provider.ts` | `search/index.ts` | fts, vector (Workers AI + Vectorize) |
