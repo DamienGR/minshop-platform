@@ -50,4 +50,23 @@ describe('orderShippedEmail', () => {
     expect(msg.text).not.toContain('Other');
     expect(msg.html).not.toContain('Other');
   });
+
+  it('names the relay point the parcel waits at', () => {
+    const point = {
+      offer: 'MONR-CpourToi',
+      code: '41132',
+      name: 'ART THE ZEN',
+      street: '5 RUE PACHE',
+      postalCode: '75011',
+      city: 'PARIS',
+      country: 'FR',
+    };
+    const email = orderShippedEmail(
+      order({ delivery_method: 'relay', relay_point: JSON.stringify(point) }),
+      'Minshop',
+    );
+    expect(email.text).toContain('À retirer au point relais\u202f:\nART THE ZEN\n5 RUE PACHE\n75011 PARIS');
+    expect(email.html).toContain('ART THE ZEN<br>5 RUE PACHE<br>75011 PARIS');
+    expect(orderShippedEmail(order(), 'Minshop').text).not.toContain('point relais');
+  });
 });

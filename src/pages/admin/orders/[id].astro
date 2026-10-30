@@ -15,6 +15,8 @@ import {
   listLabelAttempts,
 } from '../../../features/shipping/labelStore';
 import { getBoxtalLabelContext } from '../../../features/shipping/boxtal/index.ts';
+import { relayOffer } from '../../../features/shipping/boxtal/offers.ts';
+import { orderRelayPoint, relayPointLines } from '../../../features/shipping/relay.ts';
 import {
   parseQuotedOffers,
   parseSender,
@@ -177,6 +179,9 @@ const labelInternational =
   !!shipFrom.country && !!ship?.country && shipFrom.country.toUpperCase() !== ship.country.toUpperCase();
 // Prefill for the recipient Boxtal requires by first and last name.
 const recipient = splitName(ship?.name);
+// Where the buyer collects a relay order, as the checkout served it.
+const relayPoint = orderRelayPoint(order);
+const relayPointOffer = relayPoint ? relayOffer(relayPoint.offer) : null;
 // Whether fulfillment will actually email the customer — demo orders never do,
 // there may be no address on file, and email itself may be unconfigured (no
 // provider key). The UI must not promise a send that would be skipped.
@@ -294,6 +299,22 @@ const willEmailCustomer =
             ]
               .filter(Boolean)
               .join('\n')}
+          </dd>
+        </div>
+      )
+    }
+    {
+      relayPoint && (
+        <div class="col-span-2">
+          <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.relayPoint')}</dt>
+          <dd class="whitespace-pre-line">
+            {relayPointLines(relayPoint).join('\n')}
+            <span class="block text-gray-500">
+              {t('admin.orders.detail.relayCode', {
+                code: relayPoint.code,
+                offre: relayPointOffer ? `${relayPointOffer.carrier} ${relayPointOffer.service}` : relayPoint.offer,
+              })}
+            </span>
           </dd>
         </div>
       )

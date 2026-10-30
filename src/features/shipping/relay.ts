@@ -55,6 +55,22 @@ export function parseRelayPoint(raw: string | null | undefined): RelayPoint | nu
   return Object.fromEntries(fields.map((field) => [field, v[field]])) as unknown as RelayPoint;
 }
 
+/**
+ * The point an order is collected at. Only a relay order has one, and an
+ * erased order keeps the country alone, which reads as none.
+ */
+export function orderRelayPoint(order: {
+  delivery_method?: string | null;
+  relay_point?: string | null;
+}): RelayPoint | null {
+  return order.delivery_method === 'relay' ? parseRelayPoint(order.relay_point) : null;
+}
+
+/** The point as the shopper finds it: its name, its street, its town. */
+export function relayPointLines(point: RelayPoint): string[] {
+  return [point.name, point.street, `${point.postalCode} ${point.city}`];
+}
+
 /** Points that can take a parcel of this weight. A point that states no cap stays. */
 export function pointsForWeight(points: readonly PickupPoint[], weightGrams: number): PickupPoint[] {
   return points.filter((point) => point.maxWeightGrams == null || point.maxWeightGrams >= weightGrams);
