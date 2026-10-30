@@ -41,9 +41,11 @@ export interface SiteConfig {
      * carrying it has been certified. A relay rate is offered at checkout only
      * while the Boxtal keys are in the vault.
      *
-     * The `RELAY_POINTS` var (`on`) is the per-environment default under a
-     * store.config.ts that does not set it: staging can rehearse the option
-     * while production stays without it.
+     * The `RELAY_POINTS` var (`on`) is the default under a store.config.ts
+     * that does not set it, for a run whose vars are written by hand: `wrangler
+     * dev` with `.dev.vars`, or a test that boots the built Worker. The wrangler
+     * template renders no such var, so a deployed staging rehearses the option
+     * with the build that production will run (plan §13.3, lot 6).
      */
     relayPoints: boolean;
   };
