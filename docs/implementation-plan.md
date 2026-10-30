@@ -50,6 +50,11 @@ chaque boutique reste mono-tenant à l'exécution.
 - sauvegarde et restauration ;
 - administration protégée par Cloudflare Access et Turnstile.
 
+Après le pilote, l'[ADR 0020](architecture/decisions/0020-expeditions-par-boxtal.md)
+ajoute à l'offre deux options par Boxtal : l'achat d'étiquettes avec le suivi,
+et les points relais. Le pilote ne les couvre pas ; elles entrent dans le
+périmètre certifié avec leur propre campagne (§13.3).
+
 ### 2.2 Hors périmètre
 
 - multilingue ;
@@ -57,7 +62,7 @@ chaque boutique reste mono-tenant à l'exécution.
 - abonnements ;
 - marketplace ;
 - B2B avancé ;
-- points relais ;
+- points relais, devenus une option de l'offre après le pilote (ADR 0020) ;
 - tarifs transporteur en temps réel ;
 - ERP, caisse ou comptabilité synchronisés ;
 - automatisation marketing ;
@@ -2962,13 +2967,13 @@ amendé le même jour).
 
 ### 13.3 Les points relais et les expéditions par Boxtal
 
-Notée le 2026-10-26 (ticket #123), proposée le 2026-10-30 et **pas encore
-décidée** : le client choisit un point relais à la commande, et la boutique
-traite la commande jusqu'à ce point. Les points relais sont hors périmètre
-(§2.2, [ADR 0007](architecture/decisions/0007-perimetre-fonctionnel.md)) ;
-l'[ADR 0020](architecture/decisions/0020-expeditions-par-boxtal.md), au statut
-« Proposé », en ferait une option de l'offre, éteinte par défaut et certifiée
-avant la première vente qui s'en sert.
+Notée le 2026-10-26 (ticket #123), **décidée le 2026-10-30** : le client
+choisit un point relais à la commande, et la boutique traite la commande
+jusqu'à ce point. Les points relais étaient hors périmètre (§2.2,
+[ADR 0007](architecture/decisions/0007-perimetre-fonctionnel.md)) ;
+l'[ADR 0020](architecture/decisions/0020-expeditions-par-boxtal.md), accepté
+par la fusion de la PR #135, en fait une option de l'offre, éteinte par défaut
+et certifiée avant la première vente qui s'en sert.
 
 Damien a fixé le 2026-10-30 un agrégateur plutôt que Mondial Relay en direct,
 puis un seul prestataire pour toutes les expéditions : **Boxtal**, sans
@@ -2978,10 +2983,10 @@ Sendcloud est le repli. La recherche des points est faite par le serveur et
 sans JavaScript obligatoire, et Stripe passe par l'étape `/checkout` dès qu'un
 tarif relais existe.
 
-Si l'ADR est accepté, en six lots, dans cet ordre :
+Engagée en six lots, dans cet ordre :
 
 1. la décision écrite : l'ADR 0020 accepté, les statuts de l'ADR 0007, des
-   §2.1 et §2.2, du README et des sous-traitants ; un compte de test Boxtal,
+   §2.1 et §2.2 et du README (faits le 2026-10-30) ; un compte de test Boxtal,
    et un corpus de réponses relevées dans son bac à sable (recherche,
    cotation, expédition, suivi), qui dit aussi comment lever un achat
    incertain ;
@@ -2989,7 +2994,8 @@ Si l'ADR est accepté, en six lots, dans cet ordre :
    l'adaptateur Shippo, l'adaptateur Boxtal et ses clés dans le coffre, testés
    sur ce corpus ;
 3. l'étiquette à domicile achetée chez Boxtal depuis la fiche commande, le
-   suivi, Boxtal à la place de Shippo dans Réglages ;
+   suivi, Boxtal à la place de Shippo dans Réglages et dans la liste des
+   sous-traitants, qui décrit ce qu'une boutique fait tourner ;
 4. le tarif `relay` par offre Boxtal (document d'expédition en version 4),
    l'étape `/checkout` pour tous les moyens de paiement, la valeur `relay` de
    `delivery_method` et les colonnes du point (réservation, paiement en
