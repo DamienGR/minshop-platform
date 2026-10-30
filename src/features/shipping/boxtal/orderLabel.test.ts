@@ -61,7 +61,9 @@ describe('the offers the order page shows', () => {
       ['UPSE-Express', null, false],
     ]);
     // A code this version no longer lists drops out instead of reaching Boxtal.
-    expect(quotedOffers(['MONR-CpourToi'], null).offers).toEqual([]);
+    expect(quotedOffers(['MONR-Retired'], null).offers).toEqual([]);
+    // A relay order's one offer is a relay offer: it is listed too.
+    expect(quotedOffers(['MONR-CpourToi'], null).offers.map((offer) => offer.service)).toEqual(['C.pourToi®']);
   });
 
   it('read back from the row, or nothing', () => {

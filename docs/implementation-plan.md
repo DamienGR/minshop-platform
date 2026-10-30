@@ -3079,7 +3079,18 @@ Engagée en six lots, dans cet ordre :
    (`on`) allume l'option dans un seul environnement, pour la répéter sur le
    staging avant de la construire pour la production ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
-   l'étiquette relais ;
+   l'étiquette relais (fait le 2026-10-30, en doublure sur le corpus). Le
+   point se lit dans l'e-mail de confirmation, celui d'expédition, la page de
+   commande de l'acheteur, et, avec son code et son offre, dans l'avis au
+   commerçant et la fiche commande ; l'export prend le mode de livraison, le
+   code et l'adresse du point. Un point que l'effacement a réduit au pays ne
+   se lit plus nulle part. L'étiquette d'une commande en relais s'achète sur
+   l'offre du point, quelles que soient les offres à domicile retenues, et
+   vers le point lu sur la commande, jamais sur le formulaire
+   (`pickupPointCode`, corpus `11`) ; Boxtal refuse un point qu'il ne
+   connaît pas (`17`), et la fiche le dit au commerçant. Changer de point
+   après la commande n'est pas prévu : le commerçant prévient l'acheteur,
+   achète l'étiquette dans Boxtal et saisit le suivi à la main ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait
    d'un vrai colis en relais, avec l'URL de suivi vérifiée ; la commande réelle
    attend le feu vert de Damien.

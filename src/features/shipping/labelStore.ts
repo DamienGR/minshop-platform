@@ -81,11 +81,11 @@ export interface LabelAttemptRecord {
   settled_at: string;
 }
 
-/** The order must still be worth labelling: paid, unfulfilled, not a pickup. */
+/** The order must still be worth labelling: paid, unfulfilled, sent (home or relay), not a pickup. */
 const ORDER_ELIGIBLE = `EXISTS (
   SELECT 1 FROM orders
    WHERE id = ?1 AND status = 'paid' AND fulfillment_status = 'unfulfilled'
-     AND delivery_method = 'shipping'
+     AND delivery_method IN ('shipping', 'relay')
 )`;
 
 export async function getLabelRecord(db: D1Database, orderId: number): Promise<LabelRecord | null> {
@@ -244,7 +244,7 @@ export async function recordPurchased(
             SET fulfillment_status = 'fulfilled', tracking_carrier = ?2, tracking_number = ?3,
                 fulfilled_at = datetime('now'), label_url = ?4
           WHERE id = ?1 AND status = 'paid' AND fulfillment_status = 'unfulfilled'
-            AND delivery_method = 'shipping'
+            AND delivery_method IN ('shipping', 'relay')
             AND EXISTS (
               SELECT 1 FROM shipping_labels
                WHERE order_id = ?1 AND status = 'purchased' AND claim_token = ?5
@@ -516,7 +516,7 @@ export async function recordLabelTracking(
             SET fulfillment_status = 'fulfilled', tracking_carrier = ?2, tracking_number = ?3,
                 tracking_url = ?4, fulfilled_at = datetime('now')
           WHERE id = ?1 AND status = 'paid' AND fulfillment_status = 'unfulfilled'
-            AND delivery_method = 'shipping'
+            AND delivery_method IN ('shipping', 'relay')
             AND EXISTS (
               SELECT 1 FROM shipping_labels
                WHERE order_id = ?1 AND status = 'purchased' AND transaction_id = ?5

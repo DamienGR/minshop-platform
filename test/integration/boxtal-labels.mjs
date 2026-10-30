@@ -15,16 +15,18 @@ import {
 import { getLabelRecord, listLabelAttempts } from '../../src/features/shipping/labelStore.ts';
 import { t } from '../../src/features/i18n/index.ts';
 
-// A home label bought from Boxtal for an order (ADR 0021; plan §13.3, lot 3),
+// A label bought from Boxtal for an order (ADR 0021; plan §13.3, lots 3 and 5),
 // on the real schema, every migration applied, and the answers the sandbox
 // actually gave (test/fixtures/boxtal/). The properties are the ones the ADR
 // asks of this lot: a label buys without the optional v1 quote and with a
 // failing one, an uncertain purchase is settled only by an id whose parcel
 // carries the attempt's reference, and a purchase Boxtal has not confirmed
-// yet stays bought until the number arrives.
+// yet stays bought until the number arrives. A relay order buys on the offer
+// of the point its buyer chose, to that point, whatever offers are retained.
 //
 // The reference is pinned to the one the corpus carries (`essai-att-mvva9992`
-// for `44`-`52`, `essai-dom-mvv4seit` for `10`-`14`). No request leaves the
+// for `44`-`52`, `essai-dom-mvv4seit` for `10`-`14`, `essai-rel-mvv4seit` for
+// the relay order `11`). No request leaves the
 // process: a step that asks for an answer the test did not queue fails.
 
 const mf = new Miniflare({
@@ -50,6 +52,17 @@ const QUOTE_KEYS = { accessKey: 'v1-access', secretKey: 'v1-secret' };
 const CONTENT = 'content:v1:40110';
 const PENDING_ID = '2610301905POFR56EJFR';
 const HOME_ID = '2610301632POFR56E7FR';
+const RELAY_ID = '2610301632MONR56E8FR';
+// The point the relay order `11` was bought to, as the checkout snapshots it.
+const POINT = {
+  offer: 'MONR-CpourToi',
+  code: '41132',
+  name: 'ART THE ZEN',
+  street: '5 RUE PACHE',
+  postalCode: '75011',
+  city: 'PARIS',
+  country: 'FR',
+};
 
 // The corpus's sender and recipient (fictional), so the quote and the purchase
 // ask what the sandbox answered.
@@ -89,8 +102,11 @@ function context(db, { labels = [], quote = null, offers = ['POFR-ColissimoAcces
 }
 
 let orders = 0;
-/** A paid, unfulfilled delivery order whose goods are worth 42,40 € (the corpus's declared value). */
-async function newOrder(db) {
+/**
+ * A paid, unfulfilled delivery order whose goods are worth 42,40 € (the
+ * corpus's declared value); with a point, a relay order.
+ */
+async function newOrder(db, point = null) {
   orders++;
   const publicId = `ord_bxtl${String(orders).padStart(6, '0')}`;
   const address = JSON.stringify({
@@ -105,10 +121,10 @@ async function newOrder(db) {
   await db
     .prepare(
       `INSERT INTO orders (public_id, email, amount_total_cents, shipping_cents, currency, status,
-                           fulfillment_status, delivery_method, ship_address)
-       VALUES (?1, 'destinataire@example.com', 4930, 690, 'eur', 'paid', 'unfulfilled', 'shipping', ?2)`,
+                           fulfillment_status, delivery_method, ship_address, relay_point)
+       VALUES (?1, 'destinataire@example.com', 4930, 690, 'eur', 'paid', 'unfulfilled', ?3, ?2, ?4)`,
     )
-    .bind(publicId, address)
+    .bind(publicId, address, point ? 'relay' : 'shipping', point ? JSON.stringify(point) : null)
     .run();
   return db.prepare('SELECT * FROM orders WHERE public_id = ?1').bind(publicId).first();
 }
@@ -356,6 +372,72 @@ try {
     assert.ok(document.value.startsWith(`https://document.boxtal.build/shipping-label/${PENDING_ID}_bordereau_1.pdf?`));
     const early = await labelDocumentUrl(context(db, { labels: ['46-documents-pending'] }).ctx.labels, record);
     assert.equal(early.ok, false);
+  });
+
+  await check('a relay label buys on the point’s offer, to the point the buyer chose', async () => {
+    const order = await newOrder(db, POINT);
+    // A home offer retained in Réglages: a relay order does not choose among them.
+    const { ctx, sent } = context(db, {
+      quote: ['32-cotation-two-offers'],
+      offers: ['POFR-ColissimoAccess'],
+      labels: ['11-order-relay-mondial-relay-no-dropoff', '19-tracking-relay-t0'],
+      reference: 'essai-rel-mvv4seit',
+    });
+    assert.equal((await prepareLabel(ctx, order, { from: SENDER, parcel: PARCEL })).ok, true);
+    const quoted = parseQuotedOffers((await getLabelRecord(db, order.id)).offers);
+    assert.deepEqual(
+      quoted.offers.map((offer) => [offer.code, offer.carrier, offer.priceExclTaxCents, offer.available]),
+      [['MONR-CpourToi', 'Mondial Relay', 419, true]],
+    );
+    expectFailure(
+      await buyLabel(ctx, order, { offerCode: 'POFR-ColissimoAccess', recipient: RECIPIENT }),
+      t('admin.orders.notice.boxtal.pickOffer'),
+    );
+    assert.equal(sent.length, 0);
+
+    const bought = await buyLabel(ctx, order, { offerCode: 'MONR-CpourToi', recipient: RECIPIENT });
+    assert.equal(bought.ok && bought.fulfilled, true, JSON.stringify(bought));
+    // What the sandbox accepted (`11`): the point, read off the order.
+    const asked = recorded('11-order-relay-mondial-relay-no-dropoff').request.body;
+    assert.equal(sent[0].body.shippingOfferCode, 'MONR-CpourToi');
+    assert.equal(sent[0].body.shipment.pickupPointCode, asked.shipment.pickupPointCode);
+    assert.equal(sent[0].body.shipment.dropoffPointCode, undefined);
+    assert.deepEqual(sent[0].body.shipment.toAddress.contact, asked.shipment.toAddress.contact);
+    assert.ok(sent[1].url.endsWith(`/shipping-order/${RELAY_ID}/tracking`));
+
+    const after = await orderRow(db, order.id);
+    assert.equal(after.fulfillment_status, 'fulfilled');
+    assert.equal(after.tracking_number, 'CR261030000000000UYN');
+    assert.ok(after.tracking_url.startsWith('https://www.mondialrelay.com/'), after.tracking_url);
+    assert.equal(await shippedNotices(db, order.id), 1);
+    const label = await getLabelRecord(db, order.id);
+    assert.equal(label.transaction_id, RELAY_ID);
+    assert.equal(label.amount_cents, 419);
+  });
+
+  await check('a relay order whose point cannot be read buys nothing', async () => {
+    const { ctx, sent } = context(db, { offers: ['POFR-ColissimoAccess'] });
+    for (const point of [{ country: 'FR' }, { ...POINT, offer: 'MONR-Retired' }]) {
+      const order = await newOrder(db, point);
+      expectFailure(
+        await prepareLabel(ctx, order, { from: SENDER, parcel: PARCEL }),
+        t('admin.orders.notice.boxtal.noRelayPoint'),
+      );
+      assert.equal(await getLabelRecord(db, order.id), null);
+    }
+    assert.equal(sent.length, 0);
+  });
+
+  await check('a point Boxtal does not know is a definite refusal (`17`)', async () => {
+    const order = await newOrder(db, { ...POINT, code: '00000' });
+    const { ctx } = context(db, { labels: ['17-order-relay-unknown-point'], reference: 'essai-rel-mvv4seit-bad' });
+    assert.equal((await prepareLabel(ctx, order, { from: SENDER, parcel: PARCEL })).ok, true);
+    const refused = await buyLabel(ctx, order, { offerCode: 'MONR-CpourToi', recipient: RECIPIENT });
+    // Named for the merchant, who has to pick another point with the buyer.
+    expectFailure(refused, t('admin.shipping.boxtal.pickupPointRefused'));
+    const failed = await getLabelRecord(db, order.id);
+    assert.equal(failed.status, 'failed');
+    assert.equal((await orderRow(db, order.id)).fulfillment_status, 'unfulfilled');
   });
 } finally {
   await mf.dispose();
