@@ -109,3 +109,47 @@ describe('the plain-text part', () => {
     }
   });
 });
+
+describe('the relay point', () => {
+  // Fixture `02`'s nearest point, as the checkout snapshots it.
+  const point = {
+    offer: 'MONR-CpourToi',
+    code: '41132',
+    name: 'ART THE ZEN',
+    street: '5 RUE PACHE',
+    postalCode: '75011',
+    city: 'PARIS',
+    country: 'FR',
+  };
+  const relay = order({ delivery_method: 'relay', relay_point: JSON.stringify(point) });
+
+  it('tells the shopper where to collect the parcel, and the merchant its code too', () => {
+    const customer = orderConfirmationEmail(relay, [], 'https://demo.minshop.dev', 'Minshop');
+    const owner = orderNotificationEmail(relay, [], 'owner@example.com', 'https://demo.minshop.dev', 'Minshop');
+    for (const message of [customer, owner]) {
+      for (const body of [message.text, message.html]) {
+        expect(body).toContain('ART THE ZEN');
+        expect(body).toContain('5 RUE PACHE');
+        expect(body).toContain('75011 PARIS');
+      }
+    }
+    expect(customer.text).toContain('Votre point relais\u202f:');
+    expect(customer.text).not.toContain('41132');
+    expect(owner.text).toContain('Code du point\u202f: 41132');
+    expect(owner.html).toContain('Code du point\u202f: 41132');
+  });
+
+  it('says nothing of a point an erasure reduced to its country, or of a home order', () => {
+    for (const quiet of [
+      order({ delivery_method: 'relay', relay_point: JSON.stringify({ country: 'FR' }) }),
+      order({ delivery_method: 'shipping', relay_point: JSON.stringify(point) }),
+    ]) {
+      const customer = orderConfirmationEmail(quiet, [], 'https://demo.minshop.dev', 'Minshop');
+      const owner = orderNotificationEmail(quiet, [], 'owner@example.com', 'https://demo.minshop.dev', 'Minshop');
+      for (const message of [customer, owner]) {
+        expect(message.text).not.toContain('point relais');
+        expect(message.html).not.toContain('point relais');
+      }
+    }
+  });
+});

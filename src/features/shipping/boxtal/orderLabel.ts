@@ -1,7 +1,8 @@
 /**
- * A home label bought from Boxtal for one order (ADR 0020, ADR 0021; plan
- * §13.3, lot 3): the steps the order page runs, on the label state machine of
- * `labelStore.ts`. The database and the providers come in as parameters, so the
+ * A label bought from Boxtal for one order (ADR 0020, ADR 0021; plan §13.3,
+ * lots 3 and 5): the steps the order page runs, on the label state machine of
+ * `labelStore.ts`. A home order is bought on one of the retained offers; a
+ * relay order on the offer of the point its buyer chose, to that point. The database and the providers come in as parameters, so the
  * integration suite drives these steps on a real D1 with the sandbox corpus.
  *
  * The steps, and what each one guards:
@@ -41,8 +42,9 @@ import type {
   ShippingQuoteProvider,
 } from '../provider.ts';
 import { plausiblePhone } from '../recipient.ts';
+import { orderRelayPoint, type RelayPoint } from '../relay.ts';
 import { boxtalContent, quoteContentCode } from './contents.ts';
-import { homeOffer } from './offers.ts';
+import { homeOffer, relayOffer } from './offers.ts';
 import { trackingMatchesReference } from './v3.ts';
 
 /** The sender on the label, as the label form keeps it in `ship_from`. */
@@ -111,6 +113,8 @@ export interface LabelOrder {
   ship_address: string | null;
   amount_total_cents: number;
   shipping_cents: number;
+  delivery_method?: string | null;
+  relay_point?: string | null;
 }
 
 /** What the merchant types on the buy step: Boxtal requires the recipient's phone. */
@@ -212,7 +216,7 @@ export function quotedOffers(
   quote: LabelResult<QuoteResult> | null,
 ): QuotedOffers {
   const offers = retained.flatMap((code): QuotedOffer[] => {
-    const offer = homeOffer(code);
+    const offer = homeOffer(code) ?? relayOffer(code);
     if (!offer) return [];
     const unpriced = { code, carrier: offer.carrier, service: offer.service, priceExclTaxCents: null, currency: null };
     if (!quote?.ok) return [{ ...unpriced, available: true }];
@@ -282,6 +286,27 @@ function destination(order: LabelOrder): Destination | string {
   };
 }
 
+interface LabelOffers {
+  codes: readonly string[];
+  /** The point a relay label goes to; null for a home label. */
+  point: RelayPoint | null;
+}
+
+/**
+ * The offers this order's label can be bought on: the retained home offers,
+ * or, for a relay order, the one offer of the point its buyer chose. The
+ * network came with the point, and Boxtal checks the point against the offer
+ * when the label is bought (`17`).
+ */
+function labelOffers(ctx: LabelContext, order: LabelOrder): LabelOffers | string {
+  if (order.delivery_method !== 'relay') {
+    return ctx.offers.length > 0 ? { codes: ctx.offers, point: null } : t('admin.orders.notice.boxtal.noOffers');
+  }
+  const point = orderRelayPoint(order);
+  if (!point || !relayOffer(point.offer)) return t('admin.orders.notice.boxtal.noRelayPoint');
+  return { codes: [point.offer], point };
+}
+
 // ── Steps ────────────────────────────────────────────────────────────────────
 
 /**
@@ -293,21 +318,26 @@ export async function prepareLabel(
   order: LabelOrder,
   input: { from: Partial<LabelSender>; parcel: LabelParcel },
 ): Promise<LabelOutcome> {
-  if (ctx.offers.length === 0) return fail(t('admin.orders.notice.boxtal.noOffers'));
+  const offers = labelOffers(ctx, order);
+  if (typeof offers === 'string') return fail(offers);
   if (!boxtalContent(ctx.contentId)) return fail(t('admin.orders.notice.boxtal.noContent'));
   const to = destination(order);
   if (typeof to === 'string') return fail(to);
   const from = completeSender(input.from);
   if (!from) return fail(t('admin.orders.notice.boxtal.senderIncomplete'));
+  // A relay parcel travels to its point, wherever its buyer lives.
+  const arrival = offers.point ?? to;
   // Domestic only: abroad, a label needs a customs declaration this flow does
   // not collect.
-  if (from.country !== to.country) return fail(t('admin.orders.notice.labelInternational', { pays: to.country }));
+  if (from.country !== arrival.country) {
+    return fail(t('admin.orders.notice.labelInternational', { pays: arrival.country }));
+  }
 
   const quote = ctx.quote
     ? await ctx.quote.quote({
-        offerCodes: [...ctx.offers],
+        offerCodes: [...offers.codes],
         from: { kind: 'business', postalCode: from.postalCode, city: from.city, country: from.country },
-        to: { kind: 'residential', postalCode: to.postalCode, city: to.city, country: to.country },
+        to: { kind: 'residential', postalCode: arrival.postalCode, city: arrival.city, country: arrival.country },
         parcel: input.parcel,
         contentCode: quoteContentCode(ctx.contentId!),
       })
@@ -315,7 +345,7 @@ export async function prepareLabel(
   const reference = (ctx.reference ?? newReference)(order);
   const kept = await recordQuote(ctx.db, order.id, reference, {
     parcel: JSON.stringify({ from, parcel: input.parcel } satisfies QuotedParcel),
-    offers: JSON.stringify(quotedOffers(ctx.offers, quote)),
+    offers: JSON.stringify(quotedOffers(offers.codes, quote)),
   });
   // Refused: a purchase is in flight or done, or the order is no longer to
   // label (unpaid, fulfilled, pickup). Nothing was bought either way.
@@ -335,11 +365,13 @@ export async function buyLabel(
   const quoted = record?.vendor === 'boxtal' && record.status === 'quoted' ? parseQuotedOffers(record.offers) : null;
   const details = record && quoted ? parseQuotedParcel(record.parcel) : null;
   if (!record || !quoted || !details) return fail(t('admin.orders.notice.labelNoQuote'));
+  const offers = labelOffers(ctx, order);
+  if (typeof offers === 'string') return fail(offers);
   if (!input.offerCode) return fail(t('admin.orders.notice.boxtal.pickOffer'));
   const offer = quoted.offers.find((entry) => entry.code === input.offerCode);
   if (!offer) return fail(t('admin.orders.notice.boxtal.pickOffer'));
   if (!offer.available) return fail(t('admin.orders.notice.boxtal.offerNotOffered'));
-  if (!ctx.offers.includes(offer.code)) return fail(t('admin.orders.notice.boxtal.offerNotRetained'));
+  if (!offers.codes.includes(offer.code)) return fail(t('admin.orders.notice.boxtal.offerNotRetained'));
   const content = boxtalContent(ctx.contentId);
   if (!content) return fail(t('admin.orders.notice.boxtal.noContent'));
   const to = destination(order);
@@ -382,6 +414,8 @@ export async function buyLabel(
       contentCode: content.id,
       contentDescription: content.label,
     },
+    // Read off the order, never the form: the point is the one the buyer chose.
+    ...(offers.point && { pickupPointCode: offers.point.code }),
   });
   if (!bought.ok) {
     if (bought.uncertain) {

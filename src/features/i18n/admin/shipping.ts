@@ -159,7 +159,7 @@ export const shipping = {
   'admin.shipping.boxtal.unexpected': 'Boxtal a répondu dans un format inattendu.',
   'admin.shipping.boxtal.unknownOffer': 'Boxtal ne connaît pas l’offre {offre}.',
   'admin.shipping.boxtal.pickupPointRefused':
-    'Boxtal refuse ce point relais : il n’existe plus ou ne prend plus ce colis. Choisissez un point voisin et prévenez l’acheteur.',
+    'Boxtal refuse ce point relais : il n’existe plus ou ne prend plus ce colis. Prévenez l’acheteur, achetez l’étiquette dans Boxtal vers un point voisin, puis saisissez le suivi à la main.',
   'admin.shipping.boxtal.orderNotFound': 'Boxtal ne connaît aucune expédition sous cette référence.',
   'admin.shipping.boxtal.notCancellable':
     'Boxtal refuse l’annulation : le transporteur a sans doute déjà pris le colis.',

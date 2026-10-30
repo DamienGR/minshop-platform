@@ -15,6 +15,8 @@ import {
   listLabelAttempts,
 } from '../../../features/shipping/labelStore';
 import { getBoxtalLabelContext } from '../../../features/shipping/boxtal/index.ts';
+import { relayOffer } from '../../../features/shipping/boxtal/offers.ts';
+import { orderRelayPoint, relayPointLines } from '../../../features/shipping/relay.ts';
 import {
   parseQuotedOffers,
   parseSender,
@@ -89,13 +91,17 @@ const labelEligible =
   !!order.ship_address &&
   !fulfilled &&
   order.status === 'paid' &&
-  // Exactly 'shipping': pickup orders have no parcel, and 'unknown' (a Stripe
-  // settlement that lost the rate lookup) must be reconciled, not guessed at.
-  // 0036 backfilled legacy physical orders, so NULL here really means unknown.
-  order.delivery_method === 'shipping';
-// Keys alone are not enough: a label needs an offer to buy and a declared content.
+  // Exactly 'shipping' or 'relay': pickup orders have no parcel, and 'unknown'
+  // (a Stripe settlement that lost the rate lookup) must be reconciled, not
+  // guessed at. 0036 backfilled legacy physical orders, so NULL here really
+  // means unknown.
+  (order.delivery_method === 'shipping' || order.delivery_method === 'relay');
+// Keys alone are not enough: a label needs an offer to buy and a declared
+// content. A relay order brings its offer with its point.
 const labelSettingsReady =
-  !!boxtalSettings && boxtalSettings.offers.length > 0 && !!boxtalSettings.contentId;
+  !!boxtalSettings &&
+  (order.delivery_method === 'relay' || boxtalSettings.offers.length > 0) &&
+  !!boxtalSettings.contentId;
 const canLabel = !!boxtal && labelSettingsReady && labelEligible;
 const boxtalLabel = labelRecord?.vendor === 'boxtal';
 const quoted =
@@ -170,11 +176,16 @@ const ship = order.ship_address
       phone?: string | null;
     })
   : null;
+// Where the buyer collects a relay order, as the checkout served it.
+const relayPoint = orderRelayPoint(order);
+const relayPointOffer = relayPoint ? relayOffer(relayPoint.offer) : null;
 // Domestic-only for now: international labels need a customs declaration this
 // flow doesn't collect. Warn on the page only when the saved origin makes the
-// mismatch knowable; the POST enforces it regardless.
+// mismatch knowable; the POST enforces it regardless. A relay parcel goes to
+// its point.
+const arrivalCountry = relayPoint?.country ?? ship?.country;
 const labelInternational =
-  !!shipFrom.country && !!ship?.country && shipFrom.country.toUpperCase() !== ship.country.toUpperCase();
+  !!shipFrom.country && !!arrivalCountry && shipFrom.country.toUpperCase() !== arrivalCountry.toUpperCase();
 // Prefill for the recipient Boxtal requires by first and last name.
 const recipient = splitName(ship?.name);
 // Whether fulfillment will actually email the customer — demo orders never do,
@@ -294,6 +305,22 @@ const willEmailCustomer =
             ]
               .filter(Boolean)
               .join('\n')}
+          </dd>
+        </div>
+      )
+    }
+    {
+      relayPoint && (
+        <div class="col-span-2">
+          <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.relayPoint')}</dt>
+          <dd class="whitespace-pre-line">
+            {relayPointLines(relayPoint).join('\n')}
+            <span class="block text-gray-500">
+              {t('admin.orders.detail.relayCode', {
+                code: relayPoint.code,
+                offre: relayPointOffer ? `${relayPointOffer.carrier} ${relayPointOffer.service}` : relayPoint.offer,
+              })}
+            </span>
           </dd>
         </div>
       )
@@ -465,7 +492,7 @@ const willEmailCustomer =
               ) : labelInternational ? (
                 <p class="text-gray-600">
                   {t('admin.orders.detail.label.international', {
-                    destination: ship?.country ?? '—',
+                    destination: arrivalCountry ?? '—',
                     origine: shipFrom.country ?? '—',
                   })}
                 </p>
@@ -503,6 +530,11 @@ const willEmailCustomer =
                           </span>
                         </label>
                       ))}
+                      {relayPoint && (
+                        <p class="text-xs text-gray-500">
+                          {t('admin.orders.detail.label.relayPoint', { nom: relayPoint.name, code: relayPoint.code })}
+                        </p>
+                      )}
                     </fieldset>
                     <fieldset class="space-y-2">
                       <legend class="mb-1 text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.label.recipient')}</legend>

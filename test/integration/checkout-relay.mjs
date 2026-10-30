@@ -24,12 +24,15 @@ import assert from 'node:assert/strict';
 import { startBuiltWorker } from '../helpers/built-worker.mjs';
 import { recorded } from '../helpers/boxtal-corpus.mjs';
 import { encryptSecret } from '../../src/features/secrets/crypto.ts';
+import { hashPassword } from '../../src/features/auth/password.ts';
 import { saveRuntimeShippingConfig } from '../../src/features/shipping/settings.ts';
 import { t } from '../../src/features/i18n/index.ts';
 
 const ORIGIN = 'https://store.test';
 const SECRETS_KEK = 'checkout-relay-suite-key-encryption-key';
 const WEBHOOK_SECRET = 'whsec_checkout_relay';
+const AUTH_SECRET = 'checkout-relay-suite-auth-secret';
+const PASSWORD = 'checkout-relay-suite-password';
 const FORM = 'application/x-www-form-urlencoded';
 const PRODUCT = 'prod_rxy0000001';
 const ADDRESS = {
@@ -54,7 +57,7 @@ const stripeSessions = [];
 const rateField = (session, name) => session.get(`shipping_options[0][shipping_rate_data]${name}`);
 
 const worker = await startBuiltWorker({
-  vars: { CANONICAL_ORIGIN: ORIGIN, SECRETS_KEK, RELAY_POINTS: 'on' },
+  vars: { CANONICAL_ORIGIN: ORIGIN, SECRETS_KEK, AUTH_SECRET, RELAY_POINTS: 'on' },
   async outbound(request) {
     const url = new URL(request.url);
     if (url.hostname === 'api.boxtal.build' && url.pathname === '/shipping/v3.2/parcel-point-by-shipping-offer') {
@@ -270,6 +273,8 @@ try {
   });
 
   await db.prepare("DELETE FROM settings WHERE key = 'enc:opennode_api_key'").run();
+  /** The demo order's page, as its payment hands it back. */
+  let demoOrderPage = null;
 
   await check('the paid order keeps the point, copied from the reservation', async () => {
     const demo = { method: 'demo', product_id: PRODUCT, ...ADDRESS };
@@ -281,6 +286,7 @@ try {
       body: new URLSearchParams({ outcome: 'approve' }).toString(),
     });
     assert.equal(pay.status, 303, `the demo payment did not settle: ${pay.status}`);
+    demoOrderPage = new URL(pay.headers.get('location'), ORIGIN).pathname;
     const order = await db
       .prepare('SELECT delivery_method, relay_point, ship_address FROM orders ORDER BY id DESC LIMIT 1')
       .first();
@@ -400,6 +406,54 @@ try {
       .first();
     assert.equal(reservation.status, 'settled');
     assert.equal(reservation.ship_address, null);
+  });
+
+  console.log('Après la commande');
+
+  // Fixture `02`'s second point, where the demo order goes.
+  const chosen = MONDIAL.content[1].parcelPoint;
+  const demoOrder = await db
+    .prepare("SELECT public_id FROM orders WHERE payment_method = 'demo' ORDER BY id DESC LIMIT 1")
+    .first();
+
+  await check('the buyer’s order page names the point to collect the parcel at', async () => {
+    assert.ok(demoOrderPage?.startsWith('/order/'), `no order page: ${demoOrderPage}`);
+    const html = await (await fetch(demoOrderPage)).text();
+    assert.ok(html.includes(t('order.relayPoint')), 'the page does not speak of a relay point');
+    assert.ok(html.includes(chosen.name), 'the point is not named');
+    // The code is the carrier's business, not the buyer's.
+    assert.ok(!html.includes(`>${chosen.code}<`));
+  });
+
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?)")
+    .bind(await hashPassword(PASSWORD))
+    .run();
+  const login = await fetch('/admin/login', {
+    method: 'POST',
+    headers: { origin: ORIGIN, 'content-type': FORM },
+    body: new URLSearchParams({ password: PASSWORD }).toString(),
+  });
+  const admin = { headers: { cookie: (login.headers.get('set-cookie') ?? '').split(';')[0] } };
+
+  await check('the order page in the admin shows the point and its code', async () => {
+    assert.equal(login.status, 303, 'the admin login failed');
+    const page = await fetch(`/admin/orders/${demoOrder.public_id}`, admin);
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.ok(html.includes(chosen.name), 'the point is not named');
+    assert.ok(html.includes(`Code ${chosen.code}, offre Mondial Relay`), 'the code is not given');
+  });
+
+  await check('the order export carries the delivery mode and the point', async () => {
+    const csv = await (await fetch('/admin/orders/export.csv', admin)).text();
+    const [header, ...rows] = csv.trim().split('\r\n');
+    assert.ok(header.endsWith(',Delivery,Relay point code,Relay point'), header);
+    const relayRows = rows.filter((row) => row.includes(`,relay,${chosen.code},`));
+    assert.equal(relayRows.length, 1, 'the demo relay order is not exported with its point');
+    assert.ok(relayRows[0].includes(chosen.name));
+    // The card order too, at its own point.
+    assert.equal(rows.filter((row) => row.includes(`,relay,${MONDIAL_CODES[2]},`)).length, 1);
   });
 } finally {
   await worker.dispose();
