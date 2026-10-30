@@ -1,6 +1,7 @@
 # ADR 0020 — Boxtal pour toutes les expéditions, points relais compris
 
-- **Statut** : Accepté (fusion de la PR #135 par Damien, le 2026-10-30)
+- **Statut** : Accepté (fusion de la PR #135 par Damien, le 2026-10-30) ;
+  amendé par l'[ADR 0021](0021-boxtal-apres-le-bac-a-sable.md)
 - **Date** : 2026-10-30
 - **Jalon** : après le pilote (plan §13.3) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), qui range les
