@@ -27,7 +27,7 @@ import {
   DEMO_CHECKOUT_TTL_SECONDS,
 } from '../../features/payments';
 import { getStoreSettings } from '../../features/settings/db';
-import { createConfigRatesCalculator } from '../../features/shipping/calculator';
+import { createConfigRatesCalculator, deliveryMethodOf } from '../../features/shipping/calculator';
 import { shippingFor } from '../../features/shipping/effective';
 import { shipmentWeightFor } from '../../features/shipping/lines';
 import { asksRecipientPhone, plausiblePhone } from '../../features/shipping/recipient';
@@ -860,7 +860,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         shippingCents: chosen.amountCents,
         shippingLabel: chosen.label,
         shippingWeightGrams: inAppQuote.shipmentWeightGrams,
-        deliveryMethod: chosen.pickup ? 'pickup' : 'shipping',
+        deliveryMethod: deliveryMethodOf(chosen),
         itemsJson: JSON.stringify(
           lines.map((l) => ({ id: l.product.id, v: l.variantId, q: l.qty, n: l.name, p: l.unitPriceCents })),
         ),
@@ -966,7 +966,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
             label: chosen.label,
             amountCents: chosen.amountCents,
             weightGrams: inAppQuote?.shipmentWeightGrams ?? null,
-            deliveryMethod: chosen.pickup ? 'pickup' : 'shipping',
+            deliveryMethod: deliveryMethodOf(chosen),
             address: {
               name: shipTo.name,
               line1: shipTo.line1,

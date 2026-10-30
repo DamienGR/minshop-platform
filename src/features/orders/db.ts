@@ -5,6 +5,7 @@ import {
 } from '../products/stock.ts';
 import { generatePublicId } from '../ids/publicId.ts';
 import { vatIncludedCents } from '../legal/vat.ts';
+import type { DeliveryMethod } from '../shipping/calculator.ts';
 
 export interface ShippingAddress {
   name: string | null;
@@ -49,9 +50,11 @@ export interface Order {
   fulfilled_at: string | null;
   /** Purchased label PDF (Shippo), or null: a Boxtal label is re-read on demand. */
   label_url: string | null;
-  /** 'pickup' | 'shipping' | NULL (pre-0035 or no shipping). Unknown = shipping. */
+  /** 'pickup' | 'shipping' | 'relay' | NULL (pre-0035 or no shipping). Unknown = shipping. */
   delivery_method: string | null;
   ship_address: string | null; // JSON snapshot (ShippingAddress) or null
+  /** The relay point picked at checkout, JSON (features/shipping/relay.ts), or null. */
+  relay_point: string | null;
   /** Terms version the buyer accepted, or null when the gate was open. */
   terms_version: string | null;
   /** When they accepted, UTC "YYYY-MM-DD HH:MM:SS". Null with terms_version. */
@@ -178,7 +181,7 @@ export interface PaidOrderInput {
    *  Snapshotted so later catalog or rate edits cannot rewrite history. */
   shippingLabel?: string | null;
   shippingWeightGrams?: number | null;
-  deliveryMethod?: 'pickup' | 'shipping' | 'unknown' | null;
+  deliveryMethod?: DeliveryMethod | 'unknown' | null;
   discountCents?: number;
   taxCents?: number;
   shippingAddress?: ShippingAddress | null;
@@ -513,33 +516,37 @@ export async function recordPaidOrder(
   // ONE place: `vatIncludedCents` is what the tests exercise, and a SQL copy of
   // the same arithmetic would eventually disagree with it. The insert's
   // reservation guard still decides whether the row is written at all.
+  //
+  // The relay point travels the same way, and for the same reason.
   const carried = o.reservationId
     ? await db
         .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps FROM checkout_reservations WHERE public_id = ?',
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point FROM checkout_reservations WHERE public_id = ?',
         )
         .bind(o.reservationId)
         .first<{
           terms_version: string | null;
           terms_accepted_at: string | null;
           vat_rate_bps: number | null;
+          relay_point: string | null;
         }>()
     : null;
   const vatRateBps = carried?.vat_rate_bps ?? null;
-  const consentValues = [
+  const carriedValues = [
     carried?.terms_version ?? null,
     carried?.terms_accepted_at ?? null,
     vatRateBps,
     // Taken on the total the buyer actually paid, not summed per line.
     vatRateBps ? vatIncludedCents(o.amountTotalCents, vatRateBps) : null,
+    carried?.relay_point ?? null,
   ] as const;
   const orderColumns =
-    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents';
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, relay_point';
   const insertOrder = o.reservationId
     ? db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -547,11 +554,11 @@ export async function recordPaidOrder(
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )
-        .bind(...orderValues, ...consentValues, o.reservationId)
+        .bind(...orderValues, ...carriedValues, o.reservationId)
     : db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

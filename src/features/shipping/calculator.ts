@@ -31,6 +31,19 @@ export interface ShippingOption {
   relayOffer?: string;
 }
 
+/** How an order reaches the buyer, as orders and pending payments record it. */
+export type DeliveryMethod = 'pickup' | 'shipping' | 'relay';
+
+/** The delivery an option promises — read off its data, never its label. */
+export function deliveryMethodOf(option: ShippingOption): DeliveryMethod {
+  return option.pickup ? 'pickup' : option.relayOffer !== undefined ? 'relay' : 'shipping';
+}
+
+/** A stored delivery_method, or null for a legacy row or a value this core does not know. */
+export function parseDeliveryMethod(value: string | null | undefined): DeliveryMethod | null {
+  return value === 'pickup' || value === 'shipping' || value === 'relay' ? value : null;
+}
+
 export interface FlatRatePricing {
   type: 'flat';
   amountCents: number;

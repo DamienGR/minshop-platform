@@ -6,6 +6,7 @@ import {
 import type { OrderItemInput } from './db';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
 import type { TermsConsent } from '../legal/terms';
+import type { RelayPoint } from '../shipping/relay.ts';
 import {
   DIGITAL_DELIVERY_RELEASE,
   lifecycleActive,
@@ -306,6 +307,12 @@ export async function reserveInventory(
    * honest answer for a shop that has not configured one.
    */
   vatRateBps: number | null = null,
+  /**
+   * The relay point picked at checkout (features/shipping/relay.ts), copied
+   * onto the order at settlement like the consent above. Null for every other
+   * delivery.
+   */
+  relayPoint: RelayPoint | null = null,
 ): Promise<boolean> {
   if (items.length === 0 || !Number.isInteger(ttlSeconds) || ttlSeconds < 60) return false;
   await releaseExpiredReservations(db, 50, purger);
@@ -343,8 +350,8 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
@@ -357,6 +364,7 @@ export async function reserveInventory(
         consent?.version ?? null,
         consent?.acceptedAt ?? null,
         vatRateBps && vatRateBps > 0 ? vatRateBps : null,
+        relayPoint ? JSON.stringify(relayPoint) : null,
         ...checkValues,
       );
     // Release 1 writes no claims, so the decrement results sit at a different

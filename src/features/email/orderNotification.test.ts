@@ -32,6 +32,7 @@ const order = (overrides: Partial<Order> = {}): Order =>
     tracking_url: null,
     delivery_method: null,
     ship_address: null,
+    relay_point: null,
     terms_version: null,
     terms_accepted_at: null,
     vat_rate_bps: null,

@@ -36,9 +36,14 @@ export interface SiteConfig {
     accounts: boolean;
     /**
      * Relay-point delivery (ADR 0020): the shipping editor offers relay rates,
-     * each naming a Boxtal relay offer. Off by default, switched on shop by
-     * shop once the core tag carrying it has been certified. A relay rate is
-     * offered at checkout only while the Boxtal keys are in the vault.
+     * each naming a Boxtal relay offer, and /checkout lets the shopper pick a
+     * point. Off by default, switched on shop by shop once the core tag
+     * carrying it has been certified. A relay rate is offered at checkout only
+     * while the Boxtal keys are in the vault.
+     *
+     * The `RELAY_POINTS` var (`on`) is the per-environment default under a
+     * store.config.ts that does not set it: staging can rehearse the option
+     * while production stays without it.
      */
     relayPoints: boolean;
   };
@@ -235,7 +240,7 @@ function defaultConfig(): SiteConfig {
     timeZone: env.TIME_ZONE ?? DEFAULT_TIME_ZONE, // setup/admin settings can override this at runtime
     features: {
       accounts: false, // magic-link customer login; needs AUTH_SECRET + email
-      relayPoints: false, // relay rates in the shipping editor; needs the Boxtal keys
+      relayPoints: env.RELAY_POINTS === 'on', // relay rates and /checkout's point step; needs the Boxtal keys
     },
     legal: {
       termsSlug: 'conditions-generales-de-vente',

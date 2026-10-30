@@ -200,6 +200,7 @@ src/
                lightning/  backend (port) · phoenixd · lnbits · index · rate · pending
     shipping/  calculator (zones + ShippingCalculator port) · provider (label, relay-point, quote ports)
                recipient (the phone checkout asks once Boxtal buys the labels)
+               relay (the point /checkout lists: cached search, served-code check, snapshot)
                labels (Shippo, disabled: ADR 0020) · labelStore (label state machine)
                boxtal/  v3 · quote (v1) · offers · contents · orderLabel (the order page's steps) · index
     storage/   provider (port) · r2 · index (factory)
@@ -396,7 +397,8 @@ total, never per line.
   `store.config.ts`). Pure logic lives in `shipping/calculator.ts` — unit-test it.
   A relay rate names a Boxtal relay offer (`BOXTAL_RELAY_OFFERS`) and is quoted
   only to a caller that passes it in `relayOffers`: a surface that cannot let
-  the shopper pick a point never shows one.
+  the shopper pick a point never shows one. `/checkout` is that surface; the
+  point it lists rides the reservation to the order (`relay_point`).
 - **A migration:** `npx wrangler d1 migrations create minshop-db <name>` → edit →
   `npm run db:migrate` (local). A deployed environment is migrated by
   `shopctl deploy`, which backs production up first — never migrate it by hand.

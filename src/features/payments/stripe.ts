@@ -8,6 +8,7 @@ import type {
 import { STRIPE_CHECKOUT_TTL_SECONDS } from './provider';
 import { stripeAllowedCountries } from './stripeCountries.ts';
 import { DEFAULT_CURRENCY, LANG } from '../i18n/locale.ts';
+import { parseDeliveryMethod, type DeliveryMethod } from '../shipping/calculator.ts';
 
 /**
  * Stripe's locale enum is language-level ('fr'), not a BCP 47 tag with a
@@ -29,16 +30,15 @@ const STRIPE_LOCALE = stripeLocale(LANG);
 
 /**
  * The delivery mode a chosen Stripe rate encodes. Session creation stamps every
- * rate's metadata with delivery: pickup|shipping; anything else (older sessions
+ * rate's metadata with delivery: pickup|shipping|relay; anything else (older sessions
  * created before that stamping, hand-made rates) is 'unknown' — which blocks
  * label purchase rather than being coalesced into a delivery order, because the
  * customer may have chosen pickup.
  */
 export function classifyRateDelivery(
   metadata: Record<string, string> | null | undefined,
-): 'pickup' | 'shipping' | 'unknown' {
-  const d = metadata?.delivery;
-  return d === 'pickup' ? 'pickup' : d === 'shipping' ? 'shipping' : 'unknown';
+): DeliveryMethod | 'unknown' {
+  return parseDeliveryMethod(metadata?.delivery) ?? 'unknown';
 }
 
 // Shipping details have moved across Stripe API versions (session.shipping_details
@@ -234,7 +234,7 @@ export function createStripeProvider(
         // rate is chosen on Stripe's page. `display_name` is the label we sent as
         // `shipping_rate_data.display_name`, so no duplicate metadata is needed.
         let shippingLabel: string | null = null;
-        let deliveryMethod: 'pickup' | 'shipping' | 'unknown' | null = null;
+        let deliveryMethod: DeliveryMethod | 'unknown' | null = null;
         const rateRef = session.shipping_cost?.shipping_rate;
         if (typeof rateRef === 'string') {
           try {

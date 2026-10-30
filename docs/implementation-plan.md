@@ -3048,7 +3048,23 @@ Engagée en six lots, dans cet ordre :
    (`relayOffers`), et la livraison offerte reste une livraison à domicile.
    Le document passe en version 4. Une offre que le socle ne liste plus est
    refusée à l'enregistrement mais ne rend pas le document invalide : elle
-   sort du choix ;
+   sort du choix. Le point se choisit à `/checkout` (fait le 2026-10-30 pour
+   Lightning, OpenNode et la démo : `features/shipping/relay.ts`, la
+   migration 0048, `test/integration/checkout-relay.mjs`). L'étape des tarifs
+   cherche les points de chaque offre relais autour de l'adresse saisie, en
+   cache une heure par offre et par adresse ; une offre dont la recherche
+   échoue ou ne trouve rien sort du choix, et la commande continue. Un tarif
+   relais mène à une étape de plus, la liste des dix points les plus proches,
+   sans JavaScript ; un point posté n'est cru que si la recherche l'a servi.
+   Le point (offre, code, nom, adresse) entre dans la réservation, que
+   `recordPaidOrder` recopie sur la commande avec `delivery_method` = `relay`.
+   Le paiement en attente n'en garde pas de copie, contrairement à ce que
+   prévoyait l'ADR 0020 : chaque moyen de paiement règle à partir de la même
+   réservation. L'effacement réduit le point au pays sur la commande comme
+   sur la réservation, que la carte des données personnelles atteint
+   désormais. La variable `RELAY_POINTS` (`on`) allume l'option dans un seul
+   environnement, pour la répéter sur le staging avant de la construire pour
+   la production ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait
