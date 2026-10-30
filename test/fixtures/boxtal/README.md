@@ -78,9 +78,12 @@ Deux retouches seulement, après le relevé :
 - La réponse donne `deliveryPriceExclTax` : 8,11 € HT en Colissimo Access et
   4,19 € HT en Mondial Relay, pour 0,8 kg.
 - **Le prix n'est connu qu'après l'achat** : l'API v3 n'a pas de cotation.
-- La bibliothèque de Boxtal fait la cotation v1 (`boxtal/php-library`) avec
-  l'identifiant et le mot de passe du compte, pas avec les clés de
-  l'application v3. Ce n'est pas essayé ici.
+- Boxtal renvoie le devis à sa v1 (`GET /cotation`) :
+  - une API dépréciée mais maintenue, en XML ;
+  - un serveur de test à part, `test.envoimoinscher.com/api/v1` ;
+  - les clés d'une application de type v1, distinctes de celles de la v3.
+
+  Rien n'est relevé ici, faute d'une application v1 sur le compte de test.
 - Le compte qui commande est en paiement différé par prélèvement, pas en
   prépaiement (guide `getting-started-api-v3`).
 
@@ -151,3 +154,5 @@ Deux retouches seulement, après le relevé :
 - Le format `PDF_10x15` : est-ce le bac à sable seul qui rend du A4 ?
 - Ce que coûte une commande réelle annulée avant la prise en charge.
 - Le webhook, de bout en bout, sur une boutique déployée.
+- Le devis v1 : son format, et si ses codes de transporteur et de service
+  donnent bien le code d'offre v3 (`MONR` + `CpourToi` → `MONR-CpourToi`).

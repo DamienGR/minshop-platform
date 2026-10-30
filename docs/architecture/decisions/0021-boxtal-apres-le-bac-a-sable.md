@@ -22,10 +22,16 @@ contredit cinq phrases de l'ADR 0020 :
   valide le point quand l'étiquette s'achète : `422`,
   `ValidationException.PickupPointCode` ;
 - **« Boxtal cote les offres pour le colis et le commerçant en choisit une »** :
-  l'API v3 n'a pas de cotation, et Boxtal renvoie à la v1. La bibliothèque de
-  Boxtal y entre par l'identifiant et le mot de passe du compte, pas par les
-  clés d'une application v3. La v3 donne le prix hors taxes dans la réponse de
-  la commande, donc après l'achat ;
+  - l'API v3 n'a pas de devis : c'est « une évolution future », et Boxtal
+    renvoie « en attendant » à sa v1 (guide `quote-api-v3`) ;
+  - la v1 est « officiellement dépréciée mais maintenue » pour les modules
+    e-commerce de Boxtal. C'est une API en XML, sur son propre serveur de test
+    (`test.envoimoinscher.com/api/v1`) ;
+  - elle s'ouvre par les clés d'une application de type v1, distinctes de
+    celles de la v3. L'identifiant et le mot de passe du compte ne valent plus
+    que pour d'anciens comptes (guide `auth-api-v1`) ;
+  - la v3 donne le prix hors taxes dans la réponse de la commande, donc après
+    l'achat ;
 - **« retrouve une expédition pour lever un achat incertain »** :
   - aucun appel ne liste les commandes ni ne cherche par `externalId` ;
   - Boxtal n'est pas idempotent : le même corps renvoyé crée une seconde
@@ -63,16 +69,25 @@ commande.
   coûter. Le commerçant choisit alors un point voisin dans la fiche commande et
   prévient l'acheteur.
 
-**Sans cotation, l'offre se choisit d'avance, à domicile comme en relais.**
+**Le devis passe par la v1, en option ; l'achat reste en v3.**
 
 - Le commerçant retient dans Réglages les offres à domicile qu'il propose
-  (Colissimo Access, Mondial Relay Domicile…). La fiche commande lui fait
-  choisir l'une d'elles.
-- Le prix de Boxtal s'affiche après l'achat, sur la commande.
-- La boutique ne garde jamais l'identifiant ni le mot de passe du compte
-  Boxtal : le coffre ne reçoit que les clés de l'application v3.
+  (Colissimo Access, Mondial Relay Domicile…).
+- À l'achat d'une étiquette, la fiche commande demande un devis à la v1 pour
+  le colis, et montre ces offres avec leur prix. Le commerçant en choisit une ;
+  l'étiquette s'achète en v3 sur cette offre.
+- Sans clés v1, ou quand le devis échoue, la fiche commande montre les mêmes
+  offres sans prix, et le prix s'affiche après l'achat.
+- L'achat ne dépend donc jamais de la v1. Le jour où Boxtal la retire, ou
+  ajoute le devis à la v3, seul l'adaptateur du devis change.
+- En relais, l'offre est celle du tarif ; le devis n'en montre que le prix.
+- Le devis ne sert qu'au commerçant, après la vente : le client paie toujours
+  le tarif que le commerçant a fixé (ADR 0007, ADR 0020).
+- Le coffre reçoit deux paires de clés d'application, v3 et v1, jamais
+  l'identifiant ni le mot de passe du compte Boxtal.
 - `LabelProvider` achète, relit une commande par son identifiant Boxtal,
-  annule, et rend document et suivi ; il ne cote pas.
+  annule, et rend document et suivi. Un port à part, facultatif, fait le
+  devis.
 - `labelStore.ts` ne change pas :
   - la ligne `quoted` porte la référence de l'envoi (l'`externalId`) et
     l'offre retenue ;
@@ -116,10 +131,14 @@ Le reste de l'ADR 0020 tient tel quel :
 
 ## Conséquences
 
-- le commerçant ne compare plus les prix des transporteurs au moment
-  d'expédier, comme le permettait Shippo. Il les compare une fois, sur le site
-  de Boxtal, en choisissant ses offres ; chaque commande montre ensuite ce que
-  l'envoi a coûté ;
+- le commerçant compare les prix au moment d'expédier, comme avec Shippo,
+  mais seulement entre les offres qu'il a retenues ;
+- la boutique parle deux API de Boxtal, en JSON et en XML, avec deux paires de
+  clés. Le devis v1 se relève à son tour dans le bac à sable, avant le lot 2 :
+  il faut une application v1 sur le compte de test ;
+- le code d'une offre v3 (`MONR-CpourToi`) semble assembler les codes de
+  transporteur et de service que rend le devis v1. Le corpus v1 doit le
+  confirmer ;
 - un achat incertain demande une action du commerçant, quand Shippo se
   rapprochait seul. Le cas est rare, mais pas exceptionnel : une réponse perdue
   suffit ;
@@ -139,10 +158,14 @@ Le reste de l'ADR 0020 tient tel quel :
 
 ## Alternatives écartées
 
-- **La cotation par l'API v1** : il faudrait garder l'identifiant et le mot de
-  passe du compte, qui ouvrent tout le compte, paiement compris, au lieu de
-  deux clés d'application révocables. Pour comparer quelques prix au moment
-  d'expédier, la boutique porterait le secret le plus fort du commerçant.
+- **La v3 seule, sans devis** : le commerçant choisirait ses offres sans prix
+  et ne verrait le coût qu'après l'achat. Boxtal propose la v1 justement pour
+  combler ce manque.
+- **Tout faire en v1** : une API dépréciée, en XML, qui ne survit que pour les
+  modules anciens de Boxtal ; la recherche par offre, l'annulation et les
+  webhooks signés sont en v3.
+- **Le devis v1 obligatoire** : l'achat tomberait avec la v1, que Boxtal peut
+  retirer.
 - **Relancer l'achat d'office après une réponse perdue** : sans idempotence,
   chaque relance peut payer un envoi de plus.
 - **Copier l'étiquette dans R2** : un fichier de plus qui porte une adresse
@@ -163,5 +186,7 @@ Le reste de l'ADR 0020 tient tel quel :
 - `test/integration/shipping.mjs` mène un achat jusqu'à `uncertain`. Il refuse
   un identifiant collé dont le `packageExternalId` n'est pas celui de l'envoi,
   et accepte le bon ;
+- un test achète une étiquette sans clés v1, et un autre avec un devis v1 en
+  échec : les deux aboutissent, sans prix affiché avant l'achat ;
 - aucune colonne ni aucun réglage ne reçoit l'identifiant ou le mot de passe du
-  compte Boxtal : le coffre n'a que deux `SecretName` pour Boxtal.
+  compte Boxtal : le coffre n'a que des clés d'application pour Boxtal.
