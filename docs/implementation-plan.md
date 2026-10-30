@@ -2968,25 +2968,27 @@ traite la commande jusqu'à ce point. Les points relais sont hors périmètre
 (§2.2, [ADR 0007](architecture/decisions/0007-perimetre-fonctionnel.md)) ;
 l'[ADR 0020](architecture/decisions/0020-points-relais.md), au statut
 « Proposé », en ferait une option de l'offre, éteinte par défaut et certifiée
-avant la première vente qui s'en sert. Il propose Mondial Relay en direct pour
-la recherche des points, faite par le serveur et sans JavaScript obligatoire,
-l'étiquette faite à la main au début, et un passage de Stripe par l'étape
+avant la première vente qui s'en sert. Damien a retenu le 2026-10-30 un
+agrégateur plutôt que Mondial Relay en direct ; l'ADR propose Boxtal, sans
+abonnement, avec Sendcloud en repli. La recherche des points est faite par le
+serveur et sans JavaScript obligatoire, l'étiquette d'une commande relais
+s'achète chez Boxtal depuis la fiche commande, et Stripe passe par l'étape
 `/checkout` dès qu'un tarif relais existe.
 
 Si l'ADR est accepté, en six lots, dans cet ordre :
 
 1. la décision écrite : l'ADR 0020 accepté, les statuts de l'ADR 0007, du §2.2
-   et du README ; vérifier que la recherche de Mondial Relay sert un compte
-   ouvert après le 23 décembre 2024 ;
-2. le port `PickupPointProvider`, l'adaptateur Mondial Relay et ses
-   identifiants dans le coffre, testés sur un corpus de réponses figées ;
-3. le tarif `relay` (document d'expédition en version 4), l'étape `/checkout`
-   pour tous les moyens de paiement, la valeur `relay` de `delivery_method` et
-   les colonnes du point (réservation, paiement en attente, commande), classées
-   pour l'effacement ;
+   et du README ; un compte de test Boxtal, et un corpus de réponses relevées
+   dans son bac à sable (recherche, expédition, suivi) ;
+2. le port `PickupPointProvider`, l'adaptateur Boxtal et ses clés dans le
+   coffre, testés sur ce corpus ;
+3. le tarif `relay` par réseau (document d'expédition en version 4), l'étape
+   `/checkout` pour tous les moyens de paiement, la valeur `relay` de
+   `delivery_method` et les colonnes du point (réservation, paiement en
+   attente, commande), classées pour l'effacement ;
 4. le point dans les e-mails, la fiche commande et l'export CSV ;
-5. la campagne relais en doublure, puis en réel jusqu'au retrait d'un vrai
-   colis, avec l'URL de suivi de Mondial Relay vérifiée ; la commande réelle
-   attend le feu vert de Damien ;
-6. plus tard, l'achat d'étiquettes depuis la boutique (API Connect de Mondial
-   Relay, ou Shippo après un essai avec une clé de test).
+5. l'achat de l'étiquette relais chez Boxtal depuis la fiche commande, le
+   suivi, et la ligne de Boxtal dans les sous-traitants ;
+6. la campagne relais en doublure sur le bac à sable, puis en réel jusqu'au
+   retrait d'un vrai colis, avec l'URL de suivi vérifiée ; la commande réelle
+   attend le feu vert de Damien.
