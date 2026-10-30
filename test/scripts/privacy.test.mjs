@@ -76,7 +76,7 @@ const SUBJECT = 'Client@Example.FR';
 /** A shop with two buyers, an order each, and everything that hangs off one. */
 const PEOPLE = [
   ...SEED,
-  `UPDATE orders SET email = '${SUBJECT}', ship_address = '{"name":"Jean Dupont","line1":"3 rue des Lilas","line2":null,"city":"Lyon","state":null,"postal":"69003","country":"FR"}', tracking_carrier = 'colissimo', tracking_number = '6A11122233344', label_url = 'https://labels.example/6A111.pdf', settlement_token = 'stl_secret', provider_payment_id = 'pi_1', vat_amount_cents = 817, vat_rate_bps = 2000 WHERE id = 1;`,
+  `UPDATE orders SET email = '${SUBJECT}', ship_address = '{"name":"Jean Dupont","line1":"3 rue des Lilas","line2":null,"city":"Lyon","state":null,"postal":"69003","country":"FR"}', tracking_carrier = 'colissimo', tracking_number = '6A11122233344', label_url = 'https://labels.example/6A111.pdf', tracking_url = 'https://suivi.example/6A111', settlement_token = 'stl_secret', provider_payment_id = 'pi_1', vat_amount_cents = 817, vat_rate_bps = 2000 WHERE id = 1;`,
   `INSERT INTO order_guest_access (order_public_id, access_token) VALUES ('ord_0000000001', 'gat_secret_token');`,
   `INSERT INTO order_item_ids (public_id, order_public_id) VALUES ('oit_0000000001', 'ord_0000000001');`,
   `INSERT INTO order_notifications (order_id, kind, state, last_error) VALUES (1, 'confirmation', 'failed', 'Resend a refusé jean.dupont@example.fr');`,
@@ -411,7 +411,7 @@ describe('la commande, contre une vraie base', () => {
     ]);
     expect(status).toBe(EXIT_CODES.ok);
     expect(report.dryRun).toBe(true);
-    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url']);
+    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url', 'tracking_url']);
     expect(report.plan.find((entry) => entry.table === 'order_guest_access').action).toBe('supprimée');
     expect(report.plan.find((entry) => entry.table === 'order_notifications').columns).toEqual(['last_error', 'state', 'lease_expires_at']);
     expect(orderRow(target, 'ord_0000000001').email).toBe('Client@Example.FR');
@@ -430,6 +430,7 @@ describe('la commande, contre une vraie base', () => {
     expect(after.ship_address).toBe('{"country":"FR"}');
     expect(after.tracking_number).toBeNull();
     expect(after.label_url).toBeNull();
+    expect(after.tracking_url).toBeNull();
 
     // What the Code de commerce keeps for ten years, kept.
     expect(after.amount_total_cents).toBe(before.amount_total_cents);

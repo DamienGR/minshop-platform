@@ -12,7 +12,9 @@ Les fichiers `30` à `39` viennent de l'API v1, celle du devis, sur son serveur
 de test (`https://test.envoimoinscher.com/api/v1`), relevés le même jour avec
 l'application v1 du même compte. Le corps de leur réponse est le XML tel que
 Boxtal l'a rendu, en une chaîne. `40` à `42` reviennent à la v3, pour vérifier
-qu'un devis v1 désigne bien une offre v3.
+qu'un devis v1 désigne bien une offre v3. `43` à `52`, relevés le même jour
+pour le lot 3, y reviennent aussi : le téléphone du destinataire, et ce que
+rend une commande tant qu'elle est `PENDING`.
 
 Chaque fichier garde la requête (`method`, `path`, `body`) et la réponse
 (`status`, `ms`, `contentType`, `body`), jamais un en-tête : aucune clé n'y
@@ -62,6 +64,10 @@ Quatre retouches seulement, après le relevé :
 | `39` | sans en-tête `Authorization` | `401`, `UnauthorizedException` |
 | `40`, `41` | v3, `POST /shipping-order` en `BMON-DomicileFrance`, puis `DELETE` | le prix du devis ; commande annulée |
 | `42` | v3, recherche de points en `MONRCpourToi`, sans tiret | `400`, `ValidShippingOfferCode` |
+| `43` | v3, `POST /shipping-order` sans téléphone du destinataire | `422`, `ValidationException.Null` |
+| `44` | la même commande, avec le téléphone | `PENDING` |
+| `45`, `46`, `47` | aussitôt après `44` : suivi, étiquette, `DELETE` | une liste vide ; `422` ; `422` |
+| `48` à `52` | 20 s plus tard : la commande, son suivi, son étiquette, `DELETE`, `GET` | `CONFIRMED`, tout est prêt ; puis `CANCELLED` |
 
 ## Ce que le bac à sable a établi
 
@@ -166,6 +172,23 @@ Quatre retouches seulement, après le relevé :
 - Les libellés de `mandatory_informations` sont échappés deux fois
   (`l&amp;apos;envoi`). Ceux des transporteurs, des services et des options
   ne le sont pas.
+
+**Avant `CONFIRMED`.**
+
+- Le téléphone du destinataire est obligatoire : sans lui, la commande rend
+  `422` et `ValidationException.Null` sur `shipment.toAddress.contact.phone`
+  (`43`). La boutique ne le demande pas encore à l'acheteur : jusqu'au lot 4,
+  le commerçant le saisit dans la fiche commande.
+- Tant que la commande est `PENDING`, Boxtal ne rend presque rien d'elle :
+  - son suivi : `200` et une liste vide (`45`) ;
+  - son étiquette : `422` et `UnexpectedException` (`46`) ;
+  - son annulation : `422` et `PrivateServiceException` (`47`), et rien n'est
+    annulé.
+- 20 s plus tard, elle est `CONFIRMED` : le suivi rend le numéro, l'URL et la
+  référence du colis (`49`), l'étiquette est prête (`50`), et la commande
+  s'annule (`51`, `52`).
+- La boutique enregistre donc l'achat dès la réponse, puis relit le suivi :
+  c'est lui qui porte le numéro et la référence du colis.
 
 **Pas d'idempotence, pas de liste.**
 
