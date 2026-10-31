@@ -3075,9 +3075,10 @@ Engagée en six lots, dans cet ordre :
    relances de webhook de Stripe, et le balayage qui masque son lien d'invité
    l'efface. Une session sans collecte d'adresse se vérifie en mode test
    au lot 6, avec Stripe Tax, qui calcule alors l'impôt sur l'adresse de
-   facturation. La variable `RELAY_POINTS`
-   (`on`) allume l'option dans un seul environnement, pour la répéter sur le
-   staging avant de la construire pour la production ;
+   facturation. L'option se construit (`features.relayPoints` dans le
+   `store.config.ts` de la boutique) : la staging qui la répète porte le build
+   de la production. La variable `RELAY_POINTS` (`on`) ne sert qu'aux essais
+   locaux et aux tests, le gabarit de `wrangler.jsonc` ne la rendant pas ;
 5. le point dans les e-mails, la fiche commande et l'export CSV, et
    l'étiquette relais (fait le 2026-10-30, en doublure sur le corpus). Le
    point se lit dans l'e-mail de confirmation, celui d'expédition, la page de
@@ -3093,4 +3094,17 @@ Engagée en six lots, dans cet ordre :
    achète l'étiquette dans Boxtal et saisit le suivi à la main ;
 6. la campagne en doublure sur le bac à sable, puis en réel jusqu'au retrait
    d'un vrai colis en relais, avec l'URL de suivi vérifiée ; la commande réelle
-   attend le feu vert de Damien.
+   attend le feu vert de Damien. Sa fiche,
+   [points-relais-commandes](certification/points-relais-commandes.md)
+   (écrite le 2026-10-30, sur le socle `v0.3.35`), la mène sur pilote-certif :
+   une staging temporaire sur `workers.dev`, Boxtal en bac à sable et Stripe en
+   mode test, pour une étiquette en relais et une à domicile, puis détruite ;
+   ensuite la production, Boxtal et Stripe en réel. Le
+   [runbook des points relais](operations/runbooks/point-relais.md) prend les
+   incidents que l'ADR 0020 range dans `docs/operations/` (tarif absent, point
+   refusé, colis non retiré, retour, panne de Boxtal) ; le délai de garde de
+   Mondial Relay y entre après la commande réelle. Un écart avec la
+   vérification de l'ADR 0020 : la porte navigateur ne passe pas encore par
+   `/checkout`, faute d'un Boxtal simulé sous `wrangler dev`. Le choix du point
+   sans JavaScript est tenu par `test/integration/checkout-relay.mjs`, et la
+   fiche le regarde à la main, sur un téléphone et sans JavaScript.

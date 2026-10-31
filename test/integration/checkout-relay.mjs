@@ -15,7 +15,8 @@
  *
  * Boxtal answers with the search recorded in its sandbox (test/fixtures/boxtal/
  * `02`: Mondial Relay around Paris 11e). The option is switched on by the
- * `RELAY_POINTS` var, as on a staging that rehearses it.
+ * `RELAY_POINTS` var, as a local run sets it; a deployed shop sets
+ * `features.relayPoints` in its store.config.ts instead.
  *
  * Run: node --experimental-strip-types test/integration/checkout-relay.mjs
  * (after a build — `npm run verify` builds first.)

@@ -16,8 +16,7 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   //
   // features: { relayPoints: true }, // relay rates (Boxtal), plan §13.3: only on a
   //                                  // core tag that passed the relay campaign;
-  //                                  // unset, the RELAY_POINTS var (`on`) decides
-  //                                  // per environment
+  //                                  // staging and production build it alike
   //
   // images: { maxWidth: 1000 },      // optimization on/off lives in Admin
   //
