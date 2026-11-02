@@ -17,6 +17,13 @@ export interface EmailMessage {
    * notices) need not invent one.
    */
   idempotencyKey?: string;
+  /**
+   * Where a reply goes, when it is not the sender. The contact form's message
+   * is sent FROM the store (only the store's domain may send) and answered TO
+   * the visitor who wrote it. One bare address, already validated: never a
+   * display name, which would be a second free-text field in a header.
+   */
+  replyTo?: string;
 }
 
 export interface EmailProvider {

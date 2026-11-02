@@ -27,7 +27,7 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0004](0004-localisation-des-donnees.md) | Localisation des données | Accepté |
 | [0005](0005-strategie-de-sauvegarde.md) | Stratégie de sauvegarde et de restauration | Accepté |
 | [0006](0006-politique-des-migrations.md) | Politique des migrations de schéma | Accepté |
-| [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté ; amendé par 0020 pour les points relais, par 0022 pour les produits personnalisables, par 0023 pour le virement |
+| [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté ; amendé par 0020 pour les points relais, par 0022 pour les produits personnalisables, par 0023 pour le virement, par 0025 pour le formulaire de contact |
 | [0008](0008-format-du-manifeste-client.md) | Format et autorité du manifeste client | Accepté |
 | [0009](0009-forme-de-la-cli-shopctl.md) | Forme, langage et livraison de la CLI `shopctl` | Accepté |
 | [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve ; amendé par 0024 pour la franchise en base |
@@ -45,3 +45,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Accepté |
 | [0023](0023-paiement-par-virement.md) | Le paiement par virement, rapproché à la main | Accepté |
 | [0024](0024-franchise-en-base-de-tva.md) | La franchise en base de TVA | Accepté |
+| [0025](0025-formulaire-de-contact.md) | Un formulaire de contact, envoyé sans être gardé | Proposé |

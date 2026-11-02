@@ -51,6 +51,15 @@ export async function getPublishedPageBySlug(
     .first<Page>();
 }
 
+/** The storefront path of a published page, by id; null for a draft or a gap. */
+export async function publishedPagePath(db: D1Database, id: number): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT slug FROM pages WHERE id = ? AND published = 1')
+    .bind(id)
+    .first<{ slug: string }>();
+  return row ? `/pages/${row.slug}` : null;
+}
+
 /** Admin listing: drafts included, newest activity first. */
 export async function listPages(db: D1Database): Promise<Page[]> {
   const { results } = await db

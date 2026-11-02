@@ -262,3 +262,35 @@ export interface ContentPageModel {
   /** Inline custom properties for the preset's measure and title alignment. */
   layoutStyle: string;
 }
+
+/** The fields of the contact form, as the visitor typed them. */
+export interface ContactFormValues {
+  name: string;
+  email: string;
+  phone: string;
+  reason: string;
+  message: string;
+}
+
+/**
+ * The contact form under the merchant's chosen page (ADR 0025). Rendered by
+ * the page route under the theme's ContentPage, so a theme frames the page and
+ * its tokens style the form, without any template having to know it exists.
+ *
+ * `errors` and `formError` are sentences already in French: the control
+ * prints them, it does not choose them.
+ */
+export interface ContactFormModel {
+  /** Where the form posts: the page's own path. */
+  action: string;
+  /** The reasons on offer, in the merchant's order. */
+  reasons: string[];
+  /** What the visitor typed, handed back after a refusal; empty at first. */
+  values: ContactFormValues;
+  /** One sentence per refused field. */
+  errors: Partial<Record<keyof ContactFormValues, string>>;
+  /** A refusal that belongs to no field: the challenge, the provider. */
+  formError: string | null;
+  /** The message went: the confirmation replaces the form. */
+  sent: boolean;
+}

@@ -27,6 +27,7 @@ export function createResendEmail(
           subject: msg.subject,
           html: msg.html,
           text: msg.text,
+          ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
         }),
       });
       if (!res.ok) {

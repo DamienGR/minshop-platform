@@ -23,10 +23,11 @@ from an argument: `BASE_URL`, and behind a private preview
   checkout switched off by `provision` — has no express page: the cart says
   the order is unavailable and `/express` redirects back, which the check
   accepts and names, to be re-run once Stripe is configured.
-  `-- --limiteurs` adds the rate limiters last, tripped to a 429 each. Search
-  and checkout are held by Cloudflare's limiter, permissive by design (per
-  location, cached per machine), so they are flooded fifty at a time up to
-  twenty times their limit; the admin login is held by the shop's exact
+  `-- --limiteurs` adds the rate limiters last, tripped to a 429 each. Search,
+  checkout and the contact form are held by Cloudflare's limiter, permissive
+  by design (per location, cached per machine), so they are flooded fifty at a
+  time up to twenty times their limit — the contact form on a page that does
+  not exist, so nothing is sent; the admin login is held by the shop's exact
   counter (`features/auth/loginThrottle.ts`), so it must refuse the sixth
   guess at the latest, with a Retry-After longer than the edge's minute. It
   costs the operator's own IP a minute of checkout and a quarter of an hour

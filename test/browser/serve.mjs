@@ -53,6 +53,19 @@ wrangler([
   '--command', `INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_password_hash', '${adminPasswordHash()}')`,
 ]);
 
+// The contact form (ADR 0025) under a page of its own, for the specs that walk
+// it without JavaScript. Here and not in the shared fixtures, like the admin
+// password: the baselines gate renders no form. The page shows the form from
+// settings alone, so a key row stands in for a provider — the specs refuse
+// before anything would be sent, and the integration suite does the sending.
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  "INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('Contact', 'contact', 'Une question sur une commande, un projet sur mesure\u202f?', 1, 'page_c0ntact000'); " +
+    "INSERT OR REPLACE INTO settings (key, value) SELECT 'contact_page', id FROM pages WHERE slug = 'contact'; " +
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('contact_to', 'atelier@exemple.test'), ('enc:resend_api_key', 'browser-suite-placeholder')",
+]);
+
 // The gallery rows point at object keys. Without the objects the product page
 // renders broken images, and "does this image actually load" is one of the
 // things the suite asks.

@@ -283,6 +283,14 @@
   margin-inline: auto;
   line-height: var(--prose-leading, 1.75);
 }
+/* The contact form under its page (ADR 0025) takes the page's measure, so
+   the form lines up with the text above it whatever preset the merchant
+   chose. */
+.contact-frame {
+  max-width: var(--page-measure, var(--prose-measure, 48rem));
+  margin-inline: auto;
+  margin-top: 2.5rem;
+}
 .markdown-content h1 {
   text-align: var(--page-title-align, left);
   font-family: var(--font-serif, ui-serif, Georgia, serif);

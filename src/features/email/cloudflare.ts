@@ -8,6 +8,8 @@ export interface EmailBinding {
     subject: string;
     html?: string;
     text?: string;
+    /** The binding's own field (`EmailMessageBuilder.replyTo` in workers-types). */
+    replyTo?: string;
   }): Promise<unknown>;
 }
 
@@ -27,6 +29,7 @@ export function createCloudflareEmail(
         subject: msg.subject,
         html: msg.html,
         text: msg.text,
+        ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
       });
     },
   };

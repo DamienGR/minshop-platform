@@ -3241,3 +3241,38 @@ l'expert-comptable sur les endroits de la mention (au pied de page et sur le
 reçu de Stripe, le socle ne l'écrit pas), la mention dans l'article « Prix »
 des CGV du commerçant, et la migration 0051 dans les notes de la prochaine
 version du socle.
+
+### 13.7 Le formulaire de contact
+
+Noté le 2026-11-02 (ticket #147) : une page de contact où le visiteur laisse
+son nom, son e-mail, un téléphone facultatif, un motif et son message, que le
+marchand reçoit par e-mail et auquel il répond directement. Pour la première
+boutique réelle, le motif « Sur mesure » est la porte d'entrée des commandes sur
+mesure. Damien a choisi d'envoyer sans rien garder ;
+l'[ADR 0025](architecture/decisions/0025-formulaire-de-contact.md), proposé,
+amende l'ADR 0007, qui ne parlait que de pages éditoriales et légales. Aucun
+des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-02, en un seul lot, sans migration :
+
+- le formulaire sous une page publiée choisie dans Admin → Réglages →
+  Formulaire de contact : la page lui sert d'introduction et la navigation y
+  mène comme à toute page ; `/contact` y redirige (302), ou répond 404 ;
+- un destinataire propre, à défaut celui des alertes de commande, et des motifs
+  modifiables (dix au plus ; vide, la liste par défaut) ; le formulaire n'est
+  affiché que si l'e-mail est configuré et qu'un destinataire existe ;
+- les champs nom, e-mail, téléphone facultatif, motif et message, refusés et
+  non tronqués, le texte rendu au visiteur avec un message par champ ;
+  `src/features/contact/form.ts` ;
+- `replyTo` dans le port e-mail, chez Resend et sur la liaison de Cloudflare :
+  « Répondre » écrit au visiteur ;
+- l'origine contrôlée, une limite de cinq envois par minute et par client
+  (`CONTACT_RATE_LIMITER`), un champ piège, et Turnstile quand il est activé ;
+- rien en base, rien du message dans les journaux ; un envoi qui échoue rend
+  la page avec le texte.
+
+Tenu par `test/integration/contact.mjs` et `test/browser/contact.spec.mjs`.
+Reste à faire : la recette de la première boutique réelle (sa page de contact,
+ses motifs, un message reçu et une réponse), la mention du formulaire dans sa
+politique de confidentialité, et la liaison `CONTACT_RATE_LIMITER` dans les
+notes de la prochaine version du socle.
