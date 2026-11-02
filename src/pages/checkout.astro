@@ -7,6 +7,14 @@ import { readCart, resolveCart } from '../features/cart/cart';
 import { getProductByPublicId, type Product } from '../features/products/db';
 import { listVariants, getExtrasByPublicIds, type ProductVariant } from '../features/products/variants';
 import { parsePublicId } from '../features/ids/publicId';
+import { listCustomFields } from '../features/products/customFields';
+import {
+  checkCustomization,
+  customFieldName,
+  customizationSummary,
+  readCustomValues,
+  type CustomizationEntry,
+} from '../features/products/customization';
 import {
   claimOrderIdentity,
   deleteGuestAccessIfUnsettled,
@@ -59,6 +67,12 @@ const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
 const form = isPost ? await Astro.request.formData() : null;
 const fld = (name: string) => (form?.get(name) ?? '').toString().trim();
+// A personalised Buy now arrives by POST, never by query: api/checkout.ts
+// answers 307 so the buyer's text stays out of URLs, with `hop=start` to say
+// this post opens the address step rather than submits it. "Edit the address"
+// posts the same way.
+const firstHop = isPost && Astro.url.searchParams.get('hop') === 'start';
+const isSubmit = isPost && !firstHop;
 
 /**
  * The in-app shipping checkout, shared by every rail that cannot collect a
@@ -110,11 +124,14 @@ interface CheckoutLine {
   name: string;
   unitPriceCents: number;
   variantId: number | null;
+  customization: CustomizationEntry[];
   /** Carried (not just its id) because shipment weight needs the variant's own
    *  weight, which overrides the product's. */
   variant: ProductVariant | null;
 }
 let lines: CheckoutLine[] = [];
+// Buy now's personalisation, carried as hidden fields across the steps.
+let carryCustom: { name: string; value: string }[] = [];
 if (productPublicId) {
   const product = await getProductByPublicId(env.DB, productPublicId);
   if (product && product.active) {
@@ -126,6 +143,12 @@ if (productPublicId) {
     const extras = buyNowExtraIds.length
       ? await getExtrasByPublicIds(env.DB, product.id, buyNowExtraIds)
       : [];
+    const fields = await listCustomFields(env.DB, product.id);
+    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form?.get(name)));
+    if (!custom.ok) {
+      return Astro.redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
+    }
+    carryCustom = Object.entries(custom.values).map(([id, value]) => ({ name: customFieldName(id), value }));
     lines = [
       {
         product,
@@ -136,6 +159,7 @@ if (productPublicId) {
           (extras.length ? ` (${extras.map((e) => e.label).join(', ')})` : ''),
         unitPriceCents: lineUnitPriceCents(product.price_cents, variant, extras),
         variantId: variant?.id ?? null,
+        customization: custom.entries,
         variant,
       },
     ];
@@ -151,6 +175,7 @@ if (productPublicId) {
       (l.extras.length ? ` (${l.extras.map((e) => e.label).join(', ')})` : ''),
     unitPriceCents: l.unitPriceCents,
     variantId: l.variant?.id ?? null,
+    customization: l.customization,
     variant: l.variant,
   }));
 }
@@ -210,6 +235,10 @@ const editAddressHref = (() => {
   if (termsAccepted) params.set('accept_terms', '1');
   return `/checkout?${params}`;
 })();
+// With personalisation the way back is a post of this step's own form: the
+// buyer's text rides in its hidden fields, and the address typed comes back
+// filled in.
+const editAddressAction = `/checkout?${new URLSearchParams({ hop: 'start' })}`;
 
 /**
  * Demo orders don't ship anywhere, so the demo rail skips this page entirely:
@@ -231,7 +260,7 @@ const DEMO_ADDRESS = {
   // From the range ARCEP keeps for fiction: it reaches nobody.
   phone: '06 39 98 00 00',
 };
-const prefill = rail === 'demo' && !isPost ? DEMO_ADDRESS : null;
+const prefill = rail === 'demo' && !isSubmit ? DEMO_ADDRESS : null;
 // The destination the cart priced a card payment for, when it sent one here.
 const cartDestination = (Astro.url.searchParams.get('country') ?? '').toUpperCase();
 const cartCountry =
@@ -259,10 +288,10 @@ const relayPoints = new Map<string, PickupPoint[]>();
 // The relay option awaiting its point, while stage is 'relay'.
 let relayOption: ShippingOption | null = null;
 // Back from the point step to the rates: the rate is chosen again.
-const changingRate = isPost && fld('change_rate') !== '';
+const changingRate = isSubmit && fld('change_rate') !== '';
 
 // Demo submits itself: the sample address on the first GET, no typing.
-const submitted = isPost || rail === 'demo';
+const submitted = isSubmit || rail === 'demo';
 if (submitted) {
   if (!/.+@.+\..+/.test(addr.email)) errors.push(t('checkout.error.email'));
   if (!addr.name) errors.push(t('checkout.error.name'));
@@ -437,6 +466,7 @@ if (submitted) {
                     quantity: l.qty,
                     // Shown by Stripe's page; the bitcoin rails ignore it.
                     imageUrl: new URL(productImageUrl(l.product.image_key, cfg.images.baseUrl), Astro.url.origin).href,
+                    description: customizationSummary(l.customization),
                   })),
                   // Stripe-only options, as api/checkout.ts sets them.
                   allowPromotionCodes: Astro.locals.settings.discountsEnabled ?? cfg.discounts.enabled,
@@ -569,6 +599,9 @@ const distanceLabel = (meters: number | null): string | null =>
           {carryExtraIds.map((id) => (
             <input type="hidden" name="extra" value={id} />
           ))}
+          {carryCustom.map((c) => (
+            <input type="hidden" name={c.name} value={c.value} />
+          ))}
           <input type="hidden" name="email" value={addr.email} />
           <input type="hidden" name="name" value={addr.name} />
           <input type="hidden" name="line1" value={addr.line1} />
@@ -596,9 +629,20 @@ const distanceLabel = (meters: number | null): string | null =>
                 })}
               </div>
             </div>
-            <a href={editAddressHref} class="mt-2 inline-block text-xs font-medium text-accent">
-              {t('checkout.editAddress')}
-            </a>
+            {carryCustom.length > 0 ? (
+              <button
+                type="submit"
+                formaction={editAddressAction}
+                formnovalidate
+                class="mt-2 inline-block text-xs font-medium text-accent"
+              >
+                {t('checkout.editAddress')}
+              </button>
+            ) : (
+              <a href={editAddressHref} class="mt-2 inline-block text-xs font-medium text-accent">
+                {t('checkout.editAddress')}
+              </a>
+            )}
           </div>
 
           <fieldset class="space-y-2">
@@ -685,6 +729,9 @@ const distanceLabel = (meters: number | null): string | null =>
           {carryExtraIds.map((id) => (
             <input type="hidden" name="extra" value={id} />
           ))}
+          {carryCustom.map((c) => (
+            <input type="hidden" name={c.name} value={c.value} />
+          ))}
           <input type="hidden" name="email" value={addr.email} />
           <input type="hidden" name="name" value={addr.name} />
           <input type="hidden" name="line1" value={addr.line1} />
@@ -702,9 +749,20 @@ const distanceLabel = (meters: number | null): string | null =>
               {addr.line2 ? `, ${addr.line2}` : ''}, {addr.city} {addr.state} {addr.postal}, {addr.country}
               {askPhone && <div>{t('checkout.phoneOnFile', { numero: addr.phone })}</div>}
             </div>
-            <a href={editAddressHref} class="mt-2 inline-block text-xs font-medium text-accent">
-              {t('checkout.editAddress')}
-            </a>
+            {carryCustom.length > 0 ? (
+              <button
+                type="submit"
+                formaction={editAddressAction}
+                formnovalidate
+                class="mt-2 inline-block text-xs font-medium text-accent"
+              >
+                {t('checkout.editAddress')}
+              </button>
+            ) : (
+              <a href={editAddressHref} class="mt-2 inline-block text-xs font-medium text-accent">
+                {t('checkout.editAddress')}
+              </a>
+            )}
           </div>
 
           <fieldset class="space-y-2">
@@ -766,6 +824,9 @@ const distanceLabel = (meters: number | null): string | null =>
           {carryVariantId && <input type="hidden" name="variant_id" value={carryVariantId} />}
           {carryExtraIds.map((id) => (
             <input type="hidden" name="extra" value={id} />
+          ))}
+          {carryCustom.map((c) => (
+            <input type="hidden" name={c.name} value={c.value} />
           ))}
           {/* The acceptance given on the cart, carried to the step that asks for it. */}
           {terms.required && termsAccepted && <input type="hidden" name="accept_terms" value="on" />}

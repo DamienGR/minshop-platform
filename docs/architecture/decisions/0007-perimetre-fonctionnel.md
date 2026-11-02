@@ -1,7 +1,9 @@
 # ADR 0007 — Périmètre fonctionnel de l'offre
 
 - **Statut** : Accepté ; amendé pour les points relais par
-  l'[ADR 0020](0020-expeditions-par-boxtal.md)
+  l'[ADR 0020](0020-expeditions-par-boxtal.md), pour les produits
+  personnalisables par un texte libre par
+  l'[ADR 0022](0022-produits-personnalisables.md)
 - **Date** : 2026-08-28
 - **Jalon** : 0
 

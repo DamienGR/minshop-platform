@@ -101,6 +101,7 @@ export function createStripeProvider(
             product_data: {
               name: li.name,
               ...(li.imageUrl && { images: [li.imageUrl] }),
+              ...(li.description && { description: li.description }),
             },
           },
           quantity: li.quantity,

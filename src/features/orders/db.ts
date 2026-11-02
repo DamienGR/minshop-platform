@@ -6,6 +6,7 @@ import {
 import { generatePublicId } from '../ids/publicId.ts';
 import { vatIncludedCents } from '../legal/vat.ts';
 import type { DeliveryMethod } from '../shipping/calculator.ts';
+import { serializeCustomization, withCustomization, type CustomizationEntry } from '../products/customization.ts';
 
 export interface ShippingAddress {
   name: string | null;
@@ -77,6 +78,8 @@ export interface OrderItemInput {
   fileName?: string | null;
   fileMime?: string | null;
   fileSizeBytes?: number | null;
+  /** What the buyer typed in the product's personalisation fields (ticket #125). */
+  customization?: CustomizationEntry[] | null;
 }
 
 /** A persisted order_items row. */
@@ -94,6 +97,8 @@ export interface OrderItem {
   file_mime: string | null;
   file_size_bytes: number | null;
   downloads: number;
+  /** JSON [{ label, value }] — read it with parseCustomization(); NULL once erased. */
+  customization: string | null;
 }
 
 export interface InventoryException {
@@ -500,11 +505,13 @@ export async function recordPaidOrder(
   //
   // The relay point travels the same way, and for the same reason. So does
   // the address, when /checkout took it for a rail that returns none (a card
-  // payment that went through it: Stripe then collects no address).
+  // payment that went through it: Stripe then collects no address). And so
+  // does what the buyer typed on a personalised product: the Lightning page
+  // settles from the pending row's own item list, which never carries it.
   const carried = o.reservationId
     ? await db
         .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address FROM checkout_reservations WHERE public_id = ?',
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address, customization FROM checkout_reservations WHERE public_id = ?',
         )
         .bind(o.reservationId)
         .first<{
@@ -513,6 +520,7 @@ export async function recordPaidOrder(
           vat_rate_bps: number | null;
           relay_point: string | null;
           ship_address: string | null;
+          customization: string | null;
         }>()
     : null;
   const orderValues = [
@@ -585,7 +593,13 @@ export async function recordPaidOrder(
     quantity: number;
   }> = [];
 
-  const items = (o.items ?? []).map((item) => ({ ...item, needsClaim: !item.publicId }));
+  // Items that already carry the text (the reservation's own snapshot) keep it;
+  // a list built elsewhere takes it from the reservation, line for line.
+  const given = o.items ?? [];
+  const withText = given.some((item) => item.customization?.length)
+    ? given
+    : withCustomization(given, carried?.customization);
+  const items = withText.map((item) => ({ ...item, needsClaim: !item.publicId }));
   for (const item of items) {
     if (item.publicId) {
       const claim = await db
@@ -637,8 +651,8 @@ export async function recordPaidOrder(
         .prepare(
           `INSERT INTO order_items
              (order_id, product_id, variant_id, name, price_cents, quantity,
-              public_id, file_key, file_name, file_mime, file_size_bytes)
-           SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM orders
+              public_id, file_key, file_name, file_mime, file_size_bytes, customization)
+           SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM orders
             WHERE provider_session_id = ? AND settlement_token = ?`,
         )
         .bind(
@@ -652,6 +666,7 @@ export async function recordPaidOrder(
           it.fileName ?? null,
           it.fileMime ?? null,
           it.fileSizeBytes ?? null,
+          serializeCustomization(it.customization),
           o.providerSessionId,
           settlementToken,
         ),
@@ -761,8 +776,9 @@ export async function recordPaidOrder(
     stmts.push(
       db
         .prepare(
-          // The order now holds the address; the reservation lets it go.
-          `UPDATE checkout_reservations SET status = 'settled', ship_address = NULL
+          // The order now holds the address and the buyer's personalisation
+          // text; the reservation lets both go.
+          `UPDATE checkout_reservations SET status = 'settled', ship_address = NULL, customization = NULL
             WHERE public_id = ? AND status IN ${settlementStatuses} AND EXISTS (
               SELECT 1 FROM orders
                WHERE provider_session_id = ? AND settlement_token = ?

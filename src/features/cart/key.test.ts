@@ -5,6 +5,8 @@ const P = 'prod_k7m2qx8vn6';
 const V = 'var_n9fx2km7qc';
 const XA = 'xtra_0000000000';
 const XB = 'xtra_q3vr8jm2np';
+const CA = 'cfld_0000000000';
+const CB = 'cfld_q3vr8jm2np';
 
 describe('cartKey', () => {
   it('plain product (no variant/extras)', () => {
@@ -39,6 +41,7 @@ describe('parseCartKey', () => {
         productPublicId: pid,
         variantPublicId: vid,
         extraPublicIds: [...ex],
+        customValues: {},
       });
     }
   });
@@ -63,6 +66,37 @@ describe('parseCartKey', () => {
   it('rejects the line when ANY extra is invalid', () => {
     expect(parseCartKey(`${P}#${XA},junk`)).toBeNull();
     expect(parseCartKey(`${P}#${XA},7`)).toBeNull();
+  });
+});
+
+describe('the personalisation segment', () => {
+  it('rides after the selection and reads back exactly', () => {
+    const key = cartKey(P, V, [XA], { [CB]: 'Tom', [CA]: 'Léa Martin' });
+    expect(key.startsWith(`${P}:${V}#${XA}~`)).toBe(true);
+    expect(parseCartKey(key)).toEqual({
+      productPublicId: P,
+      variantPublicId: V,
+      extraPublicIds: [XA],
+      customValues: { [CA]: 'Léa Martin', [CB]: 'Tom' },
+    });
+  });
+  it('makes one key for the same answers, and two for different ones', () => {
+    expect(cartKey(P, null, [], { [CA]: 'Léa', [CB]: 'x' })).toBe(cartKey(P, null, [], { [CB]: 'x', [CA]: 'Léa' }));
+    expect(cartKey(P, null, [], { [CA]: 'Léa' })).not.toBe(cartKey(P, null, [], { [CA]: 'Tom' }));
+  });
+  it('adds nothing when there is nothing typed', () => {
+    expect(cartKey(P, null, [], {})).toBe(P);
+  });
+  it('survives the characters the other separators use', () => {
+    const text = 'A#B:C~D,E "F" é';
+    expect(parseCartKey(cartKey(P, null, [], { [CA]: text }))?.customValues).toEqual({ [CA]: text });
+  });
+  it('rejects a bare, doubled or tampered segment', () => {
+    const key = cartKey(P, null, [], { [CA]: 'Léa' });
+    expect(parseCartKey(`${P}~`)).toBeNull();
+    expect(parseCartKey(`${key}~x`)).toBeNull();
+    expect(parseCartKey(`${key}x`)).toBeNull();
+    expect(parseCartKey(`${P}~${btoa('not json')}`)).toBeNull();
   });
 });
 

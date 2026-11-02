@@ -8,6 +8,14 @@ import {
   type ProductExtra,
 } from '../../features/products/variants';
 import { parsePublicId } from '../../features/ids/publicId.ts';
+import { listCustomFields } from '../../features/products/customFields';
+import {
+  checkCustomization,
+  customizationSummary,
+  readCustomValues,
+  type CustomizationEntry,
+  type CustomValues,
+} from '../../features/products/customization';
 import {
   claimOrderIdentity,
   deleteGuestAccessIfUnsettled,
@@ -151,6 +159,8 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const origin = url.origin;
 
   let lines: LineDraft[] = [];
+  // Buy now's personalisation, carried on to /checkout when a rail goes there.
+  let buyNowCustomValues: CustomValues = {};
   let cancelUrl = `${origin}/`;
   // Where to send the shopper if a stock check fails (cart, or the product).
   let errorPath = '/cart';
@@ -190,6 +200,14 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     const extras = extraPublicIds.length
       ? await getExtrasByPublicIds(env.DB, product.id, extraPublicIds)
       : [];
+    // The personalisation text, posted from /express (never a query string:
+    // a URL ends up in the platform's request logs, the buyer's text must not).
+    const fields = await listCustomFields(env.DB, product.id);
+    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)));
+    if (!custom.ok) {
+      return redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
+    }
+    buyNowCustomValues = custom.values;
     lines = [
       {
         product,
@@ -201,6 +219,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
         unitPriceCents: lineUnitPriceCents(product.price_cents, variant, extras),
         availableStock: variant ? variant.stock : product.stock,
         variantId: variant?.id ?? null,
+        customization: custom.entries,
       },
     ];
     cancelUrl = `${origin}/products/${product.slug}?canceled=1`;
@@ -223,6 +242,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
       unitPriceCents: l.unitPriceCents,
       availableStock: l.availableStock,
       variantId: l.variant?.id ?? null,
+      customization: l.customization,
     }));
     cancelUrl = `${origin}/cart?canceled=1`;
   }
@@ -308,6 +328,14 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     // earlier. It is a pre-tick, not a pass: the form that places a Lightning
     // or OpenNode order still posts the box, and /checkout refuses without it.
     if (isAcceptance(form.get('accept_terms'))) params.set('accept_terms', '1');
+    // A personalised Buy now cannot put the buyer's text in that URL (request
+    // logs keep URLs). A 307 has the browser post this same body to /checkout,
+    // `custom:` fields included; `hop=start` tells /checkout it is the first
+    // view of the address step, not an address being submitted.
+    if (Object.keys(buyNowCustomValues).length > 0) {
+      params.set('hop', 'start');
+      return new Response(null, { status: 307, headers: { location: `/checkout?${params}` } });
+    }
     return redirect(`/checkout?${params}`, 303);
   }
 
@@ -454,6 +482,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
         // Same image/placeholder resolution as the storefront, made absolute so
         // Stripe can fetch it (won't render from localhost).
         imageUrl: new URL(productImageUrl(l.product.image_key, cfg.images.baseUrl), origin).href,
+        description: customizationSummary(l.customization),
       })),
       successUrl: `${origin}/order/${accessToken}`,
       // Returning from a hosted checkout does not make that session unpayable,
@@ -486,11 +515,13 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 
 /**
  * Programmatic checkout for agents/tools. Body:
- *   { items: [{ product_id, quantity, variant_id?, extra_ids?: string[] }], method? }
+ *   { items: [{ product_id, quantity, variant_id?, extra_ids?: string[],
+ *               customization?: { "cfld_…": string } }], method? }
  * `product_id` is the prefixed public ID (`prod_…`) from the catalog; `slug` is
  * accepted as a documented convenience selector. `variant_id` (`var_…`) is
  * required for products that have a variant group; `extra_ids` (`xtra_…`) are
- * optional add-ons — all from the catalog (GET /api/products/:slug). Numeric
+ * optional add-ons — all from the catalog (GET /api/products/:slug), whose
+ * `customization_fields` say what `customization` must answer. Numeric
  * row IDs and the legacy numeric `extras` array are rejected with 400.
  * Resolves selectors → priced lines (variant/extra-aware), validates stock,
  * creates a hosted checkout session, and returns { checkout_url } as JSON — the
@@ -577,6 +608,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   interface AgentLine extends LineDraft {
     variant: ProductVariant | null;
     extras: ProductExtra[];
+    customization: CustomizationEntry[];
   }
   const lines: AgentLine[] = [];
   for (const raw of rawItems) {
@@ -587,6 +619,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       variant_id?: unknown;
       extra_ids?: unknown;
       extras?: unknown;
+      customization?: unknown;
     };
     // The legacy numeric `extras` array is rejected outright, not silently read.
     if (r.extras !== undefined) {
@@ -665,6 +698,37 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       extras = wantExtras.length ? await getExtrasByPublicIds(env.DB, product.id, wantExtras) : [];
     }
 
+    // Personalisation: an object of `cfld_…` → text, judged as the product
+    // page's form is. Anything else is refused rather than read as "none".
+    if (
+      r.customization !== undefined &&
+      (r.customization === null ||
+        typeof r.customization !== 'object' ||
+        Array.isArray(r.customization) ||
+        Object.values(r.customization as Record<string, unknown>).some((v) => typeof v !== 'string'))
+    ) {
+      return cjson({ error: '"customization" must be an object of "cfld_…": string.' }, 400);
+    }
+    const fields = await listCustomFields(env.DB, product.id);
+    const custom = checkCustomization(fields, (r.customization as CustomValues | undefined) ?? {});
+    if (!custom.ok) {
+      return cjson(
+        {
+          error: custom.error,
+          product_id: product.public_id,
+          slug,
+          customization_fields: fields.map((f) => ({
+            id: f.public_id,
+            label: f.label,
+            help: f.help_text,
+            max_length: f.max_length,
+            required: f.required === 1,
+          })),
+        },
+        400,
+      );
+    }
+
     const availableStock = variant ? variant.stock : product.stock;
     if (availableStock < qty) {
       const label = variant ? `${product.name} — ${variant.label}` : product.name;
@@ -691,6 +755,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       variantId: variant?.id ?? null,
       variant,
       extras,
+      customization: custom.entries,
     });
   }
 
@@ -922,6 +987,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
           quantity: l.qty,
           variant: l.variant ? { id: l.variant.public_id, label: l.variant.label } : null,
           extras: l.extras.map((e) => ({ id: e.public_id, label: e.label })),
+          customization: l.customization,
           unit_price_cents: l.unitPriceCents,
           line_total_cents: l.unitPriceCents * l.qty,
         })),
@@ -974,6 +1040,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         currency: storeCurrency,
         quantity: l.qty,
         imageUrl: new URL(productImageUrl(l.product.image_key, cfg.images.baseUrl), origin).href,
+        description: customizationSummary(l.customization),
       })),
       successUrl: `${origin}/order/${accessToken}`,
       cancelUrl: `${origin}/`,
@@ -1049,6 +1116,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       quantity: l.qty,
       variant: l.variant ? { id: l.variant.public_id, label: l.variant.label } : null,
       extras: l.extras.map((e) => ({ id: e.public_id, label: e.label })),
+      customization: l.customization,
       unit_price_cents: l.unitPriceCents,
       line_total_cents: l.unitPriceCents * l.qty,
     })),

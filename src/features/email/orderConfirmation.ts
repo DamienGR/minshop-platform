@@ -8,6 +8,7 @@ import {
 import { orderTrackingUrl, shippedCarrierName } from '../orders/tracking';
 import { orderRelayPoint, relayPointLines } from '../shipping/relay.ts';
 import { t, formatNumber } from '../i18n/index.ts';
+import { customizationText, parseCustomization } from '../products/customization.ts';
 import type { EmailMessage } from './provider';
 import {
   PALETTE,
@@ -87,6 +88,10 @@ function formatShipAddress(order: Order): string {
     .join('\n');
 }
 
+/** What the buyer typed on a line, one « label : text » per field (ticket #125). */
+const customizationLines = (item: OrderItemWithImage): string[] =>
+  parseCustomization(item.customization).map(customizationText);
+
 /**
  * The relay point a relay order is collected at, under its heading: the
  * shopper reads where to go, the merchant also reads the code the label needs.
@@ -123,9 +128,10 @@ export function orderConfirmationEmail(
   const hasDigital = items.some((item) => Boolean(item.file_key));
   const relay = relayBlock(order, t('email.relay.heading'));
 
-  const rows = items.map(
-    (it) => `${it.name} × ${it.quantity}: ${money(it.price_cents * it.quantity)}`,
-  );
+  const rows = items.flatMap((it) => [
+    `${it.name} × ${it.quantity}: ${money(it.price_cents * it.quantity)}`,
+    ...customizationLines(it).map((line) => `  ${line}`),
+  ]);
 
   const text = [
     t('email.order.thanks'),
@@ -150,6 +156,7 @@ export function orderConfirmationEmail(
           name: it.name,
           quantity: it.quantity,
           amount: money(it.price_cents * it.quantity),
+          details: customizationLines(it),
         })),
         totalRows(order, money),
       ) +
@@ -193,9 +200,10 @@ export function orderNotificationEmail(
   const relay = relayBlock(order, t('email.notification.relayPoint'), true);
   const adminUrl = `${baseUrl}/admin/orders/${order.public_id ?? order.id}`;
 
-  const rows = items.map(
-    (it) => `${it.name} × ${it.quantity}: ${money(it.price_cents * it.quantity)}`,
-  );
+  const rows = items.flatMap((it) => [
+    `${it.name} × ${it.quantity}: ${money(it.price_cents * it.quantity)}`,
+    ...customizationLines(it).map((line) => `  ${line}`),
+  ]);
 
   const text = [
     t('email.notification.newOrder', { numero: num }),
@@ -234,6 +242,7 @@ export function orderNotificationEmail(
           name: it.name,
           quantity: it.quantity,
           amount: money(it.price_cents * it.quantity),
+          details: customizationLines(it),
         })),
         totalRows(order, money),
       ) +

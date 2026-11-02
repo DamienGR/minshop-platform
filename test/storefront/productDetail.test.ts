@@ -41,6 +41,7 @@ const purchase = (overrides: Partial<ProductPurchaseModel> = {}): ProductPurchas
   variantLabel: null,
   variants: [],
   extras: [],
+  customFields: [],
   ...overrides,
 });
 
@@ -134,6 +135,44 @@ describe('the purchase form', () => {
     expect(options).toContain('data-fullpage');
     expect(options).toContain('formaction="/express"');
     expect(options).toContain('formmethod="GET"');
+  });
+
+  it('asks each personalisation field under the name the server reads, with its limits', async () => {
+    const html = await render(ProductPurchaseForm, {
+      model: purchase({
+        hasOptions: true,
+        customFields: [
+          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: 'En capitales', maxLength: 15, required: true },
+          { name: 'custom:cfld_gggggggggg', inputId: 'custom-cfld_gggggggggg', label: 'Message', help: null, maxLength: 40, required: false },
+        ],
+      }),
+    });
+    const inputs = html.match(/<input[^>]*name="custom:[^"]+"[^>]*>/g) ?? [];
+
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]).toContain('maxlength="15"');
+    expect(inputs[0]).toContain('required');
+    // One character that is not a space, as the server asks.
+    expect(inputs[0]).toContain('pattern=');
+    expect(inputs[0]).toContain('aria-describedby="custom-cfld_ffffffffff-help"');
+    expect(inputs[1]).not.toContain('required');
+    expect(html).toContain('for="custom-cfld_ffffffffff"');
+    expect(html).toContain('En capitales');
+  });
+
+  it('posts Buy now when it carries personalisation, so the text is never a URL', async () => {
+    const html = await render(ProductPurchaseForm, {
+      model: purchase({
+        hasOptions: true,
+        customFields: [
+          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: null, maxLength: 15, required: true },
+        ],
+      }),
+    });
+
+    expect(html).toContain('formaction="/express"');
+    expect(html).toContain('formmethod="POST"');
+    expect(html).not.toContain('formmethod="GET"');
   });
 
   it('makes a sold-out variant unselectable but still visible', async () => {

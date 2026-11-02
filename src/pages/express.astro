@@ -7,6 +7,14 @@ import { readTermsGate } from '../features/legal/terms';
 import { getProductByPublicId } from '../features/products/db';
 import { listVariants, getExtrasByPublicIds } from '../features/products/variants';
 import { parsePublicId } from '../features/ids/publicId.ts';
+import { listCustomFields } from '../features/products/customFields';
+import {
+  checkCustomization,
+  customFieldName,
+  customizationText,
+  readCustomValues,
+  type CustomizationEntry,
+} from '../features/products/customization';
 import { lineUnitPriceCents } from '../features/cart/key';
 import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
@@ -30,6 +38,7 @@ interface DisplayLine {
   imageKey: string | null;
   unitPriceCents: number;
   qty: number;
+  customization: CustomizationEntry[];
 }
 
 // Buy-now identifiers are prefixed public IDs (prod_/var_/xtra_); numeric row
@@ -71,6 +80,16 @@ if (isBuyNow && productPublicId) {
   const extras = extraPublicIds.length
     ? await getExtrasByPublicIds(env.DB, product.id, extraPublicIds)
     : [];
+  // The personalisation arrives by POST from the product page (the form posts
+  // here when the product has fields, so the buyer's text is never a URL).
+  const fields = await listCustomFields(env.DB, product.id);
+  const custom = checkCustomization(
+    fields,
+    readCustomValues(fields, (name) => (isPost ? form!.get(name) : Astro.url.searchParams.get(name))),
+  );
+  if (!custom.ok) {
+    return Astro.redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
+  }
   if ((variant ? variant.stock : product.stock) <= 0) {
     return Astro.redirect(
       `/products/${product.slug}?error=${encodeURIComponent(t('checkout.error.soldOut', { produit: product.name }))}`,
@@ -86,6 +105,7 @@ if (isBuyNow && productPublicId) {
       imageKey: product.image_key,
       unitPriceCents: lineUnitPriceCents(product.price_cents, variant, extras),
       qty: 1,
+      customization: custom.entries,
     },
   ];
   weightLines = [{ product, variant, qty: 1 }];
@@ -94,6 +114,7 @@ if (isBuyNow && productPublicId) {
   for (const e of extras) {
     if (e.public_id) carry.push({ name: 'extra', value: e.public_id });
   }
+  for (const [id, value] of Object.entries(custom.values)) carry.push({ name: customFieldName(id), value });
 } else {
   const { lines: cartLines } = await resolveCart(env.DB, readCart(Astro.cookies));
   if (cartLines.length === 0) return Astro.redirect('/cart', 303);
@@ -121,6 +142,7 @@ if (isBuyNow && productPublicId) {
     imageKey: l.product.image_key,
     unitPriceCents: l.unitPriceCents,
     qty: l.qty,
+    customization: l.customization,
   }));
   weightLines = cartLines.map((l) => ({ product: l.product, variant: l.variant, qty: l.qty }));
   carry = [{ name: 'source', value: 'cart' }];
@@ -166,6 +188,9 @@ const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMe
             />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium">{l.name}</p>
+              {l.customization.map((entry) => (
+                <p class="break-words text-xs text-muted">{customizationText(entry)}</p>
+              ))}
               <p class="text-xs text-muted">{t('checkout.express.quantity', { count: l.qty })}</p>
             </div>
             <span class="tabular-nums">{formatPrice(l.unitPriceCents * l.qty)}</span>

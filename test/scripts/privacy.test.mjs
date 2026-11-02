@@ -94,6 +94,10 @@ const PEOPLE = [
   `INSERT INTO orders (provider_session_id, email, amount_total_cents, currency, status, public_id, ship_address)
      VALUES ('cs_test_2', '${OTHER}', 2500, 'eur', 'paid', 'ord_0000000002', '{"name":"Autre Cliente","city":"Nantes","country":"FR"}');`,
   `INSERT INTO order_guest_access (order_public_id, access_token) VALUES ('ord_0000000002', 'gat_other_token');`,
+  // A personalised line each (ticket #125): what was typed may name somebody.
+  `UPDATE order_items SET customization = '[{"label":"Nom à broder","value":"Jean"}]' WHERE order_id = 1;`,
+  `INSERT INTO order_items (order_id, product_id, name, price_cents, quantity, customization)
+     VALUES ((SELECT id FROM orders WHERE public_id = 'ord_0000000002'), 1, 'Lampe', 2500, 1, '[{"label":"Nom à broder","value":"Camille"}]');`,
   `INSERT INTO order_notifications (order_id, kind, state) VALUES ((SELECT id FROM orders WHERE public_id = 'ord_0000000002'), 'customer-receipt', 'pending');`,
 ];
 
@@ -382,9 +386,11 @@ describe('la commande, contre une vraie base', () => {
     ]);
     expect(document.tables.orders.rows[0].email).toBe('Client@Example.FR');
     expect(document.tables.orders.rows[0].ship_address).toContain('rue des Lilas');
+    expect(document.tables.order_items.rows[0].customization).toContain('Jean');
     // The other buyer's order is not in it, and neither is any credential.
     const text = JSON.stringify(document);
     expect(text).not.toContain('voisine@example.fr');
+    expect(text).not.toContain('Camille');
     expect(text).not.toContain('stl_secret');
     expect(text).not.toContain('gat_secret_token');
     expect(text).not.toContain('admin@boutique.fr');
@@ -446,6 +452,16 @@ describe('la commande, contre une vraie base', () => {
     expect(after.status).toBe(before.status);
     // And the pointer that lets the merchant ask Stripe for the same erasure.
     expect(after.provider_payment_id).toBe('pi_1');
+
+    // The line stays, without what the buyer had embroidered on it; the other
+    // buyer's text is theirs and stays.
+    expect(target.query('SELECT name, price_cents, customization FROM order_items WHERE order_id = 1')).toEqual([
+      { name: 'Lampe', price_cents: 4900, customization: null },
+    ]);
+    const other = target.query(
+      "SELECT customization FROM order_items WHERE order_id = (SELECT id FROM orders WHERE public_id = 'ord_0000000002')",
+    );
+    expect(other[0].customization).toContain('Camille');
   });
 
   it('révoque l’accès invité et efface ce que les journaux avaient recopié', () => {

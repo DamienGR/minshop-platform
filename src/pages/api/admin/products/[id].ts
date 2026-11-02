@@ -23,6 +23,11 @@ import {
   listVariants,
   listExtras,
 } from '../../../../features/products/variants';
+import {
+  applyCustomFieldForm,
+  listCustomFields,
+  validateCustomFieldForm,
+} from '../../../../features/products/customFields';
 import { validateImage } from '../../../../features/products/image';
 import { optimizeUpload } from '../../../../features/products/imageOptimize';
 import { uploadMedia } from '../../../../features/media/upload';
@@ -43,8 +48,9 @@ export const prerender = false;
 
 /**
  * The variants/extras editor submits public IDs (var_/xtra_ rows, pimg_ photo
- * choices) in its positionally-aligned arrays. applyVariantForm works on the
- * product's integer row ids, so translate IN PLACE here at the boundary —
+ * choices, cfld_ personalisation fields) in its positionally-aligned arrays.
+ * applyVariantForm and applyCustomFieldForm work on the product's integer row
+ * ids, so translate IN PLACE here at the boundary —
  * internal writes stay integer. Returns an error for a reference that does not
  * belong to this product (a stale or tampered form), rather than guessing.
  */
@@ -62,11 +68,14 @@ async function resolveVariantFormIds(
   const images = new Map(
     (await listProductImages(db, productId)).map((i) => [i.public_id ?? '', i.id]),
   );
+  const customFields = new Map(
+    (await listCustomFields(db, productId)).map((f) => [f.public_id ?? '', f.id]),
+  );
 
   const translate = (
     field: string,
     map: Map<string, number>,
-    kind: 'variant' | 'extra' | 'productImage',
+    kind: 'variant' | 'extra' | 'productImage' | 'customField',
   ): boolean => {
     const values = form.getAll(field).map((v) => String(v));
     if (values.length === 0) return true;
@@ -95,6 +104,9 @@ async function resolveVariantFormIds(
   }
   if (!translate('v_image', images, 'productImage')) {
     return t('admin.products.error.variantPhotoGone');
+  }
+  if (!translate('c_id', customFields, 'customField') || !translate('c_remove', customFields, 'customField')) {
+    return t('admin.products.error.customFieldGone');
   }
   return null;
 }
@@ -142,6 +154,9 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   // a half-saved edit behind the failure page.
   const badWeight = validateVariantWeights(form, weightUnit);
   if (badWeight) return fail(badWeight);
+  // Personalisation fields, judged before any write for the same reason.
+  const badField = validateCustomFieldForm(form);
+  if (badField) return fail(badField);
 
   // Public-ID → row-id translation for the variants editor, before any write.
   const badReference = await resolveVariantFormIds(form, env.DB, id);
@@ -212,6 +227,9 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   // validates every weight before it writes anything.
   const variantResult = await applyVariantForm(env.DB, id, form, parsed.data.currency, weightUnit);
   if (variantResult.error) return fail(variantResult.error);
+  // Personalisation fields, edited on the same form (ticket #125).
+  const fieldResult = await applyCustomFieldForm(env.DB, id, form);
+  if (fieldResult.error) return fail(fieldResult.error);
 
   // Re-embed for semantic search (no-op unless vector search is on).
   try {

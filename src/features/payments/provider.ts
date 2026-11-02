@@ -19,6 +19,9 @@ export interface CheckoutLineItem {
   quantity: number;
   /** Absolute, publicly-reachable image URL shown on the hosted checkout. */
   imageUrl?: string;
+  /** Shown under the name where the page has room for it: the line's
+   *  personalisation ("Nom à broder : Léa"), so the buyer reads it back. */
+  description?: string;
 }
 
 export interface ShippingOption {

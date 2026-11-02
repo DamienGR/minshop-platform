@@ -162,6 +162,22 @@ export interface StorefrontExtra {
 }
 
 /**
+ * A free-text field the buyer fills in — the name to embroider (ticket #125).
+ * `required` and `maxLength` become the input's attributes, which only spare a
+ * round trip: the server judges the text again, whatever the browser let by.
+ */
+export interface StorefrontCustomField {
+  /** The form field the server reads, `custom:<cfld_…>`. */
+  name: string;
+  /** DOM id, for the label and the help text to point at. */
+  inputId: string;
+  label: string;
+  help: string | null;
+  maxLength: number;
+  required: boolean;
+}
+
+/**
  * Everything the purchase controls need, with every decision already made.
  *
  * A template must not receive stock quantities or re-derive which buttons to
@@ -182,6 +198,7 @@ export interface ProductPurchaseModel {
   variantLabel: string | null;
   variants: StorefrontVariant[];
   extras: StorefrontExtra[];
+  customFields: StorefrontCustomField[];
 }
 
 /** Metadata the ROUTE emits. Never handed to a template: escaping and canonical

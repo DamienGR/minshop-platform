@@ -83,6 +83,7 @@ export const products = {
   'admin.products.error.fileType': 'Utilisez un fichier PDF, ZIP, EPUB, MP3, M4A ou texte brut.',
   'admin.products.error.variantGone': 'Une des variantes n’existe plus — rechargez la page et réessayez.',
   'admin.products.error.extraGone': 'Une des options supplémentaires n’existe plus — rechargez la page et réessayez.',
+  'admin.products.error.customFieldGone': 'Un des champs de personnalisation n’existe plus — rechargez la page et réessayez.',
   'admin.products.error.variantPhotoGone': 'Une des photos de variante n’existe plus — rechargez la page et réessayez.',
   'admin.products.error.chooseImage': 'Choisissez une image.',
   'admin.products.error.imageNotFound': 'Image introuvable.',
@@ -128,6 +129,25 @@ export const products = {
   'admin.products.extras.labelPlaceholder': 'par ex. Emballage cadeau',
   'admin.products.extras.priceDelta': 'Supplément de prix ({devise})',
   'admin.products.extras.add': 'Ajouter une option',
+
+  // ─── Personnalisation (ticket #125) ────────────────────────────────────────────
+  'admin.products.customization.title': 'Personnalisation',
+  'admin.products.customization.intro': 'Facultatif. Des champs de texte libre que l’acheteur remplit sur la fiche produit (par ex. un nom à broder). Le texte saisi suit la ligne dans le panier, puis dans la commande, l’e-mail de confirmation et l’avis de nouvelle commande.',
+  'admin.products.customization.heading': 'Champs de personnalisation',
+  'admin.products.customization.label': 'Libellé',
+  'admin.products.customization.labelPlaceholder': 'par ex. Nom à broder',
+  'admin.products.customization.help': 'Texte d’aide',
+  'admin.products.customization.helpPlaceholder': 'par ex. En lettres capitales',
+  'admin.products.customization.maxLength': 'Caractères au plus',
+  'admin.products.customization.required': 'Saisie',
+  'admin.products.customization.required.yes': 'Obligatoire',
+  'admin.products.customization.required.no': 'Facultative',
+  'admin.products.customization.add': 'Ajouter un champ',
+  'admin.products.customization.error.row': 'Champ de personnalisation {numero} : {erreur}',
+  'admin.products.customization.error.labelTooLong': 'le libellé dépasse {max} caractères.',
+  'admin.products.customization.error.helpTooLong': 'le texte d’aide dépasse {max} caractères.',
+  'admin.products.customization.error.maxLength': 'le nombre de caractères doit être un entier de 1 à {max}.',
+  'admin.products.customization.error.tooMany': 'Un produit demande au plus {max} champs de personnalisation.',
 
   // ─── Barre de filtres (FilterBar, partagée avec les commandes) ─────────────────
   'admin.filterBar.apply': 'Appliquer',

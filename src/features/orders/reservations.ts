@@ -7,6 +7,7 @@ import type { OrderItemInput, ShippingAddress } from './db';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
 import type { TermsConsent } from '../legal/terms';
 import type { RelayPoint } from '../shipping/relay.ts';
+import { customizationColumn, withCustomization } from '../products/customization.ts';
 import {
   DIGITAL_DELIVERY_RELEASE,
   lifecycleActive,
@@ -36,6 +37,8 @@ interface ReservationRow {
   status: ReservationStatus;
   expires_at: string;
   terminal_at: string | null;
+  /** One entry per line of `items`: what the buyer typed (migration 0049). */
+  customization: string | null;
 }
 
 interface StockTarget {
@@ -99,7 +102,9 @@ function parseItems(value: string): ReservationItem[] | null {
 
 async function getReservation(db: D1Database, publicId: string): Promise<ReservationRow | null> {
   return db
-    .prepare('SELECT public_id, items, status, expires_at, terminal_at FROM checkout_reservations WHERE public_id = ?')
+    .prepare(
+      'SELECT public_id, items, status, expires_at, terminal_at, customization FROM checkout_reservations WHERE public_id = ?',
+    )
     .bind(publicId)
     .first<ReservationRow>();
 }
@@ -179,17 +184,19 @@ async function releaseReservation(
   statements.push(
     db
       .prepare(
-        // A released reservation never settles, so its address goes with the
-        // hold. An expired or failed one still can — a paid webhook Stripe
-        // retried past the hold — and keeps it until the three-day sweep
-        // (sweepAbandonedGuestAccess) clears it.
+        // A released reservation never settles, so its address and the
+        // buyer's personalisation text go with the hold. An expired or failed
+        // one still can — a paid webhook Stripe retried past the hold — and
+        // keeps them until the three-day sweep (sweepAbandonedGuestAccess)
+        // clears them.
         `UPDATE checkout_reservations
             SET status = ?, terminal_at = CASE WHEN ? = 'released' THEN terminal_at ELSE datetime('now') END,
-                ship_address = CASE WHEN ? = 'released' THEN NULL ELSE ship_address END
+                ship_address = CASE WHEN ? = 'released' THEN NULL ELSE ship_address END,
+                customization = CASE WHEN ? = 'released' THEN NULL ELSE customization END
           WHERE public_id = ? AND status IN ('active', 'payment_pending')
           RETURNING public_id`,
       )
-      .bind(terminalStatus, terminalStatus, terminalStatus, publicId),
+      .bind(terminalStatus, terminalStatus, terminalStatus, terminalStatus, publicId),
   );
   const results = await db.batch<StockUpdateRow & { public_id?: string }>(statements);
   const released = Boolean(results.at(-1)?.results[0]);
@@ -349,6 +356,8 @@ export async function reserveInventory(
       ...item,
       publicId: item.publicId ?? (lifecycleActive(release) ? generatePublicId('orderItem') : undefined),
     }));
+    // The buyer's text rides in its own column, never in `items`.
+    const storedItems = claimedItems.map(({ customization: _text, ...item }) => item);
 
     // Transitional guard while historical order-item IDs are being registered.
     if (
@@ -361,15 +370,15 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address, customization)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
       )
       .bind(
         publicId,
-        JSON.stringify(claimedItems),
+        JSON.stringify(storedItems),
         paymentMethod,
         `+${ttlSeconds} seconds`,
         consent?.version ?? null,
@@ -377,6 +386,7 @@ export async function reserveInventory(
         vatRateBps && vatRateBps > 0 ? vatRateBps : null,
         relayPoint ? JSON.stringify(relayPoint) : null,
         shipAddress ? JSON.stringify(shipAddress) : null,
+        customizationColumn(claimedItems),
         ...checkValues,
       );
     // Release 1 writes no claims, so the decrement results sit at a different
@@ -455,7 +465,7 @@ export async function getSettlementReservation(
   const row = await getReservation(db, publicId);
   if (!row || !['active', 'payment_pending', 'expired', 'failed'].includes(row.status)) return null;
   const items = parseItems(row.items);
-  return items ? { items, status: row.status } : null;
+  return items ? { items: withCustomization(items, row.customization), status: row.status } : null;
 }
 
 /** Snapshot used by the unadvertised machine-readable status route. */

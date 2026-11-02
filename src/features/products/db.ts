@@ -457,6 +457,8 @@ export async function deleteProduct(db: D1Database, id: number): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id),
     db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id),
+    // Its personalisation fields go with it; an order line keeps its own copy.
+    db.prepare('DELETE FROM product_custom_fields WHERE product_id = ?').bind(id),
     db.prepare('DELETE FROM products WHERE id = ?').bind(id),
   ]);
 }

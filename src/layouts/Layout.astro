@@ -289,11 +289,17 @@ const shell = buildShellModel({
             return;
           if (location.pathname === '/cart') return;
           e.preventDefault();
-          await fetch('/api/cart', {
+          const response = await fetch('/api/cart', {
             method: 'POST',
             headers: { 'X-Partial': '1' },
             body: new URLSearchParams(new FormData(form)),
           });
+          // Refused with a reason (a personalisation text, a full cart): post
+          // again as a page, which shows it. submit() fires no second event.
+          if (response.status === 422) {
+            form.submit();
+            return;
+          }
           await refresh();
           open();
         });

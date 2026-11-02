@@ -28,6 +28,7 @@ import RefundPanel from '../../../features/refunds/RefundPanel.astro';
 import { formatWeight } from '../../../features/shipping/weight';
 import { parseOrderOrLegacyPublicId } from '../../../features/ids/publicId';
 import { t, type MessageKey } from '../../../features/i18n';
+import { customizationText, parseCustomization } from '../../../features/products/customization';
 
 // The route param is the order public ID — ord_ or a preserved legacy shape
 // (hex32/UUID). Numeric row ids are not accepted.
@@ -805,6 +806,10 @@ const willEmailCustomer =
               ) : (
                 it.name
               )}
+              {/* What the buyer typed — the text to embroider, engrave, print. */}
+              {parseCustomization(it.customization).map((entry) => (
+                <span class="mt-1 block break-words text-xs text-gray-600">{customizationText(entry)}</span>
+              ))}
             </td>
             <td data-label={t('admin.orders.detail.items.unitPrice')} class="py-3 pr-4 tabular-nums">{formatPrice(it.price_cents, order.currency)}</td>
             <td data-label={t('admin.orders.detail.items.quantity')} class="py-3 pr-4 tabular-nums">{it.quantity}</td>

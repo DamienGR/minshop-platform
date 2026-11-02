@@ -31,6 +31,7 @@ const rows = {
   } as Record<string, unknown>,
   variants: [] as Array<Record<string, unknown>>,
   extras: [] as Array<Record<string, unknown>>,
+  customFields: [] as Array<Record<string, unknown>>,
   images: [] as Array<Record<string, unknown>>,
 };
 
@@ -43,6 +44,7 @@ vi.mock('../../src/features/storefront/reads', () => ({
     categories: [],
     variants: rows.variants,
     extras: rows.extras,
+    customFields: rows.customFields,
     images: rows.images,
     related: [],
   })),
@@ -92,6 +94,18 @@ const extra = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const customField = (overrides: Record<string, unknown> = {}) => ({
+  id: 13,
+  public_id: 'cfld_ffffffffff',
+  product_id: 42,
+  label: 'Nom à broder',
+  help_text: 'En capitales',
+  max_length: 15,
+  required: 1,
+  position: 0,
+  ...overrides,
+});
+
 const galleryRow = (overrides: Record<string, unknown> = {}) => ({
   id: 11,
   public_id: 'pimg_dddddddddd',
@@ -105,6 +119,7 @@ beforeEach(() => {
   rows.product = { ...rows.product, public_id: 'prod_k7m2qx8vn6', active: 1 };
   rows.variants = [];
   rows.extras = [];
+  rows.customFields = [];
   rows.images = [];
 });
 
@@ -141,6 +156,41 @@ describe('loadProductDetail public-ID policy', () => {
     rows.extras = [extra({ public_id: null })];
 
     await expect(load()).rejects.toThrow(/extra row 9 has no public_id/);
+  });
+
+  it('hands the purchase form each personalisation field under its public ID', async () => {
+    rows.customFields = [customField(), customField({ id: 14, public_id: 'cfld_gggggggggg', required: 0, help_text: null })];
+
+    const loaded = await load();
+
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    // A field alone is an option: the one form must hold it for both buttons.
+    expect(loaded.purchase.hasOptions).toBe(true);
+    expect(loaded.purchase.customFields).toEqual([
+      {
+        name: 'custom:cfld_ffffffffff',
+        inputId: 'custom-cfld_ffffffffff',
+        label: 'Nom à broder',
+        help: 'En capitales',
+        maxLength: 15,
+        required: true,
+      },
+      {
+        name: 'custom:cfld_gggggggggg',
+        inputId: 'custom-cfld_gggggggggg',
+        label: 'Nom à broder',
+        help: null,
+        maxLength: 15,
+        required: false,
+      },
+    ]);
+  });
+
+  it('refuses a personalisation field without a public ID', async () => {
+    rows.customFields = [customField({ public_id: null })];
+
+    await expect(load()).rejects.toThrow(/custom field row 13 has no public_id/);
   });
 
   it('refuses a gallery image without a public ID', async () => {

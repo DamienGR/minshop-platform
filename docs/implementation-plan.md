@@ -66,7 +66,8 @@ périmètre certifié avec leur propre campagne (§13.3).
 - tarifs transporteur en temps réel ;
 - ERP, caisse ou comptabilité synchronisés ;
 - automatisation marketing ;
-- personnalisation produit complexe ;
+- personnalisation produit complexe ; un texte libre par champ est entré dans
+  l'offre après le pilote (ADR 0022) ;
 - recherche sémantique ;
 - Lightning, OpenNode et MCP.
 
@@ -3116,3 +3117,45 @@ Engagée en six lots, dans cet ordre :
    Damien, 2026-11-02) : elle se fera sur cette boutique, qui allume
    l'option pour sa recette. D'ici là, le lot 6 reste ouvert et aucune autre
    boutique réelle n'allume `features.relayPoints`.
+
+### 13.4 Les produits personnalisables
+
+Notée le 2026-11-02 (ticket #125) : l'acheteur saisit un texte libre dans des
+champs que le commerçant règle sur la fiche du produit (un libellé, un texte
+d'aide, un nombre maximal de caractères), et le texte se lit sur le produit,
+dans le panier et dans la commande. L'exemple du ticket est un sac brodé d'un
+prénom, « Nom à broder », 15 caractères au plus. La personnalisation complexe
+reste hors périmètre (§2.2) ;
+l'[ADR 0022](architecture/decisions/0022-produits-personnalisables.md),
+proposé avec le code, fait entrer ce cas simple dans l'offre. Aucun des jalons
+0 à 10 n'avance.
+
+Fait le 2026-11-02, en un seul lot :
+
+- jusqu'à cinq champs par produit, dans la section « Personnalisation » de sa
+  fiche d'administration, obligatoires par défaut, facultatifs au choix
+  (`product_custom_fields`, migration 0049, identifiant `cfld_`) ;
+- un texte d'une ligne, compté en caractères, refusé et non tronqué quand il
+  manque ou dépasse, sans supplément de prix (une broderie payante se vend par
+  une option à côté) : `src/features/products/customization.ts` ;
+- deux textes différents font deux lignes de panier, le texte voyageant dans
+  la clé de ligne du cookie ; le panier rejuge chaque ligne contre les champs
+  du moment ;
+- l'achat immédiat d'un produit à champs poste vers `/express`, puis
+  `/checkout` par un 307 : le texte n'est jamais dans une URL ni dans un
+  journal ;
+- le texte copié sur `order_items.customization`, le libellé du moment avec
+  lui, porté jusque-là par la réservation (`checkout_reservations`), qui
+  l'efface au règlement, à la libération, ou trois jours après un abandon ;
+  la page Lightning, qui règle à partir du paiement en attente, le lit sur la
+  réservation ;
+- lu sur la fiche produit, le panier et son tiroir, `/express`, `/checkout`,
+  la page de commande, la fiche commande, l'e-mail de confirmation, l'avis au
+  commerçant, et la page de Stripe en description de l'article ; l'API JSON
+  décrit les champs et lit `customization` sur chaque article ;
+- classé `erase` dans la carte des données personnelles : exporté à la
+  demande, vidé à l'effacement.
+
+Tenu par `test/integration/customization.mjs`. Reste à faire : la recette de
+la première boutique réelle qui vend un produit personnalisé, sur ce
+parcours.

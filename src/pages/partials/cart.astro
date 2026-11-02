@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { formatPrice } from '../../config';
 import { readCart, resolveCart, cartCount } from '../../features/cart/cart';
+import { customizationText } from '../../features/products/customization';
 import ProductImage from '../../features/products/ProductImage.astro';
 import { getSetting } from '../../features/settings/db';
 import { t } from '../../features/i18n';
@@ -56,6 +57,9 @@ const linesForm = 'drawer-lines';
                     {[l.variant?.label, ...l.extras.map((e) => e.label)].filter(Boolean).join(' · ')}
                   </span>
                 )}
+                {l.customization.map((entry) => (
+                  <span class="mt-0.5 break-words text-xs text-muted">{customizationText(entry)}</span>
+                ))}
                 <span class="mt-1 text-xs tabular-nums text-muted">
                   {formatPrice(l.unitPriceCents)}
                 </span>
