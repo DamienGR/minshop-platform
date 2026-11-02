@@ -1,6 +1,6 @@
 # ADR 0024 — La franchise en base de TVA
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #153 par Damien, le 2026-11-02)
 - **Date** : 2026-11-02
 - **Jalon** : après le pilote (plan §13.6) ; aucun des jalons 0 à 10. Lève, pour
   la première boutique réelle, la part « franchise en base » de la condition
@@ -126,8 +126,7 @@ de les lire.
   Stripe devait être le seul document, la question revient à l'expert-comptable
   (étape 11, § 3, question 1) ;
 - **les endroits de la mention sont à valider** par l'expert-comptable du
-  commerçant, avec les autres questions de la fiche de l'étape 11. D'où le
-  statut « Proposé » ;
+  commerçant, avec les autres questions de la fiche de l'étape 11 ;
 - le réglage « Taxes automatiques » (Stripe Tax) ne connaît pas le régime :
   l'ADR 0010 le garde éteint sur toute boutique TTC, et il le reste ici. Le
   bloquer en franchise est un changement de l'écran des réglages, hors de ce
