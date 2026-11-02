@@ -16,7 +16,10 @@ Deux parties, sur pilote-certif :
   recherche des points jusqu'aux deux étiquettes, aux e-mails, aux fiches et à
   l'export ; Stripe Tax sur une session sans adresse de livraison ; puis la
   staging détruite.
-- **B. La commande réelle**, qui **attend le feu vert de Damien**. En
+- **B. La commande réelle**, qui **attend le feu vert de Damien**. Passée
+  la partie A (2026-11-02, preuves pilote#50), Damien l'a **reportée à la
+  recette du premier site client** (décision du 2026-11-02) : elle se fera
+  sur cette boutique, pas sur pilote-certif. En
   production, Boxtal en production et Stripe live : une vraie commande en
   relais, son étiquette achetée, le colis déposé chez Mondial Relay puis retiré
   au point, l'URL de suivi vérifiée. Une heure le premier jour, le dépôt, puis
@@ -414,6 +417,10 @@ avant la partie B.
   tarif relais (`checkout.astro`), et `test/integration/checkout-relay.mjs`
   le tient pour la panne.
 
+  Pour voir ce repli sur la staging : le code postal `00000` et une ville
+  inventée qui ne ressemble à aucune autre. À la répétition, « Setouk » n'a
+  rendu aucun point Mondial Relay : Colissimo seul, sans erreur.
+
 ### A9. Détruire la staging (dix minutes)
 
 ```sh
@@ -470,6 +477,15 @@ Elle touche de vrais comptes : un paiement réel, une étiquette réelle que
 Boxtal prélève, un colis. **Elle attend le feu vert de Damien**, et un socle
 qui a passé la partie A : `v0.3.36`, qui corrige ce qu'elle a trouvé (le
 transporteur d'une étiquette relais, `other` au lieu de `mondialrelay`).
+
+**Reportée** (décision de Damien, 2026-11-02) : elle se fera à la recette du
+premier site client, sur sa production, et non sur pilote-certif. Ce jour-là,
+la suite se relit avec les noms de cette boutique : son dépôt (avec
+`features.relayPoints` dans son `store.config.ts`), son domaine, son entrée dans la flotte, son produit et son prix au lieu de
+l'« Article de certification » à 1,00 € ; les preuves vont dans son dépôt,
+sous `client/certification/points-relais/reel/`. Sur pilote-certif,
+l'interrupteur reste allumé (pilote#47) : sans clés Boxtal ni tarif relais en
+production, il ne change rien à ce que la boutique propose.
 
 ### B0. Ce qui doit exister
 
@@ -702,8 +718,11 @@ garde annoncé par Mondial Relay, ce que la page de suivi a montré à chaque
 
 ## Ce qui ferme le lot 6
 
-Les deux pull requests de preuves du pilote vertes et fusionnées, données dans
-le thread. Puis, dans le socle : le lot 6 coché au plan, le tag qui a passé la
+Les deux pull requests de preuves vertes et fusionnées, données dans le
+thread : celle de la partie A l'est (pilote#50) ; celle de la partie B ira
+dans le dépôt du premier site client, à sa recette (reportée le 2026-11-02,
+voir B). Jusque-là, le lot reste ouvert. Puis, dans le socle : le lot 6
+coché au plan, le tag qui a passé la
 campagne nommé à côté de `features.relayPoints` (`src/store.config.example.ts`
 et le §13.3), le délai de garde de Mondial Relay dans le runbook. À partir de
 ce tag, une boutique qui allume l'option hérite de la certification du socle
