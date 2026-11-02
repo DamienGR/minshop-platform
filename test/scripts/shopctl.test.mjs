@@ -705,6 +705,8 @@ commerce:
   market: FR
   pricesIncludeTax: true
   checkoutMode: guest
+  # Un vendeur en franchise en base (art. 293 B du CGI) remplace cette ligne
+  # par \`vatExemption: franchise\`, et le dit aussi dans src/store.config.ts (ADR 0024).
   defaultVatRate: 20
   # La validation comptable du jalon 3 n'a pas eu lieu pour cette boutique :
   # la stratégie de facturation reste en attente plutôt que par défaut.
@@ -846,6 +848,41 @@ theme:
     }
     expect(JSON.parse(readFileSync(join(shop, 'theme.config.json'), 'utf8'))).toEqual({ theme: 'boutique-du-port' });
     expect(readFileSync(join(shop, 'wrangler.jsonc'), 'utf8')).toContain('"minshop-boutique-du-port"');
+  });
+
+  // Ticket #148: the manifest and src/store.config.ts both describe the VAT,
+  // and a shop in franchise en base whose build still says nothing would charge
+  // the 20 % default. The shop's own gate is what refuses it.
+  it('refuses a VAT its manifest does not declare, and passes once both agree', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], work);
+    expect(result.status, result.stderr).toBe(0);
+    const shop = join(work, 'shop-boutique-du-port');
+    const gate = () => spawnSync('node', ['scripts/check-manifest.mjs'], { cwd: shop, encoding: 'utf8' });
+
+    const config = join(shop, 'src/store.config.ts');
+    writeFileSync(
+      config,
+      readFileSync(config, 'utf8').replace(
+        'export const storeOverrides: DeepPartial<SiteConfig> = {};',
+        "export const storeOverrides: DeepPartial<SiteConfig> = { legal: { vatExemption: 'franchise' } };",
+      ),
+    );
+    let run = gate();
+    expect(run.status).toBe(1);
+    expect(run.stderr).toMatch(/sets legal\.vatExemption "franchise" but client\/client\.yaml declares commerce\.defaultVatRate 20/);
+
+    const manifest = join(shop, 'client/client.yaml');
+    writeFileSync(manifest, readFileSync(manifest, 'utf8').replace(/defaultVatRate: 20/, 'vatExemption: franchise'));
+    run = gate();
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toContain('sells at the manifest\'s VAT (exemption franchise)');
+
+    // And the other way round: the manifest exempt, the build back at 20 %.
+    writeFileSync(config, readFileSync(config, 'utf8').replace("{ legal: { vatExemption: 'franchise' } }", '{}'));
+    run = gate();
+    expect(run.status).toBe(1);
+    expect(run.stderr).toMatch(/declares commerce\.vatExemption "franchise" but src\/store\.config\.ts sells at 20 %/);
   });
 
   it('emits one JSON document on stdout and nothing else', () => {

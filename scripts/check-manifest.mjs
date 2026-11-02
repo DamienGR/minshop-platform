@@ -30,6 +30,7 @@ import {
   resourceNames,
 } from './manifest.mjs';
 import { classifyPath } from './path-ownership.mjs';
+import { STORE_CONFIG, builtVat, vatDisagreement } from './store-vat.mjs';
 import { CONFIG_FILE, resolveConfiguredTheme } from './themes.mjs';
 
 const args = process.argv.slice(2);
@@ -123,6 +124,30 @@ function checkThemeSelection(entries) {
   return { ok: true, theme: configured };
 }
 
+/**
+ * In a shop, the manifest is the agency's record of the VAT and
+ * src/store.config.ts is what the Worker computes with (ADR 0010, ADR 0024).
+ * Same pattern as the theme: the gate makes the second one follow the first.
+ * Only in a shop, for the same reason — the core's witnesses are fixtures with
+ * no build of their own.
+ */
+async function checkVatSelection(entries) {
+  if (!isShopRepository(root)) return null;
+  const own = entries.find(({ file }) => file === 'client/client.yaml');
+  if (!own) return null;
+  let built;
+  try {
+    built = await builtVat(root);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `${STORE_CONFIG} could not be read outside the Worker (${error.message}), so the VAT the build sells under cannot be compared with the manifest. Keep that file to plain values, with type-only imports.`,
+    };
+  }
+  const disagreement = vatDisagreement(own.manifest, built);
+  return disagreement ? { ok: false, message: disagreement, vat: built } : { ok: true, vat: built };
+}
+
 const core = coreVersion(root);
 const files = discoverManifests(root);
 const loaded = files.map((file) => loadManifest(file, { root, core }));
@@ -131,10 +156,16 @@ const collisions = detectFleetCollisions(valid);
 const schema = checkSchemaFile();
 const leaks = findClientLeaks(valid, coreText());
 const themeSelection = checkThemeSelection(valid);
+const vatSelection = await checkVatSelection(valid);
 
 const failed = loaded.filter((entry) => entry.errors.length > 0);
 const ok =
-  failed.length === 0 && collisions.length === 0 && schema.ok && leaks.length === 0 && (themeSelection?.ok ?? true);
+  failed.length === 0 &&
+  collisions.length === 0 &&
+  schema.ok &&
+  leaks.length === 0 &&
+  (themeSelection?.ok ?? true) &&
+  (vatSelection?.ok ?? true);
 
 if (asJson) {
   console.log(
@@ -155,6 +186,7 @@ if (asJson) {
         collisions,
         coreNeutrality: { ok: leaks.length === 0, findings: leaks },
         themeSelection,
+        vatSelection,
       },
       null,
       2,
@@ -194,6 +226,12 @@ if (leaks.length === 0) console.log('✓ no client value written into a core fil
 
 if (themeSelection && !themeSelection.ok) console.error(`✗ ${themeSelection.message}`);
 else if (themeSelection) console.log(`✓ ${CONFIG_FILE} follows the manifest (${themeSelection.theme})`);
+
+if (vatSelection && !vatSelection.ok) console.error(`✗ ${vatSelection.message}`);
+else if (vatSelection) {
+  const terms = vatSelection.vat.exemption ? `exemption ${vatSelection.vat.exemption}` : `${vatSelection.vat.rateBps / 100} %`;
+  console.log(`✓ ${STORE_CONFIG} sells at the manifest's VAT (${terms})`);
+}
 
 if (schema.wrote) console.log(`✓ ${SCHEMA_FILE} regenerated`);
 else if (!schema.ok) console.error(`✗ ${schema.message}`);

@@ -24,8 +24,16 @@ the browser gate and local development render, none of which reach an account.
 `x-staging` colliding with the staging family of `x` is a gate failure rather
 than a discovery.
 
-Every field a shop DECIDES is required. Six of the seven `optional` ones under
-`cloudflare` are values a shop LEARNS: `accountId` exists only after
+Every field a shop DECIDES is required, with one pair as the exception:
+`commerce.defaultVatRate` and `commerce.vatExemption`, of which a shop declares
+exactly one — the rate it charges, or `franchise` for a seller under art. 293 B
+du CGI who charges none (rule `vat-rate-or-exemption`, ADR 0024). Each is
+optional because the other stands in for it. In a shop, `config:validate` also
+reads `src/store.config.ts` (`scripts/store-vat.mjs`) and refuses a build whose
+`legal.vatRateBps` / `legal.vatExemption` say something else than the manifest,
+as it refuses a `theme.config.json` naming another design.
+
+Six of the seven `optional` fields under `cloudflare` are values a shop LEARNS: `accountId` exists only after
 provisioning has run, `productionAccountId` only once the client's own account
 does (ADR 0015), `imagesDomain` only if a domain was ever attached to
 production's images bucket (only the production render names it, and a

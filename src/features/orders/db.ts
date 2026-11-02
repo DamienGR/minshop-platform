@@ -4,7 +4,7 @@ import {
   type StockTransitionPurger,
 } from '../products/stock.ts';
 import { generatePublicId } from '../ids/publicId.ts';
-import { vatIncludedCents } from '../legal/vat.ts';
+import { orderVat } from '../legal/vat.ts';
 import type { DeliveryMethod } from '../shipping/calculator.ts';
 import { serializeCustomization, withCustomization, type CustomizationEntry } from '../products/customization.ts';
 
@@ -64,6 +64,9 @@ export interface Order {
   vat_rate_bps: number | null;
   /** VAT contained in amount_total_cents (prices are TTC), not added to it. */
   vat_amount_cents: number | null;
+  /** Why the order carries no VAT — 'franchise' (art. 293 B du CGI, ADR 0024)
+   *  — or null. An exempt order records a rate and an amount of 0. */
+  vat_exemption: string | null;
   created_at: string;
 }
 
@@ -511,13 +514,14 @@ export async function recordPaidOrder(
   const carried = o.reservationId
     ? await db
         .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address, customization FROM checkout_reservations WHERE public_id = ?',
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization FROM checkout_reservations WHERE public_id = ?',
         )
         .bind(o.reservationId)
         .first<{
           terms_version: string | null;
           terms_accepted_at: string | null;
           vat_rate_bps: number | null;
+          vat_exemption: string | null;
           relay_point: string | null;
           ship_address: string | null;
           customization: string | null;
@@ -542,22 +546,26 @@ export async function recordPaidOrder(
     o.providerPaymentId ?? null,
   ] as const;
   const settlementStatuses = "('active', 'payment_pending', 'expired', 'failed')";
-  const vatRateBps = carried?.vat_rate_bps ?? null;
+  // Taken on the total the buyer actually paid, not summed per line; an exempt
+  // reservation records 0 and its exemption (ADR 0024).
+  const vat = carried
+    ? orderVat(o.amountTotalCents, { rateBps: carried.vat_rate_bps, exemption: carried.vat_exemption })
+    : null;
   const carriedValues = [
     carried?.terms_version ?? null,
     carried?.terms_accepted_at ?? null,
-    vatRateBps,
-    // Taken on the total the buyer actually paid, not summed per line.
-    vatRateBps ? vatIncludedCents(o.amountTotalCents, vatRateBps) : null,
+    vat?.rateBps ?? null,
+    vat?.amountCents ?? null,
+    vat?.exemption ?? null,
     carried?.relay_point ?? null,
   ] as const;
   const orderColumns =
-    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, relay_point';
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point';
   const insertOrder = o.reservationId
     ? db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -569,7 +577,7 @@ export async function recordPaidOrder(
     : db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

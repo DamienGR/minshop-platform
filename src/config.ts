@@ -3,6 +3,7 @@ import { storeOverrides } from './store.config';
 import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE } from './features/i18n/locale.ts';
 import { formatDateTime } from './features/i18n/format.ts';
 import type { ShippingConfig } from './features/shipping/calculator';
+import { DEFAULT_VAT_RATE_BPS, type VatExemption } from './features/legal/vat.ts';
 
 /**
  * Site-wide settings SCHEMA + DEFAULTS. This file is upstream-owned: to change
@@ -75,13 +76,25 @@ export interface SiteConfig {
      * One rate for the whole catalogue, not one per product — see ADR 0010.
      * The agency's record of it is `commerce.defaultVatRate` in the client
      * manifest; this is the value the running store computes with, and the two
-     * must agree.
+     * must agree — `npm run config:validate` refuses a shop where they do not.
      *
      * Prices are TTC, so this describes the tax ALREADY INSIDE a price, never a
      * surcharge. 0 disables the split (an order then records no VAT rather than
      * a fabricated one).
      */
     vatRateBps: number;
+    /**
+     * Why the shop charges no VAT at all, or null (ADR 0024). `'franchise'` is
+     * the franchise en base of art. 293 B du CGI: the rate above is then
+     * ignored, every order records a rate and an amount of 0 with the
+     * exemption, and the order page and its e-mails print « TVA non
+     * applicable, art. 293 B du CGI ».
+     *
+     * The manifest's `commerce.vatExemption` is the agency's record of it, as
+     * `commerce.defaultVatRate` is of the rate; `npm run config:validate`
+     * refuses a shop whose manifest and build disagree on either.
+     */
+    vatExemption: VatExemption | null;
   };
   /**
    * Downscale + recompress uploaded product images to WebP on upload via the
@@ -247,7 +260,8 @@ function defaultConfig(): SiteConfig {
     legal: {
       termsSlug: 'conditions-generales-de-vente',
       termsVersion: '1', // bump on every change a customer would have to re-accept
-      vatRateBps: 2000, // 20 % — the French standard rate
+      vatRateBps: DEFAULT_VAT_RATE_BPS, // 20 % — the French standard rate
+      vatExemption: null, // 'franchise' for a seller under art. 293 B du CGI
     },
     images: {
       optimizeOnUpload: false, // set true after enabling Transformations (free ≤5k/mo)

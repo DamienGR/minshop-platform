@@ -107,6 +107,10 @@ export function buildManifest({ slug, displayName, domain, email, theme, coreVer
 const NOTES = {
   coreVersion: ['Version du socle clonée. Mise à jour par `shopctl core upgrade`.'],
   'client.locale': ['Fixés par le périmètre certifié (plan §2.1) : une seule valeur possible.'],
+  'commerce.defaultVatRate': [
+    'Un vendeur en franchise en base (art. 293 B du CGI) remplace cette ligne',
+    'par `vatExemption: franchise`, et le dit aussi dans src/store.config.ts (ADR 0024).',
+  ],
   'commerce.invoiceStrategy': [
     'La validation comptable du jalon 3 n\'a pas eu lieu pour cette boutique :',
     'la stratégie de facturation reste en attente plutôt que par défaut.',

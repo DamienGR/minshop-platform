@@ -1,6 +1,7 @@
 # ADR 0010 — TVA, facturation et consentement aux CGV
 
-- **Statut** : Accepté, sous réserve de validation externe (voir Conséquences)
+- **Statut** : Accepté, sous réserve de validation externe (voir Conséquences) ;
+  amendé pour la franchise en base par l'[ADR 0024](0024-franchise-en-base-de-tva.md)
 - **Date** : 2026-08-30
 - **Jalon** : 3
 

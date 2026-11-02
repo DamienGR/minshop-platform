@@ -3,6 +3,7 @@ import { Miniflare } from 'miniflare';
 import { readTermsGate, consentFor, isAcceptance } from '../../src/features/legal/terms.ts';
 import { reserveInventory } from '../../src/features/orders/reservations.ts';
 import { recordPaidOrder, getOrderByPublicId } from '../../src/features/orders/db.ts';
+import { vatTerms } from '../../src/features/legal/vat.ts';
 
 /**
  * The terms-of-sale consent, end to end against real D1.
@@ -39,8 +40,8 @@ try {
        payment_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
        expires_at TEXT NOT NULL, terminal_at TEXT,
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-       terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, relay_point TEXT, ship_address TEXT,
-       customization TEXT)`,
+       terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, vat_exemption TEXT, relay_point TEXT,
+       ship_address TEXT, customization TEXT)`,
     `CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_session_id TEXT UNIQUE,
        public_id TEXT UNIQUE, email TEXT, amount_total_cents INTEGER NOT NULL,
        shipping_cents INTEGER NOT NULL DEFAULT 0, shipping_label TEXT,
@@ -49,7 +50,7 @@ try {
        currency TEXT NOT NULL, ship_address TEXT, status TEXT NOT NULL,
        payment_method TEXT, settlement_token TEXT, provider_payment_id TEXT,
        terms_version TEXT, terms_accepted_at TEXT,
-       vat_rate_bps INTEGER, vat_amount_cents INTEGER, relay_point TEXT,
+       vat_rate_bps INTEGER, vat_amount_cents INTEGER, vat_exemption TEXT, relay_point TEXT,
        created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     `CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL,
        product_id INTEGER, variant_id INTEGER, public_id TEXT, name TEXT NOT NULL,
@@ -102,7 +103,7 @@ try {
   assert.ok(consent, 'a ticked box produces a consent record');
   const items = [{ productId: 1, variantId: null, quantity: 2, name: 'Article', priceCents: 1000 }];
   assert.ok(
-    await reserveInventory(db, 'ord_termsaccept', items, 900, 'demo', undefined, undefined, consent, 2000),
+    await reserveInventory(db, 'ord_termsaccept', items, 900, 'demo', undefined, undefined, consent, vatTerms({ vatRateBps: 2000, vatExemption: null })),
     'reservation succeeds',
   );
   const reservation = await db
@@ -130,12 +131,13 @@ try {
   // paid: 20,00 € TTC at 20 % contains 3,33 €.
   assert.equal(paid.vat_rate_bps, 2000, 'the rate in force at purchase is kept');
   assert.equal(paid.vat_amount_cents, 333, 'the split is computed on the order total');
+  assert.equal(paid.vat_exemption, null, 'a liable shop records no exemption');
 
   // An order placed while the gate was open records no consent rather than a
   // fabricated one. Null is the honest answer to "what did they accept?".
   assert.equal(consentFor(draftGate, false), null);
   assert.ok(
-    await reserveInventory(db, 'ord_noconsent', items, 900, 'demo', undefined, undefined, null, 0),
+    await reserveInventory(db, 'ord_noconsent', items, 900, 'demo', undefined, undefined, null, vatTerms({ vatRateBps: 0, vatExemption: null })),
     'reservation succeeds without consent when the gate is open',
   );
   await recordPaidOrder(db, {
@@ -154,8 +156,40 @@ try {
   // A shop with no configured rate records no split rather than a made-up one.
   assert.equal(openGateOrder.vat_rate_bps, null);
   assert.equal(openGateOrder.vat_amount_cents, null);
+  assert.equal(openGateOrder.vat_exemption, null);
 
-  console.log('✓ terms consent + VAT split: draft gate open, published gate closed, version and rate recorded on the order');
+  // A seller in franchise en base (ADR 0024): whatever rate the config still
+  // carries, the reservation records the exemption, and the order a rate and an
+  // amount of 0 beside it — "there was no VAT", which the CSV tells apart from
+  // the null above.
+  assert.ok(
+    await reserveInventory(db, 'ord_franchise', items, 900, 'demo', undefined, undefined, consent, vatTerms({ vatRateBps: 2000, vatExemption: 'franchise' })),
+    'reservation succeeds for a shop in franchise',
+  );
+  const exemptHold = await db
+    .prepare('SELECT vat_rate_bps, vat_exemption FROM checkout_reservations WHERE public_id = ?')
+    .bind('ord_franchise')
+    .first();
+  assert.deepEqual({ ...exemptHold }, { vat_rate_bps: 0, vat_exemption: 'franchise' });
+  // Settlement reads the reservation, never the configuration: a seller who
+  // leaves the franchise before the webhook arrives still records the terms
+  // the buyer agreed to.
+  await recordPaidOrder(db, {
+    providerSessionId: 'sess_franchise',
+    publicId: 'ord_franchise',
+    reservationId: 'ord_franchise',
+    email: 'acheteur@exemple.fr',
+    amountTotalCents: 2000,
+    currency: 'eur',
+    paymentMethod: 'demo',
+    items: [{ productId: 1, variantId: null, name: 'Article', priceCents: 1000, quantity: 2 }],
+  });
+  const exempt = await getOrderByPublicId(db, 'ord_franchise');
+  assert.equal(exempt.vat_rate_bps, 0, 'an exempt order records a zero rate, not an unknown one');
+  assert.equal(exempt.vat_amount_cents, 0);
+  assert.equal(exempt.vat_exemption, 'franchise', 'the order says why it carries no VAT');
+
+  console.log('✓ terms consent + VAT split: draft gate open, published gate closed, version and rate recorded on the order, franchise en base recorded as an exemption');
 } finally {
   await mf.dispose();
 }

@@ -33,6 +33,14 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   //
   // legal: { termsVersion: '2', vatRateBps: 2000 },
   //
+  // A seller in franchise en base de TVA (art. 293 B du CGI, ADR 0024) charges
+  // none: every order then records no VAT and its page and e-mails say « TVA
+  // non applicable, art. 293 B du CGI ». The manifest declares the same thing
+  // (`commerce.vatExemption: franchise` in place of `defaultVatRate`), and
+  // `npm run config:validate` refuses the two when they disagree.
+  //
+  // legal: { vatExemption: 'franchise' },
+  //
   // Shipping (zones, rates, weight bands, free-over thresholds) is managed in
   // Admin → Livraison. The block that used to live here is only the default for a
   // brand-new store; editing it after the first Admin save has no effect.

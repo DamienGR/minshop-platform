@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { netOfVatCents, vatIncludedCents, vatRateBps } from './vat';
+import {
+  DEFAULT_VAT_RATE_BPS,
+  isVatExemption,
+  netOfVatCents,
+  orderVat,
+  orderVatExemption,
+  vatIncludedCents,
+  vatRateBps,
+  vatTerms,
+} from './vat';
 
 const NORMAL = vatRateBps(20);
 const REDUCED = vatRateBps(5.5);
@@ -57,5 +66,45 @@ describe('VAT inside a tax-inclusive total', () => {
     expect(vatIncludedCents(1000, 0)).toBe(0);
     expect(vatIncludedCents(-1000, NORMAL)).toBe(0);
     expect(vatIncludedCents(Number.NaN, NORMAL)).toBe(0);
+  });
+});
+
+describe('the franchise en base de TVA (ADR 0024)', () => {
+  it('knows the one exemption the French B2C scope sells under', () => {
+    expect(isVatExemption('franchise')).toBe(true);
+    for (const other of ['Franchise', 'export', '', null, undefined, 0]) expect(isVatExemption(other)).toBe(false);
+  });
+
+  it('defaults to the standard rate', () => {
+    expect(DEFAULT_VAT_RATE_BPS).toBe(vatRateBps(20));
+  });
+
+  it('lets the exemption win over any rate the configuration still carries', () => {
+    // A shop in franchise that never touched `vatRateBps` still inherits 2000:
+    // it must never compute 20 % because of a default (ticket #148).
+    expect(vatTerms({ vatRateBps: DEFAULT_VAT_RATE_BPS, vatExemption: 'franchise' })).toEqual({ rateBps: 0, exemption: 'franchise' });
+    expect(vatTerms({ vatRateBps: NORMAL, vatExemption: null })).toEqual({ rateBps: NORMAL, exemption: null });
+    // A rate of 0 without an exemption is a shop that configured nothing, not
+    // an exempt one.
+    expect(vatTerms({ vatRateBps: 0, vatExemption: null })).toEqual({ rateBps: null, exemption: null });
+  });
+
+  it('records 0 with the exemption, and null when nothing is known', () => {
+    expect(orderVat(12_000, { rateBps: 0, exemption: 'franchise' })).toEqual({ rateBps: 0, amountCents: 0, exemption: 'franchise' });
+    // Even a rate carried beside it: the exemption is the fact.
+    expect(orderVat(12_000, { rateBps: NORMAL, exemption: 'franchise' })).toEqual({ rateBps: 0, amountCents: 0, exemption: 'franchise' });
+    expect(orderVat(12_000, { rateBps: NORMAL, exemption: null })).toEqual({ rateBps: NORMAL, amountCents: 2000, exemption: null });
+    expect(orderVat(12_000, { rateBps: null, exemption: null })).toEqual({ rateBps: null, amountCents: null, exemption: null });
+    expect(orderVat(12_000, null)).toEqual({ rateBps: null, amountCents: null, exemption: null });
+    // A value a later core wrote and this one does not know is not a mention
+    // to print, nor a rate to invent.
+    expect(orderVat(12_000, { rateBps: 0, exemption: 'export' })).toEqual({ rateBps: null, amountCents: null, exemption: null });
+  });
+
+  it('reads the exemption a stored order was sold under', () => {
+    expect(orderVatExemption({ vat_exemption: 'franchise' })).toBe('franchise');
+    expect(orderVatExemption({ vat_exemption: null })).toBeNull();
+    expect(orderVatExemption({})).toBeNull();
+    expect(orderVatExemption({ vat_exemption: 'export' })).toBeNull();
   });
 });

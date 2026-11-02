@@ -828,13 +828,20 @@ if [[ "$accepted_status" != "200" ]]; then
   exit 1
 fi
 accepted_reservation="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
-  --command "SELECT terms_version, vat_rate_bps FROM checkout_reservations ORDER BY rowid DESC LIMIT 1;" |
+  --command "SELECT terms_version, vat_rate_bps, vat_exemption FROM checkout_reservations ORDER BY rowid DESC LIMIT 1;" |
   node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s)[0].results[0])))')"
+# The terms THIS build sells under, read the way the manifest gate reads them:
+# 20 % in the core, whatever a shop configures in its own store.config.ts —
+# a shop in franchise en base records a rate of 0 and its exemption (ADR 0024).
+built_vat="$(node scripts/store-vat.mjs)"
 node -e '
   const r = JSON.parse(process.argv[1]);
+  const built = JSON.parse(process.argv[2]);
   if (!r.terms_version) throw new Error("the accepted checkout recorded no terms version");
-  if (r.vat_rate_bps !== 2000) throw new Error(`expected the 20% rate in basis points, got ${r.vat_rate_bps}`);
-' "$accepted_reservation"
+  const rate = built.exemption ? 0 : built.rateBps;
+  if (r.vat_rate_bps !== rate) throw new Error(`expected the configured rate ${rate} in basis points, got ${r.vat_rate_bps}`);
+  if (r.vat_exemption !== built.exemption) throw new Error(`expected the exemption ${built.exemption}, got ${r.vat_exemption}`);
+' "$accepted_reservation" "$built_vat"
 # The cart's own checkbox, through the in-app step. The acceptance given on the
 # cart rides the redirect to /checkout, which the demo rail submits by itself:
 # it used to refuse, one click after the shopper accepted, for want of the box.
@@ -960,6 +967,17 @@ if [[ "$confirmation" != *"Sample Tee"* ]]; then
   echo "D1 integration failed: committed order was not readable via its guest token" >&2
   exit 1
 fi
+# Under its total, the page says how the order was taxed: its VAT split, or
+# for a shop in franchise en base the mention the tax code requires (ADR 0024).
+node -e '
+  const html = require("fs").readFileSync(0, "utf8");
+  const built = JSON.parse(process.argv[1]);
+  const mention = html.includes("TVA non applicable, art. 293 B du CGI");
+  const split = html.includes("dont TVA");
+  if (built.exemption ? !mention || split : mention || !split) {
+    throw new Error(`the order page does not read as ${built.exemption ?? "liable"}: mention ${mention}, VAT line ${split}`);
+  }
+' "$built_vat" <<<"$confirmation"
 
 bare_status="$(curl --max-time 30 --silent --output /dev/null --write-out '%{http_code}' \
   "http://127.0.0.1:$test_port/order/$order_id")"

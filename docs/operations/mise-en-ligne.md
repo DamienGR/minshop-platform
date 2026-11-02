@@ -193,9 +193,16 @@ voient les clients. Ensuite, dans Admin → Réglages :
   [fiche de l'étape 11](../certification/etape-11-commandes.md), et
   `commerce.invoiceStrategy` qui en dit le résultat : un manifeste qui porte
   encore `pending-validation` ne vend pas ([ADR 0010](../architecture/decisions/0010-tva-facturation-et-consentement.md)).
-  Une facture numérotée ou la franchise en base, si la réponse les demande,
-  se construisent dans le socle avant la première vente (la certification
-  les a reportées à la première boutique réelle).
+  Une facture numérotée, si la réponse la demande, se construit dans le socle
+  avant la première vente (la certification l'a reportée à la première
+  boutique réelle). La **franchise en base** (art. 293 B du CGI) se déclare
+  en deux lignes ([ADR 0024](../architecture/decisions/0024-franchise-en-base-de-tva.md)) :
+  `commerce.vatExemption: franchise` au manifeste à la place de
+  `defaultVatRate`, `legal: { vatExemption: 'franchise' }` dans
+  `src/store.config.ts` (`npm run config:validate` refuse l'un sans l'autre),
+  et la mention « TVA non applicable, art. 293 B du CGI » écrite aussi par le
+  commerçant dans l'article « Prix » de ses CGV : le socle la porte sur la
+  page de commande et les e-mails, pas dans le texte des CGV.
 
 Les contenus sont saisis sur B, jamais recopiés depuis A (ADR 0015) : le
 catalogue par l'administration, ou par `shopctl catalog import --env production`

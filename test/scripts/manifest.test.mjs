@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 // Deliberately .mjs, not .ts, for the same reason as the other tests in this
 // directory: tsconfig's `types` is pinned to the Cloudflare types, so node
 // builtins have no declarations and a .ts file here fails `astro check`.
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -31,6 +31,7 @@ import {
   wranglerSubstitutions,
 } from '../../scripts/manifest.mjs';
 import { isValidThemeId } from '../../scripts/themes.mjs';
+import { builtVat, vatDisagreement } from '../../scripts/store-vat.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
 const fixture = (slug) => `test/fixtures/clients/${slug}/client.yaml`;
@@ -160,6 +161,8 @@ describe('manifest schema', () => {
     ['tax-exclusive prices on the French market', (m) => { m.commerce.pricesIncludeTax = false; }, 'french-prices-include-tax'],
     ['an out-of-scope feature', (m) => { m.features.semanticSearch = true; }, 'out-of-scope-features-off'],
     ['a platform subdomain in production', (m) => { m.cloudflare.productionDomain = 'pilot-fr.workers.dev'; }, 'production-domain-is-custom'],
+    ['a VAT rate beside the franchise en base', (m) => { m.commerce.vatExemption = 'franchise'; }, 'vat-rate-or-exemption'],
+    ['neither a VAT rate nor an exemption', (m) => { delete m.commerce.defaultVatRate; }, 'vat-rate-or-exemption'],
   ])('refuses %s', (_label, mutate, rule) => {
     const m = base();
     mutate(m);
@@ -627,7 +630,14 @@ describe('published JSON Schema', () => {
     // preview. `saasZone` is a hosting choice, not a fact to learn: a shop on
     // its merchant's own account, or inside the agency's zone, has none to
     // declare (ADR 0019).
+    //
+    // `defaultVatRate` and `vatExemption` are the one pair: a shop DECIDES its
+    // VAT, and says it with exactly one of the two (rule `vat-rate-or-exemption`,
+    // ADR 0024). Each is optional because the other stands in for it; requiring
+    // the rate of a seller who charges none would be the placeholder above.
     expect(optional).toEqual([
+      'commerce.defaultVatRate',
+      'commerce.vatExemption',
       'cloudflare.accountId',
       'cloudflare.productionAccountId',
       'cloudflare.saasZone',
@@ -730,6 +740,79 @@ describe('reserved slugs', () => {
 
   it('is sorted, so a reader can find a name in it', () => {
     expect(RESERVED_SLUGS).toEqual([...RESERVED_SLUGS].sort());
+  });
+});
+
+describe('the franchise en base in the manifest (ADR 0024)', () => {
+  const franchise = () => {
+    const m = base();
+    delete m.commerce.defaultVatRate;
+    m.commerce.vatExemption = 'franchise';
+    return m;
+  };
+
+  it('accepts the exemption in place of the rate, with no new schema version', () => {
+    // Every manifest released before it still validates unchanged: the rate
+    // stays the way a liable shop says what it charges.
+    expect(validateManifest(franchise()).ok, messages(validateManifest(franchise()))).toBe(true);
+    expect(validateManifest(base()).ok).toBe(true);
+    expect(SCHEMA_VERSION).toBe(1);
+  });
+
+  it('knows one exemption, and refuses a rate of zero', () => {
+    const typo = franchise();
+    typo.commerce.vatExemption = 'micro';
+    expect(validateManifest(typo).errors).toContainEqual(expect.objectContaining({ path: 'commerce.vatExemption' }));
+    // An exemption is not a rate: 0 % is how a seller would mistype the
+    // franchise and lose its mention.
+    const zero = base();
+    zero.commerce.defaultVatRate = 0;
+    expect(validateManifest(zero).errors).toContainEqual(expect.objectContaining({ path: 'commerce.defaultVatRate' }));
+  });
+});
+
+describe('the VAT a build sells under, against its manifest', () => {
+  it('reads the effective value the Worker computes with', async () => {
+    // getConfig() is the Worker's own reading (deepMerge over the defaults);
+    // builtVat() is the gate's, in plain Node. In a shop this compares the
+    // shop's real store.config.ts, which is the point: the two must not drift.
+    const { getConfig } = await import('../../src/config.ts');
+    const { vatTerms } = await import('../../src/features/legal/vat.ts');
+    expect(await builtVat(root)).toEqual(vatTerms(getConfig().legal));
+  });
+
+  it('reads a store.config.ts that sets the franchise', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'store-vat-'));
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(
+      join(dir, 'src/store.config.ts'),
+      "import type { DeepPartial, SiteConfig } from './config';\nexport const storeOverrides: DeepPartial<SiteConfig> = { legal: { vatExemption: 'franchise' } };\n",
+    );
+    expect(await builtVat(dir)).toEqual({ rateBps: 0, exemption: 'franchise' });
+  });
+
+  const liable = { commerce: { defaultVatRate: 20 } };
+  const exempt = { commerce: { vatExemption: 'franchise' } };
+  const AT_20 = { rateBps: 2000, exemption: null };
+  const FRANCHISE = { rateBps: 0, exemption: 'franchise' };
+
+  it('agrees when both say the same thing', () => {
+    expect(vatDisagreement(liable, AT_20)).toBeNull();
+    expect(vatDisagreement(exempt, FRANCHISE)).toBeNull();
+    expect(vatDisagreement({ commerce: { defaultVatRate: 5.5 } }, { rateBps: 550, exemption: null })).toBeNull();
+  });
+
+  // The two mistakes of ticket #148: a seller in franchise whose build still
+  // charges the 20 % default, and a liable shop that turned VAT off.
+  it('refuses a franchise manifest over a build that computes VAT', () => {
+    expect(vatDisagreement(exempt, AT_20)).toMatch(/vatExemption: 'franchise'/);
+    expect(vatDisagreement(exempt, { rateBps: null, exemption: null })).toMatch(/no configured rate/);
+  });
+
+  it('refuses a liable manifest over a build that is exempt, or at another rate', () => {
+    expect(vatDisagreement(liable, FRANCHISE)).toMatch(/without the VAT it owes/);
+    expect(vatDisagreement(liable, { rateBps: 550, exemption: null })).toMatch(/legal.vatRateBps 550/);
+    expect(vatDisagreement(liable, { rateBps: null, exemption: null })).toMatch(/legal.vatRateBps 0/);
   });
 });
 
