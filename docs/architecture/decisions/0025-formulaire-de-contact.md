@@ -1,6 +1,6 @@
 # ADR 0025 — Un formulaire de contact, envoyé sans être gardé
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #155 par Damien, le 2026-11-02)
 - **Date** : 2026-11-02
 - **Jalon** : après le pilote (plan §13.7) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), qui range les

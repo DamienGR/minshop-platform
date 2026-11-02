@@ -45,4 +45,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Accepté |
 | [0023](0023-paiement-par-virement.md) | Le paiement par virement, rapproché à la main | Accepté |
 | [0024](0024-franchise-en-base-de-tva.md) | La franchise en base de TVA | Accepté |
-| [0025](0025-formulaire-de-contact.md) | Un formulaire de contact, envoyé sans être gardé | Proposé |
+| [0025](0025-formulaire-de-contact.md) | Un formulaire de contact, envoyé sans être gardé | Accepté |

@@ -3249,8 +3249,8 @@ son nom, son e-mail, un téléphone facultatif, un motif et son message, que le
 marchand reçoit par e-mail et auquel il répond directement. Pour la première
 boutique réelle, le motif « Sur mesure » est la porte d'entrée des commandes sur
 mesure. Damien a choisi d'envoyer sans rien garder ;
-l'[ADR 0025](architecture/decisions/0025-formulaire-de-contact.md), proposé,
-amende l'ADR 0007, qui ne parlait que de pages éditoriales et légales. Aucun
+l'[ADR 0025](architecture/decisions/0025-formulaire-de-contact.md), accepté par
+la fusion de la PR #155, amende l'ADR 0007, qui ne parlait que de pages éditoriales et légales. Aucun
 des jalons 0 à 10 n'avance.
 
 Fait le 2026-11-02, en un seul lot, sans migration :
