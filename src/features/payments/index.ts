@@ -8,6 +8,7 @@ import { createLightningProvider } from './lightning-provider';
 import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
 import { createDemoProvider } from './demo';
+import { createBankTransferProvider } from './bank-transfer-provider';
 import { getSecret, vaultReady } from '../secrets/store';
 import {
   enabledMethods as methodsEnabled,
@@ -72,6 +73,9 @@ export async function getPaymentProvider(method?: PaymentMethod): Promise<Paymen
     case 'lightning':
       // Self-hosted Lightning (phoenixd / LNbits) behind a self-rendered pay page.
       return createLightningProvider(env.DB, await getLightningBackend());
+    case 'bank_transfer':
+      // The merchant's own account, behind the transfer page (ADR 0023).
+      return createBankTransferProvider(env.DB, settings);
     case 'opennode': {
       const key = await getSecret(env.DB, 'opennode_api_key');
       if (!key) throw new Error('OpenNode is not configured.');

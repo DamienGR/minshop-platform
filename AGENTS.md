@@ -198,6 +198,8 @@ src/
                customization (the buyer's free text, pure) · customFields (its fields, admin editor)
     orders/    db · number · reservations (atomic checkout stock holds)
     payments/  provider (port) · stripe · opennode · lightning-provider · index (factory)
+               bankTransfer (IBAN, reference, delay; pure) · bank-transfer-provider
+               bankTransferStore (the transfers awaited) · bankTransferNotify (their e-mails)
                lightning/  backend (port) · phoenixd · lnbits · index · rate · pending
     shipping/  calculator (zones + ShippingCalculator port) · provider (label, relay-point, quote ports)
                recipient (the phone checkout asks once Boxtal buys the labels)
@@ -232,7 +234,7 @@ To swap/add a provider, write one adapter file + wire the factory:
 
 | Port | Where | Factory | Adapters |
 |---|---|---|---|
-| `PaymentProvider` | `payments/provider.ts` | `payments/index.ts` | stripe, opennode, lightning |
+| `PaymentProvider` | `payments/provider.ts` | `payments/index.ts` | stripe, opennode, lightning, bank transfer |
 | `LightningBackend` | `payments/lightning/backend.ts` | `payments/lightning/index.ts` | phoenixd, lnbits |
 | `ShippingCalculator` | `shipping/calculator.ts` | (config-rates) | carrier rates (future) |
 | `LabelProvider`, `PickupPointProvider`, `ShippingQuoteProvider` | `shipping/provider.ts` | `shipping/boxtal/index.ts` | boxtal (v3; the quote on v1, optional) |

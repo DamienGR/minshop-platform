@@ -6,7 +6,9 @@ import { parseDeliveryMethod, type DeliveryMethod } from '../../shipping/calcula
  * Pending Lightning payments — the in-flight state between minting a BOLT11
  * invoice and the customer paying it. NOT an order until settled (see
  * migrations/0014). Used only by the self-rendered backends (phoenixd / LNbits);
- * OpenNode also uses it because its webhook cannot echo application state.
+ * OpenNode also uses it because its webhook cannot echo application state, the
+ * demo rail, and the bank transfer, which waits days for the merchant's word
+ * (features/payments/bankTransferStore.ts).
  */
 export interface PendingPayment {
   id: number;
@@ -28,7 +30,7 @@ export interface PendingPayment {
   ship_address: string | null; // JSON (ShippingAddress) or null
   /** Explicit link for post-0021 rows; null preserves legacy settlement. */
   reservation_id: string | null;
-  status: string; // 'pending' | 'settled' | 'expired'
+  status: string; // 'pending' | 'settled' | 'expired' | 'abandoned' (a bank transfer given up, ADR 0023)
   expires_at: string | null;
   created_at: string;
 }

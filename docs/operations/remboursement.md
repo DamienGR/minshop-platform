@@ -70,6 +70,15 @@ commande **Enregistrer un remboursement déjà effectué**, avec le montant et
 une note interne qui dit comment il a été fait. **Annuler** un enregistrement
 erroné corrige les registres de la boutique ; aucun argent ne bouge.
 
+Un virement attendu
+([ADR 0023](../architecture/decisions/0023-paiement-par-virement.md)) n'est
+pas une commande tant que le commerçant ne l'a pas enregistré dans Admin →
+Commandes. Trop versé : enregistrer « Virement reçu », puis rembourser
+l'excédent comme ci-dessus. Pas assez : demander le complément à l'acheteur
+avant d'enregistrer, ou lui rendre ce qui est arrivé et « Abandonner ». Un
+virement arrivé sur une commande abandonnée se rend par virement, sans rien
+enregistrer : il n'y a pas de commande.
+
 ## 5. Rétractation
 
 Le droit de rétractation est celui que décrit la page « Droit de

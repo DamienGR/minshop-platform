@@ -5,6 +5,7 @@ import {
   type ParsedRuntimeShippingConfig,
 } from '../shipping/settings';
 import { defaultWeightUnit, isWeightUnit, type WeightUnit } from '../shipping/weight';
+import { parseHoldDays } from '../payments/bankTransfer.ts';
 
 /**
  * Runtime settings — the small set of values the setup wizard persists to D1 so
@@ -51,11 +52,17 @@ export type SettingKey =
   | 'email_notify_to' // owner "new order" alert recipient; absent = store.config.ts notifyTo
   | 'turnstile_enabled' // '1' = bot challenge on (admin login + customer sign-in); absent = off
   | 'turnstile_site_key' // Turnstile public sitekey
-  | 'payment_provider' // 'stripe' | 'lightning' | 'opennode' | 'demo'; absent = stripe
+  | 'payment_provider' // 'stripe' | 'lightning' | 'opennode' | 'bank_transfer' | 'demo'; absent = stripe
   | 'lightning_backend' // 'phoenixd' | 'lnbits'; absent = phoenixd
   | 'lnbits_url' // LNbits node URL (the invoice/read key is in the vault)
   | 'phoenixd_url' // phoenixd node URL (the password is in the vault)
   | 'opennode_api_url' // OpenNode API base override (testnet); absent = live default
+  // The merchant's own account, shown to every buyer who pays by transfer
+  // (ADR 0023). Not secrets: an IBAN is printed on every invoice.
+  | 'bank_transfer_iban' // electronic form, no spaces
+  | 'bank_transfer_bic' // optional
+  | 'bank_transfer_holder' // the account holder's name, as the bank knows it
+  | 'bank_transfer_days' // days the stock stays held; absent = 8
   | `enc:${string}`; // AES-GCM-encrypted secret (see features/secrets/store.ts), e.g. 'enc:stripe_secret_key'. Never loaded as plaintext into locals.
 
 /** The storefront features that can be flipped at runtime (default on). */
@@ -124,7 +131,7 @@ export interface StoreSettings {
   /** Turnstile public sitekey, or null. (The secret lives in the vault.) */
   turnstileSiteKey: string | null;
   /** Default payment rail (Réglages → Paiements). Default 'stripe'. */
-  paymentProvider: 'stripe' | 'lightning' | 'opennode' | 'demo';
+  paymentProvider: 'stripe' | 'lightning' | 'opennode' | 'bank_transfer' | 'demo';
   /** Self-hosted Lightning node (when provider/rail is lightning). Default 'phoenixd'. */
   lightningBackend: 'phoenixd' | 'lnbits';
   /** Lightning node URLs, or null. (The key/password live in the vault.) */
@@ -132,6 +139,13 @@ export interface StoreSettings {
   phoenixdUrl: string | null;
   /** OpenNode API base override (testnet), or null for the live default. */
   opennodeApiUrl: string | null;
+  /** The merchant's account a transfer is paid into (features/payments/bankTransfer.ts).
+   *  The rail is open while the holder and a valid IBAN are both set. */
+  bankTransferIban: string | null;
+  bankTransferBic: string | null;
+  bankTransferHolder: string | null;
+  /** Days the stock stays held while a transfer travels (1 to 30, default 8). */
+  bankTransferDays: number;
 }
 
 /** One setting value, or null if unset. */
@@ -223,12 +237,17 @@ export function parseStoreSettings(
     paymentProvider:
       map.get('payment_provider') === 'lightning' ? 'lightning'
       : map.get('payment_provider') === 'opennode' ? 'opennode'
+      : map.get('payment_provider') === 'bank_transfer' ? 'bank_transfer'
       : map.get('payment_provider') === 'demo' ? 'demo'
       : 'stripe',
     lightningBackend: map.get('lightning_backend') === 'lnbits' ? 'lnbits' : 'phoenixd',
     lnbitsUrl: map.get('lnbits_url') ?? null,
     phoenixdUrl: map.get('phoenixd_url') ?? null,
     opennodeApiUrl: map.get('opennode_api_url') ?? null,
+    bankTransferIban: map.get('bank_transfer_iban') ?? null,
+    bankTransferBic: map.get('bank_transfer_bic') ?? null,
+    bankTransferHolder: map.get('bank_transfer_holder') ?? null,
+    bankTransferDays: parseHoldDays(map.get('bank_transfer_days')),
   };
 }
 

@@ -26,6 +26,8 @@ import {
 import { listUnmatchedRefundEvents } from '../../../features/refunds/db';
 import { isPurchaseStale, listLabelsNeedingAttention } from '../../../features/shipping/labelStore';
 import { t, tn, type MessageKey } from '../../../features/i18n';
+import { listAwaitedTransfers, transferOverdue } from '../../../features/payments/bankTransferStore';
+import { transferReference } from '../../../features/payments/bankTransfer';
 import {
   parseOrderOrLegacyPublicId,
   parsePublicId,
@@ -111,6 +113,26 @@ const conflictOrders = new Map(
       .map(async (e) => [e.order_id!, await getOrder(env.DB, e.order_id!)] as const),
   ),
 );
+// Transfers the shop waits for (ADR 0023): no order yet, only the merchant's
+// statement can say the money came. The oldest first, overdue ones included —
+// a late transfer is the merchant's call.
+const awaitedTransfers = (await listAwaitedTransfers(env.DB)).map((pending) => {
+  const reference = transferReference(pending.public_id);
+  const montant = formatPrice(pending.amount_total_cents, pending.currency);
+  const overdue = transferOverdue(pending);
+  return {
+    publicId: pending.public_id,
+    reference,
+    montant,
+    email: pending.email,
+    overdue,
+    created: formatDate(pending.created_at, undefined, timeZone),
+    due: formatDate(pending.expires_at, undefined, timeZone),
+    receivedConfirm: overdue
+      ? t('admin.orders.transfers.receivedLateConfirm', { reference, montant })
+      : t('admin.orders.transfers.receivedConfirm', { reference, montant }),
+  };
+});
 const listError = Astro.url.searchParams.get('error');
 // A conflicting event's last_error is a machine code; the known ones read as
 // French, anything newer falls back to the code with its underscores spaced.
@@ -130,6 +152,65 @@ const statusLabel = (status: string) =>
 ---
 
 <AdminLayout title={t('admin.orders.title')} active="orders">
+  {
+    awaitedTransfers.length > 0 && (
+      <section id="bank-transfers" class="mb-8 scroll-mt-16 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4">
+        <h2 class="text-sm font-medium text-amber-900">
+          {tn('admin.orders.transfers.heading.one', 'admin.orders.transfers.heading.other', awaitedTransfers.length)}
+        </h2>
+        <p class="mt-1 text-xs text-amber-800">{t('admin.orders.transfers.intro')}</p>
+        <ul class="mt-3 space-y-3 text-sm text-amber-900">
+          {awaitedTransfers.map((transfer) => (
+            <li
+              class="flex flex-wrap items-center gap-x-4 gap-y-2"
+              data-awaited-transfer={transfer.publicId}
+              data-overdue={transfer.overdue ? '1' : undefined}
+            >
+              <span class="font-mono font-semibold tracking-wider">{transfer.reference}</span>
+              <span class="tabular-nums font-medium">{transfer.montant}</span>
+              <span>{transfer.email ?? t('admin.orders.transfers.noEmail')}</span>
+              <span class="text-xs text-amber-800">{transfer.created}</span>
+              <span class:list={['text-xs', transfer.overdue ? 'font-medium text-red-700' : 'text-amber-800']}>
+                {transfer.overdue
+                  ? t('admin.orders.transfers.overdue', { date: transfer.due })
+                  : t('admin.orders.transfers.due', { date: transfer.due })}
+              </span>
+              <span class="flex gap-2">
+                <form
+                  method="POST"
+                  action="/api/admin/bank-transfers"
+                  onsubmit={`return confirm(${JSON.stringify(transfer.receivedConfirm)})`}
+                >
+                  <input type="hidden" name="_action" value="received" />
+                  <input type="hidden" name="transfer" value={transfer.publicId} />
+                  <button
+                    type="submit"
+                    class="rounded-md bg-brand px-3 py-1 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+                  >
+                    {t('admin.orders.transfers.received')}
+                  </button>
+                </form>
+                <form
+                  method="POST"
+                  action="/api/admin/bank-transfers"
+                  onsubmit={`return confirm(${JSON.stringify(t('admin.orders.transfers.abandonConfirm', { reference: transfer.reference }))})`}
+                >
+                  <input type="hidden" name="_action" value="abandon" />
+                  <input type="hidden" name="transfer" value={transfer.publicId} />
+                  <button
+                    type="submit"
+                    class="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-wider hover:bg-amber-100"
+                  >
+                    {t('admin.orders.transfers.abandon')}
+                  </button>
+                </form>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
   {
     inventoryExceptions.length > 0 && (
       <section id="inventory-exceptions" class="mb-8 rounded-lg border border-red-300 bg-red-50 px-5 py-4">

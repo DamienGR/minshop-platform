@@ -3,7 +3,8 @@
 - **Statut** : Accepté ; amendé pour les points relais par
   l'[ADR 0020](0020-expeditions-par-boxtal.md), pour les produits
   personnalisables par un texte libre par
-  l'[ADR 0022](0022-produits-personnalisables.md)
+  l'[ADR 0022](0022-produits-personnalisables.md), pour le paiement par
+  virement par l'[ADR 0023](0023-paiement-par-virement.md)
 - **Date** : 2026-08-28
 - **Jalon** : 0
 

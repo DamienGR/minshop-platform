@@ -30,6 +30,11 @@ const KEYS: Record<string, { label: MessageKey; hint: MessageKey; setup: Message
     hint: 'payment.opennode.hint',
     setup: 'payment.opennode.setup',
   },
+  bank_transfer: {
+    label: 'payment.bankTransfer.label',
+    hint: 'payment.bankTransfer.hint',
+    setup: 'payment.bankTransfer.setup',
+  },
   // Demo is always available, so it never renders a setup tile.
   demo: { label: 'payment.demo.label', hint: 'payment.demo.hint', setup: null },
 };
@@ -49,6 +54,7 @@ const RAIL_KEYS: Record<string, MessageKey> = {
   stripe: 'payment.rail.stripe',
   lightning: 'payment.rail.lightning',
   opennode: 'payment.rail.opennode',
+  bank_transfer: 'payment.rail.bankTransfer',
   demo: 'payment.rail.demo',
 };
 
@@ -62,6 +68,7 @@ const RECEIPT_KEYS: Record<string, MessageKey> = {
   stripe: 'payment.method.card',
   lightning: 'payment.method.lightning',
   opennode: 'payment.method.opennode',
+  bank_transfer: 'payment.method.bankTransfer',
   demo: 'payment.method.demo',
 };
 
