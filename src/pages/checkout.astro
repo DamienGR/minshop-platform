@@ -63,6 +63,7 @@ import { paymentRailAction } from '../features/payments/labels';
 import { holdSeconds } from '../features/payments/bankTransfer';
 import { t, tn, formatNumber } from '../features/i18n';
 import { consentFor, isAcceptance, readTermsGate } from '../features/legal/terms';
+import { vatTerms } from '../features/legal/vat';
 
 const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
@@ -443,7 +444,7 @@ if (submitted) {
             purgeStockProductCache,
             undefined,
             consentFor(terms, termsAccepted),
-            cfg.legal.vatRateBps,
+            vatTerms(cfg.legal),
             relayPoint,
             // Stripe's webhook returns no address once its page asked none:
             // the reservation carries this one to the order, and lets it go.

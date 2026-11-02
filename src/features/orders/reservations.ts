@@ -6,6 +6,7 @@ import {
 import type { OrderItemInput, ShippingAddress } from './db';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
 import type { TermsConsent } from '../legal/terms';
+import type { VatTerms } from '../legal/vat.ts';
 import type { RelayPoint } from '../shipping/relay.ts';
 import { customizationColumn, withCustomization } from '../products/customization.ts';
 import {
@@ -316,14 +317,17 @@ export async function reserveInventory(
    */
   consent: TermsConsent | null = null,
   /**
-   * VAT rate in force when the buyer agreed to the price, in basis points.
+   * The VAT terms in force when the buyer agreed to the price: the rate in
+   * basis points, or the exemption the seller sells under (ADR 0024).
    *
    * Captured here, not re-derived at settlement: a rate change between the
    * checkout and the webhook would otherwise rewrite the split of an order
-   * placed under the old rate. 0 or null records no split at all, which is the
-   * honest answer for a shop that has not configured one.
+   * placed under the old rate, and a seller leaving the franchise en base would
+   * print VAT on an order sold without it. A rate of 0 or null with no
+   * exemption records no split at all, which is the honest answer for a shop
+   * that has not configured one.
    */
-  vatRateBps: number | null = null,
+  vat: VatTerms | null = null,
   /**
    * The relay point picked at checkout (features/shipping/relay.ts), copied
    * onto the order at settlement like the consent above. Null for every other
@@ -375,8 +379,8 @@ export async function reserveInventory(
 
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, relay_point, ship_address, customization)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?, ?
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?, ?, ?
           WHERE ${checks.join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
@@ -388,7 +392,8 @@ export async function reserveInventory(
         `+${ttlSeconds} seconds`,
         consent?.version ?? null,
         consent?.acceptedAt ?? null,
-        vatRateBps && vatRateBps > 0 ? vatRateBps : null,
+        vat?.exemption ? 0 : vat?.rateBps && vat.rateBps > 0 ? vat.rateBps : null,
+        vat?.exemption ?? null,
         relayPoint ? JSON.stringify(relayPoint) : null,
         shipAddress ? JSON.stringify(shipAddress) : null,
         customizationColumn(claimedItems),

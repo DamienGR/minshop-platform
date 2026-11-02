@@ -238,6 +238,10 @@ export const fr = {
   'order.table.total': 'Total',
   'order.total': 'Total : {montant}',
   'order.vatIncluded': 'dont TVA ({taux} %) : {montant}',
+  // The legal wording of the franchise en base (art. 293 B du CGI, ADR 0024):
+  // fixed by the tax code, so neither reworded nor shortened. Printed by the
+  // order page and its e-mails in place of the VAT line.
+  'vat.exemption.franchise': 'TVA non applicable, art. 293 B du CGI',
   'order.downloads': 'Téléchargements',
   'order.downloadUnavailable': 'Indisponible après remboursement',
   'order.paidWith': 'Payé par {moyen}',

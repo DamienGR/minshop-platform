@@ -225,7 +225,7 @@ try {
       undefined,
       undefined,
       consent,
-      vatRateBps,
+      vatRateBps == null ? null : { rateBps: vatRateBps, exemption: null },
     );
     return { publicId, accessToken, items, held };
   }

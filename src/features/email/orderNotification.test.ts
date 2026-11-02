@@ -37,6 +37,7 @@ const order = (overrides: Partial<Order> = {}): Order =>
     terms_accepted_at: null,
     vat_rate_bps: null,
     vat_amount_cents: null,
+    vat_exemption: null,
     created_at: '2026-07-28 00:00:00',
     ...overrides,
   });
@@ -107,6 +108,42 @@ describe('the plain-text part', () => {
       expect(at('dont TVA')).toBe(at('Total') + 1);
       expect(message.text).not.toContain('&minus;');
     }
+  });
+});
+
+describe('an order sold in franchise en base de TVA', () => {
+  // ADR 0024: the order records a rate and an amount of 0, and the exemption.
+  const exempt = order({ currency: 'eur', amount_total_cents: 4406, vat_rate_bps: 0, vat_amount_cents: 0, vat_exemption: 'franchise' });
+  const MENTION = 'TVA non applicable, art. 293 B du CGI';
+
+  it('carries the legal mention instead of a VAT line, in both parts of both e-mails', () => {
+    const messages = [
+      orderConfirmationEmail(exempt, [], 'https://demo.minshop.dev', 'Minshop'),
+      orderNotificationEmail(exempt, [], 'owner@example.com', 'https://demo.minshop.dev', 'Minshop'),
+    ];
+    for (const message of messages) {
+      for (const body of [message.text, message.html]) {
+        expect(body).toContain(MENTION);
+        expect(body).not.toContain('dont TVA');
+      }
+      // Under the total it qualifies, as the VAT line of a liable shop is.
+      const lines = message.text.split('\n');
+      expect(lines.indexOf(MENTION)).toBe(lines.findIndex((line) => line.startsWith('Total')) + 1);
+    }
+  });
+
+  it('is read off the order, so a liable order and one with no recorded split carry none', () => {
+    for (const other of [order({ vat_rate_bps: 2000, vat_amount_cents: 17 }), order()]) {
+      const message = orderConfirmationEmail(other, [], 'https://demo.minshop.dev', 'Minshop');
+      expect(message.text).not.toContain('293 B');
+      expect(message.html).not.toContain('293 B');
+    }
+  });
+
+  it('ignores an exemption this build does not know rather than printing a key', () => {
+    const message = orderConfirmationEmail(order({ vat_exemption: 'export' }), [], 'https://demo.minshop.dev', 'Minshop');
+    expect(message.text).not.toContain('vat.exemption');
+    expect(message.html).not.toContain('vat.exemption');
   });
 });
 

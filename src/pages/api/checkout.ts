@@ -49,6 +49,7 @@ import { boxtalConfigured } from '../../features/settings/availability';
 import { stripeAllowedCountries, stripeSessionDestination } from '../../features/payments/stripeCountries.ts';
 import { getConfig } from '../../config';
 import { consentFor, isAcceptance, readTermsGate } from '../../features/legal/terms';
+import { vatTerms } from '../../features/legal/vat';
 import { t } from '../../features/i18n';
 import { countryName } from '../../features/shipping/countries';
 import {
@@ -466,7 +467,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     purgeStockProductCache,
     undefined,
     consentFor(terms, accepted),
-    cfg.legal.vatRateBps,
+    vatTerms(cfg.legal),
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -932,7 +933,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       purgeStockProductCache,
       undefined,
       consentFor(jsonTerms, jsonAccepted),
-      cfg.legal.vatRateBps,
+      vatTerms(cfg.legal),
     );
     if (!lnReserved) {
       await deleteGuestAccessIfUnsettled(env.DB, lnPublicId);
@@ -1029,7 +1030,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     purgeStockProductCache,
     undefined,
     consentFor(jsonTerms, jsonAccepted),
-    cfg.legal.vatRateBps,
+    vatTerms(cfg.legal),
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);

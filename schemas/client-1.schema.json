@@ -83,7 +83,6 @@
         "market",
         "pricesIncludeTax",
         "checkoutMode",
-        "defaultVatRate",
         "invoiceStrategy"
       ],
       "properties": {
@@ -106,13 +105,20 @@
           ]
         },
         "defaultVatRate": {
-          "description": "Default French VAT rate applied when a product declares none.",
+          "description": "Default French VAT rate applied when a product declares none. Declared by every shop that charges VAT; a shop in franchise en base declares `vatExemption` instead.",
           "type": "number",
           "enum": [
             20,
             10,
             5.5,
             2.1
+          ]
+        },
+        "vatExemption": {
+          "description": "Why the shop charges no VAT, in place of `defaultVatRate`. `franchise`: the franchise en base of art. 293 B du CGI (a micro-entreprise under the turnover thresholds); every order then records no VAT and its page and e-mails print « TVA non applicable, art. 293 B du CGI ». `legal.vatExemption` in src/store.config.ts must say the same (ADR 0024).",
+          "type": "string",
+          "enum": [
+            "franchise"
           ]
         },
         "invoiceStrategy": {
@@ -294,6 +300,10 @@
     {
       "id": "french-prices-include-tax",
       "description": "The French B2C market sells at tax-inclusive prices."
+    },
+    {
+      "id": "vat-rate-or-exemption",
+      "description": "A shop declares either the VAT rate it charges or the exemption under which it charges none — exactly one."
     },
     {
       "id": "out-of-scope-features-off",

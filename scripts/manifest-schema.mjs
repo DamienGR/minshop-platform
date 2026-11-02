@@ -128,9 +128,22 @@ export const MANIFEST_SPEC = {
       market: { schema: { type: 'string', enum: ['FR'] }, description: 'Market the shop is certified for.' },
       pricesIncludeTax: { schema: { type: 'boolean' }, description: 'Whether catalogue prices are tax-inclusive (TTC).' },
       checkoutMode: { schema: { type: 'string', enum: ['guest'] }, description: 'Checkout mode. Guest-only until customer accounts are certified.' },
+      // A pair of which a shop declares exactly one (rule `vat-rate-or-exemption`):
+      // the rate it charges, or the exemption under which it charges none. Each
+      // is optional only because the other stands in for it — requiring the rate
+      // of a seller in franchise would force a value that validates and means
+      // nothing (ADR 0024).
       defaultVatRate: {
+        optional: true,
         schema: { type: 'number', enum: [20, 10, 5.5, 2.1] },
-        description: 'Default French VAT rate applied when a product declares none.',
+        description:
+          'Default French VAT rate applied when a product declares none. Declared by every shop that charges VAT; a shop in franchise en base declares `vatExemption` instead.',
+      },
+      vatExemption: {
+        optional: true,
+        schema: { type: 'string', enum: ['franchise'] },
+        description:
+          'Why the shop charges no VAT, in place of `defaultVatRate`. `franchise`: the franchise en base of art. 293 B du CGI (a micro-entreprise under the turnover thresholds); every order then records no VAT and its page and e-mails print « TVA non applicable, art. 293 B du CGI ». `legal.vatExemption` in src/store.config.ts must say the same (ADR 0024).',
       },
       invoiceStrategy: {
         schema: { type: 'string', enum: ['pending-validation', 'stripe-receipt', 'invoice'] },
@@ -303,6 +316,28 @@ export const CROSS_FIELD_RULES = [
         return {
           path: 'commerce.pricesIncludeTax',
           message: 'is false for market FR. French B2C prices are displayed TTC (plan §2.1); a tax-exclusive catalogue would under-display every price.',
+        };
+      }
+      return null;
+    },
+  },
+  {
+    id: 'vat-rate-or-exemption',
+    description: 'A shop declares either the VAT rate it charges or the exemption under which it charges none — exactly one.',
+    check(m) {
+      const rate = m.commerce?.defaultVatRate;
+      const exemption = m.commerce?.vatExemption;
+      if (rate !== undefined && exemption !== undefined) {
+        return {
+          path: 'commerce.vatExemption',
+          message: `is "${exemption}" while commerce.defaultVatRate is ${rate}. A seller in franchise en base charges no VAT, at any rate: keep the line that is true and remove the other (ADR 0024).`,
+        };
+      }
+      if (rate === undefined && exemption === undefined) {
+        return {
+          path: 'commerce.defaultVatRate',
+          message:
+            'is missing, and so is commerce.vatExemption. A shop either charges VAT — say at which rate — or is exempt — say why (`vatExemption: franchise`); a manifest that says neither is a decision nobody made.',
         };
       }
       return null;

@@ -30,7 +30,7 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0007](0007-perimetre-fonctionnel.md) | Périmètre fonctionnel de l'offre | Accepté ; amendé par 0020 pour les points relais, par 0022 pour les produits personnalisables, par 0023 pour le virement |
 | [0008](0008-format-du-manifeste-client.md) | Format et autorité du manifeste client | Accepté |
 | [0009](0009-forme-de-la-cli-shopctl.md) | Forme, langage et livraison de la CLI `shopctl` | Accepté |
-| [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve |
+| [0010](0010-tva-facturation-et-consentement.md) | TVA, facturation et consentement aux CGV | Accepté, sous réserve ; amendé par 0024 pour la franchise en base |
 | [0011](0011-langue-de-l-administration.md) | Langue de l'administration | Remplacé par 0018 |
 | [0012](0012-identite-du-catalogue-importe.md) | Identité du catalogue importé | Accepté |
 | [0013](0013-environnements-de-deploiement.md) | Environnements de déploiement | Accepté |
@@ -44,3 +44,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0021](0021-boxtal-apres-le-bac-a-sable.md) | Ce que le bac à sable de Boxtal change à l'ADR 0020 | Accepté |
 | [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Accepté |
 | [0023](0023-paiement-par-virement.md) | Le paiement par virement, rapproché à la main | Accepté |
+| [0024](0024-franchise-en-base-de-tva.md) | La franchise en base de TVA | Proposé |

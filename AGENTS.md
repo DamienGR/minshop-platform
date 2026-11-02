@@ -286,7 +286,13 @@ hold.
 a total. `tax_cents` keeps its own meaning (tax added on top, Stripe Tax); a TTC
 store leaves it 0 and reads `vat_amount_cents`. Rates are basis points — 5.5 %
 and 2.1 % are ordinary French rates. The rounding is taken once, on the order
-total, never per line.
+total, never per line. A seller in **franchise en base** (ADR 0024) charges no
+VAT: `commerce.vatExemption: franchise` in the manifest in place of
+`defaultVatRate`, `legal.vatExemption: 'franchise'` in `store.config.ts`, and
+`config:validate` refuses the two when they disagree. The order records a rate
+and an amount of 0 with `vat_exemption`, which rides the reservation like the
+rate, and its page and e-mails print the mention from the ORDER, never from
+today's config.
 
 ## Invariants — do not break these
 

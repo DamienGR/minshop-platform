@@ -3202,3 +3202,42 @@ Tenu par `test/integration/bank-transfer.mjs`, et la lecture de la liste par
 première boutique réelle qui l'allume (une commande par virement, l'e-mail
 reçu, l'enregistrement, la confirmation), et la migration 0050 dans les notes
 de la prochaine version du socle.
+
+### 13.6 La franchise en base de TVA
+
+Noté le 2026-11-02 (ticket #148) : un vendeur en franchise en base (art. 293 B
+du CGI) ne facture pas de TVA et doit l'écrire. La première boutique réelle est
+dans ce cas, et la certification l'avait reporté jusqu'à elle (fiche de
+l'étape 11, § 3, question 5 ; dossier de décision, ligne « validation TVA et
+facturation »). L'[ADR 0024](architecture/decisions/0024-franchise-en-base-de-tva.md),
+proposé, amende l'ADR 0010. Aucun des jalons 0 à 10 n'avance ; la part
+« franchise » de la condition « validation TVA et facturation » du go de
+l'étape 11 est levée côté socle, la réponse de l'expert-comptable restant due.
+
+Fait le 2026-11-02, en un seul lot :
+
+- au manifeste, `commerce.vatExemption: franchise` à la place de
+  `defaultVatRate`, une des deux exactement (règle `vat-rate-or-exemption`),
+  sans version de schéma : les manifestes publiés valident tels quels ;
+- dans `src/store.config.ts`, `legal: { vatExemption: 'franchise' }`, qui
+  l'emporte sur tout taux ; `npm run config:validate` refuse, dans une
+  boutique, un manifeste et une construction qui ne disent pas la même TVA
+  (`scripts/store-vat.mjs`) ;
+- la migration 0051, `vat_exemption` sur la commande et la réservation : une
+  commande en franchise enregistre un taux et une TVA à 0 et son exonération,
+  portées depuis la réservation ;
+- « TVA non applicable, art. 293 B du CGI », lue sur la commande, sous le
+  total de la page de commande, de l'e-mail de confirmation et de l'avis au
+  commerçant ;
+- l'export CSV : 0 dans `VAT rate` et `VAT included`, et une dernière colonne
+  `VAT exemption` ; une commande sans ventilation les laisse vides ;
+- la suite d'intégration attend la TVA que la boutique configure, et non plus
+  20 % : une boutique en franchise passe `npm run verify`.
+
+Tenu par `src/features/legal/vat.test.ts`, les tests des e-mails, ceux du
+manifeste et de `shopctl new`, `test/integration/terms.mjs` et
+`test/integration/d1-integration.sh`. Reste à faire : la réponse écrite de
+l'expert-comptable sur les endroits de la mention (au pied de page et sur le
+reçu de Stripe, le socle ne l'écrit pas), la mention dans l'article « Prix »
+des CGV du commerçant, et la migration 0051 dans les notes de la prochaine
+version du socle.

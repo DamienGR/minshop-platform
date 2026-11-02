@@ -9,6 +9,7 @@ import { orderTrackingUrl, shippedCarrierName } from '../orders/tracking';
 import { orderRelayPoint, relayPointLines } from '../shipping/relay.ts';
 import { t, formatNumber } from '../i18n/index.ts';
 import { customizationText, parseCustomization } from '../products/customization.ts';
+import { orderVatExemption } from '../legal/vat.ts';
 import type { EmailMessage } from './provider';
 import {
   PALETTE,
@@ -65,12 +66,35 @@ function totalRows(order: Order, money: (cents: number) => string): TotalRow[] {
 }
 
 /**
+ * The legal mention of an order sold without VAT (ADR 0024): « TVA non
+ * applicable, art. 293 B du CGI » under the totals, where a liable shop's order
+ * reads its VAT breakdown. A sentence, not a row: it has no amount. Read off
+ * the order, which recorded it at checkout, never off today's configuration.
+ */
+function vatExemptionNote(order: Order): string | null {
+  const exemption = orderVatExemption(order);
+  return exemption ? t(`vat.exemption.${exemption}`) : null;
+}
+
+/**
  * The same rows for the plain-text part. A client that shows the text part, or a
  * reader that reads it aloud, gets the whole receipt: the VAT breakdown was once
- * in the HTML only.
+ * in the HTML only. So does the exemption's mention.
  */
 function totalLines(order: Order, money: (cents: number) => string): string[] {
-  return totalRows(order, money).map(({ label, amount }) => `${label} : ${amount.replace('&minus;', '-')}`);
+  const note = vatExemptionNote(order);
+  return [
+    ...totalRows(order, money).map(({ label, amount }) => `${label} : ${amount.replace('&minus;', '-')}`),
+    ...(note ? [note] : []),
+  ];
+}
+
+/** The mention under the HTML totals table, or nothing. */
+function vatExemptionHtml(order: Order): string {
+  const note = vatExemptionNote(order);
+  return note
+    ? `<p style="margin:8px 0 0;font-size:13px;text-align:right;color:${PALETTE.muted};">${escapeHtml(note)}</p>`
+    : '';
 }
 
 /** One-line-per-field shipping address, blank lines dropped. */
@@ -160,6 +184,7 @@ export function orderConfirmationEmail(
         })),
         totalRows(order, money),
       ) +
+      vatExemptionHtml(order) +
       relay.html +
       (hasDigital && orderUrl
         ? `<p style="margin:20px 0 0;font-size:14px;">${escapeHtml(t('email.order.download'))}</p>`
@@ -246,6 +271,7 @@ export function orderNotificationEmail(
         })),
         totalRows(order, money),
       ) +
+      vatExemptionHtml(order) +
       emailButton(adminUrl, t('email.notification.viewInAdmin')),
   });
 

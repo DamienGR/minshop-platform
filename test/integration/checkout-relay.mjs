@@ -449,7 +449,7 @@ try {
   await check('the order export carries the delivery mode and the point', async () => {
     const csv = await (await fetch('/admin/orders/export.csv', admin)).text();
     const [header, ...rows] = csv.trim().split('\r\n');
-    assert.ok(header.endsWith(',Delivery,Relay point code,Relay point'), header);
+    assert.ok(header.includes(',Delivery,Relay point code,Relay point,'), header);
     const relayRows = rows.filter((row) => row.includes(`,relay,${chosen.code},`));
     assert.equal(relayRows.length, 1, 'the demo relay order is not exported with its point');
     assert.ok(relayRows[0].includes(chosen.name));

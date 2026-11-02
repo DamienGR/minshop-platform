@@ -5,6 +5,7 @@ import { parseOrderFilters, orderFilterClause } from '../../../features/orders/f
 import { getConfig, toMajorUnits, currencyDecimals } from '../../../config';
 import { orderReference } from '../../../features/orders/number';
 import { orderRelayPoint, relayPointLines } from '../../../features/shipping/relay.ts';
+import { orderVatExemption } from '../../../features/legal/vat.ts';
 
 export const prerender = false;
 
@@ -50,6 +51,12 @@ export const GET: APIRoute = async ({ url }) => {
     // How the parcel travels, and for a relay order the point the buyer chose:
     // the code the carrier knows it by, then the name and address on its sign.
     'Delivery', 'Relay point code', 'Relay point',
+    // Why an order carries no VAT (ADR 0024): `franchise` for a seller under
+    // art. 293 B du CGI, whose `VAT rate` and `VAT included` then read 0 —
+    // where an order with no recorded split leaves all three empty. Last, like
+    // every column added after the first export, so a bookkeeper's sheet that
+    // reads the others by position keeps reading them.
+    'VAT exemption',
   ];
   const rows = orders.map((o) => [
     orderReference(o.public_id, o.id, onCfg),
@@ -75,7 +82,7 @@ export const GET: APIRoute = async ({ url }) => {
         : 'partial',
     o.refund_review_reason && !o.refund_reviewed_at ? o.refund_review_reason : '',
     // Empty, not 0: an order placed before a rate was configured did not have a
-    // zero rate, it has no recorded split at all.
+    // zero rate, it has no recorded split at all. An exempt order did: 0.
     o.vat_rate_bps == null ? '' : `${o.vat_rate_bps / 100}`,
     o.vat_amount_cents == null ? '' : money(o.vat_amount_cents, o.currency),
     o.vat_amount_cents == null
@@ -86,6 +93,7 @@ export const GET: APIRoute = async ({ url }) => {
     o.tracking_carrier ?? '',
     o.tracking_number ?? '',
     ...deliveryCells(o),
+    orderVatExemption(o) ?? '',
   ]);
 
   const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n';

@@ -13,6 +13,7 @@ import { catalogPath } from '../../features/settings/home';
 import { paymentMethodName } from '../../features/payments/labels';
 import { orderRelayPoint, relayPointLines } from '../../features/shipping/relay.ts';
 import { formatNumber, t } from '../../features/i18n';
+import { orderVatExemption } from '../../features/legal/vat';
 import { customizationText, parseCustomization } from '../../features/products/customization';
 
 // Guest access: new orders are addressed ONLY by their otk_ access token
@@ -60,6 +61,13 @@ const orderRef = order
 const paymentLabel = order?.payment_method ? paymentMethodName(order.payment_method) : null;
 // Where the parcel is to be collected, as the checkout served the point.
 const relayPoint = order ? orderRelayPoint(order) : null;
+const vatExemption = order ? orderVatExemption(order) : null;
+// Computed here rather than as `rate && (…)` in the template: an exempt order
+// records a rate of 0, and Astro prints a falsy 0 where it would drop a false.
+const vatIncluded =
+  order && order.vat_amount_cents != null && order.vat_rate_bps
+    ? { rateBps: order.vat_rate_bps, amountCents: order.vat_amount_cents }
+    : null;
 // The catalog is at / until the home page is pointed elsewhere.
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
 ---
@@ -108,15 +116,19 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
           {t('order.total', { montant: formatPrice(order.amount_total_cents, order.currency) })}
         </p>
         {
-          order.vat_amount_cents != null && order.vat_rate_bps && (
+          vatIncluded && (
             <p class="text-sm text-muted">
               {t('order.vatIncluded', {
-                taux: formatNumber(order.vat_rate_bps / 100),
-                montant: formatPrice(order.vat_amount_cents, order.currency),
+                taux: formatNumber(vatIncluded.rateBps / 100),
+                montant: formatPrice(vatIncluded.amountCents, order.currency),
               })}
             </p>
           )
         }
+        {/* What the ORDER was sold under, never today's configuration: a seller
+            leaving the franchise en base keeps the mention on what it sold
+            before (ADR 0024). */}
+        {vatExemption && <p class="text-sm text-muted">{t(`vat.exemption.${vatExemption}`)}</p>}
         {relayPoint && (
           <section class="mt-8 rounded-lg border border-line bg-surface p-5">
             <h2 class="font-serif text-2xl">{t('order.relayPoint')}</h2>
