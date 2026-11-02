@@ -39,6 +39,7 @@ import {
 } from '../../features/payments/stripeMode';
 import { adminCredential } from '../../features/auth/admin';
 import {
+  emailConfigured,
   featureAvailability,
   lightningConfigurationError,
   semanticSearchAvailable,
@@ -46,6 +47,14 @@ import {
   type RuntimeCapabilities,
 } from '../../features/settings/availability';
 import { getEmailProvider } from '../../features/email';
+import { ownerAlertRecipient } from '../../features/email/orderPolicy';
+import { contactRecipient, contactSettings } from '../../features/contact/policy';
+import {
+  CONTACT_LIMITS,
+  defaultContactReasons,
+  isContactAddress,
+  parseReasonsInput,
+} from '../../features/contact/form';
 import {
   BANK_TRANSFER_DEFAULT_DAYS,
   BANK_TRANSFER_MAX_DAYS,
@@ -407,6 +416,35 @@ if (Astro.request.method === 'POST') {
         daysRaw && days !== BANK_TRANSFER_DEFAULT_DAYS ? String(days) : null,
       );
     }
+  } else if (action === 'save_contact') {
+    // The contact form (ADR 0025): the page it sits under, its recipient and its
+    // reasons. Each is checked before anything is saved, and the page is
+    // refused while nobody would receive what the form sends.
+    const choice = String(form.get('contact_page') ?? '').trim();
+    const to = String(form.get('contact_to') ?? '').trim();
+    const reasons = parseReasonsInput(String(form.get('contact_reasons') ?? ''));
+    const pid = choice ? parsePublicId(choice, 'page') : null;
+    const page = pid ? await getPageByPublicId(env.DB, pid) : null;
+    if (choice && (!page || page.published !== 1)) {
+      validationError = t('admin.settings.contact.error.page');
+    } else if (to && !isContactAddress(to)) {
+      validationError = t('admin.settings.contact.error.recipient');
+    } else if (!reasons.ok) {
+      validationError = t(reasons.error, { max: CONTACT_LIMITS.reasons, longueur: CONTACT_LIMITS.reason });
+    } else {
+      await setSetting(env.DB, 'contact_to', to || null);
+      await setSetting(env.DB, 'contact_reasons', reasons.reasons?.join('\n') ?? null);
+      const current = await getStoreSettings(env.DB);
+      if (!page) {
+        await setSetting(env.DB, 'contact_page', null);
+      } else if (!emailConfigured(current, capabilities)) {
+        validationError = t('admin.settings.contact.error.email');
+      } else if (!contactRecipient(current, getConfig().email.notifyTo)) {
+        validationError = t('admin.settings.contact.error.noRecipient');
+      } else {
+        await setSetting(env.DB, 'contact_page', String(page.id));
+      }
+    }
   } else if (action === 'save_opennode') {
     await setSetting(env.DB, 'opennode_api_url', String(form.get('opennode_api_url') ?? '').trim() || null);
     await applySecrets(['opennode_api_key']);
@@ -649,12 +687,33 @@ const turnstileSecretReady = !!(await getSecret(env.DB, 'turnstile_secret_key'))
 const turnstileReady =
   turnstileConfigured(settings, capabilities) && turnstileSecretReady;
 
+// Contact form (ADR 0025): the page it sits under, from the published pages
+// already listed for the home selector. A chosen page that is no longer
+// published leaves the form off, and the section says why.
+const contactPage = settings.contactPageId
+  ? homePages.find((p) => p.id === settings.contactPageId) ?? null
+  : null;
+const contact = {
+  pageChoice: contactPage?.public_id ?? '',
+  pageMissing: settings.contactPageId !== null && !contactPage,
+  emailReady: emailConfigured(settings, capabilities),
+  live: !!contactPage && contactSettings(settings, cfg.email.notifyTo, capabilities) !== null,
+  to: settings.contactTo ?? '',
+  toPlaceholder:
+    ownerAlertRecipient(settings.emailNotifyTo, cfg.email.notifyTo) ||
+    t('admin.settings.contact.toPlaceholder'),
+  reasons: (settings.contactReasons ?? []).join('\n'),
+  reasonsPlaceholder: defaultContactReasons().join('\n'),
+  maxReasons: CONTACT_LIMITS.reasons,
+};
+
 // Jump sub-nav targets.
 const sections = [
   { id: 'general', label: t('admin.settings.section.general') },
   { id: 'images', label: t('admin.settings.section.images') },
   { id: 'payments', label: t('admin.settings.section.payments') },
   { id: 'email', label: t('admin.settings.section.email') },
+  { id: 'contact', label: t('admin.settings.section.contact') },
   { id: 'turnstile', label: t('admin.settings.section.turnstile') },
   { id: 'search', label: t('admin.settings.section.search') },
   { id: 'build-time', label: t('admin.settings.section.buildTime') },
@@ -1464,6 +1523,73 @@ const sections = [
         {t('admin.settings.email.test.button')}
       </button>
       <span data-email-test-result class="text-xs font-medium"></span>
+    </form>
+  </section>
+
+  {/* ── Contact form (ADR 0025) ──────────────────────────────────────────── */}
+  <section id="contact" class="mt-10 scroll-mt-16">
+    <h2 class="mb-2 text-lg font-bold">{t('admin.settings.section.contact')}</h2>
+    <p class="mb-4 text-sm text-gray-500">{t('admin.settings.contact.intro')}</p>
+
+    <form method="POST" class="mb-10 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+      <input type="hidden" name="_action" value="save_contact" />
+      <p class={`text-sm font-medium ${contact.live ? 'text-green-700' : 'text-gray-500'}`} data-contact-status>
+        {
+          contact.live
+            ? t('admin.settings.contact.status.live', { page: contactPage?.title ?? '' })
+            : contact.pageMissing
+              ? t('admin.settings.contact.status.pageMissing')
+              : !contactPage
+                ? t('admin.settings.contact.status.off')
+                : !contact.emailReady
+                  ? t('admin.settings.contact.status.noEmail')
+                  : t('admin.settings.contact.status.noRecipient')
+        }
+      </p>
+      <div class="flex flex-wrap gap-4">
+        <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+          {t('admin.settings.contact.page')}
+          <select
+            name="contact_page"
+            class="w-80 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+          >
+            <option value="" selected={contact.pageChoice === ''}>{t('admin.settings.contact.pageNone')}</option>
+            {homePages.map((p) => (
+              <option value={p.public_id ?? ''} selected={contact.pageChoice !== '' && contact.pageChoice === p.public_id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+          <span class="normal-case tracking-normal text-gray-400">{t('admin.settings.contact.pageHint')}</span>
+        </label>
+        <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+          {t('admin.settings.contact.to')}
+          <input
+            type="email"
+            name="contact_to"
+            value={contact.to}
+            placeholder={contact.toPlaceholder}
+            class="w-64 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+          />
+          <span class="normal-case tracking-normal text-gray-400">{t('admin.settings.contact.toHint')}</span>
+        </label>
+      </div>
+      <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+        {t('admin.settings.contact.reasons')}
+        <textarea
+          name="contact_reasons"
+          rows="6"
+          placeholder={contact.reasonsPlaceholder}
+          class="w-80 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+        >{contact.reasons}</textarea>
+        <span class="normal-case tracking-normal text-gray-400">{t('admin.settings.contact.reasonsHint', { max: contact.maxReasons })}</span>
+      </label>
+      <button
+        type="submit"
+        class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+      >
+        {t('admin.common.save')}
+      </button>
     </form>
   </section>
 

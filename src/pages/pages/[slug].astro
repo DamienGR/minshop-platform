@@ -2,11 +2,17 @@
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import ContentPage from '#theme/ContentPage.astro';
+import ContactForm from '../../features/storefront/controls/ContactForm.astro';
+import Turnstile from '../../features/auth/Turnstile.astro';
+import type { ContactFormModel } from '../../features/storefront/models';
 import { getConfig } from '../../config';
 import { getPublishedPageBySlug } from '../../features/pages/db';
 import { pageImageDimensions } from '../../features/media/db';
 import { renderMarkdown, markdownExcerpt } from '../../features/pages/markdown';
 import { normalizePageLayout, pageLayoutStyle } from '../../features/pages/layouts';
+import { contactSettings, submitContact } from '../../features/contact';
+import { publicOrigin } from '../../features/http/origin';
+import { vaultReady } from '../../features/secrets/store';
 import { t } from '../../features/i18n';
 
 const { slug } = Astro.params;
@@ -26,6 +32,47 @@ if (!page) {
   });
 }
 
+// The contact form (ADR 0025) sits under the one page the merchant chose, and
+// only while someone would receive it. Every other page takes no POST.
+const settings = Astro.locals.settings;
+const contact =
+  settings && settings.contactPageId === page.id
+    ? contactSettings(settings, getConfig().email.notifyTo, { vault: vaultReady(), emailBinding: !!env.EMAIL })
+    : null;
+const pagePath = `/pages/${page.slug}`;
+let form: ContactFormModel | null = contact
+  ? {
+      action: pagePath,
+      reasons: contact.reasons,
+      values: { name: '', email: '', phone: '', reason: '', message: '' },
+      errors: {},
+      formError: null,
+      // Post/Redirect/Get: a reload of the confirmation sends nothing twice.
+      sent: Astro.url.searchParams.get('sent') === '1',
+    }
+  : null;
+
+if (Astro.request.method === 'POST') {
+  if (!contact || !settings || !form) {
+    return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
+  }
+  const pageUrl = new URL(pagePath, publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN)).href;
+  const outcome = await submitContact(Astro.request, contact, settings, pageUrl);
+  if (outcome.kind === 'sent') return Astro.redirect(`${pagePath}?sent=1#contact`, 303);
+  // A refusal echoes what the visitor typed: it is never shared, never kept.
+  Astro.response.status = outcome.status;
+  Astro.response.headers.set('cache-control', 'private, no-store');
+  form = {
+    ...form,
+    sent: false,
+    values: outcome.values,
+    errors: Object.fromEntries(
+      Object.entries(outcome.errors).map(([field, key]) => [field, t(key)]),
+    ),
+    formError: outcome.formError ? t(outcome.formError) : null,
+  };
+}
+
 // One indexed read, on an edge-cached route, so body images can carry their
 // intrinsic size and stop shifting the layout when they load.
 const dimensions = await pageImageDimensions(env.DB, page.id);
@@ -35,10 +82,27 @@ const html = renderMarkdown(page.body_markdown, {
 });
 const description = markdownExcerpt(page.body_markdown);
 const layout = normalizePageLayout(page.layout);
+const layoutStyle = pageLayoutStyle(layout);
 ---
 
 <Layout title={page.title} description={description}>
-  <ContentPage
-    model={{ title: page.title, html, layout, layoutStyle: pageLayoutStyle(layout) }}
-  />
+  <ContentPage model={{ title: page.title, html, layout, layoutStyle }} />
+  {
+    form && (
+      <div class="contact-frame" style={layoutStyle}>
+        <ContactForm model={form}>
+          <div slot="challenge" class="flex justify-center">
+            <Turnstile />
+            {/* The challenge needs its script; say so to a visitor without one
+                rather than let them write a message the server will refuse. */}
+            {settings?.turnstileEnabled && (
+              <noscript>
+                <p class="text-sm text-muted">{t('contact.noscriptChallenge')}</p>
+              </noscript>
+            )}
+          </div>
+        </ContactForm>
+      </div>
+    )
+  }
 </Layout>

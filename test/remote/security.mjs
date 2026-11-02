@@ -20,8 +20,9 @@
  *   - no page of the shop's own asking for a card: the purchase is paid on the
  *     provider's page, and no form field here is shaped to take a card.
  *
- * With `--limiteurs`, it also trips the three rate limiters once each — search
- * and checkout by a flood, the admin login by a patient guesser — and expects a
+ * With `--limiteurs`, it also trips the four rate limiters once each — search,
+ * checkout and the contact form by a flood, the admin login by a patient
+ * guesser — and expects a
  * 429 that says when to come back. Opt-in and never in the nightly run: the
  * address that runs it waits a minute before it can check out again and a
  * quarter of an hour before it can log in, and on a real shop that is its owner.
@@ -392,6 +393,13 @@ if (options.limiteurs) {
   await check('le checkout répond 429 sous une inondation (limite de 20 par minute), sans rien réserver', async () => {
     // An empty order: refused by the route, counted by the limiter before it.
     return flooded('du checkout', 20, await flood(20, () => get('/api/checkout', { method: 'POST', headers: { origin: target.origin, 'content-type': 'application/json' }, body: '{}' })));
+  });
+
+  await check('le formulaire de contact répond 429 sous une inondation (limite de 5 par minute), sans rien envoyer', async () => {
+    // A page that does not exist: no form, no e-mail, and still counted — the
+    // limiter answers every POST /pages/* before the route (ADR 0025).
+    const page = `/pages/porte-distante-${Date.now().toString(36)}`;
+    return flooded('du formulaire de contact', 5, await flood(5, () => get(page, { method: 'POST', headers: { origin: target.origin, 'content-type': FORM }, body: 'message=porte-distante' })));
   });
 
   // The admin login is counted exactly, in the shop's own database

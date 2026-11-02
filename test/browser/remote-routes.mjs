@@ -90,6 +90,9 @@ process.stdout.write(
     emptyCategory: null,
     category: paths.find((path) => path.startsWith('/categories/')) ?? null,
     page: paths.find((path) => path.startsWith('/pages/')) ?? null,
+    // The contact form posts for real against a deployed shop, to the
+    // merchant's inbox: its specs stay on the fixture store.
+    contact: null,
     search: word,
   })}\n`,
 );

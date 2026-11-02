@@ -15,6 +15,11 @@ describe('rateLimitBucket', () => {
     expect(rateLimitBucket('POST', path)).toBe('checkout');
   });
 
+  it.each(['/pages/contact', '/pages/nous-ecrire'])('limits the contact form POST %s (ADR 0025)', (path) => {
+    expect(rateLimitBucket('POST', path)).toBe('contact');
+    expect(rateLimitBucket('GET', path)).toBeNull();
+  });
+
   it.each(['/search', '/api/products'])('limits search GET %s only when q is present', (path) => {
     expect(rateLimitBucket('GET', path, true)).toBe('search');
     expect(rateLimitBucket('GET', path, false)).toBeNull();

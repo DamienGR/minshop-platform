@@ -1,0 +1,155 @@
+---
+import type { ContactFormModel } from '../models';
+import { CONTACT_LIMITS, CONTACT_TRAP_FIELD } from '../../contact/form.ts';
+import { t } from '../../i18n';
+
+/**
+ * The contact form (ADR 0025) — the part of the contact page no template
+ * reimplements.
+ *
+ * It owns the field names the server reads (`name`, `email`, `phone`,
+ * `reason`, `message`), the trap field and its hiding, the limits the server
+ * enforces (as `maxlength`), and the link from each field to its error
+ * (`aria-invalid`, `aria-describedby`). A plain POST form: it works without
+ * JavaScript (invariant 1), and the server answers by redirecting to the
+ * confirmation or by rendering this form again with what was typed.
+ *
+ * The trap is hidden three ways — off-screen, out of the tab order, out of the
+ * accessibility tree — so a person never meets it and a robot that fills every
+ * input does. Its label says to leave it empty, for the one case where the
+ * stylesheet does not load.
+ *
+ * The bot challenge comes in through the `challenge` slot: the page renders
+ * Turnstile there when it is on, because whether it is on is request state,
+ * which a control does not read.
+ */
+interface Props {
+  model: ContactFormModel;
+}
+
+const { model } = Astro.props;
+const errorId = (field: string) => `contact-${field}-error`;
+const invalid = (field: keyof ContactFormModel['errors']) =>
+  model.errors[field]
+    ? { 'aria-invalid': 'true' as const, 'aria-describedby': errorId(field) }
+    : {};
+const input = 'w-full rounded-md border border-line bg-surface px-3 py-2 text-sm';
+---
+
+<section id="contact" class="contact-form">
+  {
+    model.sent ? (
+      <div role="status" class="rounded-md border border-line bg-surface px-4 py-4">
+        <h2 class="mb-2 text-lg font-medium">{t('contact.sent.title')}</h2>
+        <p class="text-sm text-muted">{t('contact.sent.body')}</p>
+        <a href={`${model.action}#contact`} class="mt-3 inline-block text-sm underline">
+          {t('contact.sent.again')}
+        </a>
+      </div>
+    ) : (
+      <form method="POST" action={`${model.action}#contact`} class="space-y-4">
+        <h2 class="text-lg font-medium">{t('contact.title')}</h2>
+        <p class="text-sm text-muted">{t('contact.intro')}</p>
+        {model.formError && (
+          <p role="alert" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {model.formError}
+          </p>
+        )}
+
+        <div class="text-sm">
+          <label for="contact-name" class="mb-1 block font-medium">{t('contact.field.name')}</label>
+          <input
+            id="contact-name"
+            type="text"
+            name="name"
+            value={model.values.name}
+            required
+            maxlength={CONTACT_LIMITS.name}
+            autocomplete="name"
+            class={input}
+            {...invalid('name')}
+          />
+          {model.errors.name && <p id={errorId('name')} class="mt-1 text-red-700">{model.errors.name}</p>}
+        </div>
+
+        <div class="text-sm">
+          <label for="contact-email" class="mb-1 block font-medium">{t('contact.field.email')}</label>
+          <input
+            id="contact-email"
+            type="email"
+            name="email"
+            value={model.values.email}
+            required
+            maxlength={CONTACT_LIMITS.email}
+            autocomplete="email"
+            class={input}
+            {...invalid('email')}
+          />
+          {model.errors.email && <p id={errorId('email')} class="mt-1 text-red-700">{model.errors.email}</p>}
+        </div>
+
+        <div class="text-sm">
+          <label for="contact-phone" class="mb-1 block font-medium">{t('contact.field.phone')}</label>
+          <input
+            id="contact-phone"
+            type="tel"
+            name="phone"
+            value={model.values.phone}
+            maxlength={CONTACT_LIMITS.phone}
+            autocomplete="tel"
+            class={input}
+            {...invalid('phone')}
+          />
+          {model.errors.phone && <p id={errorId('phone')} class="mt-1 text-red-700">{model.errors.phone}</p>}
+        </div>
+
+        <div class="text-sm">
+          <label for="contact-reason" class="mb-1 block font-medium">{t('contact.field.reason')}</label>
+          <select id="contact-reason" name="reason" required class={input} {...invalid('reason')}>
+            <option value="" selected={!model.reasons.includes(model.values.reason)}>
+              {t('contact.field.reasonChoose')}
+            </option>
+            {model.reasons.map((reason) => (
+              <option value={reason} selected={reason === model.values.reason}>
+                {reason}
+              </option>
+            ))}
+          </select>
+          {model.errors.reason && <p id={errorId('reason')} class="mt-1 text-red-700">{model.errors.reason}</p>}
+        </div>
+
+        <div class="text-sm">
+          <label for="contact-message" class="mb-1 block font-medium">{t('contact.field.message')}</label>
+          <textarea
+            id="contact-message"
+            name="message"
+            required
+            rows="8"
+            maxlength={CONTACT_LIMITS.message}
+            class={input}
+            {...invalid('message')}
+          >{model.values.message}</textarea>
+          {model.errors.message && <p id={errorId('message')} class="mt-1 text-red-700">{model.errors.message}</p>}
+        </div>
+
+        <div aria-hidden="true" class="sr-only">
+          <label>
+            {t('contact.field.trap')}
+            <input type="text" name={CONTACT_TRAP_FIELD} value="" tabindex="-1" autocomplete="off" />
+          </label>
+        </div>
+
+        <slot name="challenge" />
+
+        <p class="text-xs text-muted">{t('contact.privacy')}</p>
+
+        <button
+          type="submit"
+          class="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover"
+        >
+          {t('contact.submit')}
+        </button>
+      </form>
+    )
+  }
+</section>

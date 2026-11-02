@@ -217,6 +217,7 @@ src/
     http/      origin · securityHeaders (twin of public/_headers)
     observability/  logSafe
     catalog/   serialize · http  (public API shapes for /api/products)
+    contact/   form (fields and rules, pure) · policy (where, to whom) · index (send; ADR 0025)
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/

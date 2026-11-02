@@ -136,12 +136,12 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     normalizeSearchQuery(context.url.searchParams.get('q') ?? '') !== '',
   );
   if (bucket) {
-    const limiter =
-      bucket === 'auth'
-        ? env.AUTH_RATE_LIMITER
-        : bucket === 'checkout'
-          ? env.CHECKOUT_RATE_LIMITER
-          : env.SEARCH_RATE_LIMITER;
+    const limiter = {
+      auth: env.AUTH_RATE_LIMITER,
+      checkout: env.CHECKOUT_RATE_LIMITER,
+      search: env.SEARCH_RATE_LIMITER,
+      contact: env.CONTACT_RATE_LIMITER,
+    }[bucket];
     try {
       if (!(await checkRateLimit(limiter, context.request, path))) {
         console.warn(JSON.stringify({ event: 'rate_limited', bucket, path }));

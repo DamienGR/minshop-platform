@@ -52,6 +52,7 @@ declare namespace Cloudflare {
     AUTH_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
     CHECKOUT_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
     SEARCH_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
+    CONTACT_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
     // Optional: Cloudflare Images binding for upload optimization (needs
     // Transformations enabled). Absent = uploads stored as-is (imageOptimize.ts
     // guards + falls back), so the free-plan default config omits it.

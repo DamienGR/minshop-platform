@@ -203,6 +203,12 @@ A merchant's per-page layout preset still wins over `--prose-measure`. That is
 intentional: their explicit choice of a wide or centred page outranks a theme
 default.
 
+The page the merchant chose for the contact form (Admin → Réglages) renders
+the form **below** your `ContentPage`, not inside it, in the page's measure.
+Your template needs nothing for it, and cannot lose it: the form is the
+upstream `<ContactForm>` control, styled by your tokens (`brand`, `line`,
+`surface`, `muted`) like the cart and checkout.
+
 ## Page container
 
 The width and padding of the page are yours, via tokens the layout reads:

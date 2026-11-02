@@ -29,6 +29,7 @@ export const FIXTURE = REMOTE
       category: '/categories/apparel',
       emptyCategory: '/categories/bientot',
       page: '/pages/about',
+      contact: '/pages/contact',
       search: 'sample',
     };
 
@@ -57,6 +58,7 @@ export const ROUTES = [
   { name: 'recherche', path: FIXTURE.search && `/search?q=${encodeURIComponent(FIXTURE.search)}`, why: 'des résultats' },
   { name: 'recherche vide', path: '/search?q=zzzznomatch', why: 'aucun résultat' },
   { name: 'page de contenu', path: FIXTURE.page, why: 'la prose du marchand' },
+  { name: 'contact', path: FIXTURE.contact, why: 'le formulaire de contact sous sa page' },
   { name: 'panier', path: '/cart', why: 'le shell hors navigation' },
   { name: 'introuvable', path: '/no-such-page', why: 'la 404' },
 ].filter((route) => route.path);

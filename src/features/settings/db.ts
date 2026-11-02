@@ -63,6 +63,10 @@ export type SettingKey =
   | 'bank_transfer_bic' // optional
   | 'bank_transfer_holder' // the account holder's name, as the bank knows it
   | 'bank_transfer_days' // days the stock stays held; absent = 8
+  // The contact form (ADR 0025): sent by e-mail, never stored.
+  | 'contact_page' // id of the published page the form sits under; absent = no form
+  | 'contact_to' // its recipient; absent = the order alerts' recipient
+  | 'contact_reasons' // the reasons offered, one per line; absent = the catalog's defaults
   | `enc:${string}`; // AES-GCM-encrypted secret (see features/secrets/store.ts), e.g. 'enc:stripe_secret_key'. Never loaded as plaintext into locals.
 
 /** The storefront features that can be flipped at runtime (default on). */
@@ -146,6 +150,13 @@ export interface StoreSettings {
   bankTransferHolder: string | null;
   /** Days the stock stays held while a transfer travels (1 to 30, default 8). */
   bankTransferDays: number;
+  /** The page the contact form sits under (features/contact/policy.ts), or null:
+   *  no form. An id, not a slug, like the home page: a renamed page keeps it. */
+  contactPageId: number | null;
+  /** The form's recipient, or null for the order alerts' one. */
+  contactTo: string | null;
+  /** The reasons the merchant wrote, in order, or null for the defaults. */
+  contactReasons: string[] | null;
 }
 
 /** One setting value, or null if unset. */
@@ -248,7 +259,25 @@ export function parseStoreSettings(
     bankTransferBic: map.get('bank_transfer_bic') ?? null,
     bankTransferHolder: map.get('bank_transfer_holder') ?? null,
     bankTransferDays: parseHoldDays(map.get('bank_transfer_days')),
+    contactPageId: positiveId(map.get('contact_page')),
+    contactTo: map.get('contact_to') ?? null,
+    contactReasons: lines(map.get('contact_reasons')),
   };
+}
+
+/** A stored row id, or null when absent or not one. */
+function positiveId(value: string | undefined): number | null {
+  const id = Number(value);
+  return value && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** A stored list, one entry per line, or null when nothing is left of it. */
+function lines(value: string | undefined): string[] | null {
+  const entries = (value ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return entries.length > 0 ? entries : null;
 }
 
 /**

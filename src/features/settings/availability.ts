@@ -15,7 +15,11 @@ export interface SettingAvailability {
   reason?: string;
 }
 
-const hasSecret = (settings: StoreSettings, caps: RuntimeCapabilities, name: string): boolean =>
+const hasSecret = (
+  settings: StoreSettings,
+  caps: Pick<RuntimeCapabilities, 'vault'>,
+  name: string,
+): boolean =>
   caps.vault && settings.configuredSecrets.includes(name);
 
 export function stripeConfigured(
@@ -42,7 +46,7 @@ export function boxtalConfigured(configuredSecrets: readonly string[], vault: bo
 
 export function emailConfigured(
   settings: StoreSettings,
-  caps: RuntimeCapabilities,
+  caps: Pick<RuntimeCapabilities, 'vault' | 'emailBinding'>,
 ): boolean {
   if (!settings.emailEnabled) return false;
   return settings.emailProvider === 'cloudflare'

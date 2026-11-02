@@ -1,7 +1,7 @@
 import type { RateLimit } from '@cloudflare/workers-types';
 import { t } from '../i18n/index.ts';
 
-export type RateLimitBucket = 'auth' | 'checkout' | 'search';
+export type RateLimitBucket = 'auth' | 'checkout' | 'search' | 'contact';
 
 /** Public routes that can spend scarce resources or amplify credential abuse. */
 export function rateLimitBucket(
@@ -21,6 +21,9 @@ export function rateLimitBucket(
   if (pathname === '/api/checkout' || pathname === '/checkout' || pathname.startsWith('/pay/')) {
     return 'checkout';
   }
+  // The contact form posts to the page it sits under (ADR 0025), and no other
+  // page takes a POST: each one sends an e-mail, the scarcest thing here.
+  if (pathname.startsWith('/pages/')) return 'contact';
   return null;
 }
 

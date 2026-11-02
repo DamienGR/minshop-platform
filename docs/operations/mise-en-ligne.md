@@ -169,6 +169,12 @@ voient les clients. Ensuite, dans Admin → Réglages :
   commande est sautée, et rien ne la renvoie (la première commande réelle du
   pilote, étape 10 de la certification) ;
 - [ ] **Protection anti-robots** : les clés du widget de production ;
+- [ ] **Formulaire de contact**, si le commerçant en veut un
+  ([ADR 0025](../architecture/decisions/0025-formulaire-de-contact.md)) : la
+  page qui le porte, publiée et ajoutée au pied de page dans Navigation, ses
+  motifs, et un message de test reçu par le destinataire, auquel « Répondre »
+  écrit bien au visiteur. Sa politique de confidentialité dit ce que le
+  formulaire transmet et à qui ;
 - [ ] **Paiements** : Stripe, quand le commerçant ouvre — une clé **live**
   restreinte (droits : [guide des comptes, §1](../certification/comptes-et-acces.md#1-stripe)),
   l'endpoint de webhook du mode live sur `https://<domaine>/api/webhook` avec
