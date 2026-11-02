@@ -42,4 +42,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0019](0019-compte-cloudflare-mutualise.md) | Un compte Cloudflare mutualisé pour les boutiques | Accepté |
 | [0020](0020-expeditions-par-boxtal.md) | Boxtal pour toutes les expéditions, points relais compris | Accepté ; amendé par 0021 |
 | [0021](0021-boxtal-apres-le-bac-a-sable.md) | Ce que le bac à sable de Boxtal change à l'ADR 0020 | Accepté |
-| [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Proposé |
+| [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Accepté |
