@@ -3108,3 +3108,11 @@ Engagée en six lots, dans cet ordre :
    `/checkout`, faute d'un Boxtal simulé sous `wrangler dev`. Le choix du point
    sans JavaScript est tenu par `test/integration/checkout-relay.mjs`, et la
    fiche le regarde à la main, sur un téléphone et sans JavaScript.
+   La partie A, la répétition sur le bac à sable, est passée les 1er et
+   2 novembre 2026 (preuves pilote#50) : elle a trouvé un défaut, le
+   transporteur `other` d'une étiquette relais, corrigé dans `v0.3.36` et
+   revérifié sur la staging avant sa destruction. La partie B, la commande
+   réelle, est reportée à la recette du premier site client (décision de
+   Damien, 2026-11-02) : elle se fera sur cette boutique, qui allume
+   l'option pour sa recette. D'ici là, le lot 6 reste ouvert et aucune autre
+   boutique réelle n'allume `features.relayPoints`.
