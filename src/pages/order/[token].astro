@@ -12,6 +12,7 @@ import { catalogPath } from '../../features/settings/home';
 import { paymentMethodName } from '../../features/payments/labels';
 import { orderRelayPoint, relayPointLines } from '../../features/shipping/relay.ts';
 import { formatNumber, t } from '../../features/i18n';
+import { customizationText, parseCustomization } from '../../features/products/customization';
 
 // Guest access: new orders are addressed ONLY by their otk_ access token
 // (resolved through the registry); legacy orders keep their pre-cutover
@@ -77,7 +78,12 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
             <tbody>
               {items.map((it) => (
                 <tr class="border-t border-line">
-                  <td class="px-4 py-2">{it.name}</td>
+                  <td class="px-4 py-2">
+                    {it.name}
+                    {parseCustomization(it.customization).map((entry) => (
+                      <span class="block break-words text-xs text-muted">{customizationText(entry)}</span>
+                    ))}
+                  </td>
                   <td class="px-4 py-2">{it.quantity}</td>
                   <td class="px-4 py-2">
                     {formatPrice(it.price_cents * it.quantity, order.currency)}

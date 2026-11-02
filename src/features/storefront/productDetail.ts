@@ -11,6 +11,7 @@ import { catalogPath } from '../settings/home';
 import { formatMoney, toMajorUnits, currencyDecimals } from '../../money';
 import { requirePublicId } from '../catalog/serialize';
 import { buildProductCard } from './productCard';
+import { customFieldName } from '../products/customization';
 import type {
   ProductDetailModel,
   ProductPurchaseModel,
@@ -97,7 +98,7 @@ export async function loadProductDetail(
   // beside the stored neighbours, which only a semantic-search shop has. The
   // category top-up is read whether or not they fill the row — twice the
   // target covers any shortfall, and inside the batch it costs no call.
-  const [{ categories, variants, extras, images: gallery, related: byCategory }, storedRelated] =
+  const [{ categories, variants, extras, customFields, images: gallery, related: byCategory }, storedRelated] =
     await Promise.all([
       readProductPageRows(db, product.id, RELATED_TARGET * 2),
       getRelatedStored(product, RELATED_TARGET),
@@ -233,7 +234,7 @@ export async function loadProductDetail(
       productId: requirePublicId(product.public_id, product.id, 'product'),
       cartAction: '/api/cart',
       expressAction: '/express',
-      hasOptions: hasVariants || extras.length > 0,
+      hasOptions: hasVariants || extras.length > 0 || customFields.length > 0,
       soldOut,
       showAddToCart: cartEnabled,
       // Buy now is express (it skips the cart), so it survives the cart being
@@ -255,6 +256,17 @@ export async function loadProductDetail(
         formattedPriceDelta: formatMoney(extra.price_delta_cents, options.currency),
         priceDeltaCents: extra.price_delta_cents,
       })),
+      customFields: customFields.map((field) => {
+        const id = requirePublicId(field.public_id, field.id, 'custom field');
+        return {
+          name: customFieldName(id),
+          inputId: `custom-${id}`,
+          label: field.label,
+          help: field.help_text,
+          maxLength: field.max_length,
+          required: field.required === 1,
+        };
+      }),
     },
   };
 }

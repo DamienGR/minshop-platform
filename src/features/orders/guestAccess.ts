@@ -207,7 +207,8 @@ function advanceCursor(db: D1Database, name: string, last: SweepRow): D1Prepared
 /**
  * A checkout terminal for three days without an order: its credential becomes
  * a tombstone, and the address /checkout took for a card payment (migration
- * 0048) is let go — past Stripe's retries, no paid webhook comes to need it.
+ * 0048) and the buyer's personalisation text (migration 0049) are let go —
+ * past Stripe's retries, no paid webhook comes to need them.
  */
 async function hideTerminalGuestAccess(db: D1Database, scan: number): Promise<number> {
   const cursor = await readCursor(db, HIDE_CURSOR);
@@ -239,8 +240,8 @@ async function hideTerminalGuestAccess(db: D1Database, scan: number): Promise<nu
   const forgets = acted.map((row) =>
     db
       .prepare(
-        `UPDATE checkout_reservations SET ship_address = NULL
-          WHERE public_id = ?1 AND ship_address IS NOT NULL
+        `UPDATE checkout_reservations SET ship_address = NULL, customization = NULL
+          WHERE public_id = ?1 AND (ship_address IS NOT NULL OR customization IS NOT NULL)
             AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.public_id = ?1)`,
       )
       .bind(row.id),

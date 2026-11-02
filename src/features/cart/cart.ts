@@ -7,6 +7,12 @@ import {
   type ProductVariant,
   type ProductExtra,
 } from '../products/variants';
+import { listCustomFieldsByProductPublicIds } from '../products/customFields';
+import {
+  checkCustomization,
+  type CustomizationEntry,
+  type ProductCustomField,
+} from '../products/customization';
 import { parseCartKey, lineUnitPriceCents } from './key';
 
 const COOKIE = 'cart';
@@ -21,14 +27,24 @@ const MAX_QTY = 99;
  */
 const CART_VERSION = 2;
 
-/** Cart is a cartKey → quantity map (key encodes product[:variant][#extras]). */
+/** Cart is a cartKey → quantity map (key encodes product[:variant][#extras][~text]). */
 export type Cart = Record<string, number>;
+
+/**
+ * The cookie's budget. A browser silently drops a cookie past 4 KB (name,
+ * value and attributes together), and with it the cart: the add that tipped
+ * it over would empty the basket instead of filling it. Personalisation text
+ * rides in the keys (key.ts), so this is the first cart that can get there.
+ */
+const COOKIE_VALUE_BUDGET = 3800;
 
 export interface CartLine {
   key: string; // the exact cart key (for update/remove)
   product: Product;
   variant: ProductVariant | null;
   extras: ProductExtra[];
+  /** What the buyer typed, judged against the product's current fields. */
+  customization: CustomizationEntry[];
   qty: number;
   unitPriceCents: number; // variant/base + selected extras
   lineTotalCents: number;
@@ -59,6 +75,15 @@ function sanitize(obj: unknown): Cart {
     }
   }
   return out;
+}
+
+/** The cookie value as Astro writes it: JSON, then percent-encoded. */
+const encodedCookieValue = (cart: Cart): string =>
+  encodeURIComponent(JSON.stringify({ v: CART_VERSION, items: cart }));
+
+/** Whether this cart still fits in its cookie (see COOKIE_VALUE_BUDGET). */
+export function cartFits(cart: Cart): boolean {
+  return encodedCookieValue(cart).length <= COOKIE_VALUE_BUDGET;
 }
 
 export function writeCart(cookies: AstroCookies, cart: Cart, secure: boolean): void {
@@ -132,8 +157,9 @@ export async function resolveCart(
   });
   if (requested.length === 0) return { lines: [], subtotalCents: 0 };
 
-  const [products, variants, extras] = await Promise.all([
-    getProductsByPublicIds(db, [...new Set(requested.map((line) => line.parsed.productPublicId))]),
+  const productPublicIds = [...new Set(requested.map((line) => line.parsed.productPublicId))];
+  const [products, variants, extras, fields] = await Promise.all([
+    getProductsByPublicIds(db, productPublicIds),
     getActiveVariantsByPublicIds(
       db,
       requested.flatMap((line) =>
@@ -144,10 +170,17 @@ export async function resolveCart(
       db,
       requested.flatMap((line) => line.parsed.extraPublicIds),
     ),
+    listCustomFieldsByProductPublicIds(db, productPublicIds),
   ]);
   const productsByPid = new Map(products.map((product) => [product.public_id, product]));
   const variantsByPid = new Map(variants.map((variant) => [variant.public_id, variant]));
   const extrasByPid = new Map(extras.map((extra) => [extra.public_id, extra]));
+  const fieldsByProduct = new Map<number, ProductCustomField[]>();
+  for (const field of fields) {
+    const list = fieldsByProduct.get(field.product_id);
+    if (list) list.push(field);
+    else fieldsByProduct.set(field.product_id, [field]);
+  }
 
   const lines: CartLine[] = [];
   for (const { key, qty, parsed } of requested) {
@@ -168,12 +201,19 @@ export async function resolveCart(
           extra !== undefined && extra.product_id === product.id,
       );
 
+    // Personalisation: judged against the fields as they are NOW. A line whose
+    // text no longer fits — a field made required, a maximum lowered — drops,
+    // as a line whose variant was removed does; it is never cut to fit.
+    const custom = checkCustomization(fieldsByProduct.get(product.id) ?? [], parsed.customValues);
+    if (!custom.ok) continue;
+
     const unitPriceCents = lineUnitPriceCents(product.price_cents, variant, lineExtras);
     lines.push({
       key,
       product,
       variant,
       extras: lineExtras,
+      customization: custom.entries,
       qty,
       unitPriceCents,
       lineTotalCents: unitPriceCents * qty,

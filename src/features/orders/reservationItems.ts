@@ -1,4 +1,5 @@
 import type { Product } from '../products/db.ts';
+import type { CustomizationEntry } from '../products/customization.ts';
 import type { ReservationItem } from './reservations.ts';
 import { entitlementWriterActive } from '../digitalDelivery/rollout.ts';
 
@@ -14,6 +15,8 @@ export interface ReservationLine {
   name: string; // composed: product + variant + extras
   unitPriceCents: number; // variant/base + extras
   variantId: number | null;
+  /** What the buyer typed, judged against the product's fields (ticket #125). */
+  customization?: CustomizationEntry[];
 }
 
 export interface LineDraft extends ReservationLine {
@@ -39,6 +42,7 @@ export const reservationItems = (lines: ReservationLine[]): ReservationItem[] =>
     name: line.name,
     priceCents: line.unitPriceCents,
     quantity: line.qty,
+    ...(line.customization && line.customization.length > 0 ? { customization: line.customization } : {}),
     ...(entitlementWriterActive() && line.product.file_key
       ? {
           fileKey: line.product.file_key,

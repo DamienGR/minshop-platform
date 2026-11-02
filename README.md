@@ -112,7 +112,8 @@ Cloudflare `eu`, et pas seulement avec un hint de localisation `weur`.
 - ERP, caisse ou comptabilité synchronisés ;
 - tarifs transporteur en temps réel ;
 - automatisation marketing ;
-- produits hautement configurables ;
+- produits hautement configurables (un texte libre par champ, lui, est pris en
+  charge : [ADR 0022](docs/architecture/decisions/0022-produits-personnalisables.md)) ;
 - recherche sémantique, Lightning et MCP.
 
 Ces besoins pourront être proposés sur devis, mais ne doivent pas faire dériver

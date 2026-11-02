@@ -4,6 +4,7 @@ import Layout from '../layouts/Layout.astro';
 import { formatPrice, getConfig } from '../config';
 import { readTermsGate } from '../features/legal/terms';
 import { readCart, resolveCart } from '../features/cart/cart';
+import { customizationText } from '../features/products/customization';
 import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { stripeDestination } from '../features/shipping/destination';
@@ -110,6 +111,9 @@ const linesForm = 'cart-lines';
                       {[l.variant?.label, ...l.extras.map((e) => e.label)].filter(Boolean).join(' · ')}
                     </span>
                   )}
+                  {l.customization.map((entry) => (
+                    <span class="block break-words text-xs text-muted">{customizationText(entry)}</span>
+                  ))}
                   <span class="block text-xs tabular-nums text-muted">
                     {formatPrice(l.unitPriceCents)} {t('cart.unitPrice')}
                   </span>

@@ -195,6 +195,7 @@ src/
   layouts/               Layout.astro (storefront), AdminLayout.astro
   features/
     products/  db · form · image · ProductForm.astro · sort · search · stock · slug
+               customization (the buyer's free text, pure) · customFields (its fields, admin editor)
     orders/    db · number · reservations (atomic checkout stock holds)
     payments/  provider (port) · stripe · opennode · lightning-provider · index (factory)
                lightning/  backend (port) · phoenixd · lnbits · index · rate · pending

@@ -4,20 +4,33 @@
  * variant/extras are distinct lines. Pure (no bindings) so it's unit-testable and
  * shared by the cookie parser, the add-to-cart route, and checkout.
  *
- * Key format (prefixed public IDs only):  product[:variant][#extra,extra,…]
+ * Key format (prefixed public IDs only):  product[:variant][#extra,extra,…][~text]
  *   "prod_x"                     product, no variant, no extras
  *   "prod_x:var_y"               product + variant
  *   "prod_x#xtra_a,xtra_b"       product + extras (no variant)
  *   "prod_x:var_y#xtra_a,xtra_b" product + variant + extras
+ *   "prod_x~WyJjZmxk…"           product + what the buyer typed in its
+ *                                personalisation fields (customization.ts)
  * Extras are de-duped + sorted so the same selection always yields the same key.
- * Legacy numeric keys are NOT parsed — they fail validation and the line drops.
+ * The personalisation rides IN the key, so a bag embroidered "Léa" and one
+ * embroidered "Tom" are two lines, and the same name twice is one line of two.
+ * `~` is outside the public-ID and base64url alphabets, so it never splits a
+ * part. Legacy numeric keys are NOT parsed — they fail validation and the line
+ * drops.
  */
 import { parsePublicId } from '../ids/publicId.ts';
+import {
+  decodeCustomValues,
+  encodeCustomValues,
+  type CustomValues,
+} from '../products/customization.ts';
 
 export interface ParsedKey {
   productPublicId: string;
   variantPublicId: string | null;
   extraPublicIds: string[];
+  /** What the buyer typed, by `cfld_` ID; empty when the line has none. */
+  customValues: CustomValues;
 }
 
 /** Canonical extras list: valid xtra_ IDs only, de-duped, sorted lexicographically. */
@@ -29,17 +42,28 @@ export function cartKey(
   productPublicId: string,
   variantPublicId?: string | null,
   extraPublicIds: string[] = [],
+  customValues: CustomValues = {},
 ): string {
   let key = productPublicId;
   if (variantPublicId) key += `:${variantPublicId}`;
   const ex = canonicalExtras(extraPublicIds);
   if (ex.length) key += `#${ex.join(',')}`;
+  const text = encodeCustomValues(customValues);
+  if (text) key += `~${text}`;
   return key;
 }
 
 /** Parse a cart key back to its parts, or null if ANY part is malformed (never trust cookies). */
 export function parseCartKey(key: string): ParsedKey | null {
-  const [left, extrasPart, spill] = key.split('#');
+  const [selection, textPart, overflow] = key.split('~');
+  if (overflow !== undefined) return null; // more than one '~' → malformed
+  let customValues: CustomValues = {};
+  if (textPart !== undefined) {
+    const decoded = decodeCustomValues(textPart);
+    if (!decoded) return null; // bare '~' or a token that is not canonical
+    customValues = decoded;
+  }
+  const [left, extrasPart, spill] = selection.split('#');
   if (spill !== undefined) return null; // more than one '#' → malformed
   const [pidStr, vidStr, extra] = left.split(':');
   if (extra !== undefined) return null; // more than one ':' → malformed
@@ -60,7 +84,7 @@ export function parseCartKey(key: string): ParsedKey | null {
     if (extraPublicIds.length !== new Set(parts).size) return null; // any invalid extra → reject
     if (extraPublicIds.length === 0) return null; // bare '#' → malformed
   }
-  return { productPublicId, variantPublicId, extraPublicIds };
+  return { productPublicId, variantPublicId, extraPublicIds, customValues };
 }
 
 /**

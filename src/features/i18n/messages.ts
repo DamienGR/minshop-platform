@@ -81,6 +81,12 @@ export const fr = {
   'product.gallery.image': 'Image {position} sur {total}',
   'product.digitalDelivery': 'Téléchargement numérique',
   'product.error.chooseOption': 'Choisissez : {option}.',
+  'product.customization': 'Personnalisation',
+  'product.customization.optional': '(facultatif)',
+  'product.customization.maxLength': '{max} caractères au plus',
+  'product.customization.entry': '{champ} : {texte}',
+  'product.error.customRequired': 'Renseignez « {champ} ».',
+  'product.error.customTooLong': '« {champ} » : {max} caractères au plus.',
 
   // ─── Panier ────────────────────────────────────────────────────────────────────
   'cart.title': 'Votre panier',
@@ -99,6 +105,7 @@ export const fr = {
   'cart.checkout': 'Commander',
   'cart.viewFull': 'Voir le panier',
   'cart.unavailable': 'La commande est momentanément indisponible.',
+  'cart.error.full': 'Votre panier est plein : commandez ce qu’il contient ou retirez un article avant d’en ajouter un autre.',
   'cart.shipTo': 'Livrer en',
 
   // ─── Moyens de paiement ────────────────────────────────────────────────────────

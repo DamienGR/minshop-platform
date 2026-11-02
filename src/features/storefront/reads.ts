@@ -21,6 +21,8 @@ import {
   type ProductExtra,
   type ProductVariant,
 } from '../products/variants';
+import { listCustomFieldsStatement } from '../products/customFields';
+import type { ProductCustomField } from '../products/customization';
 
 /**
  * The storefront's page reads, one `db.batch()` each.
@@ -49,6 +51,8 @@ export interface ProductPageRows {
   categories: Category[];
   variants: ProductVariant[];
   extras: ProductExtra[];
+  /** The free-text fields the buyer fills in (ticket #125). */
+  customFields: ProductCustomField[];
   images: ProductImageRow[];
   /** Active products sharing a category, newest first, up to `relatedLimit`. */
   related: Product[];
@@ -60,10 +64,11 @@ export async function readProductPageRows(
   productId: number,
   relatedLimit: number,
 ): Promise<ProductPageRows> {
-  const [categories, variants, extras, images, related] = await db.batch([
+  const [categories, variants, extras, customFields, images, related] = await db.batch([
     categoriesForProductStatement(db, productId),
     listVariantsStatement(db, productId),
     listExtrasStatement(db, productId),
+    listCustomFieldsStatement(db, productId),
     listProductImagesStatement(db, productId),
     relatedProductsStatement(db, productId, relatedLimit),
   ]);
@@ -71,6 +76,7 @@ export async function readProductPageRows(
     categories: rows<Category>(categories),
     variants: rows<ProductVariant>(variants),
     extras: rows<ProductExtra>(extras),
+    customFields: rows<ProductCustomField>(customFields),
     images: rows<ProductImageRow>(images),
     related: rows<Product>(related),
   };

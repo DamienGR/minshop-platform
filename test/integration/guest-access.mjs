@@ -40,7 +40,7 @@ try {
        created_at TEXT NOT NULL DEFAULT (datetime('now')), sent_at TEXT,
        PRIMARY KEY (order_id, kind))`,
     `CREATE TABLE pending_payments (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'pending', expires_at TEXT)`,
-    `CREATE TABLE checkout_reservations (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active', terminal_at TEXT, terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, ship_address TEXT)`,
+    `CREATE TABLE checkout_reservations (public_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active', terminal_at TEXT, terms_version TEXT, terms_accepted_at TEXT, vat_rate_bps INTEGER, ship_address TEXT, customization TEXT)`,
     `CREATE TABLE sweep_cursors (name TEXT PRIMARY KEY, after_at TEXT NOT NULL, after_id TEXT NOT NULL)`,
   ]) {
     await db.exec(sql.replace(/\n\s*/g, ' '));
@@ -94,8 +94,9 @@ try {
   const terminal = await claimOrderIdentity(db);
   await db
     .prepare(
-      `INSERT INTO checkout_reservations (public_id, status, terminal_at, ship_address)
-       VALUES (?, 'expired', datetime('now', '-4 days'), '{"city":"Nantes"}')`,
+      `INSERT INTO checkout_reservations (public_id, status, terminal_at, ship_address, customization)
+       VALUES (?, 'expired', datetime('now', '-4 days'), '{"city":"Nantes"}',
+               '[[{"label":"Nom à broder","value":"Léa"}]]')`,
     )
     .bind(terminal.publicId)
     .run();
@@ -106,12 +107,14 @@ try {
   const changed = await sweepAbandonedGuestAccess(db);
   assert.equal(changed, 2, 'sweep hid the terminal row and removed only the impossible orphan');
   assert.ok((await getGuestAccess(db, terminal.publicId))?.hidden_at, 'terminal credential became a tombstone');
-  // The address /checkout took for a card payment that never came goes too.
+  // The address /checkout took for a card payment that never came goes too,
+  // and so does what the buyer typed on a personalised product (ticket #125).
   const forgotten = await db
-    .prepare('SELECT ship_address FROM checkout_reservations WHERE public_id = ?')
+    .prepare('SELECT ship_address, customization FROM checkout_reservations WHERE public_id = ?')
     .bind(terminal.publicId)
     .first();
   assert.equal(forgotten.ship_address, null, 'an abandoned card checkout kept its address');
+  assert.equal(forgotten.customization, null, 'an abandoned checkout kept the buyer’s personalisation text');
   assert.equal(await getGuestAccess(db, orphan.publicId), null);
   assert.ok(await getGuestAccess(db, fresh.publicId), 'fresh unsettled row survives the sweep');
   assert.ok(await getGuestAccess(db, orderPublicId), 'settled row survives the sweep');

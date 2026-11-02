@@ -1,9 +1,11 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { applySubmittedQuantities, readCart, writeCart, CART_QTY_MAX } from '../../features/cart/cart';
+import { applySubmittedQuantities, cartFits, readCart, writeCart, CART_QTY_MAX } from '../../features/cart/cart';
 import { cartKey, parseCartKey } from '../../features/cart/key';
 import { getProductByPublicId } from '../../features/products/db';
 import { listVariants, getExtrasByPublicIds } from '../../features/products/variants';
+import { listCustomFields } from '../../features/products/customFields';
+import { checkCustomization, readCustomValues } from '../../features/products/customization';
 import { parsePublicId } from '../../features/ids/publicId.ts';
 import { getStoreSettings } from '../../features/settings/db';
 import { t } from '../../features/i18n/index.ts';
@@ -11,9 +13,10 @@ import { t } from '../../features/i18n/index.ts';
 export const prerender = false;
 
 // POST /api/cart — add / update / remove a line, then back to the cart.
-// Lines are keyed by product[:variant][#extras] public-ID tuples. `add` resolves
-// the chosen variant + extras (validated against D1); `update`/`remove` act on
-// the line key. Numeric row IDs are never accepted.
+// Lines are keyed by product[:variant][#extras][~text] (cart/key.ts). `add`
+// resolves the chosen variant + extras and judges the personalisation text
+// (validated against D1); `update`/`remove` act on the line key. Numeric row
+// IDs are never accepted.
 export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const form = await request.formData();
   const action = String(form.get('_action'));
@@ -85,12 +88,27 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     ? await getExtrasByPublicIds(env.DB, product.id, wantExtras)
     : [];
 
+  // Personalisation: a required field left blank or a text past its maximum
+  // sends the shopper back to the product with the reason. The drawer's
+  // request gets a 422, on which the shell's script posts the form again as a
+  // page, so the reason is shown rather than an unchanged drawer (Layout.astro).
+  const fields = await listCustomFields(env.DB, product.id);
+  const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)));
+  const backToProduct = (message: string) =>
+    partial
+      ? new Response(null, { status: 422 })
+      : redirect(`/products/${product.slug}?error=${encodeURIComponent(message)}`, 303);
+  if (!custom.ok) return backToProduct(custom.error);
+
   const key = cartKey(
     product.public_id,
     variantPublicId,
     extras.flatMap((e) => (e.public_id ? [e.public_id] : [])),
+    custom.values,
   );
   cart[key] = Math.min((cart[key] ?? 0) + 1, CART_QTY_MAX);
+  // A cookie past its budget is dropped by the browser, cart and all.
+  if (!cartFits(cart)) return backToProduct(t('cart.error.full'));
 
   writeCart(cookies, cart, url.protocol === 'https:');
   return done();

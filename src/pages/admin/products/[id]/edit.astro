@@ -6,6 +6,8 @@ import ProductForm from '../../../../features/products/ProductForm.astro';
 import { getProductByPublicId, listProductImages } from '../../../../features/products/db';
 import { parsePublicId } from '../../../../features/ids/publicId';
 import { listVariants, listExtras } from '../../../../features/products/variants';
+import { listCustomFields } from '../../../../features/products/customFields';
+import { CUSTOM_FIELD_MAX_LENGTH } from '../../../../features/products/customization';
 import {
   listCategories,
   buildTree,
@@ -35,6 +37,8 @@ const error = Astro.url.searchParams.get('error');
 // Variants + extras (show all, including any inactive, so the admin sees everything).
 const variants = await listVariants(env.DB, product.id, true);
 const extras = await listExtras(env.DB, product.id, true);
+// Personalisation fields (ticket #125): the free text the buyer types.
+const customFields = await listCustomFields(env.DB, product.id);
 // The product's main photo — a variant with no specific image falls back to this
 // (so new variants default to showing it rather than an empty box).
 const imgBase = getConfig().images.baseUrl;
@@ -254,9 +258,9 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
         <strong class="font-medium text-gray-700">{t('admin.products.variants.intro.variants')}</strong>
         {t('admin.products.variants.intro.variantsText')}
         <strong class="font-medium text-gray-700">{t('admin.products.variants.intro.extras')}</strong>
-        {t('admin.products.variants.intro.extrasText')}
-        {t('admin.products.variants.intro.saveBefore')}
-        <strong class="font-medium text-gray-700">{t('admin.products.edit.submit')}</strong>
+        {t('admin.products.variants.intro.extrasText')}{' '}
+        {t('admin.products.variants.intro.saveBefore')}{' '}
+        <strong class="font-medium text-gray-700">{t('admin.products.edit.submit')}</strong>{' '}
         {t('admin.products.variants.intro.saveAfter')}
       </p>
     </div>
@@ -515,6 +519,111 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     </div>
   </section>
 
+  <section id="personnalisation" class="mt-12 scroll-mt-20 border-t border-line pt-8">
+    <div class="mb-5">
+      <h2 class="text-xs uppercase tracking-widest text-gray-400">{t('admin.products.customization.title')}</h2>
+      <p class="mt-1 max-w-prose text-xs text-gray-500">
+        {t('admin.products.customization.intro')}{' '}
+        {t('admin.products.variants.intro.saveBefore')}{' '}
+        <strong class="font-medium text-gray-700">{t('admin.products.edit.submit')}</strong>{' '}
+        {t('admin.products.variants.intro.saveAfter')}
+      </p>
+    </div>
+
+    {/* Same single-save pattern as the variants: one inline blank row (no-JS
+        adds one field per save), "+ Add" clones it. Every row posts every
+        field, so the arrays stay aligned — hence a select, not a checkbox. */}
+    <h3 class="mb-3 text-sm font-medium">{t('admin.products.customization.heading')}</h3>
+    <div data-custom-rows data-default-max="30" class="space-y-3">
+      {
+        [...customFields, null].map((field) => (
+          <div data-custom-row data-blank={field ? undefined : ''} class="flex flex-wrap items-end gap-3 border-b border-line pb-3">
+            <input form="product-form" type="hidden" name="c_id" value={field?.public_id ?? ''} />
+            <label class="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-gray-400">
+              {t('admin.products.customization.label')}
+              <input
+                form="product-form"
+                type="text"
+                name="c_label"
+                value={field?.label ?? ''}
+                maxlength="80"
+                placeholder={t('admin.products.customization.labelPlaceholder')}
+                class="w-48 rounded-md border border-line bg-transparent px-3 py-1.5 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-gray-400">
+              {t('admin.products.customization.help')}
+              <input
+                form="product-form"
+                type="text"
+                name="c_help"
+                value={field?.help_text ?? ''}
+                maxlength="200"
+                placeholder={t('admin.products.customization.helpPlaceholder')}
+                class="w-64 rounded-md border border-line bg-transparent px-3 py-1.5 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-gray-400">
+              {t('admin.products.customization.maxLength')}
+              <input
+                form="product-form"
+                type="number"
+                name="c_max"
+                min="1"
+                max={CUSTOM_FIELD_MAX_LENGTH}
+                step="1"
+                value={field?.max_length ?? 30}
+                class="w-24 rounded-md border border-line bg-transparent px-3 py-1.5 text-sm tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-gray-400">
+              {t('admin.products.customization.required')}
+              <select
+                form="product-form"
+                name="c_required"
+                class="rounded-md border border-line bg-transparent px-3 py-1.5 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              >
+                <option value="1" selected={!field || field.required === 1}>
+                  {t('admin.products.customization.required.yes')}
+                </option>
+                <option value="0" selected={field?.required === 0}>
+                  {t('admin.products.customization.required.no')}
+                </option>
+              </select>
+            </label>
+            {field && (
+              <input form="product-form" type="checkbox" name="c_remove" value={field.public_id} class="hidden" data-remove-mark />
+            )}
+            <button
+              type="button"
+              data-remove-row
+              class="hidden pb-1.5 text-xs uppercase tracking-widest text-red-600 hover:underline"
+            >
+              {t('admin.common.remove')}
+            </button>
+          </div>
+        ))
+      }
+    </div>
+    <button
+      type="button"
+      data-add-custom
+      class="mt-3 hidden rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:border-brand hover:text-brand"
+    >
+      + {t('admin.products.customization.add')}
+    </button>
+
+    <div class="mt-8 border-t border-line pt-5">
+      <button
+        type="submit"
+        form="product-form"
+        class="rounded-md bg-brand px-5 py-2 font-medium text-white hover:bg-brand-hover"
+      >
+        {t('admin.products.edit.submit')}
+      </button>
+    </div>
+  </section>
+
   {/* Progressive enhancement: every gallery action runs via fetch (no reload, no
       jump). The plain form POSTs are the no-JS fallback (they redirect to
       #gallery). Primary badge + ↑/↓ visibility are CSS-driven, so they
@@ -675,7 +784,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
         }
         const rm = el.closest('[data-remove-row]');
         if (rm) {
-          const row = rm.closest('[data-variant-row], [data-extra-row]');
+          const row = rm.closest('[data-variant-row], [data-extra-row], [data-custom-row]');
           if (!row) return;
           // Existing rows: check the hidden flag and hide (deleted on save).
           // New rows: just drop them.
@@ -690,6 +799,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       });
 
       const defaultPrice = rows.dataset.defaultPrice || '';
+      const defaultMax = rows.dataset.defaultMax || '';
       addBtn.addEventListener('click', () => {
         const clone = blank.cloneNode(true);
         clone.removeAttribute('data-blank');
@@ -698,7 +808,13 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
           else if (el instanceof HTMLInputElement) {
             // New variants default their price to the main product price.
             el.value =
-              el.name.endsWith('_stock') ? '0' : el.name === 'v_price' ? defaultPrice : '';
+              el.name.endsWith('_stock')
+                ? '0'
+                : el.name === 'v_price'
+                  ? defaultPrice
+                  : el.name === 'c_max'
+                    ? defaultMax
+                    : '';
           }
         }
         selectThumb(clone, ''); // new variants default to the main product photo
@@ -709,6 +825,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     };
     setupRows('[data-variant-rows]', '[data-add-variant]');
     setupRows('[data-extra-rows]', '[data-add-extra]');
+    setupRows('[data-custom-rows]', '[data-add-custom]');
 
     // Click outside any photo trigger/palette closes the open palette.
     document.addEventListener('click', (e) => {

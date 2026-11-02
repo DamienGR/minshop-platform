@@ -87,6 +87,10 @@ export const COLUMN_POLICY = {
   },
   checkout_reservations: {
     relay_point: { action: 'address', why: 'La copie du point relais que la commande recopie au règlement.' },
+    customization: {
+      action: 'erase',
+      why: "Le texte de personnalisation saisi par le client, effacé au règlement, ou trois jours après un abandon.",
+    },
     ship_address: {
       action: 'address',
       why: "L'adresse saisie à /checkout pour un paiement par carte, effacée au règlement, ou trois jours après un abandon.",
@@ -98,6 +102,12 @@ export const COLUMN_POLICY = {
   },
   order_guest_access: {
     access_token: { action: 'revoke', why: "Ouvre la page d'une commande sans authentification." },
+  },
+  order_items: {
+    customization: {
+      action: 'erase',
+      why: "Le texte que le client a saisi sur un produit personnalisable (un nom à broder) : il peut nommer quelqu'un. La ligne garde son libellé, son prix et sa quantité.",
+    },
   },
   order_notifications: {
     last_error: { action: 'erase', why: "Le refus d'un fournisseur d'e-mail cite le destinataire." },
@@ -148,6 +158,8 @@ export const NOT_PERSONAL = {
   'orders.shipping_label': "Le libellé du tarif d'expédition retenu (« Colissimo »), pas une étiquette.",
   'pages.body_markdown': 'Contenu éditorial du marchand.',
   'pending_payments.shipping_label': 'Même libellé de tarif que sur la commande.',
+  'product_custom_fields.help_text': "Catalogue : l'aide que le marchand affiche sous le champ.",
+  'product_custom_fields.label': "Catalogue : le libellé d'un champ que le marchand demande, pas ce que le client y écrit.",
   'product_extras.label': 'Catalogue.',
   'product_variants.label': 'Catalogue.',
   'products.name': 'Catalogue.',
@@ -190,7 +202,7 @@ export const ADDRESS_KEPT = ['country'];
 
 /** Columns whose NAME could hold a person. Deliberately over-broad. */
 export const SUSPECT_COLUMN =
-  /(^|_)(email|mail|address|adresse|phone|tel|name|city|postal|zip|country|token|url|note|reason|error|ip|user|customer|client|tracking|session|label|body|relay|point)(s)?($|_)/i;
+  /(^|_)(email|mail|address|adresse|phone|tel|name|city|postal|zip|country|token|url|note|reason|error|ip|user|customer|client|tracking|session|label|body|relay|point|customization|text)(s)?($|_)/i;
 
 /** Columns whose NAME says the row hangs off an order. */
 export const LINK_COLUMN = /^(order_id|order_public_id|provider_payment_id)$/;

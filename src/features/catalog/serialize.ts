@@ -1,5 +1,6 @@
 import type { Product } from '../products/db';
 import type { ProductVariant, ProductExtra } from '../products/variants';
+import type { ProductCustomField } from '../products/customization';
 import { productImageUrl } from '../products/image';
 import { toMajorUnits } from '../../money';
 
@@ -22,14 +23,28 @@ export interface CatalogExtra {
 }
 
 /**
+ * A free-text field the buyer answers (ticket #125): what the JSON checkout's
+ * `customization` object must hold for this product, keyed by `id`.
+ */
+export interface CatalogCustomizationField {
+  /** Prefixed public ID (`cfld_…`) — never a row ID. */
+  id: string;
+  label: string;
+  help: string | null;
+  /** In characters. */
+  max_length: number;
+  required: boolean;
+}
+
+/**
  * The public, machine-readable shape of a product — what the `/api/products`
  * catalog endpoints return for agents/tools. Stable, self-describing, with
  * ABSOLUTE urls so a consumer needs no base-url knowledge. Pure (no bindings) so
  * it's unit-testable and reusable across the list + detail routes.
  *
  * `variant_label` flags products that have a variant group (so a list consumer
- * knows to fetch the detail). `variants`/`extras` are populated only on the
- * detail route — the list stays lightweight.
+ * knows to fetch the detail). `variants`/`extras`/`customization_fields` are
+ * populated only on the detail route — the list stays lightweight.
  *
  * Availability is exposed as `in_stock` only — NOT an exact count. A public,
  * pollable browse endpoint that returned exact quantities would leak sales
@@ -50,6 +65,7 @@ export interface CatalogProduct {
   url: string;
   variants?: CatalogVariant[];
   extras?: CatalogExtra[];
+  customization_fields?: CatalogCustomizationField[];
 }
 
 const money = (cents: number, currency: string) => ({
@@ -68,7 +84,12 @@ export function toCatalogProduct(
   p: Product,
   categoryNames: string[],
   origin: string,
-  options?: { variants?: ProductVariant[]; extras?: ProductExtra[]; imageBaseUrl?: string },
+  options?: {
+    variants?: ProductVariant[];
+    extras?: ProductExtra[];
+    customFields?: ProductCustomField[];
+    imageBaseUrl?: string;
+  },
 ): CatalogProduct {
   const variants = options?.variants;
   const extras = options?.extras;
@@ -102,6 +123,15 @@ export function toCatalogProduct(
       id: requirePublicId(e.public_id, e.id, 'extra'),
       label: e.label,
       price_delta: money(e.price_delta_cents, p.currency),
+    }));
+  }
+  if (options?.customFields) {
+    out.customization_fields = options.customFields.map((f) => ({
+      id: requirePublicId(f.public_id, f.id, 'custom field'),
+      label: f.label,
+      help: f.help_text,
+      max_length: f.max_length,
+      required: f.required === 1,
     }));
   }
   return out;

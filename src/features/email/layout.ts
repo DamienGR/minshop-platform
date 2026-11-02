@@ -102,6 +102,8 @@ export interface LineItem {
   name: string;
   quantity: number;
   amount: string;
+  /** Plain-text lines under the name (the personalisation); escaped here. */
+  details?: string[];
 }
 
 export interface TotalRow {
@@ -119,6 +121,9 @@ export function emailItemsTable(items: LineItem[], totals: TotalRow[]): string {
       <td style="padding:10px 8px;font-size:14px;line-height:1.4;border-bottom:1px solid ${PALETTE.line};">
         ${escapeHtml(it.name)}
         <span style="color:${PALETTE.muted};">&times; ${it.quantity}</span>
+        ${(it.details ?? [])
+          .map((line) => `<br><span style="font-size:12px;color:${PALETTE.muted};">${escapeHtml(line)}</span>`)
+          .join('')}
       </td>
       <td style="padding:10px 0;font-size:14px;text-align:right;white-space:nowrap;border-bottom:1px solid ${PALETTE.line};">${it.amount}</td>
     </tr>`,

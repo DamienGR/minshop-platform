@@ -6,9 +6,10 @@ import { t } from '../../i18n';
  * The purchase controls — the one part of the storefront a template must never
  * reimplement.
  *
- * It owns the form actions and methods, the hidden public IDs, the variant and
- * extra field names (`variant_id`, `extra`), the required/disabled states that
- * keep a sold-out option unselectable, and `data-fullpage` on Buy now.
+ * It owns the form actions and methods, the hidden public IDs, the variant,
+ * extra and personalisation field names (`variant_id`, `extra`,
+ * `custom:<cfld_…>`), the required/disabled states that keep a sold-out option
+ * unselectable, and `data-fullpage` on Buy now.
  *
  * `data-fullpage` is the subtle one: the shell's cart script intercepts submits
  * to open the drawer, and this attribute is what tells it to stand back so
@@ -20,6 +21,10 @@ import { t } from '../../i18n';
  * add-ons; Buy now overrides method and action so /express is a safe history
  * entry (Back never asks to resubmit). Without options there is nothing to
  * share, so each button is its own minimal form.
+ *
+ * Except with personalisation fields: then Buy now POSTS to /express. A GET
+ * would put the buyer's text in the URL, and URLs are what request logs keep;
+ * the cost is a resubmit prompt if Back returns to /express.
  */
 interface Props {
   model: ProductPurchaseModel;
@@ -97,6 +102,41 @@ const showAny = model.showAddToCart || model.showBuyNow;
           </fieldset>
         )}
 
+        {model.customFields.length > 0 && (
+          <fieldset class="mb-6">
+            <legend class="mb-2 text-xs uppercase tracking-widest text-muted">{t('product.customization')}</legend>
+            <div class="flex flex-col gap-4">
+              {model.customFields.map((field) => (
+                <div class="flex flex-col gap-1">
+                  <label for={field.inputId} class="text-sm">
+                    {field.label}
+                    {!field.required && <span class="text-muted"> {t('product.customization.optional')}</span>}
+                  </label>
+                  {/* Both buttons submit it: the cart through /api/cart, Buy now
+                      through /express, which carries it on to the order. A
+                      required field needs one character that is not a space,
+                      as the server does. */}
+                  <input
+                    type="text"
+                    id={field.inputId}
+                    name={field.name}
+                    maxlength={field.maxLength}
+                    required={field.required}
+                    pattern={field.required ? '.*\\S.*' : undefined}
+                    autocomplete="off"
+                    aria-describedby={`${field.inputId}-help`}
+                    class="rounded-md border border-line bg-transparent px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                  />
+                  <span id={`${field.inputId}-help`} class="text-xs text-muted">
+                    {field.help && <span class="block">{field.help}</span>}
+                    <span class="block">{t('product.customization.maxLength', { max: field.maxLength })}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
         {model.soldOut ? (
           <span class="inline-block cursor-not-allowed rounded-md border border-line px-8 py-3 text-sm font-medium uppercase tracking-wider text-faint">
             {t('product.soldOut')}
@@ -115,7 +155,7 @@ const showAny = model.showAddToCart || model.showBuyNow;
               <button
                 type="submit"
                 formaction={model.expressAction}
-                formmethod="GET"
+                formmethod={model.customFields.length > 0 ? 'POST' : 'GET'}
                 data-fullpage
                 class="rounded-md bg-brand px-8 py-3 text-sm font-medium uppercase tracking-wider text-on-brand transition hover:bg-brand-hover"
               >
