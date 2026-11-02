@@ -1,6 +1,6 @@
 # ADR 0023 — Le paiement par virement, rapproché à la main
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #151 par Damien, le 2026-11-02)
 - **Date** : 2026-11-02
 - **Jalon** : après le pilote (plan §13.5) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), qui ne prévoit
