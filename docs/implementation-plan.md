@@ -3210,7 +3210,7 @@ du CGI) ne facture pas de TVA et doit l'écrire. La première boutique réelle e
 dans ce cas, et la certification l'avait reporté jusqu'à elle (fiche de
 l'étape 11, § 3, question 5 ; dossier de décision, ligne « validation TVA et
 facturation »). L'[ADR 0024](architecture/decisions/0024-franchise-en-base-de-tva.md),
-proposé, amende l'ADR 0010. Aucun des jalons 0 à 10 n'avance ; la part
+accepté par la fusion de la PR #153, amende l'ADR 0010. Aucun des jalons 0 à 10 n'avance ; la part
 « franchise » de la condition « validation TVA et facturation » du go de
 l'étape 11 est levée côté socle, la réponse de l'expert-comptable restant due.
 
