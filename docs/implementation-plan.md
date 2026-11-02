@@ -3168,7 +3168,8 @@ n'est enregistrée qu'à réception des fonds. Le site actuel de la première
 boutique réelle le propose déjà, avec huit jours de réserve. Damien a choisi la
 piste B du ticket, le rapprochement à la main, plutôt que le virement de
 Stripe ; l'[ADR 0023](architecture/decisions/0023-paiement-par-virement.md),
-proposé, amende l'ADR 0007 qui ne connaissait que la carte. Aucun des jalons
+accepté par la fusion de la PR #151, amende l'ADR 0007 qui ne connaissait
+que la carte. Aucun des jalons
 0 à 10 n'avance.
 
 Fait le 2026-11-02, en un seul lot :

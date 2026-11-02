@@ -43,4 +43,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0020](0020-expeditions-par-boxtal.md) | Boxtal pour toutes les expéditions, points relais compris | Accepté ; amendé par 0021 |
 | [0021](0021-boxtal-apres-le-bac-a-sable.md) | Ce que le bac à sable de Boxtal change à l'ADR 0020 | Accepté |
 | [0022](0022-produits-personnalisables.md) | Des produits personnalisables par un texte libre | Accepté |
-| [0023](0023-paiement-par-virement.md) | Le paiement par virement, rapproché à la main | Proposé |
+| [0023](0023-paiement-par-virement.md) | Le paiement par virement, rapproché à la main | Accepté |
