@@ -1,0 +1,141 @@
+---
+import { formatPrice } from '../../../config';
+import type { PendingPayment } from '../lightning/pending';
+import { formatIban, transferReference, type BankTransferDetails } from '../bankTransfer';
+import { t } from '../../i18n';
+
+// The transfer page (ADR 0023). Rendered by /pay/[publicId] for a pending
+// payment whose backend is 'bank_transfer': the account, the amount, the
+// reference and the deadline while the transfer is awaited; a terminal state
+// once its deadline passed or the merchant gave up on it. No script: there is
+// nothing to poll, the merchant records the transfer by hand, days later.
+interface Props {
+  pending: PendingPayment;
+  /** The shop's account, or null once it no longer shows one. */
+  details: BankTransferDetails | null;
+  state: 'awaited' | 'overdue' | 'abandoned';
+  /** The deadline, formatted in the shop's time zone. */
+  due: string;
+  /** Whether the buyer's copy went out by e-mail (an address, and e-mail on). */
+  emailed: boolean;
+  /** No address on file: the page asks one, for the copy and the receipt. */
+  askEmail: boolean;
+  emailError?: string | null;
+}
+const { pending, details, state, due, emailed, askEmail, emailError = null } = Astro.props;
+
+const reference = transferReference(pending.public_id);
+const total = formatPrice(pending.amount_total_cents, pending.currency);
+const shipping = pending.shipping_cents ? formatPrice(pending.shipping_cents, pending.currency) : null;
+type Snap = { q: number; n: string; p: number };
+let items: Snap[] = [];
+try {
+  items = pending.items ? (JSON.parse(pending.items) as Snap[]) : [];
+} catch {
+  items = [];
+}
+const rows: Array<[string, string, boolean]> = details
+  ? [
+      [t('transfer.holder'), details.holder, false],
+      [t('transfer.iban'), formatIban(details.iban), true],
+      ...(details.bic ? [[t('transfer.bic'), details.bic, true] as [string, string, boolean]] : []),
+      [t('transfer.amount'), total, false],
+    ]
+  : [];
+---
+
+<div class="mx-auto max-w-md" data-bank-transfer={state}>
+  {
+    state === 'abandoned' ? (
+      <Fragment>
+        <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.transfer.abandoned.title')}</h1>
+        <p class="text-muted">{t('pay.transfer.abandoned.body', { reference })}</p>
+      </Fragment>
+    ) : state === 'overdue' ? (
+      <Fragment>
+        <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.transfer.expired.title')}</h1>
+        <p class="text-muted">{t('pay.transfer.expired.body', { date: due, reference })}</p>
+      </Fragment>
+    ) : (
+      <Fragment>
+        <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">{t('pay.transfer.heading')}</h1>
+        <p class="mb-6 text-muted">{t('pay.transfer.intro', { montant: total, date: due })}</p>
+
+        <section class="mb-6 rounded-lg border border-line bg-surface p-4" aria-labelledby="transfer-details">
+          <h2 id="transfer-details" class="mb-3 text-xs font-medium uppercase tracking-widest text-faint">
+            {t('pay.transfer.details')}
+          </h2>
+          {details ? (
+            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              {rows.map(([label, value, mono]) => (
+                <Fragment>
+                  <dt class="text-muted">{label}</dt>
+                  <dd class:list={['break-all', mono && 'font-mono']}>{value}</dd>
+                </Fragment>
+              ))}
+              <dt class="text-muted">{t('transfer.reference')}</dt>
+              <dd class="font-mono text-lg font-semibold tracking-wider" data-transfer-reference>{reference}</dd>
+            </dl>
+          ) : (
+            <p class="text-sm">{t('pay.transfer.unavailable', { reference })}</p>
+          )}
+          <p class="mt-3 text-xs text-muted">{t('transfer.referenceHint', { reference })}</p>
+        </section>
+
+        <div class="mb-6 rounded-lg border border-line bg-surface p-4">
+          <ul class="divide-y divide-line text-sm">
+            {items.map((it) => (
+              <li class="flex items-center justify-between gap-3 py-2">
+                <span class="min-w-0 truncate">
+                  {it.n} <span class="text-faint">× {it.q}</span>
+                </span>
+                <span class="shrink-0 tabular-nums">{formatPrice(it.p * it.q, pending.currency)}</span>
+              </li>
+            ))}
+          </ul>
+          {shipping && (
+            <div class="flex items-center justify-between border-t border-line pt-2 text-sm text-muted">
+              <span>{t('pay.demo.shipping')}</span>
+              <span class="tabular-nums">{shipping}</span>
+            </div>
+          )}
+          <div class="mt-2 flex items-center justify-between border-t border-line pt-2 text-base font-medium">
+            <span>{t('pay.demo.total')}</span>
+            <span class="tabular-nums">{total}</span>
+          </div>
+        </div>
+
+        <p class="mb-2 text-sm text-muted">{t('transfer.expiry', { date: due })}</p>
+        {emailed && pending.email ? (
+          <p class="text-sm text-muted">{t('pay.transfer.emailed', { email: pending.email })}</p>
+        ) : (
+          <p class="text-sm text-muted">{t('pay.transfer.noteIt')}</p>
+        )}
+
+        {askEmail && (
+          <form method="POST" class="mt-6 space-y-3">
+            {emailError && (
+              <p class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{emailError}</p>
+            )}
+            <label class="block text-sm">
+              <span class="mb-1 block font-medium">{t('pay.transfer.email.label')}</span>
+              <input
+                type="email"
+                name="email"
+                required
+                autocomplete="email"
+                class="w-full rounded-md border border-line px-3 py-2"
+              />
+            </label>
+            <button
+              type="submit"
+              class="w-full rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover"
+            >
+              {t('pay.transfer.email.submit')}
+            </button>
+          </form>
+        )}
+      </Fragment>
+    )
+  }
+</div>

@@ -95,6 +95,8 @@ Cloudflare `eu`, et pas seulement avec un hint de localisation `weur`.
 - moins de 100 produits ;
 - variantes et stock simples ;
 - Stripe Checkout ;
+- virement bancaire, rapproché à la main dans l'administration
+  ([ADR 0023](docs/architecture/decisions/0023-paiement-par-virement.md)) ;
 - livraison fixe, par poids ou franco ;
 - promotions Stripe ;
 - e-mails de commande et d'expédition ;

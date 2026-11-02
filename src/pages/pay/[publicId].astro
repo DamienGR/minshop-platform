@@ -10,6 +10,14 @@ import { isAccessToken } from '../../features/ids/token.ts';
 import { resolveAccessToken } from '../../features/orders/guestAccess.ts';
 import DemoCheckout from '../../features/payments/checkout/DemoCheckout.astro';
 import LightningPay from '../../features/payments/checkout/LightningPay.astro';
+import BankTransferPay from '../../features/payments/checkout/BankTransferPay.astro';
+import { bankTransferDetails } from '../../features/payments/bankTransfer';
+import { setAwaitedTransferEmail } from '../../features/payments/bankTransferStore';
+import { sendTransferInstructions, transferDue } from '../../features/payments/bankTransferNotify';
+import { resolveRequiredOrderEmail } from '../../features/email/orderPolicy';
+import { getEmailProvider } from '../../features/email';
+import { getStoreSettings } from '../../features/settings/db';
+import { clearCart } from '../../features/cart/cart';
 import {
   settleDemoCheckout,
   settleLightningOnLoad,
@@ -49,8 +57,9 @@ if (!pending) return new Response(t('http.notFound'), { status: 404 });
 
 const isDemo = pending.backend === 'demo';
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
+const isBankTransfer = pending.backend === 'bank_transfer';
 // An unexpected backend landing here → just show the order page.
-if (!isDemo && !isLightning) return Astro.redirect(`/order/${guestParam}`, 303);
+if (!isDemo && !isLightning && !isBankTransfer) return Astro.redirect(`/order/${guestParam}`, 303);
 
 // Every self-rendered pending payment now carries an expiry (Lightning: the
 // invoice's; Demo: 24h). Past it, the unpaid flow fails closed — no rendering
@@ -93,6 +102,29 @@ if (
   return Astro.redirect(`/order/${guestParam}`, 303);
 }
 
+// A bank transfer is awaited for days and settles by the merchant's hand
+// (ADR 0023): this page only shows what to pay, and takes the buyer's e-mail
+// when the checkout asked none (a basket that ships nothing).
+const transferSettings = isBankTransfer ? (Astro.locals.settings ?? (await getStoreSettings(env.DB))) : null;
+const transferState: 'awaited' | 'overdue' | 'abandoned' =
+  pending.status === 'abandoned' ? 'abandoned' : payExpired ? 'overdue' : 'awaited';
+let transferEmailError: string | null = null;
+if (isBankTransfer && transferSettings && Astro.request.method === 'POST' && transferState === 'awaited' && !pending.email) {
+  const email = resolveRequiredOrderEmail(String((await Astro.request.formData()).get('email') ?? ''), null);
+  if (!email) {
+    transferEmailError = t('pay.transfer.email.invalid');
+  } else {
+    if (await setAwaitedTransferEmail(env.DB, pending.public_id, email)) {
+      await sendTransferInstructions({ ...pending, email }, transferSettings, Astro.url.href);
+    }
+    return Astro.redirect(Astro.url.pathname, 303);
+  }
+}
+const transferEmailOn = isBankTransfer && transferSettings ? !!(await getEmailProvider(transferSettings)) : false;
+// For the buyer the order is placed: the basket is spent, as on the order page
+// a settled payment lands on.
+if (isBankTransfer) clearCart(Astro.cookies);
+
 // Past its window (Lightning: the BOLT11's expiry; Demo: 24h) the unpaid flow is
 // terminal — render an "expired" state instead of the payment UI, so an
 // abandoned tab can't poll forever and an expired demo can't settle.
@@ -101,10 +133,12 @@ const lightningExpired = isLightning && payExpired;
 // The name set in Admin → Réglages, as the header shows it — not the build-time
 // default, which reads « Ma boutique » on a shop named in /admin/setup.
 const storeName = Astro.locals.settings?.storeName ?? getConfig().storeName;
-const title = isDemo ? t('pay.demo.title') : t('pay.lightning.title');
+const title = isDemo ? t('pay.demo.title') : isBankTransfer ? t('pay.transfer.title') : t('pay.lightning.title');
 const description = isDemo
   ? t('pay.demo.description', { boutique: storeName })
-  : t('pay.lightning.description', { boutique: storeName });
+  : isBankTransfer
+    ? t('pay.transfer.description', { boutique: storeName })
+    : t('pay.lightning.description', { boutique: storeName });
 ---
 
 <Layout title={title} description={description}>
@@ -122,4 +156,15 @@ const description = isDemo
   )}
   {isDemo && !demoClosed && !payExpired && <DemoCheckout pending={pending} declined={declined} storeName={storeName} />}
   {isLightning && <LightningPay pending={pending} expired={lightningExpired} />}
+  {isBankTransfer && transferSettings && (
+    <BankTransferPay
+      pending={pending}
+      details={bankTransferDetails(transferSettings)}
+      state={transferState}
+      due={transferDue(pending, transferSettings)}
+      emailed={transferEmailOn && !!pending.email}
+      askEmail={!pending.email}
+      emailError={transferEmailError}
+    />
+  )}
 </Layout>

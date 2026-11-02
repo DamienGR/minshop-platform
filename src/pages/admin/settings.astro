@@ -46,6 +46,16 @@ import {
   type RuntimeCapabilities,
 } from '../../features/settings/availability';
 import { getEmailProvider } from '../../features/email';
+import {
+  BANK_TRANSFER_DEFAULT_DAYS,
+  BANK_TRANSFER_MAX_DAYS,
+  BANK_TRANSFER_MIN_DAYS,
+  formatIban,
+  isValidBic,
+  isValidIban,
+  normalizeBic,
+  normalizeIban,
+} from '../../features/payments/bankTransfer';
 import { normalizeTimeZone, allTimeZones } from '../../features/settings/timeZone';
 import { WEIGHT_UNITS, isWeightUnit } from '../../features/shipping/weight';
 import { shippingFor } from '../../features/shipping/effective';
@@ -364,6 +374,39 @@ if (Astro.request.method === 'POST') {
         validationError = t('admin.settings.boxtal.error.halfPair');
       }
     }
+  } else if (action === 'save_bank_transfer') {
+    // The merchant's own account (ADR 0023): checked before anything is saved,
+    // because a wrong IBAN sends every buyer's money to a bank that returns it.
+    // An empty IBAN closes the rail; the holder and the delay stay as typed.
+    const iban = normalizeIban(String(form.get('bank_transfer_iban') ?? ''));
+    const bic = normalizeBic(String(form.get('bank_transfer_bic') ?? ''));
+    const holder = String(form.get('bank_transfer_holder') ?? '').trim();
+    const daysRaw = String(form.get('bank_transfer_days') ?? '').trim();
+    const days = Number(daysRaw);
+    if (iban && !isValidIban(iban)) {
+      validationError = t('admin.settings.payments.bankTransfer.error.iban');
+    } else if (bic && !isValidBic(bic)) {
+      validationError = t('admin.settings.payments.bankTransfer.error.bic');
+    } else if (iban && !holder) {
+      validationError = t('admin.settings.payments.bankTransfer.error.holder');
+    } else if (
+      daysRaw &&
+      (!Number.isInteger(days) || days < BANK_TRANSFER_MIN_DAYS || days > BANK_TRANSFER_MAX_DAYS)
+    ) {
+      validationError = t('admin.settings.payments.bankTransfer.error.days', {
+        min: BANK_TRANSFER_MIN_DAYS,
+        max: BANK_TRANSFER_MAX_DAYS,
+      });
+    } else {
+      await setSetting(env.DB, 'bank_transfer_iban', iban || null);
+      await setSetting(env.DB, 'bank_transfer_bic', bic || null);
+      await setSetting(env.DB, 'bank_transfer_holder', holder || null);
+      await setSetting(
+        env.DB,
+        'bank_transfer_days',
+        daysRaw && days !== BANK_TRANSFER_DEFAULT_DAYS ? String(days) : null,
+      );
+    }
   } else if (action === 'save_opennode') {
     await setSetting(env.DB, 'opennode_api_url', String(form.get('opennode_api_url') ?? '').trim() || null);
     await applySecrets(['opennode_api_key']);
@@ -525,6 +568,7 @@ const paymentMethods: { m: PaymentMethod; label: string }[] = [
   { m: 'stripe', label: t('admin.settings.payments.method.stripe') },
   { m: 'lightning', label: t('admin.settings.payments.method.lightning') },
   { m: 'opennode', label: t('admin.settings.payments.method.opennode') },
+  { m: 'bank_transfer', label: t('admin.settings.payments.method.bankTransfer') },
   { m: 'demo', label: t('admin.settings.payments.method.demo') },
 ];
 const pmRows = paymentMethods.map((r) => {
@@ -540,6 +584,10 @@ const payments = {
   lnbitsUrl: settings.lnbitsUrl ?? '',
   phoenixdUrl: settings.phoenixdUrl ?? '',
   opennodeApiUrl: settings.opennodeApiUrl ?? '',
+  bankTransferHolder: settings.bankTransferHolder ?? '',
+  bankTransferIban: settings.bankTransferIban ? formatIban(settings.bankTransferIban) : '',
+  bankTransferBic: settings.bankTransferBic ?? '',
+  bankTransferDays: settings.bankTransferDays,
 };
 
 // Encrypted key vault (features/secrets). Keys are write-only — stored AES-GCM in
@@ -1224,6 +1272,45 @@ const sections = [
             <input type="url" name="opennode_api_url" value={payments.opennodeApiUrl} placeholder={t('admin.settings.payments.opennode.apiUrlPlaceholder')} class="w-64 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
           </label>
           <SecretField name="opennode_api_key" label={t('admin.settings.payments.opennode.apiKey')} hint={t('admin.settings.payments.opennode.apiKeyHint')} storedInD1={inD1('opennode_api_key')} vault={vault} />
+          <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
+            {t('admin.common.save')}
+          </button>
+        </form>
+      </div>
+
+      {/* Bank transfer (ADR 0023) */}
+      <div class="rounded-lg border border-gray-200 bg-white p-4" id="bank-transfer">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="font-medium">{t('admin.settings.payments.method.bankTransfer')}</p>
+            <p class={pmMap.bank_transfer.installed ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
+              {pmMap.bank_transfer.installed ? t('admin.settings.payments.live') : t('admin.settings.payments.bankTransfer.notLive')}
+            </p>
+          </div>
+          {pmMap.bank_transfer.installed && <MethodToggle method="bank_transfer" enabled={pmMap.bank_transfer.enabled} label={t('admin.settings.payments.method.bankTransfer')} />}
+        </div>
+        <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
+          <input type="hidden" name="_action" value="save_bank_transfer" />
+          <p class="text-xs text-gray-500">{t('admin.settings.payments.bankTransfer.intro')}</p>
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            {t('admin.settings.payments.bankTransfer.holder')}
+            <input type="text" name="bank_transfer_holder" value={payments.bankTransferHolder} maxlength="70" autocomplete="off" class="w-80 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            {t('admin.settings.payments.bankTransfer.iban')}
+            <input type="text" name="bank_transfer_iban" value={payments.bankTransferIban} maxlength="42" autocomplete="off" spellcheck="false" placeholder="FR76 …" class="w-80 max-w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            {t('admin.settings.payments.bankTransfer.bic')}
+            <input type="text" name="bank_transfer_bic" value={payments.bankTransferBic} maxlength="11" autocomplete="off" spellcheck="false" class="w-40 rounded-md border border-gray-300 px-3 py-2 font-mono text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            {t('admin.settings.payments.bankTransfer.days')}
+            <input type="number" name="bank_transfer_days" value={payments.bankTransferDays} min={BANK_TRANSFER_MIN_DAYS} max={BANK_TRANSFER_MAX_DAYS} step="1" class="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+          </label>
+          <p class="text-xs text-gray-400">
+            {t('admin.settings.payments.bankTransfer.daysHint', { min: BANK_TRANSFER_MIN_DAYS, max: BANK_TRANSFER_MAX_DAYS })}
+          </p>
           <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
             {t('admin.common.save')}
           </button>

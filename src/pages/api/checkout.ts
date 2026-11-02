@@ -60,6 +60,8 @@ import { purgeStockProductCache } from '../../features/cache/purge';
 import { lifecycleActive } from '../../features/digitalDelivery/rollout.ts';
 import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
+import { holdSeconds } from '../../features/payments/bankTransfer.ts';
+import type { StoreSettings } from '../../features/settings/db';
 
 export const prerender = false;
 
@@ -111,8 +113,10 @@ const MAX_JSON_BYTES = 64 * 1024;
 /** One wording for the refusal, whether it comes back as a redirect or JSON. */
 const TERMS_REFUSAL = t('checkout.error.terms');
 
-function reservationTtlSeconds(method: PaymentMethod): number {
+function reservationTtlSeconds(method: PaymentMethod, settings: StoreSettings): number {
   if (method === 'demo') return DEMO_CHECKOUT_TTL_SECONDS;
+  // A transfer takes days to arrive: the hold is the merchant's delay (ADR 0023).
+  if (method === 'bank_transfer') return holdSeconds(settings.bankTransferDays);
   if (method === 'lightning') {
     return (
       getConfig().payments.lightning.invoiceExpiryMinutes * 60 +
@@ -297,8 +301,9 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // in-app step first: Lightning has no hosted page, OpenNode's ignores addresses,
   // and Demo has none. Without this, OpenNode charged no shipping at all and Demo
   // billed whichever rate sorted first — both silently wrong once a merchant can
-  // edit rates. Stripe collects the address itself and continues below.
-  const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'demo'];
+  // edit rates. A bank transfer has no page but ours either (ADR 0023). Stripe
+  // collects the address itself and continues below.
+  const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'demo', 'bank_transfer'];
   // ...except where the destination's zone holds a relay rate: Stripe's page
   // offers a fixed list and no point, so a card payment goes through /checkout
   // too, which asks the address and phone once and hands Stripe the chosen rate
@@ -456,7 +461,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     env.DB,
     publicId,
     items,
-    reservationTtlSeconds(selected),
+    reservationTtlSeconds(selected, settings),
     selected,
     purgeStockProductCache,
     undefined,
@@ -880,7 +885,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   // address, we price THAT country, and the chosen rate travels with the charge.
   // Without this, OpenNode and Demo reached their adapters with an unselected list
   // and charged nothing for shipping.
-  const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'demo'];
+  const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'demo', 'bank_transfer'];
   const needsShipTo = shippingOn && IN_APP_JSON_RAILS.includes(method);
   let shipTo: ReturnType<typeof parseShipTo> = null;
   let chosen: { label: string; amountCents: number; pickup?: boolean } | undefined;
@@ -922,7 +927,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       env.DB,
       lnPublicId,
       reservationItems(lines),
-      reservationTtlSeconds('lightning'),
+      reservationTtlSeconds('lightning', jsonSettings),
       'lightning',
       purgeStockProductCache,
       undefined,
@@ -1019,7 +1024,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     env.DB,
     publicId,
     items,
-    reservationTtlSeconds(method),
+    reservationTtlSeconds(method, jsonSettings),
     method,
     purgeStockProductCache,
     undefined,
@@ -1086,10 +1091,13 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   // directly (no human, no /pay page). Settlement is confirmed by the existing
   // webhook → the order is recorded. Hosted providers expose checkout_url only.
   const ln = result.lightning;
+  // Bank transfer: the account and the reference, for the buyer to pay from
+  // their own bank. No order exists until the merchant records the transfer.
+  const transfer = result.bankTransfer;
   return cjson({
-    method, // the rail used: 'stripe' | 'lightning' | 'opennode'
+    method, // the rail used: 'stripe' | 'lightning' | 'opennode' | 'bank_transfer' | 'demo'
     available_methods: available, // what else this store offers
-    flow: ln ? 'invoice' : 'redirect',
+    flow: ln ? 'invoice' : transfer ? 'bank_transfer' : 'redirect',
     checkout_url: result.url, // human fallback (QR page for Lightning, hosted page otherwise)
     ...(lifecycleActive() ? { order_status_url: `${origin}/order/${accessToken}/status` } : {}),
     ...(ln && {
@@ -1098,6 +1106,16 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         amount_sat: ln.amountSat,
         payment_hash: ln.paymentHash,
         expires_at: ln.expiresAt,
+      },
+    }),
+    ...(transfer && {
+      bank_transfer: {
+        holder: transfer.holder,
+        iban: transfer.iban,
+        bic: transfer.bic,
+        reference: transfer.reference,
+        amount_cents: transfer.amountCents,
+        expires_at: transfer.expiresAt,
       },
     }),
     order_public_id: publicId,
@@ -1122,6 +1140,8 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     })),
     note: ln
       ? 'Pay the BOLT11 `lightning.invoice` from any Lightning wallet — no human needed; the order is recorded once settlement is confirmed. Or open checkout_url for the QR page.'
-      : 'Open checkout_url to complete payment. Shipping, tax, and discounts (if enabled) are applied on the hosted checkout page.',
+      : transfer
+        ? 'Transfer `bank_transfer.amount_cents` to the account in `bank_transfer`, with `bank_transfer.reference` as the label, before `bank_transfer.expires_at`. The order is recorded once the merchant receives the transfer; the stock is held until then.'
+        : 'Open checkout_url to complete payment. Shipping, tax, and discounts (if enabled) are applied on the hosted checkout page.',
   });
 }

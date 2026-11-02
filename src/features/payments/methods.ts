@@ -1,4 +1,5 @@
 import type { StoreSettings } from '../settings/db';
+import { bankTransferDetails } from './bankTransfer.ts';
 
 /**
  * The payment rails and which of them a buyer can use, decided from the
@@ -15,15 +16,22 @@ import type { StoreSettings } from '../settings/db';
 // nothing) offered while no real rail is live, so a fresh store can be exercised
 // end to end. Once a real rail is live it is withdrawn, whatever the default
 // method says: beside a real rail, any visitor could place unpaid orders that
-// take stock. The real rails work only when configured.
-export type PaymentMethod = 'stripe' | 'lightning' | 'opennode' | 'demo';
-const ALL_METHODS: PaymentMethod[] = ['stripe', 'lightning', 'opennode'];
+// take stock. The real rails work only when configured. 'bank_transfer' is a
+// real rail (ADR 0023): the merchant's own account, reconciled by hand.
+export type PaymentMethod = 'stripe' | 'lightning' | 'opennode' | 'bank_transfer' | 'demo';
+const ALL_METHODS: PaymentMethod[] = ['stripe', 'lightning', 'opennode', 'bank_transfer'];
 // The buttons presented at checkout. Each real rail works if configured, else its
 // button leads to setup instructions; demo while it is available.
 const OFFERED: PaymentMethod[] = ['stripe', 'lightning', 'demo'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
-  return value === 'stripe' || value === 'lightning' || value === 'opennode' || value === 'demo';
+  return (
+    value === 'stripe' ||
+    value === 'lightning' ||
+    value === 'opennode' ||
+    value === 'bank_transfer' ||
+    value === 'demo'
+  );
 }
 
 /**
@@ -48,6 +56,9 @@ export function isMethodAvailable(
       return settings.lightningBackend === 'lnbits'
         ? !!settings.lnbitsUrl && has('lnbits_api_key')
         : !!settings.phoenixdUrl && has('phoenixd_password');
+    case 'bank_transfer':
+      // No key and no provider: the merchant's account details, nothing more.
+      return bankTransferDetails(settings) !== null;
     case 'demo':
       return !hasRealMethod(settings, vault);
   }

@@ -7,6 +7,7 @@ import { orderNumber } from '../../features/orders/number';
 import { isLegacyPublicId, publicIdToken } from '../../features/ids/publicId.ts';
 import { isAccessToken } from '../../features/ids/token.ts';
 import { resolveAccessToken } from '../../features/orders/guestAccess.ts';
+import { getPendingByPublicId } from '../../features/payments/lightning/pending';
 import { clearCart } from '../../features/cart/cart';
 import { catalogPath } from '../../features/settings/home';
 import { paymentMethodName } from '../../features/payments/labels';
@@ -20,8 +21,9 @@ import { customizationText, parseCustomization } from '../../features/products/c
 // as an unknown token.
 const { token } = Astro.params;
 let order = null;
+let access: Awaited<ReturnType<typeof resolveAccessToken>> = null;
 if (token && isAccessToken(token)) {
-  const access = await resolveAccessToken(env.DB, token);
+  access = await resolveAccessToken(env.DB, token);
   order = access ? await getOrderByPublicId(env.DB, access.order_public_id) : null;
 } else if (token && isLegacyPublicId(token)) {
   order = await getOrderByPublicId(env.DB, token);
@@ -32,6 +34,14 @@ if (token && isAccessToken(token)) {
 // This page carries a capability URL: never cache it, never leak it in referrers.
 Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
+
+// A bank transfer has no order until the merchant records it, days later
+// (ADR 0023): its page is the transfer page, not a "confirming" loop that
+// would refresh every three seconds for a week.
+if (!order && access) {
+  const pending = await getPendingByPublicId(env.DB, access.order_public_id);
+  if (pending?.backend === 'bank_transfer') return Astro.redirect(`/pay/${token}`, 303);
+}
 
 // The webhook creates the order asynchronously, so the customer can land here
 // before it exists. If found, it's confirmed — clear the cart and show it.

@@ -3159,3 +3159,45 @@ Fait le 2026-11-02, en un seul lot :
 Tenu par `test/integration/customization.mjs`. Reste à faire : la recette de
 la première boutique réelle qui vend un produit personnalisé, sur ce
 parcours.
+
+### 13.5 Le paiement par virement
+
+Noté le 2026-11-02 (ticket #146) : l'acheteur choisit le virement bancaire au
+moment de payer, reçoit le RIB du commerçant et une référence, et la commande
+n'est enregistrée qu'à réception des fonds. Le site actuel de la première
+boutique réelle le propose déjà, avec huit jours de réserve. Damien a choisi la
+piste B du ticket, le rapprochement à la main, plutôt que le virement de
+Stripe ; l'[ADR 0023](architecture/decisions/0023-paiement-par-virement.md),
+proposé, amende l'ADR 0007 qui ne connaissait que la carte. Aucun des jalons
+0 à 10 n'avance.
+
+Fait le 2026-11-02, en un seul lot :
+
+- un moyen de paiement `bank_transfer`, ouvert dès qu'un titulaire et un IBAN
+  valide (clé ISO 13616) sont saisis dans Admin → Réglages → Paiements, avec un
+  BIC facultatif et un délai de 1 à 30 jours, 8 par défaut ; en service, il
+  retire la démonstration comme Stripe :
+  `src/features/payments/bankTransfer.ts` ;
+- le parcours par `/checkout` (adresse, tarif, point relais, CGV), une
+  réservation `active` pour le délai réglé, une ligne `pending_payments`
+  (`backend = 'bank_transfer'`), jamais une commande impayée ;
+- la page du virement, `/pay/<jeton>` : titulaire, IBAN par groupes de quatre,
+  BIC, montant, référence (les dix caractères de `ord_`, en capitales),
+  échéance et récapitulatif ; un panier sans rien à expédier y arrive
+  directement, et la page demande l'e-mail ;
+- deux e-mails au moment de la commande, hors outbox : la copie de la page à
+  l'acheteur, l'annonce du virement attendu au commerçant ;
+- dans Admin → Commandes, la liste des virements attendus, lue par l'index de
+  la migration 0050, avec « Virement reçu », qui écrit la commande par
+  `recordPaidOrder`, et « Abandonner », qui remet le stock en vente ;
+- l'échéance libère le stock par le balayage de cinq minutes ; un virement
+  reçu après reste enregistrable et reprend le stock, un manque devenant une
+  anomalie de stock (choix de Damien, 2026-11-02) ;
+- l'API JSON rend le RIB, le montant, la référence et l'échéance
+  (`flow: 'bank_transfer'`).
+
+Tenu par `test/integration/bank-transfer.mjs`, et la lecture de la liste par
+`test/integration/history-reads.mjs`. Reste à faire : la recette de la
+première boutique réelle qui l'allume (une commande par virement, l'e-mail
+reçu, l'enregistrement, la confirmation), et la migration 0050 dans les notes
+de la prochaine version du socle.

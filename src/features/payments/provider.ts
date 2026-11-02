@@ -99,6 +99,22 @@ export interface CheckoutResult {
     /** ISO timestamp after which the invoice is dead. */
     expiresAt: string;
   };
+  /**
+   * Bank transfer only (ADR 0023): what the buyer pays into, so a programmatic
+   * caller can show it without the transfer page. The order is written when
+   * the merchant records the transfer, never before.
+   */
+  bankTransfer?: {
+    holder: string;
+    /** Electronic form, no spaces. */
+    iban: string;
+    bic: string | null;
+    /** To write in the transfer's label: the order reference, in capitals. */
+    reference: string;
+    amountCents: number;
+    /** ISO timestamp the stock stops being held at. */
+    expiresAt: string;
+  };
 }
 
 export interface WebhookResult {

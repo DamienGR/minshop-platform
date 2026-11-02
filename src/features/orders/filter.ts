@@ -46,6 +46,7 @@ export const ORDER_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'stripe', label: t('admin.orders.method.stripe') },
   { value: 'lightning', label: t('admin.orders.method.lightning') },
   { value: 'opennode', label: t('admin.orders.method.opennode') },
+  { value: 'bank_transfer', label: t('admin.orders.method.bankTransfer') },
   { value: 'demo', label: t('admin.orders.method.demo') },
 ];
 

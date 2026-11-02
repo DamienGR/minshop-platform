@@ -44,6 +44,7 @@ describe('parseOrderFilters', () => {
       'stripe',
       'lightning',
       'opennode',
+      'bank_transfer',
       'demo',
     ]);
     expect(ORDER_METHOD_OPTIONS.find((o) => o.value === 'stripe')?.label).toBe('Carte (Stripe)');

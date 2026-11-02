@@ -236,10 +236,15 @@ export async function markInventoryReservationTerminal(
 }
 
 /**
- * Reclaim expired self-rendered Lightning and Demo payments before a new hold.
- * Hosted methods release only from verified provider expiry/failure webhooks: a
+ * The rails whose hold this Worker ends by its own clock. Lightning and Demo
+ * render their own page and know when it lapsed; a bank transfer has no
+ * provider at all, so its deadline (ADR 0023) is the only one there is. Hosted
+ * methods release only from verified provider expiry/failure webhooks: a
  * payment may have completed before local expiry while its webhook is delayed.
  */
+const SELF_EXPIRING = "('lightning', 'demo', 'bank_transfer')";
+
+/** Reclaim expired self-rendered holds before a new one, and on the cron. */
 export async function releaseExpiredReservations(
   db: D1Database,
   limit = 50,
@@ -247,7 +252,7 @@ export async function releaseExpiredReservations(
 ): Promise<void> {
   const { results } = await db
     .prepare(
-      "SELECT public_id FROM checkout_reservations WHERE payment_method IN ('lightning', 'demo') AND status = 'active' AND expires_at <= datetime('now') ORDER BY expires_at LIMIT ?",
+      `SELECT public_id FROM checkout_reservations WHERE payment_method IN ${SELF_EXPIRING} AND status = 'active' AND expires_at <= datetime('now') ORDER BY expires_at LIMIT ?`,
     )
     .bind(limit)
     .all<{ public_id: string }>();
@@ -272,7 +277,7 @@ export async function expireSelfRenderedReservation(
   const eligible = await db
     .prepare(
       `SELECT public_id FROM checkout_reservations
-       WHERE public_id = ? AND payment_method IN ('lightning', 'demo')
+       WHERE public_id = ? AND payment_method IN ${SELF_EXPIRING}
          AND status = 'active' AND expires_at <= datetime('now')`,
     )
     .bind(publicId)
@@ -297,7 +302,7 @@ export async function reserveInventory(
   publicId: string,
   items: ReservationItem[],
   ttlSeconds: number,
-  paymentMethod: 'stripe' | 'opennode' | 'lightning' | 'demo',
+  paymentMethod: 'stripe' | 'opennode' | 'lightning' | 'bank_transfer' | 'demo',
   purger?: StockTransitionPurger,
   release: DigitalDeliveryRelease = DIGITAL_DELIVERY_RELEASE,
   /**

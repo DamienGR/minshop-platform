@@ -30,6 +30,25 @@ describe('payment methods', () => {
     expect(enabledMethods(chosen, true)).toEqual(['stripe']);
   });
 
+  it('opens the bank transfer with a holder and a valid IBAN, and withdraws demo', () => {
+    // The merchant's own account is a real rail: beside it, demo would let any
+    // visitor place an unpaid order that takes stock (ticket #146).
+    const rib = [
+      { key: 'bank_transfer_holder', value: 'Atelier Test' },
+      { key: 'bank_transfer_iban', value: 'FR7630006000011234567890189' },
+    ];
+    expect(enabledMethods(settings(rib), false)).toEqual(['bank_transfer']);
+    expect(enabledMethods(settings([...STRIPE_KEYS, ...rib]), true)).toEqual(['stripe', 'bank_transfer']);
+    expect(
+      enabledMethods(settings([...STRIPE_KEYS, ...rib, { key: 'payment_provider', value: 'bank_transfer' }]), true),
+    ).toEqual(['bank_transfer', 'stripe']);
+    // An IBAN that fails its check leaves the rail closed rather than taking orders
+    // whose money would bounce.
+    const typo = [rib[0], { key: 'bank_transfer_iban', value: 'FR7630006000011234567890188' }];
+    expect(isMethodAvailable('bank_transfer', settings(typo), true)).toBe(false);
+    expect(isMethodAvailable('bank_transfer', settings([rib[1]]), true)).toBe(false);
+  });
+
   it('closes a rail the admin switched off, configured or not', () => {
     const stripeOff = settings([...STRIPE_KEYS, { key: 'payment_methods_disabled', value: 'stripe' }]);
     expect(isMethodAvailable('stripe', stripeOff, true)).toBe(true);

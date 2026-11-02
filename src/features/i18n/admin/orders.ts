@@ -14,9 +14,26 @@ export const orders = {
   'admin.orders.method.stripe': 'Carte (Stripe)',
   'admin.orders.method.lightning': 'Lightning',
   'admin.orders.method.opennode': 'Bitcoin (OpenNode)',
+  'admin.orders.method.bankTransfer': 'Virement bancaire',
   'admin.orders.method.demo': 'Démonstration',
   'admin.orders.method.demoNoCharge': 'Démonstration (sans débit)',
   'admin.orders.carrier.other': 'Autre',
+
+  // ─── Virements attendus (ADR 0023) ─────────────────────────────────────────────
+  'admin.orders.transfers.heading.one': '{count} virement attendu',
+  'admin.orders.transfers.heading.other': '{count} virements attendus',
+  'admin.orders.transfers.intro': 'Ces commandes attendent un virement ; leur stock est réservé jusqu’à l’échéance. Quand un virement apparaît sur votre relevé, vérifiez son montant et sa référence, puis enregistrez-le : la commande est créée et le client reçoit sa confirmation.',
+  'admin.orders.transfers.noEmail': 'sans e-mail',
+  'admin.orders.transfers.due': 'réservé jusqu’au {date}',
+  'admin.orders.transfers.overdue': 'échu le {date}, stock remis en vente',
+  'admin.orders.transfers.received': 'Virement reçu',
+  'admin.orders.transfers.receivedConfirm': 'Avez-vous vu sur votre relevé un virement de {montant} portant la référence {reference} ? La commande sera créée et le client prévenu.',
+  'admin.orders.transfers.receivedLateConfirm': 'Le délai de {reference} est passé et son stock a été remis en vente. Enregistrer le virement de {montant} reprend le stock ; s’il en manque, la commande apparaîtra dans les anomalies de stock. Continuer ?',
+  'admin.orders.transfers.abandon': 'Abandonner',
+  'admin.orders.transfers.abandonConfirm': 'Abandonner la commande {reference} ? Ses articles sont remis en vente, et un virement arrivé ensuite sera à rembourser.',
+  'admin.orders.transfers.error.unknown': 'Virement inconnu.',
+  'admin.orders.transfers.error.gone': 'Le virement {reference} n’est plus attendu : il a déjà été enregistré ou abandonné.',
+  'admin.orders.transfers.error.notRecorded': 'Le virement {reference} n’a pas pu être enregistré : sa réservation n’existe plus. Remboursez-le si l’argent est arrivé.',
 
   // ─── Liste des commandes ───────────────────────────────────────────────────────
   'admin.orders.list.lookup.notFound': 'Aucune commande ne correspond à « {recherche} ».',

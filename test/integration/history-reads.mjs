@@ -5,6 +5,7 @@ import { sweepAbandonedGuestAccess } from '../../src/features/orders/guestAccess
 import { listOrderItems, listOrderItemsWithImages } from '../../src/features/orders/db.ts';
 import { listAllProducts } from '../../src/features/products/db.ts';
 import { listLabelsNeedingAttention } from '../../src/features/shipping/labelStore.ts';
+import { listAwaitedTransfers } from '../../src/features/payments/bankTransferStore.ts';
 import { parseCsvRecords } from '../../shopctl/src/catalog/csv.mjs';
 import { buildCatalogue } from '../../shopctl/src/catalog/contract.mjs';
 import { resolveCatalogueImages } from '../../shopctl/src/catalog/media.mjs';
@@ -90,6 +91,12 @@ try {
        SELECT (i % ${PRODUCTS}) + 1, 'T' || i, 1000, 5, 'HV-' || i, i FROM n WHERE i <= ${VARIANTS}`,
     `INSERT INTO shipping_labels (order_id, status, shipment_id, vendor)
        SELECT i, 'purchased', printf('ord_h%09d-ref', i), 'boxtal' FROM n WHERE i <= ${ORDERS}`,
+    // Every order paid through a pending row (Lightning, transfers recorded).
+    `INSERT INTO pending_payments (public_id, payment_hash, backend, amount_total_cents, currency, status, created_at)
+       SELECT printf('ord_h%09d', i), printf('hash_h%09d', i),
+              CASE WHEN i % 4 = 0 THEN 'bank_transfer' ELSE 'phoenixd' END,
+              1000, 'eur', 'settled', datetime('now', '-30 days')
+         FROM n WHERE i <= ${ORDERS}`,
   ];
   for (const sql of seed) {
     await raw.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${ORDERS}) ${sql}`).run();
@@ -133,6 +140,22 @@ try {
   assert.deepEqual(toSettle.map((label) => label.order_id), [ORDERS / 2]);
   assert.ok(banner < 10, `the label banner reads ${banner} rows, not every label bought`);
   console.log(`  ✓ labels to settle: ${banner} rows (a scan would be ${ORDERS})`);
+
+  // ── The transfers awaited (ADR 0023): the open ones, not every pending row ──
+  for (const i of [1, 2, 3]) {
+    await raw
+      .prepare(
+        `INSERT INTO pending_payments (public_id, payment_hash, backend, amount_total_cents, currency, status)
+         VALUES (?, ?, 'bank_transfer', 1000, 'eur', 'pending')`,
+      )
+      .bind(`ord_hwait${i}`, `bank_transfer_ord_hwait${i}`)
+      .run();
+  }
+  const awaited = await listAwaitedTransfers(db);
+  const transfers = take();
+  assert.deepEqual(awaited.map((p) => p.public_id), ['ord_hwait1', 'ord_hwait2', 'ord_hwait3']);
+  assert.ok(transfers < 10, `the transfers awaited read ${transfers} rows, not every payment recorded`);
+  console.log(`  ✓ transfers awaited: ${transfers} rows (a scan would be ${ORDERS})`);
 
   // ── One order's lines ──
   await listOrderItems(db, ORDERS / 2);
