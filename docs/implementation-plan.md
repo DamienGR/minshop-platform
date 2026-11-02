@@ -3127,7 +3127,7 @@ dans le panier et dans la commande. L'exemple du ticket est un sac brodé d'un
 prénom, « Nom à broder », 15 caractères au plus. La personnalisation complexe
 reste hors périmètre (§2.2) ;
 l'[ADR 0022](architecture/decisions/0022-produits-personnalisables.md),
-proposé avec le code, fait entrer ce cas simple dans l'offre. Aucun des jalons
+accepté par la fusion de la PR #149, fait entrer ce cas simple dans l'offre. Aucun des jalons
 0 à 10 n'avance.
 
 Fait le 2026-11-02, en un seul lot :
