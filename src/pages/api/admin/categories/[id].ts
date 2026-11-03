@@ -5,6 +5,7 @@ import {
   deleteCategory,
   descendantIds,
   getCategoryByPublicId,
+  setCategoryImage,
 } from '../../../../features/categories/db';
 import { parseCategoryForm } from '../../../../features/categories/form';
 import { uniqueCategorySlug } from '../../../../features/categories/slug';
@@ -58,7 +59,12 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     name: parsed.data.name,
     slug,
     parent_id: parentId,
+    description: parsed.data.description,
   });
+  // Unchanged keys are written again: the statement is the same guarded one
+  // either way, and it is what refuses a file deleted since the form loaded.
+  const imageSet = await setCategoryImage(env.DB, id, parsed.data.imageKey);
   await purgeCacheTags([CACHE_TAG.catalog]);
+  if (!imageSet) return fail(t('admin.categories.error.imageGone'));
   return redirect('/admin/categories', 303);
 };

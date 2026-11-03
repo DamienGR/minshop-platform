@@ -6,6 +6,7 @@ import { shippingFor } from '../features/shipping/effective';
 import { env } from 'cloudflare:workers';
 import { countUnresolvedInventoryExceptions } from '../features/orders/db';
 import { LANG, t, tn } from '../features/i18n';
+import { activeThemeTextSlots } from '../features/themeTexts/active';
 // Admin's OWN stylesheet — never global.css, which carries the active
 // storefront set's tokens and base-layer rules. A dark set would otherwise
 // restyle every authenticated Admin page (see src/styles/admin.css).
@@ -21,6 +22,7 @@ type Section =
   | 'pages'
   | 'navigation'
   | 'shipping'
+  | 'themeTexts'
   | 'settings';
 
 interface Props {
@@ -70,6 +72,11 @@ const nav: { key: Section; label: string; href: string }[] = [
   { key: 'navigation', label: t('admin.shell.nav.navigation'), href: '/admin/navigation' },
   { key: 'shipping', label: t('admin.shell.nav.shipping'), href: '/admin/shipping' },
   { key: 'media', label: t('admin.shell.nav.media'), href: '/admin/media' },
+  // Only for a theme that declares texts (ticket #165): an entry to an empty
+  // screen is a question the merchant cannot answer.
+  ...(activeThemeTextSlots.length > 0
+    ? [{ key: 'themeTexts' as const, label: t('admin.shell.nav.themeTexts'), href: '/admin/theme-texts' }]
+    : []),
   { key: 'settings', label: t('admin.shell.nav.settings'), href: '/admin/settings' },
 ];
 // Label of the section we're on — shown in the collapsed mobile disclosure.

@@ -1,6 +1,11 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { createCategory, getCategoryByPublicId } from '../../../features/categories/db';
+import {
+  createCategory,
+  getCategory,
+  getCategoryByPublicId,
+  setCategoryImage,
+} from '../../../features/categories/db';
 import { parseCategoryForm } from '../../../features/categories/form';
 import { uniqueCategorySlug } from '../../../features/categories/slug';
 import { CACHE_TAG } from '../../../features/cache/tags';
@@ -27,11 +32,23 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   }
 
   const slug = await uniqueCategorySlug(env.DB, parsed.data.slugInput || parsed.data.name);
-  await createCategory(env.DB, {
+  const id = await createCategory(env.DB, {
     name: parsed.data.name,
     slug,
     parent_id: parentId,
+    description: parsed.data.description,
   });
+  // The image is written apart, through the statement that sources it from
+  // `media` (invariant 10). A file deleted meanwhile leaves the category
+  // without one, and the edit screen says so.
+  const imageSet = !parsed.data.imageKey || (await setCategoryImage(env.DB, id, parsed.data.imageKey));
   await purgeCacheTags([CACHE_TAG.catalog]);
+  if (!imageSet) {
+    const created = await getCategory(env.DB, id);
+    return redirect(
+      `/admin/categories/${created?.public_id}/edit?error=${encodeURIComponent(t('admin.categories.error.imageGone'))}`,
+      303,
+    );
+  }
   return redirect('/admin/categories', 303);
 };

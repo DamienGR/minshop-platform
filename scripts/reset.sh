@@ -58,6 +58,7 @@ DELETE FROM orders;
 DELETE FROM products;
 DELETE FROM categories;
 DELETE FROM settings;
+DELETE FROM theme_texts;
 "
 
 echo "▸ Clearing the $WHERE store…"

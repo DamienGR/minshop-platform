@@ -21,12 +21,15 @@ export const media = {
   // ─── Utilisations d’un fichier (usage.ts) ──────────────────────────────────────
   'admin.media.usage.editProduct': 'Modifier « {nom} »',
   'admin.media.usage.editPage': 'Modifier la page « {titre} »',
+  'admin.media.usage.editCategory': 'Modifier la catégorie « {nom} »',
   'admin.media.usage.logo': 'Logo de la boutique',
   'admin.media.usage.logoTitle': 'Changer le logo dans Réglages',
   'admin.media.usage.products.one': '{count} produit ({noms})',
   'admin.media.usage.products.other': '{count} produits ({noms})',
   'admin.media.usage.pages.one': '{count} page ({titres})',
   'admin.media.usage.pages.other': '{count} pages ({titres})',
+  'admin.media.usage.categories.one': '{count} catégorie ({noms})',
+  'admin.media.usage.categories.other': '{count} catégories ({noms})',
   'admin.media.usage.theLogo': 'le logo de la boutique',
   'admin.media.usage.and': 'et',
 

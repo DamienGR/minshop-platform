@@ -1,18 +1,21 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { listProducts } from '../products/db';
-import { childrenOf } from '../categories/db';
+import { childrenOf, type Category } from '../categories/db';
 import { orderByClause, parseStoreSortQuery, STORE_SORTS } from '../products/sort';
 import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../../pagination';
-import { readCatalogRows } from './reads';
+import { catalogPageStatement, readCatalogRows } from './reads';
+import type { ListedProduct } from '../products/cardVariants';
 import { addCacheTags, productCacheTags } from '../cache/tags';
 import type { ImageDelivery } from '../products/image';
-import { buildProductCard } from './productCard';
+import { buildProductCard, buildStorefrontImage, type StorefrontImageOptions } from './productCard';
 import type {
   CatalogPageModel,
   StorefrontPaginationItem,
+  StorefrontCategory,
   StorefrontPaginationModel,
   StorefrontSortModel,
+  ThemeTextSlot,
 } from './models';
+import { resolveThemeTexts } from '../themeTexts/slots';
 
 /**
  * The catalog loader.
@@ -27,6 +30,9 @@ const PAGE_SIZE = 24;
 
 /** Matches the card slot in the default three-column grid. */
 const CARD_SIZES = '(min-width: 1024px) 352px, calc(50vw - 36px)';
+
+/** The product put forward is a home's hero: the product page's own slot. */
+const FEATURED_SIZES = '(min-width: 768px) 528px, calc(100vw - 48px)';
 
 /**
  * Sort links deliberately drop `page`: changing the ordering while holding page
@@ -103,6 +109,25 @@ export function buildPaginationModel(
   };
 }
 
+/**
+ * The top-level categories, each with its image, its description and its
+ * sub-categories (ticket #158). Built from the list the page already read —
+ * the whole tree is one statement in the catalog batch, so a theme writing
+ * "Sacs à dos · Se débarbouiller · Accessoires" under a category costs nothing.
+ */
+export function buildCatalogCategories(
+  categories: Category[],
+  image: StorefrontImageOptions,
+): StorefrontCategory[] {
+  const link = (category: Category) => ({ text: category.name, href: `/categories/${category.slug}` });
+  return childrenOf(categories, null).map((category) => ({
+    ...link(category),
+    description: category.description ?? null,
+    image: category.image_key ? buildStorefrontImage(category.image_key, category.name, image) : null,
+    children: childrenOf(categories, category.id).map(link),
+  }));
+}
+
 export interface CatalogPageOptions {
   /** The path currently rendering — sort and page links stay on it, so the
    *  catalog works at both `/` and `/products` without hardcoding either. */
@@ -116,6 +141,12 @@ export interface CatalogPageOptions {
   currency: string;
   eyebrow: string;
   heading: string;
+  /** The merchant's choice (Admin → Réglages, ticket #164), from the settings
+   *  the request already holds; null for the automatic one. */
+  featuredProductId?: number | null;
+  /** The active theme's text slots (`themeTexts/active.ts`), passed in so the
+   *  loader stays testable outside a Vite build; none reads nothing. */
+  textSlots?: readonly ThemeTextSlot[];
 }
 
 export async function loadCatalogPage(
@@ -131,7 +162,13 @@ export async function loadCatalogPage(
   // One batch for the count, the categories and the page ASKED for; only a
   // page past the end, clamped to the last one, costs a second read.
   const asked = requestedPage(options.searchParams, MAX_PUBLIC_PAGE);
-  const read = await readCatalogRows(db, { pageSize: PAGE_SIZE, offset: (asked - 1) * PAGE_SIZE, order });
+  const read = await readCatalogRows(db, {
+    pageSize: PAGE_SIZE,
+    offset: (asked - 1) * PAGE_SIZE,
+    order,
+    featuredProductId: options.featuredProductId ?? null,
+    themeTexts: (options.textSlots?.length ?? 0) > 0,
+  });
   const { total, categories } = read;
   const { page, offset, totalPages } = paginate(
     options.searchParams,
@@ -139,20 +176,24 @@ export async function loadCatalogPage(
     PAGE_SIZE,
     MAX_PUBLIC_PAGE,
   );
-  const products = page === asked ? read.products : await listProducts(db, PAGE_SIZE, offset, order);
+  const products =
+    page === asked
+      ? read.products
+      : ((await catalogPageStatement(db, { pageSize: PAGE_SIZE, offset, order }).all<ListedProduct>()).results ?? []);
 
   addCacheTags(
     options.responseHeaders,
-    productCacheTags(products.map((product) => product.public_id)),
+    productCacheTags([...products, ...(read.featured ? [read.featured] : [])].map((product) => product.public_id)),
   );
 
   return {
     eyebrow: options.eyebrow,
     heading: options.heading,
-    categories: childrenOf(categories, null).map((category) => ({
-      text: category.name,
-      href: `/categories/${category.slug}`,
-    })),
+    categories: buildCatalogCategories(categories, {
+      baseUrl: options.imageBaseUrl,
+      delivery: options.delivery,
+      sizes: CARD_SIZES,
+    }),
     products: products.map((product, index) =>
       buildProductCard(product, {
         baseUrl: options.imageBaseUrl,
@@ -163,6 +204,18 @@ export async function loadCatalogPage(
         priority: index === 0,
       }),
     ),
+    // Priority too: a theme that puts it forward puts it at the top, where it
+    // is the likely LCP image; one that does not render it fetches nothing.
+    featured: read.featured
+      ? buildProductCard(read.featured, {
+          baseUrl: options.imageBaseUrl,
+          delivery: options.delivery,
+          currency: options.currency,
+          sizes: FEATURED_SIZES,
+          priority: true,
+        })
+      : null,
+    texts: resolveThemeTexts(options.textSlots ?? [], read.texts, { baseUrl: options.imageBaseUrl }),
     sort: buildSortModel(options.base, sort, dir),
     pagination: buildPaginationModel(options.base, page, totalPages, sort, dir),
   };

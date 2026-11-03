@@ -307,10 +307,15 @@ export function objectInventory(tables) {
   const keys = (name, column) => rows(name).map((row) => row[column]).filter((value) => typeof value === 'string' && value !== '');
 
   const images = new Set(keys('media', 'image_key'));
-  // The two tables that denormalise a key rather than joining `media` by id.
-  // A page or a menu item points at a media ROW, so neither can name a key
-  // `media` does not have — asking them would add a join with no answer in it.
-  const referenced = new Set([...keys('products', 'image_key'), ...keys('product_images', 'image_key')]);
+  // The three tables that denormalise a key rather than joining `media` by id
+  // (a category's image is one since migration 0052). A page or a menu item
+  // points at a media ROW, so neither can name a key `media` does not have —
+  // asking them would add a join with no answer in it.
+  const referenced = new Set([
+    ...keys('products', 'image_key'),
+    ...keys('product_images', 'image_key'),
+    ...keys('categories', 'image_key'),
+  ]);
   const files = new Set([...keys('products', 'file_key'), ...keys('order_items', 'file_key')]);
 
   return {

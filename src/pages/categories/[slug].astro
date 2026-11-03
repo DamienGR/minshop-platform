@@ -1,8 +1,9 @@
 ---
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
-import { getCategoryBySlug, childrenOf, productsInCategory } from '../../features/categories/db';
-import { readCategoryRows } from '../../features/storefront/reads';
+import { getCategoryBySlug, childrenOf } from '../../features/categories/db';
+import { categoryPageStatement, readCategoryRows } from '../../features/storefront/reads';
+import type { ListedProduct } from '../../features/products/cardVariants';
 import ProductCard from '#theme/ProductCard.astro';
 import { buildProductCard } from '../../features/storefront/productCard';
 import { getConfig } from '../../config';
@@ -55,7 +56,8 @@ const { page, offset, totalPages } = paginate(
 const products =
   page === asked
     ? read.products
-    : await productsInCategory(env.DB, category.id, PAGE_SIZE, offset, order);
+    : ((await categoryPageStatement(env.DB, category.id, { pageSize: PAGE_SIZE, offset, order }).all<ListedProduct>())
+        .results ?? []);
 addCacheTags(Astro.response.headers, productCacheTags(products.map((product) => product.public_id)));
 // Presentation models are built here, where the store's image settings are
 // known; only the first card is the LCP image.

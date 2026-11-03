@@ -28,6 +28,24 @@ describe('usageLinks', () => {
     ]);
   });
 
+  it('links a category to its edit screen by public ID', () => {
+    // Ticket #158: a category's image is a use, so the grid has to say where.
+    expect(
+      usageLinks(usage({ categories: [{ id: 5, public_id: 'cat_q3vr8jm2np', name: 'Partir' }] })),
+    ).toEqual([
+      {
+        href: '/admin/categories/cat_q3vr8jm2np/edit',
+        label: 'Partir',
+        kind: 'category',
+        title: 'Modifier la catégorie « Partir »',
+      },
+    ]);
+    expect(describeUsage(usage({ categories: [{ id: 5, public_id: 'cat_q3vr8jm2np', name: 'Partir' }] }))).toBe(
+      '1 catégorie (Partir)',
+    );
+    expect(isUnused(usage({ categories: [{ id: 5, public_id: 'cat_q3vr8jm2np', name: 'Partir' }] }))).toBe(false);
+  });
+
   it('links the logo to settings, where it is chosen', () => {
     // The logo is a setting rather than a row, so there is no per-item URL.
     expect(usageLinks(usage({ logo: true }))).toEqual([

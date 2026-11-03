@@ -19,6 +19,7 @@ theme engine and no code editor in Admin — you edit source, build, and deploy.
 | `src/themes/<your-theme>/ProductDetail.astro` | The product page: gallery, details, purchase panel, and recommendations. |
 | `src/themes/<your-theme>/ContentPage.astro` | The frame around a merchant's Markdown page. |
 | `src/themes/<your-theme>/tokens.css` | Your theme's design tokens: the `@theme` block (colors, fonts, radii) plus the prose and container scales. |
+| `src/themes/<your-theme>/texts.ts` | Optional. The texts your theme lets the merchant edit in Admin → Textes du thème — see "Texts the merchant edits". |
 
 That is the whole store-owned surface.
 
@@ -50,14 +51,26 @@ interface ProductCardModel {
   name: string;
   href: string;            // root-relative product URL
   image: StorefrontImage;  // already resolved: src, srcset, sizes, alt, priority
-  formattedPrice: string;  // already formatted in the store's currency
+  formattedPrice: string;  // already formatted in the store's currency;
+                           // the lowest variant's when the product has variants
+  priceVaries: boolean;    // variants at different prices: print "dès …"
   inStock: boolean;        // availability only — never a quantity
+  variantLabel: string | null;   // "Tissu", "Taille" — null without variants
+  variants: StorefrontCardVariant[]; // { label, inStock, image | null }, merchant order
+  tags: string[];          // the merchant's tags, as slugs: "non-cousu", "nouveau"
 }
 ```
 
 Every value arrives finished. Do not recompute prices, build image URLs from
 keys, or derive availability from a stock number — those are decided upstream,
 where the store's settings are known.
+
+A card's `variants` are its active ones (fabrics, sizes), each with its own
+photo when the merchant gave it one, so a card can show swatches; a variant
+carries no price or quantity of its own. `tags` mean nothing to the core: the
+merchant types them on the product form (or the import's `tags` column), and
+your theme decides that `non-cousu` hides a line or `nouveau` draws a badge.
+The product page model carries the same `tags`.
 
 A minimal card:
 
@@ -119,10 +132,19 @@ header changes its positioning context.
 
 ## The catalog contract
 
-`Catalog.astro` receives a `CatalogPageModel`: eyebrow, heading, category links,
-product cards, and finished `sort` and `pagination` models. It runs no queries
-and reads no query parameters — the loader has already parsed, bounded, and
-validated everything, and tagged the response for cache invalidation.
+`Catalog.astro` receives a `CatalogPageModel`: eyebrow, heading, categories,
+product cards, the product put forward, the theme's texts, and finished `sort`
+and `pagination` models. It runs no queries and reads no query parameters — the
+loader has already parsed, bounded, and validated everything, and tagged the
+response for cache invalidation.
+
+- `categories` are the top-level ones, each a link (`text`, `href`) with its
+  `description`, its resolved `image` (both null until the merchant sets them)
+  and its `children`.
+- `featured` is one product card: the merchant's choice in Admin → Réglages
+  while it is active, else the newest product in stock, else the newest — null
+  only for an empty catalog. Its image is resolved as the page's LCP.
+- `texts` holds every key your `texts.ts` declares (below), `{}` without one.
 
 Two controls to keep:
 
@@ -288,6 +310,37 @@ instead, the way the product page passes its "Lien copié" label. And don't
 build an `Intl` formatter — `formattedPrice` and the other model fields are
 already formatted in the store's locale, which is what makes `1 234,56 €` read
 the same everywhere.
+
+## Texts the merchant edits
+
+A home's wording — the hero's title, a block's sentence — is the merchant's,
+not yours: declare it in `src/themes/<your-theme>/texts.ts`, and Admin →
+Textes du thème shows one field per slot. No file, no screen, nothing changes.
+
+```ts
+import type { ThemeTextSlot } from '../../features/storefront/models';
+
+export const texts = [
+  { key: 'hero.title', label: 'Titre de l’accueil', default: 'Né à l’atelier',
+    maxLength: 80, format: 'text' },
+  { key: 'hero.intro', label: 'Texte d’accroche', help: 'Sous le titre.',
+    default: 'Des sacs *cousus main*.', maxLength: 600, format: 'markdown' },
+] satisfies ThemeTextSlot[];
+```
+
+```astro
+<h1>{model.texts['hero.title'].text}</h1>
+<div set:html={model.texts['hero.intro'].html} />
+```
+
+The label and help are shown to the merchant, so write them in French. A field
+left empty, or holding the default, shows the default; a text longer than
+`maxLength` is refused at saving, with a message. `text` is one line;
+`markdown` arrives as `html`, rendered without HTML the way a page body is.
+Write the default as it is stored (trimmed, and on one line for `text`):
+`test/storefront/themeTexts.test.ts` holds every theme on disk to the rules,
+yours included. Keep a key once merchants have written to it — a renamed key is
+a text that silently returns to its default.
 
 ## Styling
 

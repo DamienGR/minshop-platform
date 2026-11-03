@@ -5,6 +5,7 @@ import { getSearchProvider } from '../features/search';
 import { productsInSharedCategories } from '../features/categories/db';
 import ProductCard from '#theme/ProductCard.astro';
 import { buildProductCard } from '../features/storefront/productCard';
+import { readCardVariants } from '../features/storefront/reads';
 import { getConfig } from '../config';
 import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../pagination';
 import Pagination from '../components/Pagination.astro';
@@ -58,10 +59,14 @@ const cardOptions = {
   delivery: Astro.locals.settings?.imageDelivery,
   sizes: '(min-width: 1024px) 352px, calc(50vw - 36px)',
 };
+// The providers' rows carry no variants; one read brings them for the whole
+// page, fillers included (ticket #161).
+const variants = await readCardVariants(env.DB, [...products, ...fillers].map((product) => product.id));
+const listed = <T extends { id: number }>(product: T) => ({ ...product, card_variants: variants.get(product.id) ?? null });
 const cards = products.map((product, i) =>
-  buildProductCard(product, { ...cardOptions, priority: i === 0 }),
+  buildProductCard(listed(product), { ...cardOptions, priority: i === 0 }),
 );
-const fillerCards = fillers.map((product) => buildProductCard(product, cardOptions));
+const fillerCards = fillers.map((product) => buildProductCard(listed(product), cardOptions));
 ---
 
 <Layout title={q ? t('search.titleWithQuery', { requete: q }) : t('search.title')}>

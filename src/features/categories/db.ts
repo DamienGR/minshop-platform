@@ -9,6 +9,11 @@ export interface Category {
   slug: string;
   parent_id: number | null;
   public_id: string | null;
+  /** A media item's key, shown by themes that present the category (migration
+   *  0052). A USE of the file, never its owner: invariant 10. NULL = none. */
+  image_key: string | null;
+  /** A short plain-text presentation, at most 300 characters. NULL = none. */
+  description: string | null;
   created_at: string;
 }
 
@@ -30,6 +35,7 @@ export interface CategoryFields {
   name: string;
   slug: string;
   parent_id: number | null;
+  description: string | null;
 }
 
 /**
@@ -82,8 +88,10 @@ export async function getCategoriesByPublicIds(
 export async function createCategory(db: D1Database, c: CategoryFields): Promise<number> {
   return withPublicId('category', async (publicId) => {
     const row = await db
-      .prepare('INSERT INTO categories (name, slug, parent_id, public_id) VALUES (?, ?, ?, ?) RETURNING id')
-      .bind(c.name, c.slug, c.parent_id, publicId)
+      .prepare(
+        'INSERT INTO categories (name, slug, parent_id, description, public_id) VALUES (?, ?, ?, ?, ?) RETURNING id',
+      )
+      .bind(c.name, c.slug, c.parent_id, c.description, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -91,9 +99,36 @@ export async function createCategory(db: D1Database, c: CategoryFields): Promise
 
 export async function updateCategory(db: D1Database, id: number, c: CategoryFields): Promise<void> {
   await db
-    .prepare('UPDATE categories SET name = ?, slug = ?, parent_id = ? WHERE id = ?')
-    .bind(c.name, c.slug, c.parent_id, id)
+    .prepare('UPDATE categories SET name = ?, slug = ?, parent_id = ?, description = ? WHERE id = ?')
+    .bind(c.name, c.slug, c.parent_id, c.description, id)
     .run();
+}
+
+/**
+ * Point a category at a media item, or clear it with null (ticket #158).
+ *
+ * Sourced from `media` in the same statement that writes it, like the logo
+ * (`setLogoFromMedia`): a check-then-write leaves a window where the file is
+ * deleted between the two, and the delete guard would then have nothing to
+ * refuse. Returns false when the media row is gone (or the category is).
+ */
+export async function setCategoryImage(
+  db: D1Database,
+  id: number,
+  imageKey: string | null,
+): Promise<boolean> {
+  const result = imageKey
+    ? await db
+        .prepare(
+          `UPDATE categories
+              SET image_key = (SELECT image_key FROM media WHERE image_key = ?2)
+            WHERE id = ?1
+              AND EXISTS (SELECT 1 FROM media WHERE image_key = ?2)`,
+        )
+        .bind(id, imageKey)
+        .run()
+    : await db.prepare('UPDATE categories SET image_key = NULL WHERE id = ?').bind(id).run();
+  return (result.meta?.changes ?? 0) > 0;
 }
 
 /**
@@ -204,24 +239,24 @@ export async function categoriesForProducts(
   return byProduct;
 }
 
-/** Active products sharing a category with the given product (excludes itself). */
-export function relatedProductsStatement(
-  db: D1Database,
-  productId: number,
-  limit = 4,
-): D1PreparedStatement {
-  return db
-    .prepare(
-      `SELECT DISTINCT p.* FROM products p
+/** Active products sharing a category with the given product (excludes
+ *  itself), as SQL: bound (productId, limit). Exported for the card wrapper. */
+export const RELATED_PRODUCTS_SQL = `SELECT DISTINCT p.* FROM products p
          JOIN product_categories pc ON pc.product_id = p.id
         WHERE pc.category_id IN (
                 SELECT category_id FROM product_categories WHERE product_id = ?1
               )
           AND p.id != ?1 AND p.active = 1
         ORDER BY p.created_at DESC
-        LIMIT ?2`,
-    )
-    .bind(productId, limit);
+        LIMIT ?2`;
+
+/** Active products sharing a category with the given product (excludes itself). */
+export function relatedProductsStatement(
+  db: D1Database,
+  productId: number,
+  limit = 4,
+): D1PreparedStatement {
+  return db.prepare(RELATED_PRODUCTS_SQL).bind(productId, limit);
 }
 
 export async function relatedProducts(
@@ -281,17 +316,10 @@ export async function setProductCategories(
   await db.batch(stmts);
 }
 
-/** A page of active products in a category, including descendant categories. */
-export function productsInCategoryStatement(
-  db: D1Database,
-  categoryId: number,
-  limit: number,
-  offset = 0,
-  orderBy = 'created_at DESC',
-): D1PreparedStatement {
-  return db
-    .prepare(
-      `WITH RECURSIVE sub(id) AS (
+/** A page of active products in a category and its descendants, as SQL:
+ *  bound (categoryId, limit, offset). Exported for the card wrapper. */
+export function productsInCategorySql(orderBy = 'created_at DESC'): string {
+  return `WITH RECURSIVE sub(id) AS (
          SELECT id FROM categories WHERE id = ?1
          UNION ALL
          SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
@@ -300,9 +328,18 @@ export function productsInCategoryStatement(
        JOIN product_categories pc ON pc.product_id = p.id
        WHERE pc.category_id IN (SELECT id FROM sub) AND p.active = 1
        ORDER BY ${orderBy}
-       LIMIT ?2 OFFSET ?3`,
-    )
-    .bind(categoryId, limit, offset);
+       LIMIT ?2 OFFSET ?3`;
+}
+
+/** A page of active products in a category, including descendant categories. */
+export function productsInCategoryStatement(
+  db: D1Database,
+  categoryId: number,
+  limit: number,
+  offset = 0,
+  orderBy = 'created_at DESC',
+): D1PreparedStatement {
+  return db.prepare(productsInCategorySql(orderBy)).bind(categoryId, limit, offset);
 }
 
 export async function productsInCategory(

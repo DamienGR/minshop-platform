@@ -11,6 +11,7 @@ import { products } from './products.ts';
 import { settings } from './settings.ts';
 import { shell } from './shell.ts';
 import { shipping } from './shipping.ts';
+import { themeTexts } from './themeTexts.ts';
 
 /**
  * Every string the Admin renders, in French (ADR 0018, which replaces 0011).
@@ -38,6 +39,7 @@ export const ADMIN_FRAGMENTS = {
   pages,
   navigation,
   shipping,
+  themeTexts,
   settings,
 } as const;
 
@@ -54,5 +56,6 @@ export const frAdmin = {
   ...pages,
   ...navigation,
   ...shipping,
+  ...themeTexts,
   ...settings,
 };

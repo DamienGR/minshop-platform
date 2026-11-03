@@ -2,6 +2,7 @@ import type { ProductFields } from './db';
 import { toMinorUnits } from '../../money';
 import { toGrams, type WeightUnit } from '../shipping/weight';
 import { t } from '../i18n';
+import { parseTagsInput, storeTags } from './tags';
 
 export interface ProductFormOptions {
   /** Admin's display unit. Storage is always grams. */
@@ -66,8 +67,22 @@ export function parseProductForm(
     return { error: t('admin.products.error.weightRequired') };
   }
 
+  const tags = parseTagsInput(String(form.get('tags') ?? ''));
+  if ('error' in tags) return { error: tags.error };
+
   return {
-    data: { name, sku, description, price_cents, currency, stock, active, weight_grams, requires_shipping },
+    data: {
+      name,
+      sku,
+      description,
+      price_cents,
+      currency,
+      stock,
+      active,
+      weight_grams,
+      requires_shipping,
+      tags: storeTags(tags.tags),
+    },
   };
 }
 

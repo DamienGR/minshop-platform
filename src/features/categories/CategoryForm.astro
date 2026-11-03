@@ -1,5 +1,7 @@
 ---
 import type { Category, CategoryOption } from './db';
+import { CATEGORY_DESCRIPTION_MAX } from './form';
+import MediaPicker from '../media/MediaPicker.astro';
 import { t } from '../i18n';
 
 interface Props {
@@ -8,10 +10,13 @@ interface Props {
   category?: Category | null;
   /** Valid parent choices (depth-tagged). For edit, excludes self + descendants. */
   parentOptions: CategoryOption[];
+  /** The current image's URL, resolved by the page where the store's image
+   *  base is known; null when the category has none. */
+  imageUrl?: string | null;
   error?: string | null;
 }
 
-const { action, submitLabel, category = null, parentOptions, error = null } = Astro.props;
+const { action, submitLabel, category = null, parentOptions, imageUrl = null, error = null } = Astro.props;
 const inputClass =
   'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
 ---
@@ -52,6 +57,59 @@ const inputClass =
     </select>
   </div>
 
+  <div>
+    <label class="block text-sm font-medium" for="description">
+      {t('admin.categories.form.description')}
+      <span class="text-faint">{t('admin.categories.form.descriptionHint', { max: CATEGORY_DESCRIPTION_MAX })}</span>
+    </label>
+    <textarea
+      id="description"
+      name="description"
+      rows="3"
+      maxlength={CATEGORY_DESCRIPTION_MAX}
+      class={inputClass}
+    >{category?.description ?? ''}</textarea>
+  </div>
+
+  {/* The image is a USE of a media item (invariant 10): the picker writes its
+      key here, and the server takes it only through a statement sourced from
+      `media`. Choosing or removing does not save — the form's button does. */}
+  <fieldset
+    data-category-image
+    data-msg-choose={t('admin.categories.form.imageChoose')}
+    data-msg-replace={t('admin.categories.form.imageReplace')}
+  >
+    <legend class="block text-sm font-medium">{t('admin.categories.form.image')}</legend>
+    <div class="mt-1 flex flex-wrap items-center gap-4">
+      <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-surface">
+        <img
+          data-category-image-preview
+          src={imageUrl ?? undefined}
+          alt={t('admin.categories.form.imageAlt')}
+          hidden={!imageUrl}
+          class="h-full w-full object-cover"
+        />
+        <span data-category-image-none hidden={Boolean(imageUrl)} class="px-1 text-center text-xs text-faint">
+          {t('admin.categories.form.imageNone')}
+        </span>
+      </div>
+      <input type="hidden" name="image_key" value={category?.image_key ?? ''} data-category-image-key />
+      <MediaPicker
+        id="category-image"
+        label={imageUrl ? t('admin.categories.form.imageReplace') : t('admin.categories.form.imageChoose')}
+      />
+      <button
+        type="button"
+        data-category-image-remove
+        hidden={!imageUrl}
+        class="rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted hover:border-brand hover:text-brand"
+      >
+        {t('admin.categories.form.imageRemove')}
+      </button>
+    </div>
+    <p class="mt-2 text-xs text-faint">{t('admin.categories.form.imageHint')}</p>
+  </fieldset>
+
   <div class="flex gap-3 pt-2">
     <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
       {submitLabel}
@@ -59,3 +117,40 @@ const inputClass =
     <a href="/admin/categories" class="rounded-md border border-line px-5 py-2 hover:bg-surface">{t('admin.common.cancel')}</a>
   </div>
 </form>
+
+<script>
+  // The picker reports a choice; this form shows it and carries its key until
+  // the merchant saves. "Retirer l'image" empties the key, which the server
+  // reads as "no image".
+  const root = document.querySelector<HTMLElement>('[data-category-image]');
+  const field = root?.querySelector<HTMLInputElement>('[data-category-image-key]');
+  const preview = root?.querySelector<HTMLImageElement>('[data-category-image-preview]');
+  const none = root?.querySelector<HTMLElement>('[data-category-image-none]');
+  const remove = root?.querySelector<HTMLButtonElement>('[data-category-image-remove]');
+  const trigger = root?.querySelector<HTMLButtonElement>('[data-picker-open]');
+
+  function show(url: string | null) {
+    if (preview) {
+      preview.hidden = !url;
+      if (url) preview.src = url;
+      else preview.removeAttribute('src');
+    }
+    if (none) none.hidden = Boolean(url);
+    if (remove) remove.hidden = !url;
+    if (trigger && root) {
+      trigger.textContent = (url ? root.dataset.msgReplace : root.dataset.msgChoose) ?? trigger.textContent;
+    }
+  }
+
+  document.addEventListener('media:selected', (event) => {
+    if (!field) return;
+    const detail = (event as CustomEvent<{ imageKey: string; url: string }>).detail;
+    field.value = detail.imageKey;
+    show(detail.url);
+  });
+
+  remove?.addEventListener('click', () => {
+    if (field) field.value = '';
+    show(null);
+  });
+</script>
