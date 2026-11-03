@@ -162,6 +162,14 @@ export interface CatalogPageModel {
   /** The top-level categories, sorted by name, each with its sub-categories. */
   categories: StorefrontCategory[];
   products: ProductCardModel[];
+  /**
+   * The product put forward (ticket #164): the merchant's choice in Admin →
+   * Réglages while it is active, else the newest product in stock, else the
+   * newest — null only for an empty catalogue. The same on every page of the
+   * list, and possibly one of `products` too: whether to show it twice is the
+   * theme's call. Its image is resolved as the page's likely LCP.
+   */
+  featured: ProductCardModel | null;
   sort: StorefrontSortModel;
   pagination: StorefrontPaginationModel;
 }

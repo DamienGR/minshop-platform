@@ -44,6 +44,7 @@ export type SettingKey =
   | 'email_provider' // 'resend' | 'cloudflare'; absent = resend
   | 'logo_image_key' // media image_key shown instead of the text store name; absent = text
   | 'home_page' // what / renders: 'page:<id>' | 'product:<id>'; absent = the catalog list
+  | 'featured_product' // id of the product the catalog model puts forward (ticket #164); absent = the newest in stock
   | 'announcement' // storefront announcement bar text; absent/empty = bar hidden
   | 'announcement_href' // optional link for the announcement bar
   | 'email_from' // sender address; absent = build-time default
@@ -105,6 +106,11 @@ export interface StoreSettings {
   /** What `/` renders: 'page:<id>', 'product:<id>', or null for the catalog
    *  list. Stored as an id so renaming the target cannot break it. */
   homePage: string | null;
+  /** The product the merchant puts forward on the catalog (ticket #164), or
+   *  null for the automatic choice. An id, like the home page: a renamed
+   *  product keeps it. Resolved at read time — an inactive or deleted one
+   *  falls back, it never errors. */
+  featuredProductId: number | null;
   /** Announcement bar message, or null to hide the bar entirely. The message IS
    *  the on/off switch — an empty value deletes the row, so there is no separate
    *  enabled flag to fall out of sync with it. */
@@ -226,6 +232,7 @@ export function parseStoreSettings(
     emailProvider: map.get('email_provider') === 'cloudflare' ? 'cloudflare' : 'resend',
     logoImageKey: map.get('logo_image_key') ?? null,
     homePage: map.get('home_page') ?? null,
+    featuredProductId: positiveId(map.get('featured_product')),
     announcement: map.get('announcement') ?? null,
     announcementHref: map.get('announcement_href') ?? null,
     emailFrom: map.get('email_from') ?? null,

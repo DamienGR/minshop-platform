@@ -30,6 +30,7 @@ const model = await loadCatalogPage(env.DB, {
   imageBaseUrl: getConfig().images.baseUrl,
   currency: getConfig().currency,
   delivery: Astro.locals.settings?.imageDelivery,
+  featuredProductId: Astro.locals.settings?.featuredProductId ?? null,
   eyebrow,
   heading,
 });

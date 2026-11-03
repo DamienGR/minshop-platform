@@ -98,20 +98,62 @@ export function catalogPageStatement(
   return db.prepare(withCardVariants(listProductsSql(order), order)).bind(pageSize, offset);
 }
 
-/** The catalogue: its size, the category list, and one page of products. */
+/** A product row in stock: through its active variants when it has any —
+ *  the variant is the unit sold — else through its own count. */
+const IN_STOCK = `CASE
+    WHEN EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active = 1)
+    THEN EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active = 1 AND v.stock > 0)
+    ELSE products.stock > 0
+  END`;
+
+/**
+ * The product the catalog puts forward (ticket #164), as one statement of the
+ * catalog batch: the merchant's choice while it is active; else the newest
+ * product in stock; else the newest. Three arms in that order and one row:
+ * SQLite stops at the first that answers, so a chosen product costs one
+ * lookup, and the fallback walks the newest-first index only as far as the
+ * first product it can sell — an empty or sold-out catalogue is the one case
+ * that reads it all.
+ *
+ * Product 0 does not exist, so a shop that chose nothing binds 0.
+ */
+export function featuredProductStatement(db: D1Database, chosenId: number | null): D1PreparedStatement {
+  const newest = 'ORDER BY created_at DESC, id DESC LIMIT 1';
+  const candidates = `SELECT * FROM (
+      SELECT * FROM products WHERE id = ?1 AND active = 1
+      UNION ALL
+      SELECT * FROM (SELECT * FROM products WHERE active = 1 AND ${IN_STOCK} ${newest})
+      UNION ALL
+      SELECT * FROM (SELECT * FROM products WHERE active = 1 ${newest})
+    ) LIMIT 1`;
+  return db.prepare(withCardVariants(candidates)).bind(chosenId ?? 0);
+}
+
+export interface CatalogRows {
+  total: number;
+  categories: Category[];
+  products: ListedProduct[];
+  /** The product put forward, or null for an empty catalogue. */
+  featured: ListedProduct | null;
+}
+
+/** The catalogue: its size, the category list, one page of products, and the
+ *  product it puts forward. */
 export async function readCatalogRows(
   db: D1Database,
-  query: ListingQuery,
-): Promise<{ total: number; categories: Category[]; products: ListedProduct[] }> {
-  const [total, categories, products] = await db.batch([
+  query: ListingQuery & { featuredProductId?: number | null },
+): Promise<CatalogRows> {
+  const [total, categories, products, featured] = await db.batch([
     countProductsStatement(db),
     listCategoriesStatement(db),
     catalogPageStatement(db, query),
+    featuredProductStatement(db, query.featuredProductId ?? null),
   ]);
   return {
     total: count(total),
     categories: rows<Category>(categories),
     products: rows<ListedProduct>(products),
+    featured: rows<ListedProduct>(featured)[0] ?? null,
   };
 }
 

@@ -18,7 +18,9 @@ const mf = new Miniflare({
   modules: true,
   script: 'export default { fetch() { return new Response("ok") } }',
   compatibilityDate: '2026-07-20',
-  d1Databases: ['DB'],
+  // SPARE: a second database for the catalogues the main one cannot be at the
+  // same time — empty, and entirely sold out.
+  d1Databases: ['DB', 'SPARE'],
 });
 
 let failures = 0;
@@ -241,6 +243,84 @@ try {
     assert.equal(buildProductCard(listed, { currency: 'eur' }).variants.length, 3);
     assert.ok(spent < 20, `two products' variants read ${spent} rows`);
     assert.equal((await readCardVariants(db, [])).size, 0);
+  });
+
+  console.log('\nthe product put forward (ticket #164)');
+
+  const featured = async (featuredProductId) => {
+    const model = await loadCatalogPage(db, {
+      base: '/',
+      searchParams: new URLSearchParams(),
+      responseHeaders: new Headers(),
+      imageBaseUrl: '',
+      delivery: undefined,
+      currency: 'eur',
+      eyebrow: 'Boutique',
+      heading: 'Tout',
+      featuredProductId,
+    });
+    return model.featured;
+  };
+
+  await check('the setting holds a row id, and nothing else reads as one', async () => {
+    const { parseStoreSettings } = await import('../../src/features/settings/db.ts');
+    const id = (value) => parseStoreSettings(value === undefined ? [] : [{ key: 'featured_product', value }]).featuredProductId;
+    assert.equal(id('7'), 7);
+    for (const value of [undefined, '', '0', '-3', '7.5', 'prod_k7m2qx8vn6']) assert.equal(id(value), null, String(value));
+  });
+
+  await check('the merchant’s choice wins, sold out or not, with its variants', async () => {
+    await raw.prepare('UPDATE products SET stock = 0 WHERE id = 7').run();
+    const card = await featured(7);
+    assert.equal(card?.name, 'Produit 7');
+    assert.deepEqual(card?.variants.map((v) => v.label), ['Standard']);
+    assert.equal(card?.image.priority, true, 'a hero is the likely LCP image');
+  });
+
+  await check('without a choice, the newest product that can be sold', async () => {
+    assert.equal((await featured(null))?.name, `Produit ${PRODUCTS}`, 'in stock through its variants');
+    // Every fabric of the newest sold out: the next newest, whatever its row says.
+    await raw.prepare(`UPDATE product_variants SET stock = 0 WHERE product_id = ${PRODUCTS}`).run();
+    assert.equal((await featured(null))?.name, `Produit ${PRODUCTS - 1}`);
+    await raw.prepare(`UPDATE product_variants SET stock = 3 WHERE product_id = ${PRODUCTS} AND label = 'Coton'`).run();
+  });
+
+  await check('an inactive or deleted choice falls back instead of breaking the home', async () => {
+    await raw.prepare('UPDATE products SET active = 0 WHERE id = 8').run();
+    assert.equal((await featured(8))?.name, `Produit ${PRODUCTS}`);
+    assert.equal((await featured(987654))?.name, `Produit ${PRODUCTS}`);
+    await raw.prepare('UPDATE products SET active = 1 WHERE id = 8').run();
+  });
+
+  await check('a sold-out catalogue still puts its newest forward; an empty one, nothing', async () => {
+    const { featuredProductStatement } = await import('../../src/features/storefront/reads.ts');
+    const spare = await mf.getD1Database('SPARE');
+    await applyMigrations(spare);
+    const none = await featuredProductStatement(spare, null).all();
+    assert.deepEqual(none.results, [], 'an empty catalogue has nothing to put forward');
+
+    await spare.batch([
+      spare.prepare(`INSERT INTO products (id, name, slug, price_cents, stock, active, public_id, created_at)
+                     VALUES (1, 'Ancien', 'ancien', 1000, 0, 1, 'prod_tspare01', '2026-01-01'),
+                            (2, 'Récent', 'recent', 1000, 0, 1, 'prod_tspare02', '2026-02-01'),
+                            (3, 'Caché', 'cache', 1000, 9, 0, 'prod_tspare03', '2026-03-01')`),
+      spare.prepare(`INSERT INTO product_variants (product_id, label, price_cents, stock, position, active)
+                     VALUES (2, 'Unique', 1000, 0, 0, 1)`),
+    ]);
+    const soldOut = await featuredProductStatement(spare, null).all();
+    assert.equal(soldOut.results[0]?.name, 'Récent', 'everything sold out: the newest active one');
+  });
+
+  await check('putting a product forward costs a lookup, not a scan', async () => {
+    const { featuredProductStatement } = await import('../../src/features/storefront/reads.ts');
+    take();
+    await featuredProductStatement(db, 7).all();
+    const chosen = take();
+    await featuredProductStatement(db, null).all();
+    const automatic = take();
+    assert.ok(chosen < 10, `the chosen product read ${chosen} rows`);
+    assert.ok(automatic < 20, `the automatic choice read ${automatic} rows`);
+    console.log(`    (${chosen} rows chosen, ${automatic} automatic)`);
   });
 } finally {
   await mf.dispose();

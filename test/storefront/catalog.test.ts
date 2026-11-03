@@ -45,6 +45,7 @@ const model = (overrides: Partial<CatalogPageModel> = {}): CatalogPageModel => (
   ],
   // Mirrors the loader: only the first card is the page's likely LCP image.
   products: [product(1), product(2)].map((p, i) => buildProductCard(p, { currency: 'eur', priority: i === 0 })),
+  featured: null,
   sort: buildSortModel('/products', 'newest', 'desc'),
   pagination: buildPaginationModel('/products', 1, 3, 'newest', 'desc'),
   ...overrides,
@@ -214,6 +215,17 @@ describe('the store-owned catalog', () => {
     );
 
     expect(dressed).toBe(bare);
+  });
+
+  it('renders the same whether or not a product is put forward', async () => {
+    // Ticket #164: the model offers it; the shipped themes do not show it.
+    const bare = await render(Catalog, model());
+    const featured = await render(
+      Catalog,
+      model({ featured: buildProductCard(product(9), { currency: 'eur', priority: true }) }),
+    );
+
+    expect(featured).toBe(bare);
   });
 
   it('announces an empty catalog instead of rendering a blank grid', async () => {

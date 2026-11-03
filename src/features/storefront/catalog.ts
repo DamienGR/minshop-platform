@@ -29,6 +29,9 @@ const PAGE_SIZE = 24;
 /** Matches the card slot in the default three-column grid. */
 const CARD_SIZES = '(min-width: 1024px) 352px, calc(50vw - 36px)';
 
+/** The product put forward is a home's hero: the product page's own slot. */
+const FEATURED_SIZES = '(min-width: 768px) 528px, calc(100vw - 48px)';
+
 /**
  * Sort links deliberately drop `page`: changing the ordering while holding page
  * 7 lands the shopper in the middle of a list they have not seen.
@@ -136,6 +139,9 @@ export interface CatalogPageOptions {
   currency: string;
   eyebrow: string;
   heading: string;
+  /** The merchant's choice (Admin → Réglages, ticket #164), from the settings
+   *  the request already holds; null for the automatic one. */
+  featuredProductId?: number | null;
 }
 
 export async function loadCatalogPage(
@@ -151,7 +157,12 @@ export async function loadCatalogPage(
   // One batch for the count, the categories and the page ASKED for; only a
   // page past the end, clamped to the last one, costs a second read.
   const asked = requestedPage(options.searchParams, MAX_PUBLIC_PAGE);
-  const read = await readCatalogRows(db, { pageSize: PAGE_SIZE, offset: (asked - 1) * PAGE_SIZE, order });
+  const read = await readCatalogRows(db, {
+    pageSize: PAGE_SIZE,
+    offset: (asked - 1) * PAGE_SIZE,
+    order,
+    featuredProductId: options.featuredProductId ?? null,
+  });
   const { total, categories } = read;
   const { page, offset, totalPages } = paginate(
     options.searchParams,
@@ -166,7 +177,7 @@ export async function loadCatalogPage(
 
   addCacheTags(
     options.responseHeaders,
-    productCacheTags(products.map((product) => product.public_id)),
+    productCacheTags([...products, ...(read.featured ? [read.featured] : [])].map((product) => product.public_id)),
   );
 
   return {
@@ -187,6 +198,17 @@ export async function loadCatalogPage(
         priority: index === 0,
       }),
     ),
+    // Priority too: a theme that puts it forward puts it at the top, where it
+    // is the likely LCP image; one that does not render it fetches nothing.
+    featured: read.featured
+      ? buildProductCard(read.featured, {
+          baseUrl: options.imageBaseUrl,
+          delivery: options.delivery,
+          currency: options.currency,
+          sizes: FEATURED_SIZES,
+          priority: true,
+        })
+      : null,
     sort: buildSortModel(options.base, sort, dir),
     pagination: buildPaginationModel(options.base, page, totalPages, sort, dir),
   };
