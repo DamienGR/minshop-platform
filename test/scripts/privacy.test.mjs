@@ -76,7 +76,7 @@ const SUBJECT = 'Client@Example.FR';
 /** A shop with two buyers, an order each, and everything that hangs off one. */
 const PEOPLE = [
   ...SEED,
-  `UPDATE orders SET email = '${SUBJECT}', ship_address = '{"name":"Jean Dupont","line1":"3 rue des Lilas","line2":null,"city":"Lyon","state":null,"postal":"69003","country":"FR"}', tracking_carrier = 'colissimo', tracking_number = '6A11122233344', label_url = 'https://labels.example/6A111.pdf', tracking_url = 'https://suivi.example/6A111', settlement_token = 'stl_secret', provider_payment_id = 'pi_1', vat_amount_cents = 817, vat_rate_bps = 2000 WHERE id = 1;`,
+  `UPDATE orders SET email = '${SUBJECT}', ship_address = '{"name":"Jean Dupont","line1":"3 rue des Lilas","line2":null,"city":"Lyon","state":null,"postal":"69003","country":"FR"}', tracking_carrier = 'colissimo', tracking_number = '6A11122233344', label_url = 'https://labels.example/6A111.pdf', tracking_url = 'https://suivi.example/6A111', settlement_token = 'stl_secret', provider_payment_id = 'pi_1', vat_amount_cents = 817, vat_rate_bps = 2000, buyer_comment = 'Pour l''anniversaire de Jean' WHERE id = 1;`,
   `INSERT INTO order_guest_access (order_public_id, access_token) VALUES ('ord_0000000001', 'gat_secret_token');`,
   `INSERT INTO order_item_ids (public_id, order_public_id) VALUES ('oit_0000000001', 'ord_0000000001');`,
   `INSERT INTO order_notifications (order_id, kind, state, last_error) VALUES (1, 'confirmation', 'failed', 'Resend a refusé jean.dupont@example.fr');`,
@@ -91,8 +91,8 @@ const PEOPLE = [
      VALUES ('evt_1', 'stripe', 'pi_1', 1000, 'rapprochement impossible pour jean.dupont@example.fr');`,
   `INSERT INTO pending_payments (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, ship_address, status)
      VALUES ('pnd_0000000001', 'hash1', 'lnbits', 'lnbc1', 1000, 4900, 'eur', '${SUBJECT}', '[]', '{"name":"Jean Dupont","city":"Lyon","country":"FR"}', 'pending');`,
-  `INSERT INTO orders (provider_session_id, email, amount_total_cents, currency, status, public_id, ship_address)
-     VALUES ('cs_test_2', '${OTHER}', 2500, 'eur', 'paid', 'ord_0000000002', '{"name":"Autre Cliente","city":"Nantes","country":"FR"}');`,
+  `INSERT INTO orders (provider_session_id, email, amount_total_cents, currency, status, public_id, ship_address, buyer_comment)
+     VALUES ('cs_test_2', '${OTHER}', 2500, 'eur', 'paid', 'ord_0000000002', '{"name":"Autre Cliente","city":"Nantes","country":"FR"}', 'Bisous à Camille');`,
   `INSERT INTO order_guest_access (order_public_id, access_token) VALUES ('ord_0000000002', 'gat_other_token');`,
   // A personalised line each (ticket #125): what was typed may name somebody.
   `UPDATE order_items SET customization = '[{"label":"Nom à broder","value":"Jean"}]' WHERE order_id = 1;`,
@@ -387,6 +387,7 @@ describe('la commande, contre une vraie base', () => {
     expect(document.tables.orders.rows[0].email).toBe('Client@Example.FR');
     expect(document.tables.orders.rows[0].ship_address).toContain('rue des Lilas');
     expect(document.tables.order_items.rows[0].customization).toContain('Jean');
+    expect(document.tables.orders.rows[0].buyer_comment).toBe("Pour l'anniversaire de Jean");
     // The other buyer's order is not in it, and neither is any credential.
     const text = JSON.stringify(document);
     expect(text).not.toContain('voisine@example.fr');
@@ -423,7 +424,7 @@ describe('la commande, contre une vraie base', () => {
     ]);
     expect(status).toBe(EXIT_CODES.ok);
     expect(report.dryRun).toBe(true);
-    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url', 'tracking_url', 'relay_point']);
+    expect(report.plan.find((entry) => entry.table === 'orders').columns).toEqual(['email', 'ship_address', 'tracking_number', 'label_url', 'tracking_url', 'relay_point', 'buyer_comment']);
     expect(report.plan.find((entry) => entry.table === 'order_guest_access').action).toBe('supprimée');
     expect(report.plan.find((entry) => entry.table === 'order_notifications').columns).toEqual(['last_error', 'state', 'lease_expires_at']);
     expect(orderRow(target, 'ord_0000000001').email).toBe('Client@Example.FR');
@@ -443,6 +444,8 @@ describe('la commande, contre une vraie base', () => {
     expect(after.tracking_number).toBeNull();
     expect(after.label_url).toBeNull();
     expect(after.tracking_url).toBeNull();
+    // What the buyer wrote on the order (ADR 0028) is theirs, and goes.
+    expect(after.buyer_comment).toBeNull();
 
     // What the Code de commerce keeps for ten years, kept.
     expect(after.amount_total_cents).toBe(before.amount_total_cents);
@@ -503,6 +506,7 @@ describe('la commande, contre une vraie base', () => {
     const other = orderRow(target, 'ord_0000000002');
     expect(other.email).toBe(OTHER);
     expect(other.ship_address).toContain('Nantes');
+    expect(other.buyer_comment).toBe('Bisous à Camille');
     expect(target.query("SELECT * FROM order_guest_access WHERE order_public_id = 'ord_0000000002'")).toHaveLength(1);
   });
 
