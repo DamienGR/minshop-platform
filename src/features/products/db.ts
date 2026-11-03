@@ -29,6 +29,9 @@ export interface Product {
   /** Precomputed semantic neighbours as a JSON id array; null = not computed yet
    *  (see migration 0024 / features/search relatedIds). */
   related_ids: string | null;
+  /** Tags the theme reads, comma-joined slugs (migration 0053, features/
+   *  products/tags.ts); null = none. */
+  tags: string | null;
   created_at: string;
 }
 
@@ -43,6 +46,8 @@ export interface ProductFields {
   active: number;
   weight_grams: number | null;
   requires_shipping: number;
+  /** Already normalised and joined (storeTags). */
+  tags: string | null;
 }
 
 /** Full input for create/update — form fields plus resolved image key + slug. */
@@ -431,11 +436,11 @@ export async function createProduct(db: D1Database, p: ProductInput): Promise<nu
   return withPublicId('product', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO products (name, slug, sku, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, public_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO products (name, slug, sku, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, tags, public_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
       )
-      .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, publicId)
+      .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -446,10 +451,10 @@ export async function updateProduct(db: D1Database, id: number, p: ProductInput)
     .prepare(
       `UPDATE products
          SET name = ?, slug = ?, sku = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
-             weight_grams = ?, requires_shipping = ?
+             weight_grams = ?, requires_shipping = ?, tags = ?
        WHERE id = ?`,
     )
-    .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id)
+    .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, id)
     .run();
 }
 

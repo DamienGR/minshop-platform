@@ -9,13 +9,14 @@ import { deflateSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 
 import { CsvError, parseCsv, parseCsvRecords, sniffDelimiter } from '../../shopctl/src/catalog/csv.mjs';
-import { COLUMNS, buildCatalogue, parseCount, parsePrice, slugify, templateHeader } from '../../shopctl/src/catalog/contract.mjs';
+import { COLUMNS, buildCatalogue, normalizeTags, parseCount, parsePrice, slugify, templateHeader } from '../../shopctl/src/catalog/contract.mjs';
 import { MAX_BYTES, readCatalogImage, resolveCatalogueImages, sniffType } from '../../shopctl/src/catalog/media.mjs';
 import { planImport } from '../../shopctl/src/catalog/plan.mjs';
 import { integer, text } from '../../shopctl/src/catalog/sql.mjs';
 import { assertWranglerNamesShop, extractJson, imagesBucket } from '../../shopctl/src/catalog/store.mjs';
 import { importsReadme } from '../../shopctl/src/commands/new.mjs';
 import { slugify as storeSlugify } from '../../src/features/products/slug.ts';
+import { normalizeTags as storeNormalizeTags } from '../../src/features/products/tags.ts';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const WITNESS = resolve(ROOT, 'test/fixtures/clients/pilot-fr/catalogue/catalog.csv');
@@ -526,6 +527,68 @@ describe('les changements destructifs sont refusés, pas devinés', () => {
   });
 });
 
+describe('les étiquettes que le thème lit (ticket #159)', () => {
+  /** The same row without the `tags` column: a catalogue written before it existed. */
+  function withoutTags(cells) {
+    const kept = COLUMNS.filter((column) => column.name !== 'tags');
+    const header = kept.map((column) => column.name).join(',');
+    const line = row(cells).split(',');
+    const index = COLUMNS.findIndex((column) => column.name === 'tags');
+    // row() quotes the price, so a naive split would cut "19,90" in two: drop
+    // the tags cell by position from the END, where nothing is quoted.
+    const fromEnd = COLUMNS.length - index;
+    line.splice(line.length - fromEnd, 1);
+    return `${header}\n${line.join(',')}\n`;
+  }
+
+  it('normalise la colonne, la vide, et refuse une étiquette sans lettre', () => {
+    const tagged = catalogue([row({ tags: 'Non cousu|Nouveau|non-cousu' })]);
+    expect(read(tagged.file).products[0].tags).toBe('non-cousu,nouveau');
+    tagged.cleanup();
+
+    const empty = catalogue([row({ tags: '' })]);
+    expect(read(empty.file).products[0]).toHaveProperty('tags', null);
+    empty.cleanup();
+
+    const bad = catalogue([row({ tags: 'nouveau|!!!' })]);
+    expect(messages(read(bad.file).issues)).toMatch(/« !!! » n'est pas une étiquette/);
+    bad.cleanup();
+  });
+
+  it('une colonne absente ne dit rien des étiquettes', () => {
+    const { file, cleanup } = catalogue(withoutTags({}));
+    const [product] = read(file).products;
+    expect(product.name).toBe('Cabas');
+    expect(product).not.toHaveProperty('tags');
+    cleanup();
+  });
+
+  it('un fichier sans la colonne garde les étiquettes posées, un fichier qui la vide les retire', () => {
+    const tagged = catalogue([row({ tags: 'Non cousu|Nouveau' })]);
+    const untagged = catalogue(withoutTags({}));
+    const cleared = catalogue([row({ tags: '' })]);
+    try {
+      const result = scenario({
+        imports: [{ csv: tagged.file }, { csv: untagged.file }, { csv: cleared.file }],
+      });
+      expect(result.runs[0].summary.productsCreated).toBe(1);
+      // Without the column there is nothing to compare: the product is unchanged
+      // and no statement runs, so the admin's tags survive a pre-#159 file.
+      expect(result.runs[1].summary).toMatchObject({ productsUpdated: 0, productsUnchanged: 1 });
+      expect(result.runs[1].statements).toBe(0);
+      expect(result.runs[2].summary.productsUpdated).toBe(1);
+      expect(result.catalogue[0].tags).toBeNull();
+
+      const kept = scenario({ imports: [{ csv: tagged.file }, { csv: untagged.file }] });
+      expect(kept.catalogue[0].tags).toBe('non-cousu,nouveau');
+    } finally {
+      tagged.cleanup();
+      untagged.cleanup();
+      cleared.cleanup();
+    }
+  });
+});
+
 describe('les règles partagées avec le cœur ne dérivent pas', () => {
   // Two copies of one pure rule exist on purpose (a Worker bundle and a
   // build-free CLI). Pinning them against a shared corpus is what turns a
@@ -537,6 +600,26 @@ describe('les règles partagées avec le cœur ne dérivent pas', () => {
 
   it('slugify est le même des deux côtés', () => {
     for (const input of CORPUS) expect([input, slugify(input)]).toEqual([input, storeSlugify(input)]);
+  });
+
+  // A tag typed in the admin and the same tag imported must be one string, or a
+  // theme matching `non-cousu` sees one product and misses the other (#159).
+  // The messages differ on purpose (an operator's report, a merchant's form),
+  // so what is pinned is the tags kept, and whether the list was refused.
+  it('les étiquettes sont normalisées de la même façon des deux côtés', () => {
+    const lists = [
+      ...CORPUS.map((input) => [input]),
+      ['Non cousu', 'non-cousu', 'NON COUSU', 'Nouveau'],
+      ['Pièce unique', ' ', '', 'Été'],
+      ['a'.repeat(40)], ['a'.repeat(41)], ['!!!'],
+      Array.from({ length: 20 }, (_, n) => `t${n}`),
+      Array.from({ length: 21 }, (_, n) => `t${n}`),
+      Array.from({ length: 25 }, () => 'même'),
+    ];
+    const shape = (result) => ('error' in result ? { refused: true } : { tags: result.tags });
+    for (const list of lists) {
+      expect([list, shape(normalizeTags(list))]).toEqual([list, shape(storeNormalizeTags(list))]);
+    }
   });
 });
 

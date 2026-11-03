@@ -27,6 +27,7 @@ const rows = {
     weight_grams: null,
     requires_shipping: 1,
     related_ids: null,
+    tags: null,
     created_at: '2026-01-01T00:00:00Z',
   } as Record<string, unknown>,
   variants: [] as Array<Record<string, unknown>>,
@@ -138,6 +139,15 @@ describe('loadProductDetail public-ID policy', () => {
     expect(loaded.purchase.variants[0].id).toBe('var_aaaaaaaaaa');
     expect(loaded.purchase.extras[0].id).toBe('xtra_cccccccccc');
     expect(loaded.model.images[0].anchor).toBe('pimg_dddddddddd');
+  });
+
+  it('hands the theme the product tags, and only slugs (ticket #159)', async () => {
+    rows.product = { ...rows.product, tags: 'non-cousu,nouveau, Pas Ok ' };
+    const loaded = await load();
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    expect(loaded.model.tags).toEqual(['non-cousu', 'nouveau']);
+    rows.product = { ...rows.product, tags: null };
   });
 
   it('refuses a product without a public ID', async () => {

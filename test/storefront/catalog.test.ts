@@ -32,6 +32,7 @@ const product = (n: number, overrides: Partial<ListedProduct> = {}): ListedProdu
   weight_grams: null,
   requires_shipping: 1,
   related_ids: null,
+  tags: null,
   created_at: '2026-01-01T00:00:00Z',
   card_variants: null,
   ...overrides,

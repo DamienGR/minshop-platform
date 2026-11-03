@@ -32,8 +32,14 @@ Four properties hold, and each one is a test:
   import means inlined values, so `catalog/sql.mjs` does the quoting and the
   gate writes `'); DROP TABLE products;--` into a store and reads it back.
 
-Two pure rules exist twice on purpose — `slugify()` and the image-header
-dimension reader — because one copy lives in the Worker bundle and the other in
-a CLI with no build step. Both pairs are pinned against a shared corpus in
-`test/scripts/catalog.test.mjs`; keep them that way rather than "fixing" the
-duplication.
+An optional column says nothing when it is ABSENT, which is not the same as
+empty. `tags` (ticket #159, ADR 0026) is the one where the difference is a
+write: a file without the column leaves the store's tags as the admin set them
+(the plan neither compares nor writes them), a file with the column is the
+truth, and an empty cell clears them.
+
+Three pure rules exist twice on purpose — `slugify()`, `normalizeTags()` and the
+image-header dimension reader — because one copy lives in the Worker bundle and
+the other in a CLI with no build step. Each pair is pinned against a shared
+corpus in `test/scripts/catalog.test.mjs`; keep them that way rather than
+"fixing" the duplication.

@@ -73,6 +73,9 @@ export interface ProductCardModel {
   variantLabel: string | null;
   /** Active variants in the merchant's order; empty for a product without. */
   variants: StorefrontCardVariant[];
+  /** The merchant's tags (ticket #159): slugs such as `nouveau`, which mean
+   *  what the theme makes them mean — a badge, a hidden line. Empty for none. */
+  tags: string[];
 }
 
 /** A resolved navigation link. Targets are validated upstream, so a template
@@ -278,6 +281,9 @@ export interface ProductDetailModel {
   /** Low-stock nudge, already gated: never set for a product with variants. */
   lowStock: boolean;
   digitalDelivery: boolean;
+  /** The merchant's tags (ticket #159): slugs the theme reads — `non-cousu`
+   *  hides a "cousu main" line on a theme that says so. Empty for none. */
+  tags: string[];
   categories: StorefrontLink[];
   /** More than one image means the gallery renderer; one or none is the single
    *  hero. The distinction is the template's to make. */

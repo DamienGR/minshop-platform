@@ -1,4 +1,5 @@
 import { parseCardVariants, type ListedProduct } from '../products/cardVariants';
+import { readTags } from '../products/tags';
 import { productImageSources, type ImageDelivery } from '../products/image';
 import { requirePublicId } from '../catalog/serialize';
 import { stockState } from '../products/stock';
@@ -114,5 +115,6 @@ export function buildProductCard(
           )
         : null,
     })),
+    tags: readTags(product.tags),
   };
 }

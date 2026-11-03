@@ -322,6 +322,23 @@ try {
     assert.ok(automatic < 20, `the automatic choice read ${automatic} rows`);
     console.log(`    (${chosen} rows chosen, ${automatic} automatic)`);
   });
+
+  console.log('\nthe tags a theme reads (ticket #159)');
+
+  await check('a tag set in the admin reaches the cards, the featured hero and the search results', async () => {
+    const { storeTags, parseTagsInput } = await import('../../src/features/products/tags.ts');
+    const typed = parseTagsInput('Non cousu, Nouveau');
+    assert.ok('tags' in typed);
+    await raw.prepare(`UPDATE products SET tags = ? WHERE id = ${PRODUCTS}`).bind(storeTags(typed.tags)).run();
+
+    const model = await catalog();
+    assert.deepEqual(model.products[0].tags, ['non-cousu', 'nouveau'], 'the newest card');
+    assert.deepEqual(model.products[1].tags, [], 'an untagged card');
+    assert.deepEqual((await featured(null))?.tags, ['non-cousu', 'nouveau']);
+
+    const [listed] = await getListedProductsByIds(db, [PRODUCTS]);
+    assert.deepEqual(buildProductCard(listed, { currency: 'eur' }).tags, ['non-cousu', 'nouveau'], 'search and related');
+  });
 } finally {
   await mf.dispose();
 }

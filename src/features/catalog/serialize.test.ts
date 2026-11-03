@@ -22,6 +22,7 @@ const base: Product = {
   weight_grams: null,
   requires_shipping: 1,
   related_ids: null,
+  tags: null,
   created_at: '2026-06-18 00:00:00',
 };
 const ORIGIN = 'https://shop.example.com';

@@ -28,6 +28,7 @@ const product = (overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   weight_grams: null,
   requires_shipping: 1,
   related_ids: null,
+  tags: null,
   created_at: '2026-01-01T00:00:00Z',
   card_variants: null,
   ...overrides,
@@ -93,6 +94,15 @@ describe('buildProductCard', () => {
     expect(image.sizes).toBe('(min-width: 1024px) 352px, 50vw');
     // The key itself must not survive into the model.
     expect(image.src).not.toBe('media/sample-tee.jpg');
+  });
+
+  it('hands the theme the product tags, untouched by the shipped card (ticket #159)', async () => {
+    const tagged = cardFor(product({ tags: 'non-cousu,nouveau' }));
+    expect(tagged.tags).toEqual(['non-cousu', 'nouveau']);
+    expect(cardFor(product()).tags).toEqual([]);
+    // The shipped themes draw nothing from a tag: only a store's own theme
+    // gives one a meaning, so the default card renders the same either way.
+    expect(await render(ProductCard, tagged)).toBe(await render(ProductCard, cardFor(product())));
   });
 
   it('falls back to the placeholder when a product has no image', () => {
