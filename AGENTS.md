@@ -218,6 +218,7 @@ src/
     observability/  logSafe
     catalog/   serialize · http  (public API shapes for /api/products)
     contact/   form (fields and rules, pure) · policy (where, to whom) · index (send; ADR 0025)
+    themeTexts/  slots (a theme's declared texts: rules, form, resolution; pure) · active (the theme's texts.ts) · db
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/
@@ -373,6 +374,11 @@ today's config.
   `shopctl/src/catalog/contract.mjs` and the field to `PRODUCT_FIELDS` in
   `catalog/plan.mjs` — the generated `imports/README.md` and its gate derive from
   that list.
+- **A text the merchant edits on the home:** nothing in the core — the theme
+  declares a slot in its own `src/themes/<id>/texts.ts` (ADR 0027,
+  `CUSTOMIZING.md`), Admin → Textes du thème shows it, and `Catalog.astro`
+  reads `model.texts[key]`. A wording that belongs to every shop is a
+  catalog key instead (`messages.ts`).
 - **A content page:** nothing to add — merchants create them at `/admin/pages`.
   Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
   automatically. The footer is a menu (migration 0028): a page reaches it only
