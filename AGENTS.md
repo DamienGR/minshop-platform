@@ -218,6 +218,8 @@ src/
     observability/  logSafe
     catalog/   serialize · http  (public API shapes for /api/products)
     contact/   form (fields and rules, pure) · policy (where, to whom) · index (send; ADR 0025)
+    maps/      place (the ```carte block, pure) · tiles (Web Mercator, pure) · render (its HTML)
+               relay (to the tile server) · serve (edge cache + relay; ADR 0029)
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/
@@ -228,6 +230,7 @@ src/
     api/ (cart, webhook, admin/*; checkout — form OR JSON {items} → checkout_url;
           products, products/[slug] — public machine-readable catalog)
     images/[...key] (serves R2), sitemap.xml, robots.txt
+    map-tiles/[slug]/[z]/[x]/[y] (a published page's map tiles, relayed; ADR 0029)
 ```
 
 **Ports & adapters (the seams).** Routes depend on interfaces, never on a vendor.
@@ -341,6 +344,11 @@ today's config.
     parsed, so a page body can never inject script — including from a
     compromised admin session. The storefront and the admin preview call the
     SAME server-side `renderMarkdown()`; do not add a client-side parser.
+    A ```carte block (ADR 0029) is the one block that becomes markup, and only
+    `features/maps/render.ts` writes it, from parsed and escaped values —
+    never from the block's text. A map's tiles come through the shop's relay,
+    which fetches only tiles a published map draws: never point a page at a
+    third-party tile server, and never let the relay take a URL.
 12. **A log line is written, never forwarded.** Structured events with fields
     you chose; an error from a provider goes through `logSafe()`
     (`features/observability/logSafe.ts`), which masks e-mail addresses and

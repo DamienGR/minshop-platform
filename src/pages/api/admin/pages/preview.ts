@@ -30,6 +30,13 @@ export const POST: APIRoute = async ({ request }) => {
   const html = renderMarkdown(markdown, {
     baseUrl: getConfig().images.baseUrl,
     sourceMap: true,
+    // The draft's maps, with what is wrong with each one it cannot draw. Its
+    // tiles come through the admin's relay: no published page draws them yet.
+    placeMaps: {
+      tileUrl: (tile) => `/api/admin/map-tiles/${tile.z}/${tile.x}/${tile.y}`,
+      attribution: getConfig().maps.attribution,
+      showErrors: true,
+    },
   });
   // Wrap in the same article element the storefront uses, so the preview shows
   // the chosen layout rather than always rendering at the default measure.

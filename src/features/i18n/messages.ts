@@ -506,6 +506,12 @@ export const fr = {
   'contact.reason.default.complaint': 'Réclamation',
   'contact.reason.default.other': 'Autre',
 
+  // The map of a place in a page (```carte, ADR 0029): features/maps/render.ts.
+  'map.label': 'Carte : {lieu}',
+  'map.labelUnnamed': 'Carte de l’emplacement',
+  'map.openStreetMap': 'Voir sur OpenStreetMap',
+  'map.googleMaps': 'Voir sur Google Maps',
+
   'email.contact.subject': 'Contact : {motif} ({nom})',
   'email.contact.heading': 'Nouveau message',
   'email.contact.intro': 'Un visiteur vous a écrit depuis le formulaire de contact de {boutique}.',

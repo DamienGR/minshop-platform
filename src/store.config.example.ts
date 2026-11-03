@@ -41,6 +41,15 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   //
   // legal: { vatExemption: 'franchise' },
   //
+  // The map of a place in a page (```carte, ADR 0029) draws OpenStreetMap's
+  // tiles, relayed by the shop. Another keyless `{z}/{x}/{y}` server takes its
+  // own attribution, printed on every map:
+  //
+  // maps: {
+  //   tileUrl: 'https://tile.example.org/{z}/{x}/{y}.png',
+  //   attribution: { text: 'Example Maps', href: 'https://example.org/copyright' },
+  // },
+  //
   // Shipping (zones, rates, weight bands, free-over thresholds) is managed in
   // Admin → Livraison. The block that used to live here is only the default for a
   // brand-new store; editing it after the first Admin save has no effect.

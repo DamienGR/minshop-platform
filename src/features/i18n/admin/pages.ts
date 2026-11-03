@@ -70,6 +70,12 @@ export const pages = {
   'admin.pages.editor.placeholder.quote': 'une citation',
   'admin.pages.editor.placeholder.link': 'un lien',
   'admin.pages.editor.placeholder.imageAlt': 'décrivez l’image',
+  // The « Carte » tool inserts a ```carte block; its keys (lieu, adresse,
+  // position) are syntax and stay in the template, these are the sample values.
+  'admin.pages.editor.tool.map': 'Carte d’un lieu',
+  'admin.pages.editor.tool.mapShort': 'Carte',
+  'admin.pages.editor.mapTemplate.name': 'Nom du lieu',
+  'admin.pages.editor.mapTemplate.address': 'Rue, code postal et ville',
 
   // ─── Mises en page (features/pages/layouts.ts) ─────────────────────────────────
   'admin.pages.layout.standard.label': 'Standard',
@@ -102,4 +108,26 @@ export const pages = {
     'Modifications enregistrées, mais la page n’a pas été publiée : elle contient encore « [À COMPLÉTER] ». Remplacez chaque marqueur par le texte définitif, puis publiez-la.',
   'admin.pages.save.incompleteLive':
     'Modifications enregistrées. La page est en ligne et contient encore « [À COMPLÉTER] » : remplacez chaque marqueur par le texte définitif.',
+  'admin.pages.save.mapRefused':
+    'Modifications enregistrées, mais la page n’a pas été publiée : une carte est incomplète ({probleme}). L’aperçu montre ce qu’il faut corriger.',
+  'admin.pages.save.mapLive':
+    'Modifications enregistrées et en ligne, mais une carte est incomplète et ne s’affiche pas ({probleme}). L’aperçu montre ce qu’il faut corriger.',
+  'admin.pages.save.mapDraft':
+    'Brouillon enregistré, mais une carte est incomplète ({probleme}). L’aperçu montre ce qu’il faut corriger.',
+
+  // ─── Carte d’un lieu (bloc ```carte, ADR 0029) ─────────────────────────────────
+  'admin.pages.map.error.heading': 'Cette carte ne s’affichera pas sur la boutique :',
+  'admin.pages.map.error.at': 'ligne {ligne} : {probleme}',
+  'admin.pages.map.error.lineShape':
+    'écrivez chaque ligne sous la forme « nom : valeur », par exemple « lieu : Marché de Vannes »',
+  'admin.pages.map.error.unknownKey':
+    '« {cle} » n’est pas une ligne de carte (les lignes possibles sont lieu, adresse, position et zoom)',
+  'admin.pages.map.error.repeated': '« {cle} » est écrit deux fois',
+  'admin.pages.map.error.tooLong': '« {cle} » dépasse {max} caractères',
+  'admin.pages.map.error.addressLines': 'l’adresse tient en {max} lignes au plus',
+  'admin.pages.map.error.position':
+    'la position donne la latitude puis la longitude, par exemple « 47.6582, -2.7608 » (clic droit sur le lieu dans OpenStreetMap ou Google Maps)',
+  'admin.pages.map.error.positionMissing':
+    'il manque la position du lieu, par exemple « position : 47.6582, -2.7608 »',
+  'admin.pages.map.error.zoom': 'le zoom est un nombre entier de {min} à {max}',
 } satisfies Catalog;
