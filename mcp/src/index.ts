@@ -439,6 +439,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           // until a weight-priced rate exists.
           weight_grams: null,
           requires_shipping: 1,
+          // Tags are the merchant's, read by the theme (ADR 0026); set in Admin.
+          tags: null,
         };
         const rowId = await createProduct(db, input);
         const created = await getProduct(db, rowId);
@@ -480,6 +482,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           // column, so omitting these would silently clear them.
           weight_grams: cur.weight_grams,
           requires_shipping: cur.requires_shipping,
+          tags: cur.tags,
         };
         await updateProduct(db, cur.id, input);
         return result({ id: requirePublicId(cur.public_id, cur.id, 'product'), slug: cur.slug });

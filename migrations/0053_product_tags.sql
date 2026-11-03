@@ -1,0 +1,13 @@
+-- Migration 0053: product tags a theme reads (ticket #159, ADR 0026).
+--
+-- Free identifiers the merchant sets on a product — `non-cousu`, `nouveau`,
+-- `piece-unique` — that the core passes to the theme and gives no meaning of
+-- its own: the theme decides that `non-cousu` hides its "cousu main" line, or
+-- that `nouveau` draws a badge.
+--
+-- One column on the row, not a join table: every storefront listing already
+-- reads `products.*`, so the cards get their tags without a statement more,
+-- and nothing filters by tag yet. Slugs, comma-joined (a slug holds no
+-- comma), normalised by src/features/products/tags.ts and its twin in the
+-- catalogue import. NULL = none.
+ALTER TABLE products ADD COLUMN tags TEXT;

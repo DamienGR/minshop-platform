@@ -19,6 +19,11 @@ const { model } = Astro.props;
 <section class="alt-catalog">
   <h1>{model.heading}</h1>
 
+  {/* The theme's own texts (ticket #165, declared in ./texts.ts): a one-line
+      text prints `text`, a Markdown one its rendered `html`. */}
+  {model.texts['hero.title'] && <p class="alt-catalog__hero">{model.texts['hero.title'].text}</p>}
+  {model.texts['hero.intro']?.html && <div class="alt-catalog__intro" set:html={model.texts['hero.intro'].html} />}
+
   <ul class="alt-catalog__categories">
     {model.categories.map((category) => (
       <li>

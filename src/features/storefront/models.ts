@@ -37,6 +37,20 @@ export interface StorefrontImage {
   priority: boolean;
 }
 
+/**
+ * One variant under a card — a swatch in a list's colour chart (ticket #161).
+ * A label and an availability, never a price or a quantity: the card is a
+ * link to the product page, where the variant is chosen and priced.
+ */
+export interface StorefrontCardVariant {
+  label: string;
+  /** False when this variant is sold out; the same rule as the product page. */
+  inStock: boolean;
+  /** The variant's own photo, resolved like the card's, or null when it names
+   *  none — a swatch then has nothing to show but its label. */
+  image: StorefrontImage | null;
+}
+
 /** A product as a catalog/search/recommendation card. */
 export interface ProductCardModel {
   /** `prod_` public ID. Never a row ID. */
@@ -45,12 +59,23 @@ export interface ProductCardModel {
   /** Root-relative product URL. */
   href: string;
   image: StorefrontImage;
-  /** Server-formatted price in the store's currency. Display only — money is
-   *  never posted back from a template as authority. */
+  /** Server-formatted price in the store's currency: the lowest variant's when
+   *  the product has variants, as on its page. Display only — money is never
+   *  posted back from a template as authority. */
   formattedPrice: string;
+  /** True when the variants disagree on price, so the card reads "from …". */
+  priceVaries: boolean;
   /** Availability as a boolean, deliberately not a quantity: exact stock counts
-   *  stay private, and bucket-level changes avoid cache invalidation. */
+   *  stay private, and bucket-level changes avoid cache invalidation. With
+   *  variants, true while any one is in stock — the variant is the unit sold. */
   inStock: boolean;
+  /** The merchant's name for the variant group ("Tissu"), or null. */
+  variantLabel: string | null;
+  /** Active variants in the merchant's order; empty for a product without. */
+  variants: StorefrontCardVariant[];
+  /** The merchant's tags (ticket #159): slugs such as `nouveau`, which mean
+   *  what the theme makes them mean — a badge, a hidden line. Empty for none. */
+  tags: string[];
 }
 
 /** A resolved navigation link. Targets are validated upstream, so a template
@@ -58,6 +83,21 @@ export interface ProductCardModel {
 export interface StorefrontLink {
   text: string;
   href: string;
+}
+
+/**
+ * A category as a theme may present it — its photo, its sentence, and the line
+ * of its sub-categories under it (ticket #158). Extends the link, so a theme
+ * that prints only `text` and `href` reads it as before.
+ */
+export interface StorefrontCategory extends StorefrontLink {
+  /** Plain text, already trimmed; null when the merchant wrote none. */
+  description: string | null;
+  /** Resolved like a card image; null when the category has none — a theme
+   *  decides what an imageless category looks like. */
+  image: StorefrontImage | null;
+  /** Its direct sub-categories, sorted by name. */
+  children: StorefrontLink[];
 }
 
 /**
@@ -122,10 +162,61 @@ export interface StorefrontPaginationModel {
 export interface CatalogPageModel {
   eyebrow: string;
   heading: string;
-  categories: StorefrontLink[];
+  /** The top-level categories, sorted by name, each with its sub-categories. */
+  categories: StorefrontCategory[];
   products: ProductCardModel[];
+  /**
+   * The product put forward (ticket #164): the merchant's choice in Admin →
+   * Réglages while it is active, else the newest product in stock, else the
+   * newest — null only for an empty catalogue. The same on every page of the
+   * list, and possibly one of `products` too: whether to show it twice is the
+   * theme's call. Its image is resolved as the page's likely LCP.
+   */
+  featured: ProductCardModel | null;
+  /**
+   * The texts the theme declares in its `texts.ts` (ticket #165), by key: what
+   * the merchant wrote in Admin → Textes du thème, else the slot's default.
+   * Every declared key is present; a theme that declares none gets `{}`.
+   */
+  texts: Record<string, ThemeText>;
   sort: StorefrontSortModel;
   pagination: StorefrontPaginationModel;
+}
+
+/**
+ * A text the theme lets the merchant edit (ticket #165, ADR 0027), declared in
+ * the theme's optional `src/themes/<id>/texts.ts`:
+ *
+ *     import type { ThemeTextSlot } from '../../features/storefront/models';
+ *     export const texts = [
+ *       { key: 'hero.title', label: 'Titre de l’accueil', default: 'Né à l’atelier',
+ *         maxLength: 80, format: 'text' },
+ *     ] satisfies ThemeTextSlot[];
+ *
+ * The label and help are shown in the admin, so they are written for the
+ * merchant, in French.
+ */
+export interface ThemeTextSlot {
+  /** What the template reads, `model.texts['hero.title']`: a lowercase letter,
+   *  then letters, digits, `.` or `-` — 64 characters at most. */
+  key: string;
+  label: string;
+  /** One sentence under the field, for where the text appears. */
+  help?: string;
+  /** Shown until the merchant writes something; may be ''. */
+  default: string;
+  /** In characters, 5 000 at most. A longer text is refused at saving. */
+  maxLength: number;
+  /** `text`: one line, whitespace collapsed. `markdown`: rendered without HTML
+   *  (invariant 11), the way a page body is. */
+  format: 'text' | 'markdown';
+}
+
+/** One theme text, resolved. `html` is the rendered Markdown of a `markdown`
+ *  slot, safe for `set:html`; null for a `text` slot, which prints `text`. */
+export interface ThemeText {
+  text: string;
+  html: string | null;
 }
 
 /**
@@ -232,6 +323,9 @@ export interface ProductDetailModel {
   /** Low-stock nudge, already gated: never set for a product with variants. */
   lowStock: boolean;
   digitalDelivery: boolean;
+  /** The merchant's tags (ticket #159): slugs the theme reads — `non-cousu`
+   *  hides a "cousu main" line on a theme that says so. Empty for none. */
+  tags: string[];
   categories: StorefrontLink[];
   /** More than one image means the gallery renderer; one or none is the single
    *  hero. The distinction is the template's to make. */

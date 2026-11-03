@@ -220,6 +220,7 @@ src/
     contact/   form (fields and rules, pure) · policy (where, to whom) · index (send; ADR 0025)
     maps/      place (the ```carte block, pure) · tiles (Web Mercator, pure) · render (its HTML)
                relay (to the tile server) · serve (edge cache + relay; ADR 0029)
+    themeTexts/  slots (a theme's declared texts: rules, form, resolution; pure) · active (the theme's texts.ts) · db
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/
@@ -364,9 +365,9 @@ today's config.
 14. **Some things look wrong on purpose.** Do not "fix" them:
     - the security gate DERIVES the admin routes from `src/pages/admin` and
       `src/pages/api/admin` — never replace that with a list;
-    - `slugify()` and the image-header dimension reader exist twice (the Worker
-      bundle and the build-less CLI), pinned against a shared corpus in
-      `test/scripts/catalog.test.mjs`;
+    - `slugify()`, `normalizeTags()` and the image-header dimension reader
+      exist twice (the Worker bundle and the build-less CLI), pinned against a
+      shared corpus in `test/scripts/catalog.test.mjs`;
     - an RGPD erasure is an ANONYMISATION, never a delete: a paid order is an
       accounting record kept for ten years (`docs/agents/privacy.md`);
     - `provision` KEEPS an existing secret, never rotates it — a new
@@ -381,6 +382,11 @@ today's config.
   `shopctl/src/catalog/contract.mjs` and the field to `PRODUCT_FIELDS` in
   `catalog/plan.mjs` — the generated `imports/README.md` and its gate derive from
   that list.
+- **A text the merchant edits on the home:** nothing in the core — the theme
+  declares a slot in its own `src/themes/<id>/texts.ts` (ADR 0027,
+  `CUSTOMIZING.md`), Admin → Textes du thème shows it, and `Catalog.astro`
+  reads `model.texts[key]`. A wording that belongs to every shop is a
+  catalog key instead (`messages.ts`).
 - **A content page:** nothing to add — merchants create them at `/admin/pages`.
   Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
   automatically. The footer is a menu (migration 0028): a page reaches it only

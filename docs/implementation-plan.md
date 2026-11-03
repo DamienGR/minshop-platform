@@ -3158,7 +3158,8 @@ Fait le 2026-11-02, en un seul lot :
 
 Tenu par `test/integration/customization.mjs`. Reste à faire : la recette de
 la première boutique réelle qui vend un produit personnalisé, sur ce
-parcours.
+parcours. Publié dans le socle `v0.4.0`, dont les notes listent la migration
+0049.
 
 ### 13.5 Le paiement par virement
 
@@ -3200,8 +3201,8 @@ Fait le 2026-11-02, en un seul lot :
 Tenu par `test/integration/bank-transfer.mjs`, et la lecture de la liste par
 `test/integration/history-reads.mjs`. Reste à faire : la recette de la
 première boutique réelle qui l'allume (une commande par virement, l'e-mail
-reçu, l'enregistrement, la confirmation), et la migration 0050 dans les notes
-de la prochaine version du socle.
+reçu, l'enregistrement, la confirmation). Publié dans le socle `v0.4.0`, dont
+les notes listent la migration 0050.
 
 ### 13.6 La franchise en base de TVA
 
@@ -3238,9 +3239,9 @@ Tenu par `src/features/legal/vat.test.ts`, les tests des e-mails, ceux du
 manifeste et de `shopctl new`, `test/integration/terms.mjs` et
 `test/integration/d1-integration.sh`. Reste à faire : la réponse écrite de
 l'expert-comptable sur les endroits de la mention (au pied de page et sur le
-reçu de Stripe, le socle ne l'écrit pas), la mention dans l'article « Prix »
-des CGV du commerçant, et la migration 0051 dans les notes de la prochaine
-version du socle.
+reçu de Stripe, le socle ne l'écrit pas) et la mention dans l'article « Prix »
+des CGV du commerçant. Publié dans le socle `v0.4.0`, dont les notes listent
+la migration 0051.
 
 ### 13.7 Le formulaire de contact
 
@@ -3273,9 +3274,44 @@ Fait le 2026-11-02, en un seul lot, sans migration :
 
 Tenu par `test/integration/contact.mjs` et `test/browser/contact.spec.mjs`.
 Reste à faire : la recette de la première boutique réelle (sa page de contact,
-ses motifs, un message reçu et une réponse), la mention du formulaire dans sa
-politique de confidentialité, et la liaison `CONTACT_RATE_LIMITER` dans les
-notes de la prochaine version du socle.
+ses motifs, un message reçu et une réponse) et la mention du formulaire dans
+sa politique de confidentialité. Publié dans le socle `v0.4.0`, dont les notes
+nomment la liaison `CONTACT_RATE_LIMITER`.
+
+### 13.8 Les données de vitrine de la première boutique réelle
+
+Noté le 2026-11-03 : la recette de la boutique Artisagna a ouvert cinq tickets
+sur ce que son thème doit pouvoir lire pour remplacer les textes et les choix
+écrits en dur dans son gabarit d'accueil. Le thème de la boutique est à elle ;
+le socle ajoute des champs aux modèles de vitrine, et les thèmes livrés n'en
+affichent aucun, leur rendu est inchangé. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-03, une PR, un commit par ticket :
+
+- **#158, les catégories présentées** : une image (un usage de la médiathèque,
+  invariant 10) et une description de 300 caractères au plus par catégorie
+  (migration 0052) ; `CatalogPageModel.categories` porte les catégories de
+  premier niveau avec leur image, leur description et leurs sous-catégories ;
+- **#161, les variantes sur les cartes** : chaque carte porte ses variantes
+  actives (libellé, disponibilité, photo propre), `variantLabel` et
+  `priceVaries` ; le prix affiché est celui de la variante la moins chère. La
+  lecture reste une requête par page (colonne JSON corrélée, mesurée en
+  `rows_read`) ;
+- **#164, le produit mis en avant** : `CatalogPageModel.featured`, choisi dans
+  Admin → Réglages ; sans choix, ou si le produit choisi est désactivé ou
+  supprimé, le plus récent en stock, sinon le plus récent (repli choisi par
+  Claude, à confirmer par Damien) ;
+- **#159, les étiquettes** : des étiquettes libres par produit, que le thème
+  interprète (choix de Damien) ; [ADR 0026](architecture/decisions/0026-etiquettes-produit.md),
+  migration 0053, champ de la fiche produit, colonne `tags` de l'import ;
+- **#165, les textes du thème** : des emplacements déclarés par le thème dans
+  `texts.ts` (choix de Damien), écrits dans Admin → Textes du thème ;
+  [ADR 0027](architecture/decisions/0027-textes-du-theme.md), migration 0054.
+
+Tenu par `test/integration/theme-data.mjs` (une vraie D1, cinq cents produits)
+et les suites de `test/storefront/`. Reste à faire : le thème de la boutique
+Artisagna, dans son propre dépôt, qui lit ces champs après la montée du socle,
+et la recette de son accueil.
 
 ### 13.10 La carte d'un lieu dans une page
 

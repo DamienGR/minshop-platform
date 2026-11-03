@@ -4,6 +4,7 @@ import type { CategoryOption } from '../categories/db';
 import { getConfig, toMajorUnits, currencyDecimals } from '../../config';
 import { formatWeightValue, type WeightUnit } from '../shipping/weight';
 import { attachmentActive } from '../digitalDelivery/rollout.ts';
+import { readTags } from './tags';
 import { t, formatNumber } from '../i18n';
 
 interface Props {
@@ -187,6 +188,21 @@ const inputClass =
       </div>
     )
   }
+
+  <div>
+    <label class="block text-sm font-medium" for="tags">
+      {t('admin.products.form.tags')} <span class="text-faint">{t('admin.products.form.tagsHint')}</span>
+    </label>
+    <input
+      id="tags"
+      name="tags"
+      type="text"
+      value={readTags(product?.tags).join(', ')}
+      placeholder={t('admin.products.form.tagsPlaceholder')}
+      class={inputClass}
+    />
+    <p class="mt-1 text-xs text-gray-500">{t('admin.products.form.tagsHelp')}</p>
+  </div>
 
   {
     categoryOptions.length > 0 && (

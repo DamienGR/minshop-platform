@@ -16,6 +16,7 @@ import { mediaUsage, mediaUsageForIds, isUnused } from '../../src/features/media
 import { uploadMedia } from '../../src/features/media/upload.ts';
 import { savePageBody, saveWarning } from '../../src/features/pages/save.ts';
 import { resolveHomePath, homeTargetIsValid } from '../../src/features/settings/home.ts';
+import { setCategoryImage } from '../../src/features/categories/db.ts';
 
 // Media lifecycle against a real D1. The properties under test are the ones a
 // mocked database cannot show: that the guarded DELETE and the guarded
@@ -126,6 +127,16 @@ try {
        key TEXT PRIMARY KEY,
        value TEXT NOT NULL,
        updated_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    // Migration 0052: a category names the image it presents.
+    `CREATE TABLE categories (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       public_id TEXT UNIQUE,
+       name TEXT NOT NULL,
+       slug TEXT NOT NULL UNIQUE,
+       parent_id INTEGER,
+       image_key TEXT,
+       description TEXT,
+       created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
   ]) {
     await db.prepare(sql).run();
   }
@@ -284,6 +295,37 @@ try {
   });
 
   console.log('\nguarded association writes');
+
+  // Ticket #158: a category's image is a use like any other (invariant 10).
+  await check('media presented by a category cannot be deleted', async () => {
+    const m = await newMedia('media/univers.png');
+    await db
+      .prepare("INSERT INTO categories (id, public_id, name, slug) VALUES (31, 'cat_univers31', 'Se faire belle', 'se-faire-belle')")
+      .run();
+    assert.equal(await setCategoryImage(db, 31, m.image_key), true, 'a library image was refused');
+    assert.equal(await deleteMediaRecord(db, m.id), null, 'a category image was deletable');
+
+    const usage = await mediaUsage(db, m.id);
+    assert.deepEqual(usage.categories, [{ id: 31, public_id: 'cat_univers31', name: 'Se faire belle' }]);
+    assert.equal(isUnused(usage), false, 'the grid would offer to delete it');
+
+    // Removing the image from the category frees the file, and only the file's
+    // own route deletes it.
+    assert.equal(await setCategoryImage(db, 31, null), true);
+    assert.equal(await deleteMediaRecord(db, m.id), m.image_key, 'freed media still refused');
+  });
+
+  await check('a category takes an image only while its media row exists', async () => {
+    const m = await newMedia('media/univers-kept.png');
+    await db
+      .prepare("INSERT INTO categories (id, public_id, name, slug) VALUES (32, 'cat_univers32', 'Sacs', 'sacs')")
+      .run();
+    assert.equal(await setCategoryImage(db, 32, m.image_key), true);
+    // A key no longer in the library is refused, and the good one stays.
+    assert.equal(await setCategoryImage(db, 32, 'media/never-existed.png'), false);
+    const row = await db.prepare('SELECT image_key FROM categories WHERE id = 32').first();
+    assert.equal(row.image_key, m.image_key, 'a missing key overwrote the category image');
+  });
 
   await check('a stale selection cannot attach media that was already deleted', async () => {
     const m = await newMedia('media/vanishing.png');

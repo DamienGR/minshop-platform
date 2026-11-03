@@ -59,6 +59,7 @@ export const COLUMNS = [
   { name: 'requires_shipping', scope: 'product', required: false, description: 'oui/non. Défaut oui.' },
   { name: 'active', scope: 'product', required: false, description: 'oui/non. Défaut oui.' },
   { name: 'categories', scope: 'product', required: false, description: 'Slugs de catégories séparés par « | ».' },
+  { name: 'tags', scope: 'product', required: false, description: 'Étiquettes que le thème lit (« non-cousu », « nouveau »), séparées par « | ». Colonne absente : les étiquettes de la boutique restent ; colonne vide : elles sont retirées.' },
   { name: 'images', scope: 'product', required: false, description: 'Chemins d\'images relatifs au CSV, séparés par « | ». La première est la principale.' },
 ];
 
@@ -80,7 +81,13 @@ const LIST_SEPARATOR = '|';
  * different URLs depending on who wrote the row.
  */
 export function slugify(input) {
-  const base = String(input)
+  return slugPart(input) || 'product';
+}
+
+/** The slug of a text, or '' when nothing survives — the twin of `slugPart()`
+ *  in `src/features/products/slug.ts`, and what a tag is held to. */
+export function slugPart(input) {
+  return String(input)
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -88,7 +95,38 @@ export function slugify(input) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
-  return base || 'product';
+}
+
+/** A tag is an identifier a theme matches on (ticket #159, ADR 0026). */
+export const TAG_MAX_LENGTH = 40;
+export const TAGS_MAX = 20;
+
+/**
+ * Normalise a product's tags: each to its slug, duplicates dropped, order kept.
+ *
+ * The twin of `normalizeTags()` in `src/features/products/tags.ts`, pinned to
+ * it over a shared corpus in test/scripts/catalog.test.mjs: a tag typed in the
+ * admin and the same tag imported must be one string, or the theme matching
+ * `non-cousu` sees one and misses the other. The messages differ — this one
+ * speaks to an operator reading a report.
+ *
+ * @param {string[]} values
+ * @returns {{ tags: string[] }|{ error: string }}
+ */
+export function normalizeTags(values) {
+  const tags = [];
+  for (const raw of values) {
+    const written = String(raw).trim();
+    if (!written) continue;
+    const tag = slugPart(written);
+    if (!tag) return { error: `« ${written} » n'est pas une étiquette : il faut au moins une lettre ou un chiffre.` };
+    if (tag.length > TAG_MAX_LENGTH) {
+      return { error: `« ${written} » fait plus de ${TAG_MAX_LENGTH} caractères une fois normalisée.` };
+    }
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  if (tags.length > TAGS_MAX) return { error: `${tags.length} étiquettes ; ${TAGS_MAX} au plus.` };
+  return { tags };
 }
 
 /** One refusal, addressed to a place in the file. */
@@ -365,6 +403,16 @@ export function buildCatalogue(parsed, { currency }) {
       issues.push(issue(at('categories'), 'categories', `« ${group.key} » répète une catégorie.`));
     }
 
+    // Absent column, undefined: the plan then leaves the store's tags alone,
+    // so a catalogue written before the column existed cannot wipe what the
+    // merchant set in the admin. Present, the file is the truth, empty or not.
+    let tags;
+    if (parsed.columns.includes('tags')) {
+      const normalised = normalizeTags(splitList(value('tags')));
+      if (normalised.error) issues.push(issue(at('tags'), 'tags', normalised.error, 'Lettres, chiffres et tirets ; « Pièce unique » devient « piece-unique ».'));
+      else tags = normalised.tags;
+    }
+
     const images = splitList(value('images')).map((path) => ({ path, line: at('images') }));
     if (new Set(images.map((image) => image.path)).size !== images.length) {
       issues.push(issue(at('images'), 'images', `« ${group.key} » répète une image.`));
@@ -392,6 +440,7 @@ export function buildCatalogue(parsed, { currency }) {
       active: active.value ?? 1,
       requires_shipping: shipping.value ?? 1,
       categories,
+      ...(tags !== undefined ? { tags: tags.length > 0 ? tags.join(',') : null } : {}),
       images,
       // With variants the product row is not the sellable unit: its price is
       // what a card shows ("from"), so it is the cheapest variant, and its stock

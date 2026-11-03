@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { getConfig } from '../../config';
 import type { Product } from '../products/db';
-import { getProductsByIds, setRelatedIds, parseRelatedIds } from '../products/db';
+import { getListedProductsByIds, setRelatedIds, parseRelatedIds } from '../products/db';
+import type { ListedProduct } from '../products/cardVariants';
 import type { SearchProvider } from './provider';
 import { createFtsSearch } from './fts';
 import {
@@ -95,20 +96,19 @@ export async function storeRelatedIds(productId: number, limit = 4): Promise<voi
 
 /**
  * Read a product's stored neighbours. `related_ids` may reference products that
- * have since been deleted or deactivated — getProductsByIds filters on active,
- * so stale entries drop out silently rather than 404ing a row.
+ * have since been deleted or deactivated — the read filters on active, so
+ * stale entries drop out silently rather than 404ing a row. They become cards,
+ * so they come with their variants (ticket #161).
  */
 export async function getRelatedStored(
   product: Pick<Product, 'id' | 'related_ids'>,
   limit = 4,
-): Promise<Product[] | null> {
+): Promise<ListedProduct[] | null> {
   const ids = parseRelatedIds(product.related_ids);
   if (ids === null) return null; // never computed → caller decides to backfill
   if (ids.length === 0) return [];
-  const found = await getProductsByIds(env.DB, ids.slice(0, limit));
-  // Preserve similarity order; getProductsByIds returns rows in id order.
-  const byId = new Map(found.map((p) => [p.id, p]));
-  return ids.map((id) => byId.get(id)).filter((p): p is Product => p !== undefined);
+  // Similarity order is preserved by the read.
+  return getListedProductsByIds(env.DB, ids.slice(0, limit));
 }
 
 export async function getSearchProvider(): Promise<SearchProvider> {

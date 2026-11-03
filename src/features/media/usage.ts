@@ -7,15 +7,22 @@ import { t, tn } from '../i18n/index.ts';
 export interface MediaUsage {
   products: Array<{ id: number; public_id: string | null; name: string }>;
   pages: Array<{ id: number; public_id: string | null; title: string }>;
+  /** Categories presenting it (migration 0052, ticket #158). */
+  categories: Array<{ id: number; public_id: string | null; name: string }>;
   logo: boolean;
 }
 
 export function emptyUsage(): MediaUsage {
-  return { products: [], pages: [], logo: false };
+  return { products: [], pages: [], categories: [], logo: false };
 }
 
 export function isUnused(usage: MediaUsage): boolean {
-  return usage.products.length === 0 && usage.pages.length === 0 && !usage.logo;
+  return (
+    usage.products.length === 0 &&
+    usage.pages.length === 0 &&
+    usage.categories.length === 0 &&
+    !usage.logo
+  );
 }
 
 /**
@@ -47,6 +54,13 @@ const PAGE_USAGE_SQL = `
    WHERE pm.media_id IN (%IDS%)
    ORDER BY pg.title`;
 
+const CATEGORY_USAGE_SQL = `
+  SELECT m.id AS media_id, c.id AS category_id, c.public_id AS category_public_id, c.name AS category_name
+    FROM media m
+    JOIN categories c ON c.image_key = m.image_key
+   WHERE m.id IN (%IDS%)
+   ORDER BY c.name`;
+
 /**
  * Usage for a whole grid page in a bounded number of statements — never one
  * query per row. Ids are bound once per statement (48 parameters for a full
@@ -61,9 +75,10 @@ export async function mediaUsageForIds(
   if (ids.length === 0) return usage;
 
   const placeholders = ids.map(() => '?').join(', ');
-  const [products, pages, logo] = await db.batch<Record<string, unknown>>([
+  const [products, pages, categories, logo] = await db.batch<Record<string, unknown>>([
     db.prepare(PRODUCT_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare(PAGE_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
+    db.prepare(CATEGORY_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare("SELECT value FROM settings WHERE key = 'logo_image_key'"),
   ]);
 
@@ -86,6 +101,17 @@ export async function mediaUsageForIds(
     usage
       .get(row.media_id)
       ?.pages.push({ id: row.page_id, public_id: row.page_public_id, title: row.page_title });
+  }
+
+  for (const row of (categories.results ?? []) as Array<{
+    media_id: number;
+    category_id: number;
+    category_public_id: string | null;
+    category_name: string;
+  }>) {
+    usage
+      .get(row.media_id)
+      ?.categories.push({ id: row.category_id, public_id: row.category_public_id, name: row.category_name });
   }
 
   const logoKey = ((logo.results ?? []) as Array<{ value: string }>)[0]?.value;
@@ -111,7 +137,7 @@ export async function mediaUsage(db: D1Database, id: number): Promise<MediaUsage
 export interface UsageLink {
   href: string;
   label: string;
-  kind: 'product' | 'page' | 'logo';
+  kind: 'product' | 'page' | 'category' | 'logo';
   /** Tooltip. Per-kind rather than templated: "the logo that uses this image"
    *  reads wrong, because the logo IS the use rather than a thing having one. */
   title: string;
@@ -135,6 +161,12 @@ export function usageLinks(usage: MediaUsage): UsageLink[] {
       label: p.title,
       kind: 'page' as const,
       title: t('admin.media.usage.editPage', { titre: p.title }),
+    })),
+    ...usage.categories.map((c) => ({
+      href: `/admin/categories/${c.public_id}/edit`,
+      label: c.name,
+      kind: 'category' as const,
+      title: t('admin.media.usage.editCategory', { nom: c.name }),
     })),
     // The logo is a setting, not a row, so it links to where it is chosen.
     ...(usage.logo
@@ -164,6 +196,13 @@ export function describeUsage(usage: MediaUsage): string {
     parts.push(
       tn('admin.media.usage.pages.one', 'admin.media.usage.pages.other', usage.pages.length, {
         titres: usage.pages.map((p) => p.title).join(', '),
+      }),
+    );
+  }
+  if (usage.categories.length > 0) {
+    parts.push(
+      tn('admin.media.usage.categories.one', 'admin.media.usage.categories.other', usage.categories.length, {
+        noms: usage.categories.map((c) => c.name).join(', '),
       }),
     );
   }

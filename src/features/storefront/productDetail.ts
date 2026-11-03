@@ -12,6 +12,7 @@ import { formatMoney, toMajorUnits, currencyDecimals } from '../../money';
 import { requirePublicId } from '../catalog/serialize';
 import { buildProductCard } from './productCard';
 import { customFieldName } from '../products/customization';
+import { readTags } from '../products/tags';
 import type {
   ProductDetailModel,
   ProductPurchaseModel,
@@ -213,6 +214,7 @@ export async function loadProductDetail(
       // count means nothing when the variant is the inventory unit.
       lowStock: !hasVariants && state === 'low',
       digitalDelivery: Boolean(product.file_key),
+      tags: readTags(product.tags),
       categories: categories.map((category) => ({
         text: category.name,
         href: `/categories/${category.slug}`,

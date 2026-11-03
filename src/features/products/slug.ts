@@ -2,9 +2,10 @@ import type { D1Database } from '@cloudflare/workers-types';
 
 const DIACRITICS = /[̀-ͯ]/g;
 
-/** Turn arbitrary text into a URL-safe slug. */
-export function slugify(input: string): string {
-  const base = input
+/** The slug of a text, or '' when nothing survives — the rule slugify()
+ *  falls back from, and what a product tag is held to (ticket #159). */
+export function slugPart(input: string): string {
+  return input
     .normalize('NFKD')
     .replace(DIACRITICS, '')
     .toLowerCase()
@@ -12,7 +13,11 @@ export function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
-  return base || 'product';
+}
+
+/** Turn arbitrary text into a URL-safe slug. */
+export function slugify(input: string): string {
+  return slugPart(input) || 'product';
 }
 
 /**
