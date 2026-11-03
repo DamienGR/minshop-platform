@@ -1,6 +1,6 @@
 # ADR 0028 — Un commentaire de l'acheteur sur sa commande
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #169 par Damien, le 2026-11-03)
 - **Date** : 2026-11-03
 - **Jalon** : après le pilote (plan §13.9) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), qui ne liste pas de

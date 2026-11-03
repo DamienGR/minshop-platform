@@ -3319,7 +3319,8 @@ et la recette de son accueil.
 Noté le 2026-11-03 : deux autres tickets de la recette de la boutique
 Artisagna. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-03, une PR, un commit par ticket :
+Fait le 2026-11-03, une PR (#169, fusionnée par Damien le jour même, qui
+accepte l'ADR 0028), un commit par ticket :
 
 - **#160, les espaces autour du gras** : Astro supprime le saut de ligne
   entre deux morceaux de texte en ligne, et huit phrases du socle se
