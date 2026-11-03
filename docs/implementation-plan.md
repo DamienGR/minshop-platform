@@ -3158,7 +3158,8 @@ Fait le 2026-11-02, en un seul lot :
 
 Tenu par `test/integration/customization.mjs`. Reste à faire : la recette de
 la première boutique réelle qui vend un produit personnalisé, sur ce
-parcours.
+parcours. Publié dans le socle `v0.4.0`, dont les notes listent la migration
+0049.
 
 ### 13.5 Le paiement par virement
 
@@ -3200,8 +3201,8 @@ Fait le 2026-11-02, en un seul lot :
 Tenu par `test/integration/bank-transfer.mjs`, et la lecture de la liste par
 `test/integration/history-reads.mjs`. Reste à faire : la recette de la
 première boutique réelle qui l'allume (une commande par virement, l'e-mail
-reçu, l'enregistrement, la confirmation), et la migration 0050 dans les notes
-de la prochaine version du socle.
+reçu, l'enregistrement, la confirmation). Publié dans le socle `v0.4.0`, dont
+les notes listent la migration 0050.
 
 ### 13.6 La franchise en base de TVA
 
@@ -3238,9 +3239,9 @@ Tenu par `src/features/legal/vat.test.ts`, les tests des e-mails, ceux du
 manifeste et de `shopctl new`, `test/integration/terms.mjs` et
 `test/integration/d1-integration.sh`. Reste à faire : la réponse écrite de
 l'expert-comptable sur les endroits de la mention (au pied de page et sur le
-reçu de Stripe, le socle ne l'écrit pas), la mention dans l'article « Prix »
-des CGV du commerçant, et la migration 0051 dans les notes de la prochaine
-version du socle.
+reçu de Stripe, le socle ne l'écrit pas) et la mention dans l'article « Prix »
+des CGV du commerçant. Publié dans le socle `v0.4.0`, dont les notes listent
+la migration 0051.
 
 ### 13.7 Le formulaire de contact
 
@@ -3273,6 +3274,6 @@ Fait le 2026-11-02, en un seul lot, sans migration :
 
 Tenu par `test/integration/contact.mjs` et `test/browser/contact.spec.mjs`.
 Reste à faire : la recette de la première boutique réelle (sa page de contact,
-ses motifs, un message reçu et une réponse), la mention du formulaire dans sa
-politique de confidentialité, et la liaison `CONTACT_RATE_LIMITER` dans les
-notes de la prochaine version du socle.
+ses motifs, un message reçu et une réponse) et la mention du formulaire dans
+sa politique de confidentialité. Publié dans le socle `v0.4.0`, dont les notes
+nomment la liaison `CONTACT_RATE_LIMITER`.
