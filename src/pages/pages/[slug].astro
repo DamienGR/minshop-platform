@@ -76,9 +76,16 @@ if (Astro.request.method === 'POST') {
 // One indexed read, on an edge-cached route, so body images can carry their
 // intrinsic size and stop shifting the layout when they load.
 const dimensions = await pageImageDimensions(env.DB, page.id);
+// A ```carte block's tiles come from this page's own relay (ADR 0029), which
+// fetches only the tiles a published map of this page draws.
+const tileBase = `/map-tiles/${encodeURIComponent(page.slug)}`;
 const html = renderMarkdown(page.body_markdown, {
   baseUrl: getConfig().images.baseUrl,
   dimensions,
+  placeMaps: {
+    tileUrl: (tile) => `${tileBase}/${tile.z}/${tile.x}/${tile.y}`,
+    attribution: getConfig().maps.attribution,
+  },
 });
 const description = markdownExcerpt(page.body_markdown);
 const layout = normalizePageLayout(page.layout);

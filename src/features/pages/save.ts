@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { t, tn } from '../i18n/index.ts';
 import { findMediaByKeys, pageMediaClaimStatements } from '../media/db.ts';
 import { isIncomplete } from './completeness.ts';
-import { extractMediaKeys } from './markdown.ts';
+import { extractMediaKeys, placeMapProblems } from './markdown.ts';
 import { type Page } from './db.ts';
 
 export interface SaveResult {
@@ -12,6 +12,8 @@ export interface SaveResult {
   publishRefused: boolean;
   /** The body still holds `[À COMPLÉTER]` markers, in an environment that refuses them live. */
   incomplete: boolean;
+  /** What is wrong with the body's ```carte blocks (ADR 0029), one line each; [] when nothing. */
+  mapProblems: string[];
   /** The publication state actually stored. */
   published: number;
 }
@@ -36,6 +38,10 @@ export interface SaveResult {
  * holds the skeleton's `[À COMPLÉTER]` markers the same way: saved, kept a
  * draft, and a live page left live. Demoting a published terms page would
  * reopen the checkout without consent, which is worse than a marker.
+ *
+ * A ```carte block the renderer cannot draw (ADR 0029) is a third such reason,
+ * in every environment: the storefront would show nothing where the map was
+ * meant to be.
  */
 export async function savePageBody(
   db: D1Database,
@@ -55,12 +61,17 @@ export async function savePageBody(
   const unresolved = referenced.filter((key) => !resolvedKeys.has(key));
 
   const incomplete = options.refuseIncomplete === true && isIncomplete(fields.body_markdown);
+  const mapProblems = placeMapProblems(fields.body_markdown);
 
-  // Publishing is refused when media is missing or markers are left, but an
-  // explicit unpublish is always honoured and a live page is never demoted.
+  // Publishing is refused when media is missing, markers are left or a map
+  // cannot be drawn, but an explicit unpublish is always honoured and a live
+  // page is never demoted.
   const wantsPublish = fields.published === 1;
   const blockedValue = wantsPublish ? existing.published : 0;
-  const okValue = unresolved.length === 0 && !incomplete ? fields.published : blockedValue;
+  const okValue =
+    unresolved.length === 0 && !incomplete && mapProblems.length === 0
+      ? fields.published
+      : blockedValue;
 
   await db.batch([
     ...pageMediaClaimStatements(
@@ -104,6 +115,7 @@ export async function savePageBody(
     unresolved,
     publishRefused: wantsPublish && published !== 1,
     incomplete,
+    mapProblems,
     published,
   };
 }
@@ -118,13 +130,25 @@ export function saveWarning(result: SaveResult): string {
   }
   const media = mediaWarning(result);
   if (media) warnings.push(media);
+  const map = mapWarning(result);
+  if (map) warnings.push(map);
   return warnings.join(' ');
 }
 
+/** The first problem only: the preview lists them all, beside the text. */
+function mapWarning(result: SaveResult): string {
+  const [first] = result.mapProblems;
+  if (!first) return '';
+  if (result.published === 1) return t('admin.pages.save.mapLive', { probleme: first });
+  if (result.publishRefused) return t('admin.pages.save.mapRefused', { probleme: first });
+  return t('admin.pages.save.mapDraft', { probleme: first });
+}
+
 function mediaWarning(result: SaveResult): string {
-  // A refusal the markers alone explain is not a media problem.
+  // A refusal the markers or a map alone explain is not a media problem.
+  const otherReason = result.incomplete || result.mapProblems.length > 0;
   const refusedForMedia =
-    result.publishRefused && !(result.incomplete && result.unresolved.length === 0);
+    result.publishRefused && (result.unresolved.length > 0 || !otherReason);
   if (result.unresolved.length === 0 && !refusedForMedia) return '';
   const count = Math.max(result.unresolved.length, 1);
   if (refusedForMedia) {

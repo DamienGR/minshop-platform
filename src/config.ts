@@ -215,6 +215,20 @@ export interface SiteConfig {
     /** Store-owner address for a "new order" notification ('' = don't notify). */
     notifyTo: string;
   };
+  /**
+   * The map of a place in a page (a ```carte block, ADR 0029). The shop relays
+   * the tiles from this server, so a visitor's browser never calls it.
+   *
+   * `tileUrl` is a `{z}/{x}/{y}` template, keyless: an API key would be a
+   * credential in a committed file. The default is OpenStreetMap's own server,
+   * whose usage policy the relay follows (operations.osmfoundation.org/policies/tiles):
+   * a User-Agent naming the shop, its caching headers honoured. Another
+   * server takes its own `attribution`, printed on every map.
+   */
+  maps: {
+    tileUrl: string;
+    attribution: { text: string; href: string };
+  };
 }
 
 /**
@@ -322,6 +336,13 @@ function defaultConfig(): SiteConfig {
       from: 'onboarding@resend.dev', // Resend test sender; set a verified domain in admin for real customers
       fromName: env.STORE_NAME ?? 'Ma boutique',
       notifyTo: '', // owner "new order" notification — set yours in store.config.ts ('' = off)
+    },
+    maps: {
+      tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: {
+        text: 'les contributeurs d’OpenStreetMap',
+        href: 'https://www.openstreetmap.org/copyright',
+      },
     },
   };
 }

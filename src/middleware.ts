@@ -75,10 +75,13 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
   // the storefront/admin can reflect wizard-set values without a redeploy. APIs and
   // static assets skip it (one indexed D1 read per page, not per asset/API call).
   const path = context.url.pathname;
+  // A map's tiles (ADR 0029) are images, a dozen per map: none needs the
+  // settings or the menus, and none should pay a D1 read for them.
   const isDocument =
     !path.startsWith('/api/') &&
     !path.startsWith('/_') &&
-    !path.startsWith('/partials/');
+    !path.startsWith('/partials/') &&
+    !path.startsWith('/map-tiles/');
   if (isDocument) {
     // Storefront documents also need the header/footer menus. Both reads go in
     // ONE batch so /cart, /checkout, /account, /order, and /pay — which are never

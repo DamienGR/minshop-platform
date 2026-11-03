@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdown, markdownExcerpt, extractMediaKeys } from './markdown';
+import {
+  renderMarkdown,
+  markdownExcerpt,
+  extractMediaKeys,
+  placeMapBlocks,
+  placeMapProblems,
+  placeMapsDrawTile,
+} from './markdown';
 
 describe('renderMarkdown — structure', () => {
   it('renders headings, lists, links, and emphasis', () => {
@@ -261,5 +268,141 @@ describe('renderMarkdown — block extent', () => {
     const html = renderMarkdown('Alpha\nstill alpha\n\nBeta.', { sourceMap: true });
     expect(html).toMatch(/<p [^>]*data-source-line="1"[^>]*data-source-end="3"/);
     expect(html).toMatch(/<p [^>]*data-source-line="4"[^>]*data-source-end="5"/);
+  });
+});
+
+describe('renderMarkdown — the map of a place (```carte, ADR 0029)', () => {
+  const MAPS = {
+    tileUrl: (tile: { z: number; x: number; y: number }) => `/map-tiles/ou-me-trouver/${tile.z}/${tile.x}/${tile.y}`,
+    attribution: { text: 'les contributeurs d’OpenStreetMap', href: 'https://www.openstreetmap.org/copyright' },
+  };
+  const BLOCK = [
+    'Le samedi matin :',
+    '',
+    '```carte',
+    'lieu: Marché de Vannes',
+    'adresse: Place du Poids public',
+    'adresse: 56000 Vannes',
+    'position: 47.6582, -2.7608',
+    '```',
+    '',
+    'Et le reste de la semaine à l’atelier.',
+  ].join('\n');
+
+  it('stays a code block for a renderer that was not asked for maps', () => {
+    const html = renderMarkdown(BLOCK);
+    expect(html).toContain('<pre><code class="language-carte">');
+    expect(html).not.toContain('place-map');
+  });
+
+  it('draws the place: tiles from the page’s relay, a pin, the credit, the caption', () => {
+    const html = renderMarkdown(BLOCK, { placeMaps: MAPS });
+    expect(html).not.toContain('<pre>');
+    expect(html).toContain('<figure class="place-map">');
+    expect(html).toContain('role="img" aria-label="Carte : Marché de Vannes"');
+    const tiles = [...html.matchAll(/<img src="\/map-tiles\/ou-me-trouver\/16\/(\d+)\/(\d+)"/g)];
+    expect(tiles.length).toBeGreaterThanOrEqual(6);
+    expect(tiles.length).toBeLessThanOrEqual(12);
+    expect(html).toContain('alt="" width="256" height="256" loading="lazy" decoding="async"');
+    expect(html).toContain('class="place-map__pin"');
+    expect(html).toContain(
+      '© <a href="https://www.openstreetmap.org/copyright">les contributeurs d’OpenStreetMap</a>',
+    );
+    expect(html).toContain('<strong class="place-map__name">Marché de Vannes</strong>');
+    expect(html).toContain('Place du Poids public<br>56000 Vannes');
+    // The text around the block is untouched.
+    expect(html).toContain('<p>Le samedi matin :</p>');
+    expect(html).toContain('<p>Et le reste de la semaine à l’atelier.</p>');
+  });
+
+  it('links the place at OpenStreetMap and Google Maps, with its ampersands escaped', () => {
+    const html = renderMarkdown(BLOCK, { placeMaps: MAPS });
+    expect(html).toContain(
+      'href="https://www.openstreetmap.org/?mlat=47.6582&amp;mlon=-2.7608#map=16/47.6582/-2.7608"',
+    );
+    expect(html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=47.6582%2C-2.7608"');
+    expect(html).toContain('>Voir sur OpenStreetMap</a>');
+    expect(html).toContain('>Voir sur Google Maps</a>');
+  });
+
+  it('escapes what the merchant wrote: the block cannot carry markup (invariant 11)', () => {
+    const html = renderMarkdown(
+      '```carte\nlieu: <script>alert(1)</script>\nadresse: "><img src=x onerror=alert(1)>\nposition: 47, -2\n```',
+      { placeMaps: MAPS },
+    );
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
+  });
+
+  it('names an unnamed place generically', () => {
+    const html = renderMarkdown('```carte\nposition: 47.6582, -2.7608\n```', { placeMaps: MAPS });
+    expect(html).toContain('aria-label="Carte de l’emplacement"');
+    expect(html).not.toContain('place-map__name');
+  });
+
+  it('draws nothing on the storefront for a block it cannot read', () => {
+    const html = renderMarkdown('Avant.\n\n```carte\nlieu: Halles\n```\n\nAprès.', { placeMaps: MAPS });
+    expect(html).toBe('<p>Avant.</p>\n<p>Après.</p>\n');
+  });
+
+  it('tells the preview what is wrong, line by line in the page', () => {
+    const html = renderMarkdown('Avant.\n\n```carte\nlieu: Halles\nzoom: 40\n```', {
+      placeMaps: { ...MAPS, showErrors: true },
+    });
+    expect(html).toContain('<div class="place-map-error">');
+    expect(html).toContain('ligne 5 : le zoom est un nombre entier de 3 à 19');
+    expect(html).toContain('ligne 6 : il manque la position du lieu');
+  });
+
+  it('stamps the preview’s source lines on the map, like on every other block', () => {
+    const html = renderMarkdown(BLOCK, { placeMaps: MAPS, sourceMap: true });
+    expect(html).toContain('<figure class="place-map" data-source-line="3" data-source-end="9">');
+  });
+
+  it('leaves every other fence to markdown-it', () => {
+    const html = renderMarkdown('```js\nconst a = "<b>";\n```', { placeMaps: MAPS });
+    expect(html).toContain('<pre><code class="language-js">const a = &quot;&lt;b&gt;&quot;;\n</code></pre>');
+  });
+
+  it('draws no map from a block written as an indented code block', () => {
+    const html = renderMarkdown('    ```carte\n    position: 47, -2\n    ```', { placeMaps: MAPS });
+    expect(html).not.toContain('place-map');
+    expect(placeMapBlocks('    ```carte\n    position: 47, -2\n    ```')).toEqual([]);
+  });
+});
+
+describe('placeMapProblems', () => {
+  it('is empty for a body whose maps all draw, or that has none', () => {
+    expect(placeMapProblems('Rien ici.')).toEqual([]);
+    expect(placeMapProblems('```carte\nposition: 47, -2\n```')).toEqual([]);
+  });
+
+  it('numbers each problem by its line in the body', () => {
+    expect(placeMapProblems('# Où\n\n```carte\nlieu: Halles\n```\n\n```carte\nposition: Vannes\n```')).toEqual([
+      'ligne 5 : il manque la position du lieu, par exemple « position : 47.6582, -2.7608 »',
+      'ligne 8 : la position donne la latitude puis la longitude, par exemple « 47.6582, -2.7608 » (clic droit sur le lieu dans OpenStreetMap ou Google Maps)',
+    ]);
+  });
+});
+
+describe('placeMapsDrawTile', () => {
+  const body = 'Texte.\n\n```carte\nposition: 47.6582, -2.7608\nzoom: 16\n```';
+  const drawn = [...renderMarkdown(body, {
+    placeMaps: { tileUrl: (tile) => `/t/${tile.z}/${tile.x}/${tile.y}`, attribution: { text: 'x', href: 'https://x.example' } },
+  }).matchAll(/src="\/t\/(\d+)\/(\d+)\/(\d+)"/g)].map(([, z, x, y]) => ({ z: +z, x: +x, y: +y }));
+
+  it('says yes to every tile the page draws', () => {
+    expect(drawn.length).toBeGreaterThan(0);
+    for (const tile of drawn) expect(placeMapsDrawTile(body, tile)).toBe(true);
+  });
+
+  it('says no to a neighbour, the same tile at another zoom, and any tile of a broken block', () => {
+    const xs = drawn.map((tile) => tile.x);
+    expect(placeMapsDrawTile(body, { z: 16, x: Math.max(...xs) + 1, y: drawn[0].y })).toBe(false);
+    expect(placeMapsDrawTile(body, { ...drawn[0], z: 15 })).toBe(false);
+    expect(placeMapsDrawTile('```carte\nposition: 47.6582, -2.7608\nzoom: 99\n```', { ...drawn[0] })).toBe(false);
+    expect(placeMapsDrawTile('Pas de carte.', drawn[0])).toBe(false);
   });
 });

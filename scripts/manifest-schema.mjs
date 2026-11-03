@@ -81,8 +81,8 @@ export const RESERVED_SLUGS = [
   'account', 'acme', 'admin', 'agency', 'api', 'assets', 'cart', 'categories',
   'category', 'cdn', 'check', 'checkout', 'contact', 'core', 'default', 'dev',
   'example', 'express', 'files', 'fleet', 'images', 'index', 'internal', 'llms',
-  'local', 'mail', 'mcp', 'minshop', 'order', 'pages', 'partials', 'pay',
-  'payment-setup', 'platform', 'preview', 'prod', 'product', 'production',
+  'local', 'mail', 'map-tiles', 'mcp', 'minshop', 'order', 'pages', 'partials',
+  'pay', 'payment-setup', 'platform', 'preview', 'prod', 'product', 'production',
   'products', 'robots', 'search', 'shop', 'sitemap', 'staging', 'store',
   'support', 'test', 'www',
 ];
