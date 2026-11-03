@@ -1,6 +1,6 @@
 # ADR 0029 — La carte d'un lieu dans une page, tuiles relayées par la boutique
 
-- **Statut** : Proposé (PR du ticket #163)
+- **Statut** : Accepté (fusion de la PR #168 par Damien, le 2026-11-03)
 - **Date** : 2026-11-03
 - **Jalon** : après le pilote (plan §13.10) ; aucun des jalons 0 à 10
 - **Précise** : l'invariant 11 d'`AGENTS.md` (corps de page en Markdown,
