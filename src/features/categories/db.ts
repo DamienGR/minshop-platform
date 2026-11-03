@@ -239,24 +239,24 @@ export async function categoriesForProducts(
   return byProduct;
 }
 
-/** Active products sharing a category with the given product (excludes itself). */
-export function relatedProductsStatement(
-  db: D1Database,
-  productId: number,
-  limit = 4,
-): D1PreparedStatement {
-  return db
-    .prepare(
-      `SELECT DISTINCT p.* FROM products p
+/** Active products sharing a category with the given product (excludes
+ *  itself), as SQL: bound (productId, limit). Exported for the card wrapper. */
+export const RELATED_PRODUCTS_SQL = `SELECT DISTINCT p.* FROM products p
          JOIN product_categories pc ON pc.product_id = p.id
         WHERE pc.category_id IN (
                 SELECT category_id FROM product_categories WHERE product_id = ?1
               )
           AND p.id != ?1 AND p.active = 1
         ORDER BY p.created_at DESC
-        LIMIT ?2`,
-    )
-    .bind(productId, limit);
+        LIMIT ?2`;
+
+/** Active products sharing a category with the given product (excludes itself). */
+export function relatedProductsStatement(
+  db: D1Database,
+  productId: number,
+  limit = 4,
+): D1PreparedStatement {
+  return db.prepare(RELATED_PRODUCTS_SQL).bind(productId, limit);
 }
 
 export async function relatedProducts(
@@ -316,17 +316,10 @@ export async function setProductCategories(
   await db.batch(stmts);
 }
 
-/** A page of active products in a category, including descendant categories. */
-export function productsInCategoryStatement(
-  db: D1Database,
-  categoryId: number,
-  limit: number,
-  offset = 0,
-  orderBy = 'created_at DESC',
-): D1PreparedStatement {
-  return db
-    .prepare(
-      `WITH RECURSIVE sub(id) AS (
+/** A page of active products in a category and its descendants, as SQL:
+ *  bound (categoryId, limit, offset). Exported for the card wrapper. */
+export function productsInCategorySql(orderBy = 'created_at DESC'): string {
+  return `WITH RECURSIVE sub(id) AS (
          SELECT id FROM categories WHERE id = ?1
          UNION ALL
          SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
@@ -335,9 +328,18 @@ export function productsInCategoryStatement(
        JOIN product_categories pc ON pc.product_id = p.id
        WHERE pc.category_id IN (SELECT id FROM sub) AND p.active = 1
        ORDER BY ${orderBy}
-       LIMIT ?2 OFFSET ?3`,
-    )
-    .bind(categoryId, limit, offset);
+       LIMIT ?2 OFFSET ?3`;
+}
+
+/** A page of active products in a category, including descendant categories. */
+export function productsInCategoryStatement(
+  db: D1Database,
+  categoryId: number,
+  limit: number,
+  offset = 0,
+  orderBy = 'created_at DESC',
+): D1PreparedStatement {
+  return db.prepare(productsInCategorySql(orderBy)).bind(categoryId, limit, offset);
 }
 
 export async function productsInCategory(

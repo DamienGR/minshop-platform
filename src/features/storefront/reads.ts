@@ -1,20 +1,20 @@
-import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement, D1Result } from '@cloudflare/workers-types';
 import {
   ancestorsStatement,
   categoriesForProductStatement,
   countProductsInCategoryStatement,
   listCategoriesStatement,
-  productsInCategoryStatement,
-  relatedProductsStatement,
+  productsInCategorySql,
+  RELATED_PRODUCTS_SQL,
   type Category,
 } from '../categories/db';
 import {
   countProductsStatement,
   listProductImagesStatement,
-  listProductsStatement,
-  type Product,
+  listProductsSql,
   type ProductImageRow,
 } from '../products/db';
+import { cardVariantsForIdsSql, withCardVariants, type ListedProduct } from '../products/cardVariants';
 import {
   listExtrasStatement,
   listVariantsStatement,
@@ -54,8 +54,9 @@ export interface ProductPageRows {
   /** The free-text fields the buyer fills in (ticket #125). */
   customFields: ProductCustomField[];
   images: ProductImageRow[];
-  /** Active products sharing a category, newest first, up to `relatedLimit`. */
-  related: Product[];
+  /** Active products sharing a category, newest first, up to `relatedLimit`,
+   *  each with its card variants. */
+  related: ListedProduct[];
 }
 
 /** Everything a product page reads once its product is known. */
@@ -70,7 +71,7 @@ export async function readProductPageRows(
     listExtrasStatement(db, productId),
     listCustomFieldsStatement(db, productId),
     listProductImagesStatement(db, productId),
-    relatedProductsStatement(db, productId, relatedLimit),
+    db.prepare(withCardVariants(RELATED_PRODUCTS_SQL, 'created_at DESC')).bind(productId, relatedLimit),
   ]);
   return {
     categories: rows<Category>(categories),
@@ -78,7 +79,7 @@ export async function readProductPageRows(
     extras: rows<ProductExtra>(extras),
     customFields: rows<ProductCustomField>(customFields),
     images: rows<ProductImageRow>(images),
-    related: rows<Product>(related),
+    related: rows<ListedProduct>(related),
   };
 }
 
@@ -89,17 +90,59 @@ export interface ListingQuery {
   order: string;
 }
 
+/** One page of the catalogue as cards read it — the variants included. */
+export function catalogPageStatement(
+  db: D1Database,
+  { pageSize, offset, order }: ListingQuery,
+): D1PreparedStatement {
+  return db.prepare(withCardVariants(listProductsSql(order), order)).bind(pageSize, offset);
+}
+
 /** The catalogue: its size, the category list, and one page of products. */
 export async function readCatalogRows(
   db: D1Database,
-  { pageSize, offset, order }: ListingQuery,
-): Promise<{ total: number; categories: Category[]; products: Product[] }> {
+  query: ListingQuery,
+): Promise<{ total: number; categories: Category[]; products: ListedProduct[] }> {
   const [total, categories, products] = await db.batch([
     countProductsStatement(db),
     listCategoriesStatement(db),
-    listProductsStatement(db, pageSize, offset, order),
+    catalogPageStatement(db, query),
   ]);
-  return { total: count(total), categories: rows<Category>(categories), products: rows<Product>(products) };
+  return {
+    total: count(total),
+    categories: rows<Category>(categories),
+    products: rows<ListedProduct>(products),
+  };
+}
+
+/** One page of a category as cards read it — the variants included. */
+export function categoryPageStatement(
+  db: D1Database,
+  categoryId: number,
+  { pageSize, offset, order }: ListingQuery,
+): D1PreparedStatement {
+  return db
+    .prepare(withCardVariants(productsInCategorySql(order), order))
+    .bind(categoryId, pageSize, offset);
+}
+
+/**
+ * Card variants for products a search provider found, keyed by product id —
+ * one statement for the whole page. Providers write their own queries (FTS5,
+ * Vectorize), so their rows cannot carry the column; this is the one listing
+ * that pays a second call, and only when it has results.
+ */
+export async function readCardVariants(
+  db: D1Database,
+  productIds: number[],
+): Promise<Map<number, string | null>> {
+  const ids = [...new Set(productIds)];
+  if (ids.length === 0) return new Map();
+  const { results } = await db
+    .prepare(cardVariantsForIdsSql(ids.length))
+    .bind(...ids)
+    .all<{ id: number; card_variants: string | null }>();
+  return new Map((results ?? []).map((row) => [row.id, row.card_variants]));
 }
 
 /** A category page: its trail, the category list, its size, one page of products. */
@@ -107,17 +150,17 @@ export async function readCategoryRows(
   db: D1Database,
   categoryId: number,
   { pageSize, offset, order }: ListingQuery,
-): Promise<{ trail: Category[]; categories: Category[]; total: number; products: Product[] }> {
+): Promise<{ trail: Category[]; categories: Category[]; total: number; products: ListedProduct[] }> {
   const [trail, categories, total, products] = await db.batch([
     ancestorsStatement(db, categoryId),
     listCategoriesStatement(db),
     countProductsInCategoryStatement(db, categoryId),
-    productsInCategoryStatement(db, categoryId, pageSize, offset, order),
+    categoryPageStatement(db, categoryId, { pageSize, offset, order }),
   ]);
   return {
     trail: rows<Category>(trail),
     categories: rows<Category>(categories),
     total: count(total),
-    products: rows<Product>(products),
+    products: rows<ListedProduct>(products),
   };
 }

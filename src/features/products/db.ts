@@ -1,5 +1,6 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { withPublicId } from '../ids/publicId.ts';
+import { withCardVariants, type ListedProduct } from './cardVariants.ts';
 
 export interface Product {
   id: number;
@@ -50,6 +51,12 @@ export interface ProductInput extends ProductFields {
   slug: string;
 }
 
+/** The storefront's page of active products, as SQL: bound (limit, offset).
+ *  Exported so a listing can wrap it (features/products/cardVariants.ts). */
+export function listProductsSql(orderBy = 'created_at DESC'): string {
+  return `SELECT * FROM products WHERE active = 1 ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
+}
+
 /** listProducts, unexecuted — for a batched read (categories/db.ts says why). */
 export function listProductsStatement(
   db: D1Database,
@@ -57,11 +64,7 @@ export function listProductsStatement(
   offset = 0,
   orderBy = 'created_at DESC',
 ): D1PreparedStatement {
-  return db
-    .prepare(
-      `SELECT * FROM products WHERE active = 1 ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-    )
-    .bind(limit, offset);
+  return db.prepare(listProductsSql(orderBy)).bind(limit, offset);
 }
 
 /** A page of active products for the storefront, newest first. */
@@ -203,6 +206,19 @@ export async function getProductsByIds(db: D1Database, ids: number[]): Promise<P
     .all<Product>();
   const byId = new Map((results ?? []).map((p) => [p.id, p]));
   return ids.map((id) => byId.get(id)).filter((p): p is Product => p !== undefined);
+}
+
+/** getProductsByIds as cards read them, the variants included (ticket #161):
+ *  the stored semantic neighbours of a product page. Same order rule. */
+export async function getListedProductsByIds(db: D1Database, ids: number[]): Promise<ListedProduct[]> {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const { results } = await db
+    .prepare(withCardVariants(`SELECT * FROM products WHERE id IN (${placeholders}) AND active = 1`))
+    .bind(...ids)
+    .all<ListedProduct>();
+  const byId = new Map((results ?? []).map((p) => [p.id, p]));
+  return ids.map((id) => byId.get(id)).filter((p): p is ListedProduct => p !== undefined);
 }
 
 /** Active products for many public IDs in one cart-resolution read. */

@@ -37,6 +37,20 @@ export interface StorefrontImage {
   priority: boolean;
 }
 
+/**
+ * One variant under a card — a swatch in a list's colour chart (ticket #161).
+ * A label and an availability, never a price or a quantity: the card is a
+ * link to the product page, where the variant is chosen and priced.
+ */
+export interface StorefrontCardVariant {
+  label: string;
+  /** False when this variant is sold out; the same rule as the product page. */
+  inStock: boolean;
+  /** The variant's own photo, resolved like the card's, or null when it names
+   *  none — a swatch then has nothing to show but its label. */
+  image: StorefrontImage | null;
+}
+
 /** A product as a catalog/search/recommendation card. */
 export interface ProductCardModel {
   /** `prod_` public ID. Never a row ID. */
@@ -45,12 +59,20 @@ export interface ProductCardModel {
   /** Root-relative product URL. */
   href: string;
   image: StorefrontImage;
-  /** Server-formatted price in the store's currency. Display only — money is
-   *  never posted back from a template as authority. */
+  /** Server-formatted price in the store's currency: the lowest variant's when
+   *  the product has variants, as on its page. Display only — money is never
+   *  posted back from a template as authority. */
   formattedPrice: string;
+  /** True when the variants disagree on price, so the card reads "from …". */
+  priceVaries: boolean;
   /** Availability as a boolean, deliberately not a quantity: exact stock counts
-   *  stay private, and bucket-level changes avoid cache invalidation. */
+   *  stay private, and bucket-level changes avoid cache invalidation. With
+   *  variants, true while any one is in stock — the variant is the unit sold. */
   inStock: boolean;
+  /** The merchant's name for the variant group ("Tissu"), or null. */
+  variantLabel: string | null;
+  /** Active variants in the merchant's order; empty for a product without. */
+  variants: StorefrontCardVariant[];
 }
 
 /** A resolved navigation link. Targets are validated upstream, so a template

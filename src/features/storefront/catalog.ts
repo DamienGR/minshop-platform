@@ -1,9 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { listProducts } from '../products/db';
 import { childrenOf, type Category } from '../categories/db';
 import { orderByClause, parseStoreSortQuery, STORE_SORTS } from '../products/sort';
 import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../../pagination';
-import { readCatalogRows } from './reads';
+import { catalogPageStatement, readCatalogRows } from './reads';
+import type { ListedProduct } from '../products/cardVariants';
 import { addCacheTags, productCacheTags } from '../cache/tags';
 import type { ImageDelivery } from '../products/image';
 import { buildProductCard, buildStorefrontImage, type StorefrontImageOptions } from './productCard';
@@ -159,7 +159,10 @@ export async function loadCatalogPage(
     PAGE_SIZE,
     MAX_PUBLIC_PAGE,
   );
-  const products = page === asked ? read.products : await listProducts(db, PAGE_SIZE, offset, order);
+  const products =
+    page === asked
+      ? read.products
+      : ((await catalogPageStatement(db, { pageSize: PAGE_SIZE, offset, order }).all<ListedProduct>()).results ?? []);
 
   addCacheTags(
     options.responseHeaders,

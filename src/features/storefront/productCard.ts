@@ -1,4 +1,4 @@
-import type { Product } from '../products/db';
+import { parseCardVariants, type ListedProduct } from '../products/cardVariants';
 import { productImageSources, type ImageDelivery } from '../products/image';
 import { requirePublicId } from '../catalog/serialize';
 import { stockState } from '../products/stock';
@@ -69,11 +69,25 @@ export interface ProductCardOptions extends StorefrontImageOptions {
  * A product row as a card. Throws on a row without a public ID, matching the
  * catalog serializers: that is a deploy-order bug, and failing loudly beats
  * rendering a numeric row ID into a public page.
+ *
+ * The row must come from a listing that read its variants (`ListedProduct`,
+ * features/products/cardVariants.ts): the type is what stops a new listing
+ * from quietly rendering every product as if it had none.
  */
 export function buildProductCard(
-  product: Product,
+  product: ListedProduct,
   options: ProductCardOptions,
 ): ProductCardModel {
+  const variants = parseCardVariants(product.card_variants);
+  const hasVariants = variants.length > 0;
+  const prices = variants.map((variant) => variant.price_cents);
+  // The product page's rules, so a card and the page it links to agree: with
+  // variants, the lowest price, "from" when they differ, and availability from
+  // the variants themselves (productDetail.ts).
+  const lowest = hasVariants ? Math.min(...prices) : product.price_cents;
+  // Variant photos are never the LCP image: the card's own image is.
+  const variantImage = { ...options, priority: false };
+
   return {
     id: requirePublicId(product.public_id, product.id, 'product'),
     name: product.name,
@@ -81,9 +95,24 @@ export function buildProductCard(
     image: buildStorefrontImage(product.image_key, product.name, options),
     // The store's currency, not the row's: a product row can carry a legacy
     // currency, and the catalog has always displayed one consistent currency.
-    formattedPrice: formatMoney(product.price_cents, options.currency),
+    formattedPrice: formatMoney(lowest, options.currency),
+    priceVaries: hasVariants && lowest !== Math.max(...prices),
     // Availability only — never the count. `stockState` is the authoritative
     // classification; re-deriving `stock > 0` here would fork that rule.
-    inStock: stockState(product.stock) !== 'out',
+    inStock: hasVariants
+      ? variants.some((variant) => variant.stock > 0)
+      : stockState(product.stock) !== 'out',
+    variantLabel: hasVariants ? product.variant_label : null,
+    variants: variants.map((variant) => ({
+      label: variant.label,
+      inStock: variant.stock > 0,
+      image: variant.image_key
+        ? buildStorefrontImage(
+            variant.image_key,
+            variant.image_alt ?? `${product.name}, ${variant.label}`,
+            variantImage,
+          )
+        : null,
+    })),
   };
 }

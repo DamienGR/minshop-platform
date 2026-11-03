@@ -6,9 +6,9 @@ import {
   buildProductCard,
   type ProductCardOptions,
 } from '../../src/features/storefront/productCard';
-import type { Product } from '../../src/features/products/db';
+import type { ListedProduct } from '../../src/features/products/cardVariants';
 
-const product = (overrides: Partial<Product> = {}): Product => ({
+const product = (overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   id: 42,
   public_id: 'prod_k7m2qx8vn6',
   name: 'Sample Tee',
@@ -29,12 +29,17 @@ const product = (overrides: Partial<Product> = {}): Product => ({
   requires_shipping: 1,
   related_ids: null,
   created_at: '2026-01-01T00:00:00Z',
+  card_variants: null,
   ...overrides,
 });
 
+/** The listing's JSON column, as SQLite writes it: [id, label, price, stock,
+ *  position, image key, image alt] per active variant. */
+const variantsColumn = (...rows: unknown[][]) => JSON.stringify(rows);
+
 /** Currency is a required option: the builder is pure, so it cannot read the
  *  store config to guess one. Tests state it once here. */
-const cardFor = (p: Product, options: Partial<ProductCardOptions> = {}) =>
+const cardFor = (p: ListedProduct, options: Partial<ProductCardOptions> = {}) =>
   buildProductCard(p, { currency: 'eur', ...options });
 
 const render = async (component: unknown, model: unknown) => {
@@ -102,6 +107,80 @@ describe('buildProductCard', () => {
     expect(lazy.src).toContain('width=384');
     expect(lcp.src).toContain('width=768');
     expect(lcp.priority).toBe(true);
+  });
+});
+
+describe('the card variants (ticket #161)', () => {
+  const fabrics = variantsColumn(
+    [12, 'Lin', 2600, 0, 1, 'media/lin.jpg', 'Sac en lin'],
+    [11, 'Coton', 2400, 3, 0, null, null],
+    [13, 'Wax', 2400, 5, 1, 'media/wax.jpg', ''],
+  );
+
+  it('lists each variant in the merchant order, with its availability and photo', () => {
+    const card = cardFor(product({ variant_label: 'Tissu', card_variants: fabrics }));
+
+    expect(card.variantLabel).toBe('Tissu');
+    expect(card.variants.map((v) => [v.label, v.inStock])).toEqual([
+      ['Coton', true],
+      ['Lin', false],
+      ['Wax', true],
+    ]);
+    expect(card.variants[0].image).toBeNull();
+    expect(card.variants[1].image).toMatchObject({ src: '/images/media/lin.jpg', alt: 'Sac en lin', priority: false });
+    // An empty gallery alt falls back to something a screen reader can say.
+    expect(card.variants[2].image?.alt).toBe('Sample Tee, Wax');
+  });
+
+  it('prices and stocks the card the way the product page does', () => {
+    const card = cardFor(product({ price_cents: 9900, stock: 0, card_variants: fabrics }));
+
+    // The lowest variant price, "from" because they differ, and in stock
+    // because one variant is — the product row's own count is not the unit sold.
+    expect(card.formattedPrice).toBe('24,00\u00a0\u20ac');
+    expect(card.priceVaries).toBe(true);
+    expect(card.inStock).toBe(true);
+  });
+
+  it('is sold out when every variant is', () => {
+    const card = cardFor(
+      product({ stock: 9, card_variants: variantsColumn([1, 'S', 2400, 0, 0, null, null], [2, 'M', 2400, 0, 1, null, null]) }),
+    );
+
+    expect(card.inStock).toBe(false);
+    expect(card.priceVaries).toBe(false);
+  });
+
+  it('reads a product without variants exactly as before', () => {
+    for (const column of [null, '[]']) {
+      const card = cardFor(product({ variant_label: 'Taille', card_variants: column }));
+      expect(card.variants).toEqual([]);
+      expect(card.variantLabel).toBeNull();
+      expect(card.priceVaries).toBe(false);
+      expect(card.formattedPrice).toBe('24,00\u00a0\u20ac');
+    }
+  });
+
+  it('skips what it cannot read instead of failing the page', () => {
+    const card = cardFor(product({ card_variants: '[[1,"S",2400,2,0,null,null],["x"],{"a":1}]' }));
+    expect(card.variants.map((v) => v.label)).toEqual(['S']);
+    expect(cardFor(product({ card_variants: 'not json' })).variants).toEqual([]);
+  });
+
+  it('publishes neither a price nor a quantity per variant', () => {
+    const [variant] = cardFor(product({ card_variants: fabrics })).variants;
+    expect(Object.keys(variant).sort()).toEqual(['image', 'inStock', 'label']);
+  });
+
+  it('leaves the shipped card unchanged when it has variants to show', async () => {
+    // The shipped themes draw no swatches: the same product renders the same
+    // whether or not its variants came along, prices and availability aside.
+    const bare = await render(ProductCard, cardFor(product()));
+    const listed = await render(
+      ProductCard,
+      cardFor(product({ card_variants: variantsColumn([1, 'S', 2400, 7, 0, 'media/s.jpg', null]) })),
+    );
+    expect(listed).toBe(bare);
   });
 });
 

@@ -10,9 +10,9 @@ import {
 import type { Category } from '../../src/features/categories/db';
 import { buildProductCard } from '../../src/features/storefront/productCard';
 import type { CatalogPageModel } from '../../src/features/storefront/models';
-import type { Product } from '../../src/features/products/db';
+import type { ListedProduct } from '../../src/features/products/cardVariants';
 
-const product = (n: number, overrides: Partial<Product> = {}): Product => ({
+const product = (n: number, overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   id: n,
   public_id: `prod_k7m2qx8vn${n}`,
   name: `Item ${n}`,
@@ -33,6 +33,7 @@ const product = (n: number, overrides: Partial<Product> = {}): Product => ({
   requires_shipping: 1,
   related_ids: null,
   created_at: '2026-01-01T00:00:00Z',
+  card_variants: null,
   ...overrides,
 });
 
