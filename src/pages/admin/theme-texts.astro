@@ -1,0 +1,127 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { activeThemeTextSlots } from '../../features/themeTexts/active';
+import { readThemeTexts } from '../../features/themeTexts/db';
+import { storedThemeText, storedThemeTextTooLong, themeTextField } from '../../features/themeTexts/slots';
+import { t } from '../../features/i18n';
+
+/**
+ * Admin → Textes du thème (ticket #165): one field per slot the active theme
+ * declares in its `texts.ts`. The labels and help are the theme's, written for
+ * the merchant; the core supplies the limits, the default and the notices.
+ */
+const error = Astro.url.searchParams.get('error');
+const saved = Astro.url.searchParams.get('saved');
+
+const slots = activeThemeTextSlots;
+const stored = slots.length > 0 ? await readThemeTexts(env.DB) : new Map<string, string>();
+const fields = slots.map((slot) => {
+  const custom = storedThemeText(slot, stored);
+  return {
+    slot,
+    id: `theme-text-${slot.key.replace(/[^a-zA-Z0-9-]/g, '-')}`,
+    name: themeTextField(slot.key),
+    // The field shows what the shop shows: the merchant's text, else the
+    // default. Saving it unchanged stores nothing (parseThemeTextsForm). A text
+    // now over the theme's limit is shown as written, to be shortened.
+    value: custom ?? (storedThemeTextTooLong(slot, stored) ? (stored.get(slot.key) ?? '') : slot.default),
+    custom: custom !== null,
+    tooLongNow: storedThemeTextTooLong(slot, stored),
+    storedLength: [...(stored.get(slot.key) ?? '')].length,
+    // A one-line text that fits on one line is an input; anything else a textarea.
+    multiline: slot.format === 'markdown' || slot.maxLength > 160,
+  };
+});
+const inputClass =
+  'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
+---
+
+<AdminLayout title={t('admin.themeTexts.title')} active="themeTexts">
+  <div class="mb-8">
+    <h1 class="font-serif text-3xl tracking-tight">{t('admin.themeTexts.title')}</h1>
+    <p class="mt-2 text-sm text-gray-500">
+      {t('admin.themeTexts.intro')} {t('admin.settings.purgeNote')}
+    </p>
+  </div>
+
+  {
+    error && (
+      <p class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {error}
+      </p>
+    )
+  }
+  {
+    saved && !error && (
+      <p class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        {t('admin.themeTexts.saved')}
+      </p>
+    )
+  }
+
+  {
+    fields.length === 0 ? (
+      <p role="status" class="text-sm text-gray-500">
+        {t('admin.themeTexts.empty')}
+      </p>
+    ) : (
+      <form method="POST" action="/api/admin/theme-texts" class="max-w-2xl space-y-8">
+        {fields.map((field) => (
+          <div data-theme-text={field.slot.key}>
+            <label class="block text-sm font-medium" for={field.id}>
+              {field.slot.label}
+              {field.custom && (
+                <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-normal text-gray-600">
+                  {t('admin.themeTexts.field.custom')}
+                </span>
+              )}
+            </label>
+            {field.slot.help && <p class="mt-1 text-sm text-gray-500">{field.slot.help}</p>}
+            {field.multiline ? (
+              <textarea
+                id={field.id}
+                name={field.name}
+                rows={field.slot.format === 'markdown' ? 6 : 3}
+                maxlength={field.slot.maxLength}
+                class={inputClass}
+              >{field.value}</textarea>
+            ) : (
+              <input
+                id={field.id}
+                name={field.name}
+                type="text"
+                maxlength={field.slot.maxLength}
+                value={field.value}
+                class={inputClass}
+              />
+            )}
+            <p class="mt-1 text-xs text-gray-500">
+              {t('admin.themeTexts.field.max', { max: field.slot.maxLength })}
+              {field.slot.format === 'markdown' && <> · {t('admin.themeTexts.field.markdown')}</>}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">
+              {t('admin.themeTexts.field.default')}{' '}
+              {field.slot.default === '' ? (
+                <em>{t('admin.themeTexts.field.defaultEmpty')}</em>
+              ) : (
+                <span class="whitespace-pre-line">{field.slot.default}</span>
+              )}
+            </p>
+            {field.tooLongNow && (
+              <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {t('admin.themeTexts.field.tooLongNow', { longueur: field.storedLength })}
+              </p>
+            )}
+          </div>
+        ))}
+        <button
+          type="submit"
+          class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover"
+        >
+          {t('admin.themeTexts.save')}
+        </button>
+      </form>
+    )
+  }
+</AdminLayout>

@@ -22,6 +22,7 @@ import {
   type ProductVariant,
 } from '../products/variants';
 import { listCustomFieldsStatement } from '../products/customFields';
+import { themeTextMap, themeTextsStatement } from '../themeTexts/db';
 import type { ProductCustomField } from '../products/customization';
 
 /**
@@ -135,25 +136,31 @@ export interface CatalogRows {
   products: ListedProduct[];
   /** The product put forward, or null for an empty catalogue. */
   featured: ListedProduct | null;
+  /** What the merchant wrote over the theme's texts; empty, unread, when the
+   *  theme declares none (ticket #165). */
+  texts: Map<string, string>;
 }
 
 /** The catalogue: its size, the category list, one page of products, and the
  *  product it puts forward. */
 export async function readCatalogRows(
   db: D1Database,
-  query: ListingQuery & { featuredProductId?: number | null },
+  query: ListingQuery & { featuredProductId?: number | null; themeTexts?: boolean },
 ): Promise<CatalogRows> {
-  const [total, categories, products, featured] = await db.batch([
+  const [total, categories, products, featured, texts] = await db.batch([
     countProductsStatement(db),
     listCategoriesStatement(db),
     catalogPageStatement(db, query),
     featuredProductStatement(db, query.featuredProductId ?? null),
+    // In the same batch, and only for a theme that has texts to read.
+    ...(query.themeTexts ? [themeTextsStatement(db)] : []),
   ]);
   return {
     total: count(total),
     categories: rows<Category>(categories),
     products: rows<ListedProduct>(products),
     featured: rows<ListedProduct>(featured)[0] ?? null,
+    texts: texts ? themeTextMap(rows<{ key: string; value: string }>(texts)) : new Map(),
   };
 }
 

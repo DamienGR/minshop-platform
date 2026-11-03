@@ -173,8 +173,50 @@ export interface CatalogPageModel {
    * theme's call. Its image is resolved as the page's likely LCP.
    */
   featured: ProductCardModel | null;
+  /**
+   * The texts the theme declares in its `texts.ts` (ticket #165), by key: what
+   * the merchant wrote in Admin → Textes du thème, else the slot's default.
+   * Every declared key is present; a theme that declares none gets `{}`.
+   */
+  texts: Record<string, ThemeText>;
   sort: StorefrontSortModel;
   pagination: StorefrontPaginationModel;
+}
+
+/**
+ * A text the theme lets the merchant edit (ticket #165, ADR 0027), declared in
+ * the theme's optional `src/themes/<id>/texts.ts`:
+ *
+ *     import type { ThemeTextSlot } from '../../features/storefront/models';
+ *     export const texts = [
+ *       { key: 'hero.title', label: 'Titre de l’accueil', default: 'Né à l’atelier',
+ *         maxLength: 80, format: 'text' },
+ *     ] satisfies ThemeTextSlot[];
+ *
+ * The label and help are shown in the admin, so they are written for the
+ * merchant, in French.
+ */
+export interface ThemeTextSlot {
+  /** What the template reads, `model.texts['hero.title']`: a lowercase letter,
+   *  then letters, digits, `.` or `-` — 64 characters at most. */
+  key: string;
+  label: string;
+  /** One sentence under the field, for where the text appears. */
+  help?: string;
+  /** Shown until the merchant writes something; may be ''. */
+  default: string;
+  /** In characters, 5 000 at most. A longer text is refused at saving. */
+  maxLength: number;
+  /** `text`: one line, whitespace collapsed. `markdown`: rendered without HTML
+   *  (invariant 11), the way a page body is. */
+  format: 'text' | 'markdown';
+}
+
+/** One theme text, resolved. `html` is the rendered Markdown of a `markdown`
+ *  slot, safe for `set:html`; null for a `text` slot, which prints `text`. */
+export interface ThemeText {
+  text: string;
+  html: string | null;
 }
 
 /**

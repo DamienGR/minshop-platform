@@ -14,6 +14,7 @@ export const shell = {
   'admin.shell.nav.navigation': 'Navigation',
   'admin.shell.nav.shipping': 'Livraison',
   'admin.shell.nav.media': 'Médias',
+  'admin.shell.nav.themeTexts': 'Textes du thème',
   'admin.shell.nav.settings': 'Réglages',
   'admin.shell.nav.menu': 'Menu',
   'admin.shell.nav.toggle': 'Afficher ou masquer les sections de l’administration',

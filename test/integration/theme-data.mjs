@@ -339,6 +339,70 @@ try {
     const [listed] = await getListedProductsByIds(db, [PRODUCTS]);
     assert.deepEqual(buildProductCard(listed, { currency: 'eur' }).tags, ['non-cousu', 'nouveau'], 'search and related');
   });
+
+  console.log('\nthe texts a theme declares (ticket #165)');
+
+  const { parseThemeTextsForm, themeTextField } = await import('../../src/features/themeTexts/slots.ts');
+  const { saveThemeTexts, readThemeTexts } = await import('../../src/features/themeTexts/db.ts');
+  const slots = [
+    { key: 'hero.title', label: 'Titre', default: 'Né à l’atelier', maxLength: 40, format: 'text' },
+    { key: 'hero.intro', label: 'Accroche', default: 'Des sacs *cousus main*.', maxLength: 400, format: 'markdown' },
+  ];
+  const home = async () =>
+    (await loadCatalogPage(db, {
+      base: '/',
+      searchParams: new URLSearchParams(),
+      responseHeaders: new Headers(),
+      imageBaseUrl: '',
+      delivery: undefined,
+      currency: 'eur',
+      eyebrow: 'Boutique',
+      heading: 'Tout',
+      textSlots: slots,
+    })).texts;
+  const save = async (fields) => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(themeTextField(key), value);
+    const parsed = parseThemeTextsForm(form, slots);
+    if ('writes' in parsed) await saveThemeTexts(db, parsed.writes);
+    return parsed;
+  };
+
+  await check('the home shows the defaults until the merchant writes one', async () => {
+    const texts = await home();
+    assert.equal(texts['hero.title'].text, 'Né à l’atelier');
+    assert.equal(texts['hero.intro'].html, '<p>Des sacs <em>cousus main</em>.</p>\n');
+  });
+
+  await check('a saved text replaces its default, an emptied one brings it back', async () => {
+    await save({ 'hero.title': 'La carte cadeau', 'hero.intro': 'Le **sur-mesure**.' });
+    let texts = await home();
+    assert.equal(texts['hero.title'].text, 'La carte cadeau');
+    assert.equal(texts['hero.intro'].html, '<p>Le <strong>sur-mesure</strong>.</p>\n');
+
+    await save({ 'hero.title': '', 'hero.intro': 'Des sacs *cousus main*.' });
+    texts = await home();
+    assert.equal(texts['hero.title'].text, 'Né à l’atelier');
+    assert.equal((await readThemeTexts(db)).size, 0, 'neither an empty field nor the default is stored');
+  });
+
+  await check('a text too long is refused, and nothing of the form is written', async () => {
+    const parsed = await save({ 'hero.intro': 'Nouveau.', 'hero.title': 'x'.repeat(41) });
+    assert.ok('error' in parsed);
+    assert.match(parsed.error, /41 caractères pour 40 au plus/);
+    assert.equal((await readThemeTexts(db)).size, 0);
+  });
+
+  await check('the texts ride the catalogue batch, and a theme without slots reads none', async () => {
+    await save({ 'hero.title': 'La carte cadeau' });
+    take();
+    await home();
+    const withTexts = take();
+    await catalog();
+    const without = take();
+    assert.ok(withTexts - without <= 2, `the texts read ${withTexts - without} rows`);
+    console.log(`    (${without} rows without texts, ${withTexts} with)`);
+  });
 } finally {
   await mf.dispose();
 }

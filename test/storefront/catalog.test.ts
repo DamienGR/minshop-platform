@@ -47,6 +47,7 @@ const model = (overrides: Partial<CatalogPageModel> = {}): CatalogPageModel => (
   // Mirrors the loader: only the first card is the page's likely LCP image.
   products: [product(1), product(2)].map((p, i) => buildProductCard(p, { currency: 'eur', priority: i === 0 })),
   featured: null,
+  texts: {},
   sort: buildSortModel('/products', 'newest', 'desc'),
   pagination: buildPaginationModel('/products', 1, 3, 'newest', 'desc'),
   ...overrides,
