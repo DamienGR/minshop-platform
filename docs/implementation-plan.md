@@ -3286,7 +3286,8 @@ sur ce que son thème doit pouvoir lire pour remplacer les textes et les choix
 le socle ajoute des champs aux modèles de vitrine, et les thèmes livrés n'en
 affichent aucun, leur rendu est inchangé. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-03, une PR, un commit par ticket :
+Fait le 2026-11-03, une PR (#166, fusionnée par Damien le jour même, qui
+accepte les ADR 0026 et 0027), un commit par ticket :
 
 - **#158, les catégories présentées** : une image (un usage de la médiathèque,
   invariant 10) et une description de 300 caractères au plus par catégorie
