@@ -3323,7 +3323,8 @@ carte statique dont la boutique relaie les tuiles, plutôt qu'une iframe ;
 l'[ADR 0029](architecture/decisions/0029-carte-d-un-lieu.md) le consigne.
 Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-03, en un seul lot, sans migration :
+Fait le 2026-11-03, en un seul lot, sans migration (PR #168, fusionnée par
+Damien le jour même, qui accepte l'ADR 0029) :
 
 - un bloc de code `carte` (lieu, adresse, position, zoom) que l'éditeur insère
   par son bouton « Carte », dessiné par `renderMarkdown()` sur les pages
