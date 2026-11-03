@@ -1,6 +1,14 @@
 import MarkdownIt from 'markdown-it';
 import type { MarkdownIt as MarkdownItInstance, Token } from 'markdown-it';
 import { mediaUrl } from '../media/url.ts';
+import { isPlaceMapInfo, parsePlace, type ParsedPlace } from '../maps/place.ts';
+import {
+  placeErrorMessage,
+  renderPlaceErrors,
+  renderPlaceMap,
+  type PlaceMapOptions,
+} from '../maps/render.ts';
+import { tileGrid, type Tile } from '../maps/tiles.ts';
 
 /**
  * Server-only Markdown renderer, shared by the storefront route and the admin
@@ -76,6 +84,18 @@ export interface RenderOptions {
    * behaviour, so a page mixing measured and unmeasured images still works.
    */
   dimensions?: Map<string, { width: number; height: number }>;
+  /**
+   * Draw ```carte blocks as the map of a place (ADR 0029). Content pages only:
+   * a renderer called without it — a product description, a theme's text —
+   * leaves the block the code block it always was.
+   */
+  placeMaps?: PlaceMapOptions & {
+    /**
+     * Admin preview: say what is wrong with a block it cannot draw. The
+     * storefront draws nothing there instead; the save already said why.
+     */
+    showErrors?: boolean;
+  };
 }
 
 /**
@@ -116,6 +136,36 @@ function installImageRule(
   };
 }
 
+/**
+ * A ```carte fence becomes a map, built from the parsed place and never from
+ * the block's text (features/maps/render.ts). Every other fence keeps
+ * markdown-it's own rule.
+ */
+function installPlaceMapRule(
+  instance: MarkdownItInstance,
+  maps: NonNullable<RenderOptions['placeMaps']>,
+  sourceMap: boolean,
+): void {
+  const fence = instance.renderer.rules.fence;
+  instance.renderer.rules.fence = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    if (!isPlaceMapInfo(token.info)) {
+      return fence ? fence(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+    }
+    const fenceLine = (token.map?.[0] ?? 0) + 1;
+    // The same plumbing renderToken adds to every other block, from numbers only.
+    const source =
+      sourceMap && token.map
+        ? ` data-source-line="${token.map[0] + 1}" data-source-end="${token.map[1] + 1}"`
+        : '';
+    const parsed = parsePlace(token.content);
+    if ('errors' in parsed) {
+      return maps.showErrors ? renderPlaceErrors(parsed.errors, fenceLine, source) : '';
+    }
+    return renderPlaceMap(parsed.place, maps, source);
+  };
+}
+
 export function renderMarkdown(markdown: string, options: RenderOptions = {}): string {
   const baseUrl = options.baseUrl ?? '';
   const instance = new MarkdownIt({
@@ -125,6 +175,7 @@ export function renderMarkdown(markdown: string, options: RenderOptions = {}): s
     typographer: false,
   });
   installImageRule(instance, baseUrl, options.dimensions);
+  if (options.placeMaps) installPlaceMapRule(instance, options.placeMaps, options.sourceMap === true);
 
   if (options.sourceMap) {
     // Block tokens carry `map: [startLine, endLine]`. Stamping the start line on
@@ -203,4 +254,37 @@ export function extractMediaKeys(markdown: string, options: RenderOptions = {}):
   // A Set keeps insertion order, so repeated references collapse to one entry
   // and page_media never gets a duplicate row.
   return [...keys];
+}
+
+/**
+ * Every ```carte block of a body, parsed, with the line its fence opens on.
+ * From parser tokens, like extractMediaKeys: a ```carte written inside another
+ * code block, or indented as code, is text and draws nothing.
+ */
+export function placeMapBlocks(markdown: string): Array<{ fenceLine: number; parsed: ParsedPlace }> {
+  return md
+    .parse(markdown, {})
+    .filter((token) => token.type === 'fence' && isPlaceMapInfo(token.info))
+    .map((token) => ({ fenceLine: (token.map?.[0] ?? 0) + 1, parsed: parsePlace(token.content) }));
+}
+
+/** What is wrong with the body's maps, one message per problem; [] when none. */
+export function placeMapProblems(markdown: string): string[] {
+  return placeMapBlocks(markdown).flatMap(({ fenceLine, parsed }) =>
+    'errors' in parsed ? parsed.errors.map((error) => placeErrorMessage(error, fenceLine)) : [],
+  );
+}
+
+/**
+ * Whether one of the body's maps draws this tile. The tile route asks it on a
+ * cache miss, and refuses every other tile: what makes it a relay for the
+ * shop's own maps rather than an open proxy to the tile server.
+ */
+export function placeMapsDrawTile(markdown: string, tile: Tile): boolean {
+  return placeMapBlocks(markdown).some(({ parsed }) => {
+    if ('errors' in parsed || parsed.place.zoom !== tile.z) return false;
+    return tileGrid(parsed.place.lat, parsed.place.lon, parsed.place.zoom).tiles.some(
+      (drawn) => drawn !== null && drawn.x === tile.x && drawn.y === tile.y,
+    );
+  });
 }

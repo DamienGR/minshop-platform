@@ -385,3 +385,115 @@
   border-radius: 0.375rem;
   margin: 1.5rem auto;
 }
+/* The map of a place (a ```carte block, ADR 0029; features/maps/render.ts).
+   No script: the tiles are a CSS grid the server sized, shifted so the place
+   sits at the centre of the frame, where the pin is. The frame never grows
+   past the area the tiles cover — 48rem by 20rem, VIEW_WIDTH and VIEW_HEIGHT
+   in features/maps/tiles.ts — or it would show the mosaic's edge. */
+.place-map {
+  max-width: 48rem;
+  margin: 2rem auto;
+}
+.place-map__frame {
+  position: relative;
+  overflow: hidden;
+  height: 20rem;
+  border: 1px solid var(--color-line, #e5e5e5);
+  border-radius: var(--radius-md, 0.375rem);
+  /* What shows while a tile loads, or where one failed: the theme's panel,
+     never a broken-image glyph (each tile has alt=""). */
+  background: var(--color-surface, #f5f5f4);
+}
+.place-map__view {
+  position: absolute;
+  inset: 0;
+}
+.place-map__tiles {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  grid-template-columns: repeat(var(--map-cols, 4), 256px);
+  grid-auto-rows: 256px;
+  transform: translate(var(--map-x, 0), var(--map-y, 0));
+}
+/* Undo the body-image rule above and the preflight's max-width: a tile is
+   exactly its 256px, with no gap and no corner. */
+.place-map .place-map__tiles > img {
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+}
+.place-map__pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.75rem;
+  height: 2.25rem;
+  /* The tip of the pin, not its middle, marks the place. */
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+.place-map__pin svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.place-map__pin path {
+  fill: var(--color-brand, #111827);
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+.place-map__pin circle {
+  fill: #ffffff;
+}
+/* The tile server's credit, on the map as its policy asks. A fixed light chip
+   and dark text: it sits on the tiles, which are light whatever the theme. */
+.place-map__credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 0.125rem 0.375rem;
+  border-top-left-radius: 0.25rem;
+  background: rgb(255 255 255 / 0.85);
+  color: #1f2937;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.place-map .place-map__credit a {
+  color: inherit;
+}
+.place-map__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  line-height: 1.5;
+}
+.place-map__address {
+  color: var(--color-muted, #6b7280);
+}
+.place-map__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-size: 0.875rem;
+}
+/* The admin preview's account of a block it cannot draw. The storefront never
+   renders it: there, such a block draws nothing. */
+.place-map-error {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f59e0b;
+  border-radius: 0.375rem;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.markdown-content .place-map-error p,
+.markdown-content .place-map-error ul {
+  margin-bottom: 0.25rem;
+}

@@ -48,3 +48,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0025](0025-formulaire-de-contact.md) | Un formulaire de contact, envoyé sans être gardé | Accepté |
 | [0026](0026-etiquettes-produit.md) | Des étiquettes libres sur les produits, que le thème lit | Accepté |
 | [0027](0027-textes-du-theme.md) | Les textes du thème, déclarés par le thème et écrits par le marchand | Accepté |
+| [0029](0029-carte-d-un-lieu.md) | La carte d'un lieu dans une page, tuiles relayées par la boutique | Proposé |

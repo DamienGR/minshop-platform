@@ -3313,3 +3313,31 @@ Tenu par `test/integration/theme-data.mjs` (une vraie D1, cinq cents produits)
 et les suites de `test/storefront/`. Reste à faire : le thème de la boutique
 Artisagna, dans son propre dépôt, qui lit ces champs après la montée du socle,
 et la recette de son accueil.
+
+### 13.10 La carte d'un lieu dans une page
+
+Noté le 2026-11-03 (ticket #163), à la recette de la première boutique réelle :
+sa page « Où me trouver » montre une carte par point de vente, que le Markdown
+sans HTML des pages (invariant 11) ne pouvait pas porter. Damien a choisi une
+carte statique dont la boutique relaie les tuiles, plutôt qu'une iframe ;
+l'[ADR 0029](architecture/decisions/0029-carte-d-un-lieu.md) le consigne.
+Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-03, en un seul lot, sans migration :
+
+- un bloc de code `carte` (lieu, adresse, position, zoom) que l'éditeur insère
+  par son bouton « Carte », dessiné par `renderMarkdown()` sur les pages
+  seulement : une mosaïque de tuiles en CSS, une épingle, l'attribution, le nom,
+  l'adresse et deux liens vers OpenStreetMap et Google Maps, sans script ;
+- les tuiles servies par la boutique, `/map-tiles/<page>/<z>/<x>/<y>`, qui ne
+  relaie que celles d'une carte d'une page publiée, avec un User-Agent qui la
+  nomme et la fraîcheur qu'annonce le serveur, puis les garde dans le cache de
+  l'arête ; l'aperçu de l'éditeur passe par `/api/admin/map-tiles/` ;
+- un bloc illisible garde la page en brouillon et l'aperçu dit ce qui ne va pas,
+  ligne par ligne ;
+- le serveur de tuiles, OpenStreetMap par défaut, réglable dans
+  `store.config.ts` (`maps`).
+
+Tenu par `test/integration/place-map.mjs`. Reste à faire : la page « Où me
+trouver » de la première boutique réelle, une carte par point de vente, vue en
+production sur son domaine.

@@ -554,6 +554,39 @@ try {
     assert.match(warning, /1 image est introuvable/);
   });
 
+  // A ```carte block the renderer cannot draw (ADR 0029) keeps a draft a
+  // draft, like the markers, and is never blamed on the media library.
+  const BROKEN_MAP = 'Le samedi :\n\n```carte\nlieu: Marché de Vannes\n```';
+
+  await check('a draft with a map it cannot draw is saved and kept a draft', async () => {
+    const page = await seedPage(29, 'carte-brouillon');
+    const result = await savePageBody(db, page, fieldsFor(page, BROKEN_MAP, 1));
+    assert.equal(result.published, 0, 'a broken map went live');
+    assert.equal(result.publishRefused, true, 'the refusal was not reported');
+    assert.deepEqual(result.mapProblems.length, 1);
+    const saved = await db.prepare('SELECT published, body_markdown FROM pages WHERE id = 29').first();
+    assert.equal(saved.body_markdown, BROKEN_MAP, 'the author lost their text');
+    const warning = saveWarning(result);
+    assert.match(warning, /n’a pas été publiée.*une carte est incomplète \(ligne 5/);
+    assert.doesNotMatch(warning, /image/, 'the map was blamed on media');
+  });
+
+  await check('a live page with a broken map stays live, and says the map is not shown', async () => {
+    const page = await seedPage(33, 'carte-en-ligne', 1);
+    const result = await savePageBody(db, page, fieldsFor(page, BROKEN_MAP, 1));
+    assert.equal(result.published, 1, 'a live page was demoted');
+    assert.match(saveWarning(result), /en ligne, mais une carte est incomplète et ne s’affiche pas/);
+  });
+
+  await check('a page whose map draws publishes without a word', async () => {
+    const page = await seedPage(34, 'carte-ok');
+    const body = '```carte\nlieu: Marché de Vannes\nposition: 47.6582, -2.7608\n```';
+    const result = await savePageBody(db, page, fieldsFor(page, body, 1));
+    assert.equal(result.published, 1);
+    assert.deepEqual(result.mapProblems, []);
+    assert.equal(saveWarning(result), '');
+  });
+
   await check('an image-heavy save stays inside D1’s free-plan query budget', async () => {
     // D1 Free allows 50 queries per Worker invocation. One INSERT per image
     // would blow that on a gallery-style page, so claims are chunked into bulk
