@@ -141,8 +141,7 @@ export const fr = {
   'checkout.title': 'Commande',
   'checkout.metaDescription': 'Renseignez votre adresse de livraison.',
   'checkout.demo.banner': '⚠️ Commande de démonstration — ce n’est pas un vrai paiement',
-  'checkout.demo.explain': 'Aucune carte n’est débitée. La commande est bien enregistrée, marquée',
-  'checkout.demo.explainAfter': 'pour que vous voyiez le parcours complet.',
+  'checkout.demo.explain': 'Aucune carte n’est débitée. La commande est bien enregistrée, marquée `demo` pour que vous voyiez le parcours complet.',
   'checkout.subtotal': 'Sous-total {montant}',
   'checkout.shipTo': 'Livrer à',
   'checkout.editAddress': 'Modifier l’adresse',
@@ -214,6 +213,17 @@ export const fr = {
   'checkout.error.lightningUnavailable': 'Lightning est momentanément indisponible. Réessayez dans un instant, ou choisissez un autre moyen de paiement.',
   'checkout.error.railUnavailable': 'Ce moyen de paiement est momentanément indisponible. Réessayez dans un instant, ou choisissez-en un autre.',
 
+  // ─── Commentaire de commande (ADR 0028) ────────────────────────────────────────
+  // The message the buyer may leave before paying, when the shop takes one. Read
+  // back wherever the order is: its page, the receipt, the merchant's notice.
+  'checkout.comment.label': 'Un mot sur votre commande (facultatif)',
+  'checkout.comment.hint': 'Une précision pour la livraison, un message pour un cadeau, une personnalisation : {max} caractères au plus.',
+  'checkout.comment.tooLong': 'Votre commentaire dépasse {max} caractères. Raccourcissez-le pour continuer.',
+  'checkout.comment.yours': 'Votre commentaire',
+  'order.comment': 'Votre commentaire',
+  'email.order.comment': 'Votre commentaire',
+  'email.notification.comment': 'Commentaire de l’acheteur',
+
   // ─── Conditions générales de vente ─────────────────────────────────────────────
   'terms.accept': 'J’ai lu et j’accepte les',
   'terms.linkLabel': 'conditions générales de vente',
@@ -263,8 +273,7 @@ export const fr = {
   'pay.demo.closed.title': 'Commande de démonstration indisponible',
   'pay.demo.closed.body': 'Cette boutique ne prend plus de commandes de démonstration.',
   'pay.demo.banner': '⚠️ Commande de démonstration — ce n’est pas un vrai paiement',
-  'pay.demo.explain': 'Aucune carte n’est débitée. L’envoi du formulaire enregistre une vraie commande, marquée',
-  'pay.demo.explainAfter': 'pour que vous voyiez le parcours complet.',
+  'pay.demo.explain': 'Aucune carte n’est débitée. L’envoi du formulaire enregistre une vraie commande, marquée `demo` pour que vous voyiez le parcours complet.',
   'pay.demo.shipping': 'Livraison',
   'pay.demo.total': 'Total',
   'pay.demo.email': 'E-mail pour la confirmation de commande',

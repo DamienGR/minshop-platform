@@ -22,6 +22,7 @@ import { stripeDestination } from '../features/shipping/destination';
 import { readCart, resolveCart } from '../features/cart/cart';
 import { enabledMethods } from '../features/payments';
 import ProductImage from '../features/products/ProductImage.astro';
+import OrderCommentField from '../features/orders/OrderCommentField.astro';
 import { paymentMethodCopy } from '../features/payments/labels';
 import { t } from '../features/i18n';
 
@@ -232,6 +233,12 @@ const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMe
       )}
       {destination.hiddenOnly && (
         <input type="hidden" name="country" value={destination.countries[0]} />
+      )}
+      {/* The buyer's comment (ADR 0028), posted with the payment button. */}
+      {Astro.locals.settings?.orderCommentEnabled && (
+        <div class="mb-2">
+          <OrderCommentField />
+        </div>
       )}
       {
         terms.required && (

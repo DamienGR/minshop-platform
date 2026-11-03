@@ -327,6 +327,16 @@ const willEmailCustomer =
         </div>
       )
     }
+    {
+      order.buyer_comment && (
+        <div class="col-span-2">
+          <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.buyerComment')}</dt>
+          {/* The buyer's own words (ADR 0028): escaped like any text, its line
+              breaks kept, and never a link. */}
+          <dd class="whitespace-pre-line break-words" data-buyer-comment>{order.buyer_comment}</dd>
+        </div>
+      )
+    }
     <div>
       <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.paymentMethod')}</dt>
       <dd>{paymentLabel}</dd>

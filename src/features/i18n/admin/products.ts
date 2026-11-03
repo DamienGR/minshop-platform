@@ -111,13 +111,10 @@ export const products = {
 
   // ─── Variantes et options supplémentaires ──────────────────────────────────────
   'admin.products.variants.title': 'Variantes et options supplémentaires',
-  'admin.products.variants.intro.optional': 'Facultatif.',
-  'admin.products.variants.intro.variants': 'Les variantes',
-  'admin.products.variants.intro.variantsText': 'sont des choix qui ont leur propre prix et leur propre stock (par ex. la taille) — l’acheteur en choisit une, et c’est la variante qui est suivie en stock.',
-  'admin.products.variants.intro.extras': 'Les options supplémentaires',
-  'admin.products.variants.intro.extrasText': 'sont des cases à cocher qui s’ajoutent au prix de la ligne (par ex. un emballage cadeau), sans stock propre.',
-  'admin.products.variants.intro.saveBefore': 'Tout ce qui se trouve ici s’enregistre avec le bouton',
-  'admin.products.variants.intro.saveAfter': 'en haut de la page.',
+  // One sentence per key, the bold words marked (features/i18n/rich.ts), so the
+  // page cannot lose the spaces around them (ticket #160).
+  'admin.products.variants.intro': 'Facultatif. **Les variantes** sont des choix qui ont leur propre prix et leur propre stock (par ex. la taille) — l’acheteur en choisit une, et c’est la variante qui est suivie en stock. **Les options supplémentaires** sont des cases à cocher qui s’ajoutent au prix de la ligne (par ex. un emballage cadeau), sans stock propre.',
+  'admin.products.section.saveHint': 'Tout ce qui se trouve ici s’enregistre avec le bouton **{bouton}** en haut de la page.',
   'admin.products.variants.groupLabel': 'Nom du groupe de variantes',
   'admin.products.variants.groupLabelPlaceholder': 'par ex. Taille, Couleur',
   'admin.products.variants.heading': 'Variantes',

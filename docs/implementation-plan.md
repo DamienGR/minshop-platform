@@ -3314,6 +3314,35 @@ et les suites de `test/storefront/`. Reste à faire : le thème de la boutique
 Artisagna, dans son propre dépôt, qui lit ces champs après la montée du socle,
 et la recette de son accueil.
 
+### 13.9 Le commentaire de l'acheteur et les espaces des libellés
+
+Noté le 2026-11-03 : deux autres tickets de la recette de la boutique
+Artisagna. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-03, une PR (#169, fusionnée par Damien le jour même, qui
+accepte l'ADR 0028), un commit par ticket :
+
+- **#160, les espaces autour du gras** : Astro supprime le saut de ligne
+  entre deux morceaux de texte en ligne, et huit phrases du socle se
+  rendaient collées (« Facultatif.Les variantessont des choix »). Une
+  phrase est désormais une seule clé du catalogue, ses mots marqués `**gras**`,
+  `` `code` `` ou `[lien]`, rendue par `src/features/i18n/Rich.astro` ;
+  `test/i18n/inline-spacing.test.mjs` refuse le motif dans tous les gabarits
+  du socle ;
+- **#162, le commentaire de commande** : un champ facultatif de 500
+  caractères, retours à la ligne gardés, refusé et non tronqué, derrière un
+  réglage éteint par défaut (choix de Damien) ;
+  [ADR 0028](architecture/decisions/0028-commentaire-de-commande.md),
+  migration 0055. Sur le panier, l'achat immédiat et `/checkout`, porté par
+  la réservation jusqu'à la commande, lu sur la page de commande, la fiche
+  d'administration et les deux e-mails ; effacé avec les données de
+  l'acheteur, jamais journalisé.
+
+Tenu par `test/integration/order-comment.mjs` et
+`src/features/products/SectionIntro.test.ts`. Reste à faire : allumer le
+réglage dans la boutique Artisagna et le recetter (une commande commentée,
+l'avis reçu), et nommer le champ dans sa politique de confidentialité.
+
 ### 13.10 La carte d'un lieu dans une page
 
 Noté le 2026-11-03 (ticket #163), à la recette de la première boutique réelle :

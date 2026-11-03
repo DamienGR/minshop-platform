@@ -38,6 +38,7 @@ const order = (overrides: Partial<Order> = {}): Order =>
     vat_rate_bps: null,
     vat_amount_cents: null,
     vat_exemption: null,
+    buyer_comment: null,
     created_at: '2026-07-28 00:00:00',
     ...overrides,
   });
@@ -187,6 +188,31 @@ describe('the relay point', () => {
         expect(message.text).not.toContain('point relais');
         expect(message.html).not.toContain('point relais');
       }
+    }
+  });
+});
+
+describe('the buyer’s comment (ADR 0028)', () => {
+  const commented = order({ buyer_comment: 'Prénom à broder : <Léa>\nMerci & à bientôt' });
+
+  it('reaches the shopper’s receipt and the merchant’s notice, line breaks kept', () => {
+    const customer = orderConfirmationEmail(commented, [], 'https://demo.minshop.dev', 'Minshop');
+    const owner = orderNotificationEmail(commented, [], 'owner@example.com', 'https://demo.minshop.dev', 'Minshop');
+    expect(customer.text).toContain('Votre commentaire\u202f:\nPrénom à broder : <Léa>\nMerci & à bientôt');
+    expect(owner.text).toContain('Commentaire de l’acheteur\u202f:\nPrénom à broder : <Léa>\nMerci & à bientôt');
+    for (const message of [customer, owner]) {
+      // Their text, escaped like any other: never markup.
+      expect(message.html).toContain('Prénom à broder : &lt;Léa&gt;<br>Merci &amp; à bientôt');
+      expect(message.html).not.toContain('<Léa>');
+    }
+  });
+
+  it('says nothing when the buyer left none', () => {
+    const customer = orderConfirmationEmail(order(), [], 'https://demo.minshop.dev', 'Minshop');
+    const owner = orderNotificationEmail(order(), [], 'owner@example.com', 'https://demo.minshop.dev', 'Minshop');
+    for (const message of [customer, owner]) {
+      expect(message.text).not.toContain('ommentaire');
+      expect(message.html).not.toContain('ommentaire');
     }
   });
 });

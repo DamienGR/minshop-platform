@@ -1,0 +1,18 @@
+---
+import Rich from '../i18n/Rich.astro';
+import { t, type MessageKey } from '../i18n';
+
+/**
+ * The help under a section of the product editor whose fields save with the
+ * main form: the section's own sentence, then where its button is. One line
+ * of markup, so the space between the two sentences survives (ticket #160).
+ */
+interface Props {
+  intro: MessageKey;
+}
+
+const { intro } = Astro.props;
+const strong = 'font-medium text-gray-700';
+---
+
+<p class="mt-1 max-w-prose text-xs text-gray-500"><Rich message={intro} strongClass={strong} /> <Rich message="admin.products.section.saveHint" params={{ bouton: t('admin.products.edit.submit') }} strongClass={strong} /></p>

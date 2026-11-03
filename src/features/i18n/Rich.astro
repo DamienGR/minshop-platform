@@ -1,0 +1,28 @@
+---
+import { tRich, type MessageKey, type MessageParams } from './index.ts';
+
+/**
+ * One catalog sentence with its marked words (rich.ts): `**bold**`,
+ * `` `code` `` and `[link]`. The whole sentence is one key, so the spaces
+ * around a bold word are the translator's, and the template cannot lose them
+ * between two lines (ticket #160).
+ *
+ * Rendered as ONE expression on purpose: Astro drops a line break between two
+ * pieces of inline content, and a run per line would bring back the bug this
+ * component exists to remove.
+ */
+interface Props {
+  message: MessageKey;
+  params?: MessageParams;
+  /** Where a `[link]` run points. A link run without one reads as text. */
+  href?: string;
+  strongClass?: string;
+  codeClass?: string;
+  linkClass?: string;
+}
+
+const { message, params, href, strongClass, codeClass, linkClass } = Astro.props;
+const segments = tRich(message, params);
+---
+
+{segments.map((s) => s.mark === 'strong' ? <strong class={strongClass}>{s.text}</strong> : s.mark === 'code' ? <code class={codeClass}>{s.text}</code> : s.mark === 'link' && href ? <a href={href} class={linkClass}>{s.text}</a> : s.text)}

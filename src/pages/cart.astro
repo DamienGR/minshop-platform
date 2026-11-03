@@ -9,6 +9,7 @@ import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { stripeDestination } from '../features/shipping/destination';
 import ProductImage from '../features/products/ProductImage.astro';
+import OrderCommentField from '../features/orders/OrderCommentField.astro';
 import { enabledMethods, isMethodAvailable } from '../features/payments';
 import { paymentMethodCopy } from '../features/payments/labels';
 import { t, tn } from '../features/i18n';
@@ -212,6 +213,15 @@ const linesForm = 'cart-lines';
                   Stripe-unsupported country the filter removed. */}
               {destination.hiddenOnly && (
                 <input type="hidden" name="country" value={destination.countries[0]} />
+              )}
+
+              {/* The buyer's comment (ADR 0028): posted with the payment button,
+                  carried to /checkout when the rail goes there. An update of the
+                  quantities posts it to /api/cart, which does not keep it. */}
+              {settings?.orderCommentEnabled && (
+                <div class="mb-3">
+                  <OrderCommentField />
+                </div>
               )}
 
               {

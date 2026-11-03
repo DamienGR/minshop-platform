@@ -1,0 +1,23 @@
+---
+import { t } from '../i18n';
+import { ORDER_COMMENT_FIELD, ORDER_COMMENT_MAX_LENGTH } from './comment';
+
+/**
+ * The buyer's comment on the order (ADR 0028), on the form that leads to the
+ * payment: the cart, Buy now, and the address step of /checkout. Shown only
+ * where the shop takes comments; the server judges it again whatever the
+ * browser let through (features/orders/comment.ts).
+ */
+interface Props {
+  /** What the buyer already wrote, brought back from an earlier step. */
+  value?: string | null;
+}
+
+const { value } = Astro.props;
+---
+
+<label class="block text-left text-sm">
+  <span class="mb-1 block font-medium">{t('checkout.comment.label')}</span>
+  <textarea name={ORDER_COMMENT_FIELD} rows="3" maxlength={ORDER_COMMENT_MAX_LENGTH} aria-describedby="order-comment-hint" class="w-full rounded-md border border-line bg-surface px-3 py-2 text-ink">{value ?? ''}</textarea>
+  <span id="order-comment-hint" class="mt-1 block text-xs text-faint">{t('checkout.comment.hint', { max: ORDER_COMMENT_MAX_LENGTH })}</span>
+</label>
