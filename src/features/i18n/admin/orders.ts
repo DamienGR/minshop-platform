@@ -84,6 +84,7 @@ export const orders = {
   'admin.orders.detail.tax': 'Taxe',
   'admin.orders.detail.shipTo': 'Adresse de livraison',
   'admin.orders.detail.relayPoint': 'Point relais',
+  'admin.orders.detail.buyerComment': 'Commentaire de l’acheteur',
   'admin.orders.detail.relayCode': 'Code {code}, offre {offre}',
   'admin.orders.detail.paymentMethod': 'Moyen de paiement',
   'admin.orders.detail.paymentReference': 'Référence de paiement',

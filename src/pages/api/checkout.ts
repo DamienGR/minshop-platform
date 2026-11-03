@@ -62,6 +62,11 @@ import { lifecycleActive } from '../../features/digitalDelivery/rollout.ts';
 import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
 import { holdSeconds } from '../../features/payments/bankTransfer.ts';
+import {
+  ORDER_COMMENT_FIELD,
+  ORDER_COMMENT_MAX_LENGTH,
+  checkOrderComment,
+} from '../../features/orders/comment.ts';
 import type { StoreSettings } from '../../features/settings/db';
 
 export const prerender = false;
@@ -148,7 +153,12 @@ export const OPTIONS: APIRoute = () => new Response(null, { status: 204, headers
 export const GET: APIRoute = async () => {
   const settings = await getStoreSettings(env.DB);
   const methods = enabledMethods(settings);
-  return cjson({ available_methods: methods, default: methods[0] });
+  return cjson({
+    available_methods: methods,
+    default: methods[0],
+    // Whether `comment` is read below, and its ceiling (ADR 0028).
+    comment: settings.orderCommentEnabled ? { max_length: ORDER_COMMENT_MAX_LENGTH } : null,
+  });
 };
 
 // Creates a checkout session for either a single "Buy now" product (when
@@ -281,6 +291,12 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const available = enabledMethods(settings);
   // No method enabled → no checkout. Bounce back to the cart (which says so).
   if (available.length === 0) return redirect('/cart', 303);
+
+  // The buyer's comment (ADR 0028), judged before anything is held. The field
+  // is `maxlength`-bound, so a browser seldom reaches the refusal, which names
+  // the limit and never the text: the redirect is a URL, and URLs are logged.
+  const comment = checkOrderComment(form.get(ORDER_COMMENT_FIELD), settings.orderCommentEnabled);
+  if (!comment.ok) return redirect(`${errorPath}?error=${encodeURIComponent(comment.error)}`, 303);
   // Cart checkout passes an explicit method (the picker buttons). Express buy-now
   // passes none → use the store's default (available[0] — the default rail first).
   const selected: PaymentMethod =
@@ -335,10 +351,11 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     // or OpenNode order still posts the box, and /checkout refuses without it.
     if (isAcceptance(form.get('accept_terms'))) params.set('accept_terms', '1');
     // A personalised Buy now cannot put the buyer's text in that URL (request
-    // logs keep URLs). A 307 has the browser post this same body to /checkout,
-    // `custom:` fields included; `hop=start` tells /checkout it is the first
-    // view of the address step, not an address being submitted.
-    if (Object.keys(buyNowCustomValues).length > 0) {
+    // logs keep URLs), nor can a comment. A 307 has the browser post this same
+    // body to /checkout, `custom:` fields and the comment included; `hop=start`
+    // tells /checkout it is the first view of the address step, not an address
+    // being submitted.
+    if (Object.keys(buyNowCustomValues).length > 0 || comment.value) {
       params.set('hop', 'start');
       return new Response(null, { status: 307, headers: { location: `/checkout?${params}` } });
     }
@@ -468,6 +485,9 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     undefined,
     consentFor(terms, accepted),
     vatTerms(cfg.legal),
+    null,
+    null,
+    comment.value,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -522,7 +542,9 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 /**
  * Programmatic checkout for agents/tools. Body:
  *   { items: [{ product_id, quantity, variant_id?, extra_ids?: string[],
- *               customization?: { "cfld_…": string } }], method? }
+ *               customization?: { "cfld_…": string } }], method?, comment? }
+ * `comment` is the buyer's message on the order (ADR 0028), read only where
+ * the shop takes one (GET says so, with its ceiling) and refused elsewhere.
  * `product_id` is the prefixed public ID (`prod_…`) from the catalog; `slug` is
  * accepted as a documented convenience selector. `variant_id` (`var_…`) is
  * required for products that have a variant group; `extra_ids` (`xtra_…`) are
@@ -601,6 +623,21 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       },
       400,
     );
+  }
+
+  // The buyer's comment (ADR 0028). Sent to a shop that takes none, it is
+  // refused rather than dropped: the merchant would never read what the agent
+  // was asked to pass on, an embroidered first name included.
+  const rawComment = (body as { comment?: unknown }).comment;
+  if (rawComment !== undefined && rawComment !== null && typeof rawComment !== 'string') {
+    return cjson({ error: '"comment" must be a string.' }, 400);
+  }
+  if (typeof rawComment === 'string' && rawComment.trim() !== '' && !jsonSettings.orderCommentEnabled) {
+    return cjson({ error: 'This store does not take an order comment.' }, 400);
+  }
+  const jsonComment = checkOrderComment(rawComment, jsonSettings.orderCommentEnabled);
+  if (!jsonComment.ok) {
+    return cjson({ error: jsonComment.error, comment_max_length: ORDER_COMMENT_MAX_LENGTH }, 400);
   }
 
   const effectiveShipping = shippingFor(jsonSettings).config;
@@ -934,6 +971,9 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       undefined,
       consentFor(jsonTerms, jsonAccepted),
       vatTerms(cfg.legal),
+      null,
+      null,
+      jsonComment.value,
     );
     if (!lnReserved) {
       await deleteGuestAccessIfUnsettled(env.DB, lnPublicId);
@@ -987,6 +1027,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         shipping_label: chosen.label,
         total_cents: subtotalCents + chosen.amountCents,
         ship_to: shipTo,
+        ...(jsonComment.value && { comment: jsonComment.value }),
         items: lines.map((l) => ({
           slug: l.product.slug,
           name: l.name,
@@ -1031,6 +1072,9 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     undefined,
     consentFor(jsonTerms, jsonAccepted),
     vatTerms(cfg.legal),
+    null,
+    null,
+    jsonComment.value,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -1129,6 +1173,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       shipping_label: chosen.label,
       total_cents: subtotalCents + chosen.amountCents,
     }),
+    ...(jsonComment.value && { comment: jsonComment.value }),
     items: lines.map((l) => ({
       slug: l.product.slug,
       name: l.name,

@@ -139,6 +139,13 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
             </p>
           </section>
         )}
+        {/* What the buyer wrote before paying (ADR 0028), read back as they wrote it. */}
+        {order.buyer_comment && (
+          <section class="mt-8 rounded-lg border border-line bg-surface p-5">
+            <h2 class="font-serif text-2xl">{t('order.comment')}</h2>
+            <p class="mt-3 whitespace-pre-line break-words" data-order-comment>{order.buyer_comment}</p>
+          </section>
+        )}
         {items.some((item) => item.file_key) && isAccessToken(token) && (
           <section class="mt-8 rounded-lg border border-line bg-surface p-5">
             <h2 class="font-serif text-2xl">{t('order.downloads')}</h2>

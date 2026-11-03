@@ -84,8 +84,16 @@ export const COLUMN_POLICY = {
     refund_review_reason: { action: 'review', why: "Texte libre saisi par l'exploitant au moment d'un remboursement." },
     refund_reviewed_by: { action: 'internal', why: "L'identité d'un opérateur de la boutique, pas celle du client." },
     settlement_token: { action: 'internal', why: "Une revendication d'idempotence du règlement, jamais communiquée au client." },
+    buyer_comment: {
+      action: 'erase',
+      why: "Le message que le client a laissé sur sa commande (un prénom à broder, un mot pour un cadeau) : il peut nommer quelqu'un.",
+    },
   },
   checkout_reservations: {
+    buyer_comment: {
+      action: 'erase',
+      why: 'Le commentaire du client, effacé au règlement, ou trois jours après un abandon.',
+    },
     relay_point: { action: 'address', why: 'La copie du point relais que la commande recopie au règlement.' },
     customization: {
       action: 'erase',
@@ -202,7 +210,7 @@ export const ADDRESS_KEPT = ['country'];
 
 /** Columns whose NAME could hold a person. Deliberately over-broad. */
 export const SUSPECT_COLUMN =
-  /(^|_)(email|mail|address|adresse|phone|tel|name|city|postal|zip|country|token|url|note|reason|error|ip|user|customer|client|tracking|session|label|body|relay|point|customization|text)(s)?($|_)/i;
+  /(^|_)(email|mail|address|adresse|phone|tel|name|city|postal|zip|country|token|url|note|reason|error|ip|user|customer|client|tracking|session|label|body|relay|point|customization|comment|text)(s)?($|_)/i;
 
 /** Columns whose NAME says the row hangs off an order. */
 export const LINK_COLUMN = /^(order_id|order_public_id|provider_payment_id)$/;

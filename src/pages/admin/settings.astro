@@ -79,6 +79,7 @@ import { CACHE_TAG } from '../../features/cache/tags';
 import { purgeCacheTags } from '../../features/cache/purge';
 import { t, tn, type MessageKey } from '../../features/i18n';
 import Rich from '../../features/i18n/Rich.astro';
+import { ORDER_COMMENT_MAX_LENGTH } from '../../features/orders/comment';
 
 const capabilities: RuntimeCapabilities = {
   vault: vaultReady(),
@@ -149,7 +150,8 @@ if (Astro.request.method === 'POST') {
       feature === 'tax_enabled' ||
       feature === 'accounts_enabled' ||
       feature === 'image_optimize' ||
-      feature === 'shipping_enabled'
+      feature === 'shipping_enabled' ||
+      feature === 'order_comment_enabled'
     ) {
       let prerequisiteError = '';
       if (on && (feature === 'discounts_enabled' || feature === 'tax_enabled')) {
@@ -599,6 +601,12 @@ const baseFeatureRows: { key: string; label: string; desc: string; on: boolean }
     label: t('admin.settings.feature.buyNow.label'),
     desc: t('admin.settings.feature.buyNow.desc'),
     on: settings.buyNowEnabled,
+  },
+  {
+    key: 'order_comment_enabled',
+    label: t('admin.settings.feature.orderComment.label'),
+    desc: t('admin.settings.feature.orderComment.desc', { max: ORDER_COMMENT_MAX_LENGTH }),
+    on: settings.orderCommentEnabled,
   },
   {
     key: 'discounts_enabled',

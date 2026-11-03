@@ -67,6 +67,9 @@ export interface Order {
   /** Why the order carries no VAT — 'franchise' (art. 293 B du CGI, ADR 0024)
    *  — or null. An exempt order records a rate and an amount of 0. */
   vat_exemption: string | null;
+  /** What the buyer wrote before paying (ADR 0028), line breaks kept, or null.
+   *  Their text: shown escaped, never logged, emptied by the erasure. */
+  buyer_comment: string | null;
   created_at: string;
 }
 
@@ -510,11 +513,12 @@ export async function recordPaidOrder(
   // the address, when /checkout took it for a rail that returns none (a card
   // payment that went through it: Stripe then collects no address). And so
   // does what the buyer typed on a personalised product: the Lightning page
-  // settles from the pending row's own item list, which never carries it.
+  // settles from the pending row's own item list, which never carries it. And
+  // so does the comment they left on the order (ADR 0028), for every rail.
   const carried = o.reservationId
     ? await db
         .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization FROM checkout_reservations WHERE public_id = ?',
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization, buyer_comment FROM checkout_reservations WHERE public_id = ?',
         )
         .bind(o.reservationId)
         .first<{
@@ -525,6 +529,7 @@ export async function recordPaidOrder(
           relay_point: string | null;
           ship_address: string | null;
           customization: string | null;
+          buyer_comment: string | null;
         }>()
     : null;
   const orderValues = [
@@ -558,14 +563,15 @@ export async function recordPaidOrder(
     vat?.amountCents ?? null,
     vat?.exemption ?? null,
     carried?.relay_point ?? null,
+    carried?.buyer_comment ?? null,
   ] as const;
   const orderColumns =
-    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point';
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point, buyer_comment';
   const insertOrder = o.reservationId
     ? db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -577,7 +583,7 @@ export async function recordPaidOrder(
     : db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )
@@ -784,9 +790,9 @@ export async function recordPaidOrder(
     stmts.push(
       db
         .prepare(
-          // The order now holds the address and the buyer's personalisation
-          // text; the reservation lets both go.
-          `UPDATE checkout_reservations SET status = 'settled', ship_address = NULL, customization = NULL
+          // The order now holds the address, the buyer's personalisation text
+          // and their comment; the reservation lets all three go.
+          `UPDATE checkout_reservations SET status = 'settled', ship_address = NULL, customization = NULL, buyer_comment = NULL
             WHERE public_id = ? AND status IN ${settlementStatuses} AND EXISTS (
               SELECT 1 FROM orders
                WHERE provider_session_id = ? AND settlement_token = ?

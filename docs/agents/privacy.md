@@ -21,7 +21,8 @@ shopctl/src/privacy/   map      ← declared, and GATED
   justifies the VAT rate applied), and everything naming a parcel at a carrier
   goes to NULL — so does the text a buyer typed on a personalised product
   (`order_items.customization`, ADR 0022): the line keeps its name, price and
-  quantity, never what was embroidered on it. Exactly one row is deleted: `order_guest_access` — a token whose
+  quantity, never what was embroidered on it. The comment the buyer left on the
+  order (`orders.buyer_comment`, ADR 0028) goes to NULL too. Exactly one row is deleted: `order_guest_access` — a token whose
   order was anonymised is still a working key to that order's page.
 - **what would still go out to the person is closed.** A notification still
   `pending` or `processing` reads its recipient from the order when it is sent:

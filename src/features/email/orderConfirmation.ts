@@ -133,6 +133,21 @@ function relayBlock(order: Order, heading: string, withCode = false): { text: st
 }
 
 /**
+ * The comment the buyer left on the order (ADR 0028), under its heading, its
+ * line breaks kept. Their text: escaped in the HTML part like everything else,
+ * and never turned into a link.
+ */
+function commentBlock(order: Order, heading: string): { text: string[]; html: string } {
+  if (!order.buyer_comment) return { text: [], html: '' };
+  return {
+    text: [``, `${heading} :`, ...order.buyer_comment.split('\n')],
+    html:
+      emailLabel(heading) +
+      `<p style="margin:0;font-size:14px;line-height:1.6;">${escapeHtml(order.buyer_comment).replace(/\n/g, '<br>')}</p>`,
+  };
+}
+
+/**
  * Build the order-confirmation email for a paid order. `order.email` must be set.
  * `baseUrl` is the site origin (e.g. https://shop.example.com) for the order link.
  */
@@ -151,6 +166,7 @@ export function orderConfirmationEmail(
   const orderUrl = guestOrderUrl ?? null;
   const hasDigital = items.some((item) => Boolean(item.file_key));
   const relay = relayBlock(order, t('email.relay.heading'));
+  const comment = commentBlock(order, t('email.order.comment'));
 
   const rows = items.flatMap((it) => [
     `${it.name} × ${it.quantity}: ${money(it.price_cents * it.quantity)}`,
@@ -165,6 +181,7 @@ export function orderConfirmationEmail(
     ...rows,
     ...totalLines(order, money),
     ...relay.text,
+    ...comment.text,
     ...(hasDigital && orderUrl ? [``, t('email.order.download')] : []),
     ...(orderUrl ? [``, t('email.order.viewOrderLine', { url: orderUrl })] : []),
   ].join('\n');
@@ -186,6 +203,7 @@ export function orderConfirmationEmail(
       ) +
       vatExemptionHtml(order) +
       relay.html +
+      comment.html +
       (hasDigital && orderUrl
         ? `<p style="margin:20px 0 0;font-size:14px;">${escapeHtml(t('email.order.download'))}</p>`
         : '') +
@@ -223,6 +241,8 @@ export function orderNotificationEmail(
   const money = (cents: number) => formatPrice(cents, order.currency);
   const shipText = formatShipAddress(order);
   const relay = relayBlock(order, t('email.notification.relayPoint'), true);
+  // Read before the lines: it may change how they are made or packed.
+  const comment = commentBlock(order, t('email.notification.comment'));
   const adminUrl = `${baseUrl}/admin/orders/${order.public_id ?? order.id}`;
 
   const rows = items.flatMap((it) => [
@@ -239,6 +259,7 @@ export function orderNotificationEmail(
     `${t('email.notification.shipTo')} :`,
     shipText,
     ...relay.text,
+    ...comment.text,
     ``,
     ...rows,
     ...totalLines(order, money),
@@ -261,6 +282,7 @@ export function orderNotificationEmail(
       emailLabel(t('email.notification.shipTo')) +
       `<p style="margin:0;font-size:14px;line-height:1.6;">${escapeHtml(shipText).replace(/\n/g, '<br>')}</p>` +
       relay.html +
+      comment.html +
       emailItemsTable(
         items.map((it) => ({
           thumb: thumbCell(it.image_key, baseUrl, imageDelivery),

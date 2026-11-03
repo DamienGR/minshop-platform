@@ -240,8 +240,8 @@ async function hideTerminalGuestAccess(db: D1Database, scan: number): Promise<nu
   const forgets = acted.map((row) =>
     db
       .prepare(
-        `UPDATE checkout_reservations SET ship_address = NULL, customization = NULL
-          WHERE public_id = ?1 AND (ship_address IS NOT NULL OR customization IS NOT NULL)
+        `UPDATE checkout_reservations SET ship_address = NULL, customization = NULL, buyer_comment = NULL
+          WHERE public_id = ?1 AND (ship_address IS NOT NULL OR customization IS NOT NULL OR buyer_comment IS NOT NULL)
             AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.public_id = ?1)`,
       )
       .bind(row.id),

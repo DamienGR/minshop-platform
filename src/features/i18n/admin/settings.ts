@@ -131,6 +131,8 @@ export const settings = {
   'admin.settings.feature.cart.desc': 'Ajout au panier et passage de commande. Désactivé, la boutique devient un catalogue à consulter, sans achat.',
   'admin.settings.feature.buyNow.label': 'Achat immédiat',
   'admin.settings.feature.buyNow.desc': 'Bouton « Acheter maintenant » sur les fiches produit, pour une commande express — fonctionne même panier désactivé.',
+  'admin.settings.feature.orderComment.label': 'Commentaire de commande',
+  'admin.settings.feature.orderComment.desc': 'Un champ facultatif du panier, de l’achat immédiat et de la page de commande, où l’acheteur laisse un message de {max} caractères au plus : une précision de livraison, un message pour un cadeau, une personnalisation. Il se lit sur la commande, dans l’avis de nouvelle commande et dans la confirmation envoyée à l’acheteur.',
   'admin.settings.feature.discounts.label': 'Codes de remise',
   'admin.settings.feature.discounts.desc': 'Affiche le champ de code de remise au paiement. Les codes se créent dans le tableau de bord Stripe.',
   'admin.settings.feature.tax.label': 'Taxes automatiques',

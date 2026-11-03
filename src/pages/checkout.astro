@@ -65,6 +65,8 @@ import { t, tn, formatNumber } from '../features/i18n';
 import Rich from '../features/i18n/Rich.astro';
 import { consentFor, isAcceptance, readTermsGate } from '../features/legal/terms';
 import { vatTerms } from '../features/legal/vat';
+import { ORDER_COMMENT_FIELD, checkOrderComment } from '../features/orders/comment';
+import OrderCommentField from '../features/orders/OrderCommentField.astro';
 
 const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
@@ -230,6 +232,15 @@ const termsAccepted = isAcceptance(
   isPost ? fld('accept_terms') : Astro.url.searchParams.get('accept_terms'),
 );
 
+// The buyer's comment (ADR 0028): posted by the cart or Buy now (api/checkout.ts
+// answers 307 so it never rides a URL), typed or changed on the address step,
+// then carried as a hidden field to the step that places the order. Never in a
+// query string, never logged.
+const commentOn = Astro.locals.settings.orderCommentEnabled;
+const commentPosted = isPost ? String(form!.get(ORDER_COMMENT_FIELD) ?? '') : '';
+const comment = checkOrderComment(commentPosted, commentOn);
+const commentValue = comment.ok ? comment.value : null;
+
 const editAddressHref = (() => {
   const params = new URLSearchParams({ method: rail });
   if (carry) params.set('product_id', carry);
@@ -304,6 +315,7 @@ if (submitted) {
   if (!addr.postal) errors.push(t('checkout.error.postal'));
   if (addr.country.length !== 2) errors.push(t('checkout.error.country'));
   if (askPhone && !plausiblePhone(addr.phone)) errors.push(t('checkout.error.phone'));
+  if (!comment.ok) errors.push(comment.error);
 
   if (errors.length === 0) {
     const relay = relayOn ? await getRelayPointSearch(env.DB) : null;
@@ -450,6 +462,7 @@ if (submitted) {
             // Stripe's webhook returns no address once its page asked none:
             // the reservation carries this one to the order, and lets it go.
             rail === 'stripe' ? shippingAddress : null,
+            commentValue,
           );
           if (!reserved) {
             await deleteGuestAccessIfUnsettled(env.DB, publicId);
@@ -616,6 +629,7 @@ const distanceLabel = (meters: number | null): string | null =>
           <input type="hidden" name="postal" value={addr.postal} />
           <input type="hidden" name="country" value={addr.country} />
           {askPhone && <input type="hidden" name="phone" value={addr.phone} />}
+          {commentValue && <input type="hidden" name={ORDER_COMMENT_FIELD} value={commentValue} />}
           <input type="hidden" name="shipping_label" value={relayOption.label} />
 
           <div class="rounded-lg border border-line bg-surface p-4 text-sm">
@@ -634,7 +648,13 @@ const distanceLabel = (meters: number | null): string | null =>
                 })}
               </div>
             </div>
-            {carryCustom.length > 0 ? (
+            {commentValue && (
+              <div class="mt-2">
+                <div class="font-medium">{t('checkout.comment.yours')}</div>
+                <p class="whitespace-pre-line break-words text-muted" data-order-comment>{commentValue}</p>
+              </div>
+            )}
+            {carryCustom.length > 0 || commentValue ? (
               <button
                 type="submit"
                 formaction={editAddressAction}
@@ -746,6 +766,7 @@ const distanceLabel = (meters: number | null): string | null =>
           <input type="hidden" name="postal" value={addr.postal} />
           <input type="hidden" name="country" value={addr.country} />
           {askPhone && <input type="hidden" name="phone" value={addr.phone} />}
+          {commentValue && <input type="hidden" name={ORDER_COMMENT_FIELD} value={commentValue} />}
 
           <div class="rounded-lg border border-line bg-surface p-4 text-sm">
             <div class="mb-1 font-medium">{t('checkout.shipTo')}</div>
@@ -754,7 +775,13 @@ const distanceLabel = (meters: number | null): string | null =>
               {addr.line2 ? `, ${addr.line2}` : ''}, {addr.city} {addr.state} {addr.postal}, {addr.country}
               {askPhone && <div>{t('checkout.phoneOnFile', { numero: addr.phone })}</div>}
             </div>
-            {carryCustom.length > 0 ? (
+            {commentValue && (
+              <div class="mt-2">
+                <div class="font-medium">{t('checkout.comment.yours')}</div>
+                <p class="whitespace-pre-line break-words text-muted" data-order-comment>{commentValue}</p>
+              </div>
+            )}
+            {carryCustom.length > 0 || commentValue ? (
               <button
                 type="submit"
                 formaction={editAddressAction}
@@ -912,6 +939,8 @@ const distanceLabel = (meters: number | null): string | null =>
               </label>
             )
           }
+          {/* Brought back as typed when it was refused, so the buyer can shorten it. */}
+          {commentOn && <OrderCommentField value={comment.ok ? commentValue : commentPosted} />}
           <button
             type="submit"
             class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover"

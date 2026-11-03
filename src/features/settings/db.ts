@@ -22,6 +22,7 @@ export type SettingKey =
   | 'payment_methods_disabled' // CSV of payment methods the admin switched off
   | 'cart_enabled' // '0' = cart/checkout off (browse-only catalog); absent = on
   | 'buy_now_enabled' // '0' = hide "Buy now" (cart-only purchase); absent = on
+  | 'order_comment_enabled' // '1' = the buyer may leave a comment before paying (ADR 0028); absent = off
   | 'search_provider' // 'fts' | 'vector' — overrides config/SEARCH_PROVIDER; absent = default
   // Runtime overrides of build-time config toggles ('1'/'0'; absent = inherit config).
   | 'discounts_enabled' // overrides config.discounts.enabled
@@ -86,6 +87,9 @@ export interface StoreSettings {
   cartEnabled: boolean;
   /** "Buy now" instant-checkout button shown (default true). Requires cartEnabled. */
   buyNowEnabled: boolean;
+  /** The comment field of the cart, Buy now and /checkout (ADR 0028). Default
+   *  OFF: a core upgrade does not add a field to a shop's checkout unasked. */
+  orderCommentEnabled: boolean;
   /** Search backend chosen at runtime, or null to use the build-time default
    *  (config.search.provider / SEARCH_PROVIDER). */
   searchProvider: 'fts' | 'vector' | null;
@@ -222,6 +226,7 @@ export function parseStoreSettings(
       .filter(Boolean),
     cartEnabled: map.get('cart_enabled') !== '0',
     buyNowEnabled: map.get('buy_now_enabled') !== '0',
+    orderCommentEnabled: map.get('order_comment_enabled') === '1',
     searchProvider: map.get('search_provider') === 'vector' ? 'vector'
       : map.get('search_provider') === 'fts' ? 'fts'
       : null,

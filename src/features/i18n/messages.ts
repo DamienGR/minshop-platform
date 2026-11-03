@@ -213,6 +213,17 @@ export const fr = {
   'checkout.error.lightningUnavailable': 'Lightning est momentanément indisponible. Réessayez dans un instant, ou choisissez un autre moyen de paiement.',
   'checkout.error.railUnavailable': 'Ce moyen de paiement est momentanément indisponible. Réessayez dans un instant, ou choisissez-en un autre.',
 
+  // ─── Commentaire de commande (ADR 0028) ────────────────────────────────────────
+  // The message the buyer may leave before paying, when the shop takes one. Read
+  // back wherever the order is: its page, the receipt, the merchant's notice.
+  'checkout.comment.label': 'Un mot sur votre commande (facultatif)',
+  'checkout.comment.hint': 'Une précision pour la livraison, un message pour un cadeau, une personnalisation : {max} caractères au plus.',
+  'checkout.comment.tooLong': 'Votre commentaire dépasse {max} caractères. Raccourcissez-le pour continuer.',
+  'checkout.comment.yours': 'Votre commentaire',
+  'order.comment': 'Votre commentaire',
+  'email.order.comment': 'Votre commentaire',
+  'email.notification.comment': 'Commentaire de l’acheteur',
+
   // ─── Conditions générales de vente ─────────────────────────────────────────────
   'terms.accept': 'J’ai lu et j’accepte les',
   'terms.linkLabel': 'conditions générales de vente',
