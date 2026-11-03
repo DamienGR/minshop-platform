@@ -1,4 +1,5 @@
 import { fr } from './messages.ts';
+import { richSegments, type RichSegment } from './rich.ts';
 
 /**
  * The storefront's string lookup.
@@ -29,12 +30,28 @@ export type MessageParams = Record<string, string | number>;
  * reads as a sentence the translator meant to end there.
  */
 export function t(key: MessageKey, params?: MessageParams): string {
-  const message = CATALOG[key];
+  return substitute(CATALOG[key], params);
+}
+
+function substitute(message: string, params?: MessageParams): string {
   if (!params) return message;
   return message.replace(/\{(\w+)\}/g, (placeholder, name: string) => {
     const value = params[name];
     return value === undefined ? placeholder : String(value);
   });
+}
+
+/**
+ * A sentence with marked words (`rich.ts`), as runs to render: the marks are
+ * read off the catalog first, the placeholders filled in after, run by run, so
+ * a value is never read as a mark. Rendered by `Rich.astro`, which is what a
+ * template calls.
+ */
+export function tRich(key: MessageKey, params?: MessageParams): RichSegment[] {
+  return richSegments(CATALOG[key]).map((segment) => ({
+    ...segment,
+    text: substitute(segment.text, params),
+  }));
 }
 
 /**
@@ -57,5 +74,6 @@ export function tn(
   return t(form, { count, ...params });
 }
 
+export type { RichMark, RichSegment } from './rich.ts';
 export { LOCALE, LANG, DEFAULT_TIME_ZONE, DEFAULT_CURRENCY } from './locale.ts';
 export { formatNumber, formatDateTime, NARROW_NBSP } from './format.ts';

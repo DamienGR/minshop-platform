@@ -2,6 +2,7 @@
 import { formatPrice } from '../../../config';
 import type { PendingPayment } from '../lightning/pending';
 import { t } from '../../i18n';
+import Rich from '../../i18n/Rich.astro';
 
 // Simulated checkout view. Rendered by /pay/[publicId] for demo-backed payments.
 // The form posts back to that same route, which calls settleDemoCheckout().
@@ -37,8 +38,7 @@ try {
   <div class="mb-6 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-4 text-center text-amber-900">
     <p class="text-base font-bold uppercase tracking-wide">{t('pay.demo.banner')}</p>
     <p class="mt-1 text-sm">
-      {t('pay.demo.explain')}
-      <code class="rounded bg-amber-100 px-1">demo</code> {t('pay.demo.explainAfter')}
+      <Rich message="pay.demo.explain" codeClass="rounded bg-amber-100 px-1" />
     </p>
   </div>
 

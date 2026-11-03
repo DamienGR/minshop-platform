@@ -450,6 +450,12 @@ today's config.
   misleading "Unable to assign attributes when using <> Fragment shorthand"
   error. Fix: flip operands (`0 >= x`), use `!==`, or compute the boolean in
   frontmatter. (`>` is fine; only `<` bites.)
+- **Astro drops a line break between two inline pieces.** `{t('a')}` on one
+  line and `<strong>…</strong>` on the next render glued: "mot<strong>gras</strong>".
+  A sentence with a bold word, a code word or a link is ONE catalog key with
+  `**gras**`, `` `code` `` or `[lien]` marks, rendered by
+  `<Rich message="…" />` (`features/i18n/Rich.astro`), never fragments
+  (ticket #160). `test/i18n/inline-spacing.test.mjs` fails on the pattern.
 - **No `main`/`assets` in `wrangler.jsonc`** — the adapter supplies the worker
   entry; setting `main` breaks a clean build.
 - **CSRF on POST:** Astro rejects cross-origin form POSTs (403). Browsers send

@@ -65,8 +65,7 @@ export const settings = {
   'admin.settings.general.storeName': 'Nom de la boutique',
   'admin.settings.general.timeZone': 'Fuseau horaire de la boutique',
   'admin.settings.general.timeZonePlaceholder': 'Rechercher, p. ex. Europe/Paris',
-  'admin.settings.general.timeZoneHint': 'Le fuseau horaire sert à afficher les dates, enregistrées en UTC. Indiquez un nom IANA, comme',
-  'admin.settings.general.timeZoneHintOr': 'ou',
+  'admin.settings.general.timeZoneHint': 'Le fuseau horaire sert à afficher les dates, enregistrées en UTC. Indiquez un nom IANA, comme `UTC` ou `Europe/Paris`.',
   'admin.settings.logo.heading': 'Logo',
   'admin.settings.logo.currentAlt': 'Logo actuel',
   'admin.settings.logo.choose': 'Choisir un logo',
@@ -151,8 +150,7 @@ export const settings = {
   'admin.settings.images.cloudflare.setup': 'Connectez un domaine personnalisé R2 en HTTPS, définissez IMAGE_BASE_URL et activez les Transformations pour la zone de la vitrine.',
   'admin.settings.images.cloudflare.quota': 'Consomme votre quota Cloudflare Image Transformations. Chaque combinaison unique de source et de paramètres compte comme une transformation distincte.',
   'admin.settings.images.save': 'Enregistrer la diffusion des images',
-  'admin.settings.images.note.before': 'Ce réglage porte sur la diffusion. L’option',
-  'admin.settings.images.note.after': 'de la section Général est distincte : elle modifie les fichiers source des nouveaux imports.',
+  'admin.settings.images.note': 'Ce réglage porte sur la diffusion. L’option **{option}** de la section Général est distincte : elle modifie les fichiers source des nouveaux imports.',
 
   // ─── Paiements ─────────────────────────────────────────────────────────────────
   'admin.settings.payments.intro': 'Chaque moyen de paiement regroupe ci-dessous ses réglages et ses clés. Un moyen passe en service dès que sa clé est renseignée (et, pour Lightning, l’URL de son nœud) ; la commande de démonstration est proposée tant qu’aucun moyen réel n’est en service. Les clés sont chiffrées dans D1, en écriture seule : elles ne sont plus jamais affichées.',
@@ -252,9 +250,7 @@ export const settings = {
   'admin.settings.emailTest.unknownError': 'erreur inconnue',
 
   // ─── Protection anti-robots ────────────────────────────────────────────────────
-  'admin.settings.turnstile.intro.before': 'Défi Cloudflare Turnstile à la connexion à l’administration et à celle des comptes clients. Désactivé par défaut. Nécessite un',
-  'admin.settings.turnstile.intro.link': 'widget Turnstile',
-  'admin.settings.turnstile.intro.after': '(clé de site et clé secrète). Les clés de test de Cloudflare, toujours acceptées, suffisent pour des essais en local.',
+  'admin.settings.turnstile.intro': 'Défi Cloudflare Turnstile à la connexion à l’administration et à celle des comptes clients. Désactivé par défaut. Nécessite un [widget Turnstile] (clé de site et clé secrète). Les clés de test de Cloudflare, toujours acceptées, suffisent pour des essais en local.',
   'admin.settings.turnstile.enable': 'Activer Turnstile',
   'admin.settings.turnstile.needKeys': 'Ajoutez les deux clés avant d’activer',
   'admin.settings.turnstile.siteKey': 'Clé de site (publique)',

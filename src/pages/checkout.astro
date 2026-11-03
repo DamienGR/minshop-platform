@@ -62,6 +62,7 @@ import { purgeStockProductCache } from '../features/cache/purge';
 import { paymentRailAction } from '../features/payments/labels';
 import { holdSeconds } from '../features/payments/bankTransfer';
 import { t, tn, formatNumber } from '../features/i18n';
+import Rich from '../features/i18n/Rich.astro';
 import { consentFor, isAcceptance, readTermsGate } from '../features/legal/terms';
 import { vatTerms } from '../features/legal/vat';
 
@@ -573,8 +574,7 @@ const distanceLabel = (meters: number | null): string | null =>
         <div class="mb-6 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-4 text-center text-amber-900">
           <p class="text-base font-bold uppercase tracking-wide">{t('checkout.demo.banner')}</p>
           <p class="mt-1 text-sm">
-            {t('checkout.demo.explain')}
-            <code class="rounded bg-amber-100 px-1">demo</code> {t('checkout.demo.explainAfter')}
+            <Rich message="checkout.demo.explain" codeClass="rounded bg-amber-100 px-1" />
           </p>
         </div>
       )
