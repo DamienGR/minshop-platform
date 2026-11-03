@@ -1,6 +1,6 @@
 # ADR 0026 — Des étiquettes libres sur les produits, que le thème lit
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #166 par Damien, le 2026-11-03)
 - **Date** : 2026-11-03
 - **Jalon** : après le pilote (plan §13.8) ; aucun des jalons 0 à 10
 
