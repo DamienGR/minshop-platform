@@ -10,6 +10,8 @@ import {
   descendantIds,
 } from '../../../../features/categories/db';
 import { parsePublicId } from '../../../../features/ids/publicId';
+import { mediaUrl } from '../../../../features/media/url';
+import { getConfig } from '../../../../config';
 import { t } from '../../../../features/i18n';
 
 // The route param is the cat_ public ID; numeric row ids are not accepted.
@@ -26,6 +28,7 @@ const parentOptions = flattenTree(buildTree(await listCategories(env.DB))).filte
   (o) => !blocked.has(o.id),
 );
 const error = Astro.url.searchParams.get('error');
+const imageUrl = category.image_key ? mediaUrl(category.image_key, getConfig().images.baseUrl) : null;
 ---
 
 <AdminLayout title={t('admin.categories.edit.title', { nom: category.name })} active="categories">
@@ -36,6 +39,7 @@ const error = Astro.url.searchParams.get('error');
     submitLabel={t('admin.categories.edit.submit')}
     category={category}
     parentOptions={parentOptions}
+    imageUrl={imageUrl}
     error={error}
   />
 </AdminLayout>

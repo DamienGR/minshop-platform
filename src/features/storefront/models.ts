@@ -61,6 +61,21 @@ export interface StorefrontLink {
 }
 
 /**
+ * A category as a theme may present it — its photo, its sentence, and the line
+ * of its sub-categories under it (ticket #158). Extends the link, so a theme
+ * that prints only `text` and `href` reads it as before.
+ */
+export interface StorefrontCategory extends StorefrontLink {
+  /** Plain text, already trimmed; null when the merchant wrote none. */
+  description: string | null;
+  /** Resolved like a card image; null when the category has none — a theme
+   *  decides what an imageless category looks like. */
+  image: StorefrontImage | null;
+  /** Its direct sub-categories, sorted by name. */
+  children: StorefrontLink[];
+}
+
+/**
  * Everything the header and footer need, for every route that renders them.
  *
  * The shell is not browse-only: it wraps cart, checkout, payment, account, and
@@ -122,7 +137,8 @@ export interface StorefrontPaginationModel {
 export interface CatalogPageModel {
   eyebrow: string;
   heading: string;
-  categories: StorefrontLink[];
+  /** The top-level categories, sorted by name, each with its sub-categories. */
+  categories: StorefrontCategory[];
   products: ProductCardModel[];
   sort: StorefrontSortModel;
   pagination: StorefrontPaginationModel;

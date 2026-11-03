@@ -146,6 +146,15 @@ describe('the backup pipeline', () => {
     it('reports a key nothing owns rather than inventing a row for it', () => {
       expect(objectInventory(dump).orphans).toEqual(['media/orpheline.jpg']);
     });
+
+    it('reads a category image the same way (migration 0052)', () => {
+      const withCategory = {
+        ...dump,
+        categories: { columns: ['image_key'], rows: [{ image_key: 'media/b.jpg' }, { image_key: 'media/perdue.jpg' }, { image_key: null }] },
+      };
+      expect(objectInventory(withCategory).orphans).toEqual(['media/orpheline.jpg', 'media/perdue.jpg']);
+      expect(objectInventory(withCategory).images).toEqual(['media/a.jpg', 'media/b.jpg']);
+    });
   });
 
   /** Two dumps of unchanged rows must produce the same bytes, or verification

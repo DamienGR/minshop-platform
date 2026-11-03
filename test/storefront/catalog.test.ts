@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import Catalog from '#theme/Catalog.astro';
 import AltCatalog from './fixtures/catalog/AltCatalog.astro';
-import { buildPaginationModel, buildSortModel } from '../../src/features/storefront/catalog';
+import {
+  buildCatalogCategories,
+  buildPaginationModel,
+  buildSortModel,
+} from '../../src/features/storefront/catalog';
+import type { Category } from '../../src/features/categories/db';
 import { buildProductCard } from '../../src/features/storefront/productCard';
 import type { CatalogPageModel } from '../../src/features/storefront/models';
 import type { Product } from '../../src/features/products/db';
@@ -34,7 +39,9 @@ const product = (n: number, overrides: Partial<Product> = {}): Product => ({
 const model = (overrides: Partial<CatalogPageModel> = {}): CatalogPageModel => ({
   eyebrow: 'Shop',
   heading: 'All products',
-  categories: [{ text: 'Apparel', href: '/categories/apparel' }],
+  categories: [
+    { text: 'Apparel', href: '/categories/apparel', description: null, image: null, children: [] },
+  ],
   // Mirrors the loader: only the first card is the page's likely LCP image.
   products: [product(1), product(2)].map((p, i) => buildProductCard(p, { currency: 'eur', priority: i === 0 })),
   sort: buildSortModel('/products', 'newest', 'desc'),
@@ -46,6 +53,59 @@ const render = async (component: unknown, value: CatalogPageModel) => {
   const container = await AstroContainer.create();
   return container.renderToString(component as never, { props: { model: value } });
 };
+
+const category = (id: number, name: string, overrides: Partial<Category> = {}): Category => ({
+  id,
+  public_id: `cat_k7m2qx8vn${id}`,
+  name,
+  slug: name.toLowerCase().replace(/[^a-z]+/g, '-'),
+  parent_id: null,
+  image_key: null,
+  description: null,
+  created_at: '2026-01-01T00:00:00Z',
+  ...overrides,
+});
+
+describe('buildCatalogCategories', () => {
+  const tree = [
+    category(1, 'Se laver', { image_key: 'media/laver.jpg', description: 'Pour la salle de bain.' }),
+    category(2, 'Sacs à dos', { parent_id: 3 }),
+    category(3, 'Partir', { image_key: 'media/partir.jpg' }),
+    category(4, 'Accessoires', { parent_id: 3 }),
+    category(5, 'Bijoux'),
+    category(6, 'Boucles', { parent_id: 5 }),
+    category(7, 'Grand-enfant', { parent_id: 6 }),
+  ];
+
+  it('lists the top level by name, each with its direct sub-categories', () => {
+    const built = buildCatalogCategories(tree, {});
+
+    expect(built.map((c) => c.text)).toEqual(['Bijoux', 'Partir', 'Se laver']);
+    expect(built.find((c) => c.text === 'Partir')?.children).toEqual([
+      { text: 'Accessoires', href: '/categories/accessoires' },
+      { text: 'Sacs à dos', href: '/categories/sacs-dos' },
+    ]);
+    // Direct children only: a grandchild is its parent's business.
+    expect(built.find((c) => c.text === 'Bijoux')?.children.map((c) => c.text)).toEqual(['Boucles']);
+  });
+
+  it('resolves the image and carries the description, null when absent', () => {
+    const built = buildCatalogCategories(tree, { sizes: '352px' });
+    const laver = built.find((c) => c.text === 'Se laver');
+    const bijoux = built.find((c) => c.text === 'Bijoux');
+
+    expect(laver?.image).toMatchObject({ src: '/images/media/laver.jpg', alt: 'Se laver', priority: false });
+    expect(laver?.description).toBe('Pour la salle de bain.');
+    expect(bijoux?.image).toBeNull();
+    expect(bijoux?.description).toBeNull();
+  });
+
+  it('publishes no storage key beyond the resolved URL, and no row id', () => {
+    const [first] = buildCatalogCategories([category(9, 'Seul', { image_key: 'media/a.jpg' })], {});
+
+    expect(Object.keys(first).sort()).toEqual(['children', 'description', 'href', 'image', 'text']);
+  });
+});
 
 describe('buildSortModel', () => {
   it('names sort and direction explicitly, defaults included', () => {
@@ -131,6 +191,28 @@ describe('the store-owned catalog', () => {
     expect(html).toContain('href="/categories/apparel"');
     expect(html).toContain('href="/products/item-1"');
     expect(html).toContain('10,01\u00a0\u20ac');
+  });
+
+  it('renders the same with or without category images and descriptions', async () => {
+    // Ticket #158: the shipped themes read neither, so a merchant filling them
+    // in for a theme that does changes nothing on these.
+    const bare = await render(Catalog, model());
+    const dressed = await render(
+      Catalog,
+      model({
+        categories: [
+          {
+            text: 'Apparel',
+            href: '/categories/apparel',
+            description: 'Une phrase.',
+            image: { src: '/images/media/apparel.jpg', alt: 'Apparel', priority: false },
+            children: [{ text: 'Hats', href: '/categories/hats' }],
+          },
+        ],
+      }),
+    );
+
+    expect(dressed).toBe(bare);
   });
 
   it('announces an empty catalog instead of rendering a blank grid', async () => {

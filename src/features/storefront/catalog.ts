@@ -1,15 +1,16 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { listProducts } from '../products/db';
-import { childrenOf } from '../categories/db';
+import { childrenOf, type Category } from '../categories/db';
 import { orderByClause, parseStoreSortQuery, STORE_SORTS } from '../products/sort';
 import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../../pagination';
 import { readCatalogRows } from './reads';
 import { addCacheTags, productCacheTags } from '../cache/tags';
 import type { ImageDelivery } from '../products/image';
-import { buildProductCard } from './productCard';
+import { buildProductCard, buildStorefrontImage, type StorefrontImageOptions } from './productCard';
 import type {
   CatalogPageModel,
   StorefrontPaginationItem,
+  StorefrontCategory,
   StorefrontPaginationModel,
   StorefrontSortModel,
 } from './models';
@@ -103,6 +104,25 @@ export function buildPaginationModel(
   };
 }
 
+/**
+ * The top-level categories, each with its image, its description and its
+ * sub-categories (ticket #158). Built from the list the page already read —
+ * the whole tree is one statement in the catalog batch, so a theme writing
+ * "Sacs à dos · Se débarbouiller · Accessoires" under a category costs nothing.
+ */
+export function buildCatalogCategories(
+  categories: Category[],
+  image: StorefrontImageOptions,
+): StorefrontCategory[] {
+  const link = (category: Category) => ({ text: category.name, href: `/categories/${category.slug}` });
+  return childrenOf(categories, null).map((category) => ({
+    ...link(category),
+    description: category.description ?? null,
+    image: category.image_key ? buildStorefrontImage(category.image_key, category.name, image) : null,
+    children: childrenOf(categories, category.id).map(link),
+  }));
+}
+
 export interface CatalogPageOptions {
   /** The path currently rendering — sort and page links stay on it, so the
    *  catalog works at both `/` and `/products` without hardcoding either. */
@@ -149,10 +169,11 @@ export async function loadCatalogPage(
   return {
     eyebrow: options.eyebrow,
     heading: options.heading,
-    categories: childrenOf(categories, null).map((category) => ({
-      text: category.name,
-      href: `/categories/${category.slug}`,
-    })),
+    categories: buildCatalogCategories(categories, {
+      baseUrl: options.imageBaseUrl,
+      delivery: options.delivery,
+      sizes: CARD_SIZES,
+    }),
     products: products.map((product, index) =>
       buildProductCard(product, {
         baseUrl: options.imageBaseUrl,
