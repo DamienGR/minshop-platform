@@ -19,6 +19,7 @@ import type { CatalogPageModel } from '../../src/features/storefront/models';
 const declarations = import.meta.glob<{ texts?: unknown }>('../../src/themes/*/texts.ts', { eager: true });
 
 const model = (texts: CatalogPageModel['texts']): CatalogPageModel => ({
+  route: 'home',
   eyebrow: 'Boutique',
   heading: 'Tout',
   categories: [],

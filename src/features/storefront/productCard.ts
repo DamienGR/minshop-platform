@@ -66,6 +66,12 @@ export interface ProductCardOptions extends StorefrontImageOptions {
   currency: string;
 }
 
+/** A product's storefront URL: its card's `href` and its page's (ticket #84),
+ *  built in one place so the two cannot disagree. */
+export function productHref(slug: string): string {
+  return `/products/${slug}`;
+}
+
 /**
  * A product row as a card. Throws on a row without a public ID, matching the
  * catalog serializers: that is a deploy-order bug, and failing loudly beats
@@ -92,7 +98,7 @@ export function buildProductCard(
   return {
     id: requirePublicId(product.public_id, product.id, 'product'),
     name: product.name,
-    href: `/products/${product.slug}`,
+    href: productHref(product.slug),
     image: buildStorefrontImage(product.image_key, product.name, options),
     // The store's currency, not the row's: a product row can carry a legacy
     // currency, and the catalog has always displayed one consistent currency.

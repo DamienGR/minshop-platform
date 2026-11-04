@@ -128,6 +128,16 @@ export function buildCatalogCategories(
   }));
 }
 
+/**
+ * Which route a catalog is rendered at (ticket #84). The list is mounted at
+ * `/` and at `/products` only (ProductList.astro), and `/` renders it only when
+ * it IS the home: a home pointed at a page or a product is a rewrite to that
+ * page, never this list. So the path alone says which one this is.
+ */
+export function catalogRoute(base: string): CatalogPageModel['route'] {
+  return base === '/' ? 'home' : 'products';
+}
+
 export interface CatalogPageOptions {
   /** The path currently rendering — sort and page links stay on it, so the
    *  catalog works at both `/` and `/products` without hardcoding either. */
@@ -187,6 +197,7 @@ export async function loadCatalogPage(
   );
 
   return {
+    route: catalogRoute(options.base),
     eyebrow: options.eyebrow,
     heading: options.heading,
     categories: buildCatalogCategories(categories, {

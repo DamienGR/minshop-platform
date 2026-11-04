@@ -160,6 +160,13 @@ export interface StorefrontPaginationModel {
  * URL stays clean and cacheable.
  */
 export interface CatalogPageModel {
+  /**
+   * Which of the two routes is rendering (ticket #84): `home` at `/`, where the
+   * catalog is the home page, `products` at `/products`, the list's own URL.
+   * A theme that makes its home a showcase and keeps `/products` a list reads
+   * THIS, never the shape of a sort or page link.
+   */
+  route: 'home' | 'products';
   eyebrow: string;
   heading: string;
   /** The top-level categories, sorted by name, each with its sub-categories. */
@@ -306,6 +313,10 @@ export interface ProductSeoModel {
 export interface ProductDetailModel {
   id: string;
   name: string;
+  /** Root-relative product URL, the same string as this product's card `href`
+   *  (ticket #84): a theme that keys its own data by product reads the same
+   *  key on the card and on the page, and a renamed product keeps it. */
+  href: string;
   /** Raw Markdown source (also what the catalog API returns). */
   description: string | null;
   /** Rendered, sanitized HTML (renderMarkdown: raw HTML escaped, schemes
