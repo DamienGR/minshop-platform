@@ -1,7 +1,11 @@
 ---
 export const prerender = false;
+import { ADMIN_HINT_COOKIE } from '../../features/auth/adminHint';
 // Clears the admin session cookie and returns to the login form. Reached only
-// when already authenticated (it's under the protected /admin/* path).
+// when already authenticated (it's under the protected /admin/* path). The
+// storefront's edit hint goes with it, so a shared computer stops offering the
+// shortcut at once rather than at the next refused probe.
 Astro.cookies.delete('admin_session', { path: '/' });
+Astro.cookies.delete(ADMIN_HINT_COOKIE, { path: '/' });
 return Astro.redirect('/admin/login', 303);
 ---

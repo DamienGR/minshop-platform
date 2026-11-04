@@ -153,6 +153,10 @@ export const products = {
   'admin.products.customization.error.maxLength': 'le nombre de caractères doit être un entier de 1 à {max}.',
   'admin.products.customization.error.tooMany': 'Un produit demande au plus {max} champs de personnalisation.',
 
+  // ─── Raccourci de la vitrine (ticket #178) ──────────────────────────────────────
+  // Shown on the storefront's product page, to the admin alone.
+  'admin.products.storefrontEdit': 'Modifier ce produit',
+
   // ─── Barre de filtres (FilterBar, partagée avec les commandes) ─────────────────
   'admin.filterBar.apply': 'Appliquer',
   'admin.filterBar.result': 'résultat',

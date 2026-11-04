@@ -48,6 +48,13 @@ What it asserts, and why each one is here rather than in vitest:
   the form without the script, and the script used to throw the reason away
   (certification, step 10). `serve.mjs` gives the fixture store an admin
   password (`admin.mjs`) and a vault for it; skipped against `BASE_URL`.
+- **admin shortcut** (`admin-edit-link.spec.mjs`) — the « Modifier ce
+  produit » button of a product page (ticket #178): shown to the logged-in
+  admin and leading to the product's screen, absent for a shopper, whose page
+  sends no request to `/api/admin`, and gone after logout or when the hint
+  outlived the session. Only a browser runs the script that joins the hint to
+  the probe; the security gate checks each half on its own. Skipped against
+  `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

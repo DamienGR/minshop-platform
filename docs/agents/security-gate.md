@@ -42,6 +42,17 @@ statement. The brute-force section proves it with a parallel burst, each
 client given its own `cf-connecting-ip` so the edge limiter never answers
 first — every 429 there carries the counter's Retry-After, never the edge's 60.
 
+**One admin signal reaches the storefront, and it is not an authority.** A
+product page shows the admin a « Modifier ce produit » shortcut (ticket #178),
+on a page shared at the edge, so the HTML cannot know who asks. The middleware
+writes `admin_hint=1`, readable by script, beside a session it has just
+verified; the page's script reads it, then asks `GET /api/admin/session`, which
+the gate answers like every admin route, and shows the link only on its yes.
+Forging the hint shows nothing; it only spares a shopper's page the request.
+The rule and its reasons are in `src/features/auth/adminHint.ts`. Section 3a of
+the suite holds both halves: the page stays public and identical, the hint is
+written to a verified session only, logout clears it.
+
 Two rules the gate enforces that are easy to break by accident:
 
 - `public/_headers` and `src/features/http/securityHeaders.ts` are one list in
