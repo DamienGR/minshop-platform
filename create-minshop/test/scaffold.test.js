@@ -30,13 +30,15 @@ function createTemplateRepository(root) {
   mkdirSync(join(repository, 'mcp'), { recursive: true });
   mkdirSync(join(repository, 'scripts'), { recursive: true });
   mkdirSync(join(repository, 'src', 'themes', 'default'), { recursive: true });
-  // The REAL resolver and CI workflow, not stand-ins: the generated-store
-  // matrix test below proves the actual discovery command covers the actual
-  // themes a generated repository carries.
-  writeFileSync(
-    join(repository, 'scripts', 'themes.mjs'),
-    readFileSync(new URL('../../scripts/themes.mjs', import.meta.url), 'utf8'),
-  );
+  // The REAL resolver, CI context and CI workflow, not stand-ins: the
+  // generated-store matrix test below proves the actual discovery command
+  // covers the actual themes a generated repository carries.
+  for (const script of ['ci-context.mjs', 'manifest.mjs', 'manifest-schema.mjs', 'manifest-yaml.mjs', 'themes.mjs']) {
+    writeFileSync(
+      join(repository, 'scripts', script),
+      readFileSync(new URL(`../../scripts/${script}`, import.meta.url), 'utf8'),
+    );
+  }
   writeFileSync(
     join(repository, '.github', 'workflows', 'verify.yml'),
     readFileSync(new URL('../../.github/workflows/verify.yml', import.meta.url), 'utf8'),
@@ -219,25 +221,23 @@ test('the generated repository CI matrix discovers every theme it carries', () =
   // hardcoded list can never contain a merchant's own theme, so the store's
   // retained shipped themes would break without CI noticing.
   const workflow = readFileSync(join(result.target, '.github/workflows/verify.yml'), 'utf8');
-  assert.equal(workflow.includes('discoverThemeIds'), true);
+  assert.equal(workflow.includes('node scripts/ci-context.mjs verify --event "$EVENT"'), true);
+  assert.equal(workflow.includes('fromJSON(needs.context.outputs.themes)'), true);
   assert.equal(workflow.includes('theme: [market, studio]'), false);
 
   // Run THE SAME discovery command the workflow runs, inside the generated
   // repository: the main job covers the merchant theme (named by the config),
-  // so the matrix must be exactly the retained shipped themes.
-  const discovery = spawnSync(
-    'node',
-    [
-      '--input-type=module',
-      '-e',
-      `import { discoverThemeIds, resolveConfiguredTheme } from './scripts/themes.mjs';
-       const configured = resolveConfiguredTheme().id;
-       console.log(JSON.stringify(discoverThemeIds().filter((id) => id !== configured)));`,
-    ],
-    { cwd: result.target, encoding: 'utf8' },
-  );
+  // so the contract matrix must be exactly the retained shipped themes, and the
+  // browser gate every theme. A store this scaffolder makes carries no
+  // client/client.yaml, so it keeps the core's coverage.
+  const discovery = spawnSync('node', ['scripts/ci-context.mjs', 'verify', '--event', 'pull_request', '--json'], {
+    cwd: result.target,
+    encoding: 'utf8',
+  });
   assert.equal(discovery.status, 0, discovery.stderr);
-  assert.deepEqual(JSON.parse(discovery.stdout.trim()), ['default']);
+  const context = JSON.parse(discovery.stdout.trim());
+  assert.deepEqual(context.themes, ['default']);
+  assert.deepEqual(context.browser, ['acme-supply', 'default']);
 });
 
 test('honours an explicit --theme id', () => {

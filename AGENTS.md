@@ -31,8 +31,8 @@ These are NOT in `verify`:
   still reaches, and every forbidden path ever tracked: a key deleted from the
   tree is in every clone made since. It refuses a shallow clone.
 - `npm run check:clean-clone` re-clones HEAD into a scratch directory and builds
-  there, proving the commit stands without any working-tree state. CI runs it as
-  its own job; run it locally before tagging a core version.
+  there, proving the commit stands without any working-tree state. The core's
+  CI runs it as its own job; run it locally before tagging a core version.
 - `npm run test:browser` is Playwright against the built Worker, for everything
   a container render cannot see — `docs/agents/browser-gate.md`.
 - `test/remote/` asks the same questions of a DEPLOYED shop, given as

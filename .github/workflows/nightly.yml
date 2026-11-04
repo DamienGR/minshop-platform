@@ -10,7 +10,11 @@
 #
 #   - in EVERY repository — the core and each shop — the full suite on a clean
 #     D1 (`npm run verify`, whose integration stage builds a database from the
-#     migrations and nothing else) and the dependency audit;
+#     migrations and nothing else) and the dependency audit. The audit runs
+#     every night everywhere; the suite every night in the core, and on
+#     Mondays (or on demand) in a shop, a private repository that pays its
+#     minutes, whose Verify passes the suite on each commit of `main` (ticket
+#     #181, scripts/ci-context.mjs);
 #   - in a SHOP repository only (one with `client/client.yaml`), the same
 #     questions asked of its deployed staging: a backup to the environment's
 #     `-backups` bucket, that backup restored into a throwaway D1 on the runner
@@ -115,7 +119,8 @@ concurrency:
 jobs:
   suite:
     name: Clean D1 and full suite
-    if: ${{ github.event.schedule != '17 15 * * *' }}
+    needs: detect
+    if: ${{ github.event.schedule != '17 15 * * *' && needs.detect.outputs.suite == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -173,9 +178,22 @@ jobs:
     outputs:
       shop: ${{ steps.shop.outputs.slug }}
       staging: ${{ steps.shop.outputs.staging }}
+      suite: ${{ steps.suite.outputs.suite }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      # Every night in the core; in a shop, on Mondays and on demand (ticket
+      # #181). What a night adds to a `main` whose every commit passed Verify
+      # is drift with no commit — a new Node 22 release, a runner image, a
+      # date — and a week does not let it pile up, for a seventh of the minutes.
+      - name: Decide whether the full suite runs
+        id: suite
+        if: ${{ github.event.schedule != '17 15 * * *' }}
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          node scripts/ci-context.mjs nightly --event "$EVENT"
 
       # A staging is DECLARED, never presumed: by the manifest's stagingDomain,
       # or for one on workers.dev by the repository variable STAGING_URL. A shop

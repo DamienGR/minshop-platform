@@ -14,6 +14,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What this tree runs (ticket #181). This file ships into every shop, and a
+  # shop is a private repository that pays every minute: inherited whole, its
+  # Verify billed about 55 minutes a run, 70 % of them for jobs that question
+  # the core. In the core, every theme and every witness shop, as before; in a
+  # shop, the browser gate on its own theme on a pull request, `verify` alone on
+  # `main`, and none of the core's own jobs. scripts/ci-context.mjs decides,
+  # and says why.
+  #
+  # A job of its own, because a job-level `if:` cannot look at the tree.
+  # Which themes and shops exist is a property of the TREE, asked of the
+  # resolvers the build uses: a generated shop carries its own theme, and a
+  # hardcoded list here would silently stop covering it.
+  context:
+    name: Core or shop?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shop: ${{ steps.context.outputs.shop }}
+      browser: ${{ steps.context.outputs.browser }}
+      themes: ${{ steps.context.outputs.themes }}
+      shops: ${{ steps.context.outputs.shops }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read the tree
+        id: context
+        env:
+          EVENT: ${{ github.event_name }}
+        run: node scripts/ci-context.mjs verify --event "$EVENT"
+
   # Two runners, because the flake we cannot fix is per-runner.
   #
   # `wrangler dev` dies under the D1 gate on cloudflare/workers-sdk#15317, and
@@ -26,6 +58,10 @@ jobs:
   # residual goes to roughly one run in four hundred. This first attempt is
   # therefore tolerated and reports nothing but its outcome; `verify` below is
   # the verdict, and a real failure fails both.
+  #
+  # Everywhere and on every event, a shop's push to `main` included: the
+  # commit merged there can differ from the one its pull request tested, when
+  # `main` moved between the two.
   verify-first-runner:
     name: verify (first runner, tolerated)
     runs-on: ubuntu-latest
@@ -109,8 +145,12 @@ jobs:
   # updated checkout builds. `verify` above runs in a tree that already carries a
   # rendered wrangler.jsonc and generated theme artifacts; this job proves the
   # commit stands on its own, from the committed files and the lockfiles alone.
+  #
+  # The core's question: a shop runs a tag the core already built this way.
   clean-clone:
     name: Build from a clean clone
+    needs: context
+    if: needs.context.outputs.shop != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -150,8 +190,12 @@ jobs:
   # cosmetic: `config:validate` fails on any CORE file containing a shop's slug,
   # and this workflow file is core-owned. A hardcoded name would leak into the
   # very gate the job exists to run.
+  #
+  # The core's question too: a shop does not create shops.
   generated-shop:
     name: Generated shop
+    needs: context
+    if: needs.context.outputs.shop != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -211,6 +255,20 @@ jobs:
         run: git remote remove core
 
       # Everything below runs in the SHOP, with the tooling the shop carries.
+      #
+      # The shop half of `context` first (ticket #181), in a real shop: this
+      # repository's own run only ever takes the core half, and a shop has to
+      # inherit a branch that has actually executed. Before `npm ci`, as in
+      # the shop's own Verify, where `context` installs nothing.
+      - name: Ask what the shop's own Verify runs
+        working-directory: ${{ runner.temp }}/generated-shop
+        run: |
+          theme="$(node -p "require('./theme.config.json').theme")"
+          GITHUB_OUTPUT="$RUNNER_TEMP/context-pull-request" node scripts/ci-context.mjs verify --event pull_request
+          printf 'shop=true\nbrowser=["%s"]\nthemes=[]\nshops=[]\n' "$theme" | diff - "$RUNNER_TEMP/context-pull-request"
+          GITHUB_OUTPUT="$RUNNER_TEMP/context-push" node scripts/ci-context.mjs verify --event push
+          printf 'shop=true\nbrowser=[]\nthemes=[]\nshops=[]\n' | diff - "$RUNNER_TEMP/context-push"
+
       - name: Install the shop's dependencies
         working-directory: ${{ runner.temp }}/generated-shop
         run: npm ci
@@ -231,27 +289,6 @@ jobs:
           npm run test:security
           npm run check:deploy
 
-  # Which shops exist is a property of the TREE, for the same reason the theme
-  # list below is: a generated shop carries its own manifest, and a hardcoded
-  # list here would stop covering it.
-  discover-shops:
-    name: Discover shops
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      shops: ${{ steps.discover.outputs.shops }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: List the shops this tree describes
-        id: discover
-        run: |
-          shops=$(node scripts/prepare-client.mjs --list)
-          echo "discovered: $shops"
-          echo "shops=$shops" >> "$GITHUB_OUTPUT"
-
   # The exit criterion of jalon 1: two different shops build from one core.
   #
   # Everything per-shop comes from the manifest — the Wrangler configuration is
@@ -263,17 +300,20 @@ jobs:
   # stops being true the moment a shop takes a design of its own (jalon 5), and
   # the questions were never the same one: this job asks whether a MANIFEST
   # builds, that one whether a DESIGN holds the contract.
+  #
+  # The witness shops in the core. A shop's matrix is empty: the witnesses are
+  # the core's fixtures, and `verify` already builds the shop itself.
   shops:
     name: Build shop (${{ matrix.shop }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: discover-shops
-    if: needs.discover-shops.outputs.shops != '[]'
+    needs: context
+    if: needs.context.outputs.shops != '[]'
 
     strategy:
       fail-fast: false
       matrix:
-        shop: ${{ fromJSON(needs.discover-shops.outputs.shops) }}
+        shop: ${{ fromJSON(needs.context.outputs.shops) }}
 
     steps:
       - name: Check out repository
@@ -299,30 +339,6 @@ jobs:
       - name: Verify the shop builds and honours the contract
         run: npm run verify:theme
 
-  # Every theme in the tree, the configured one included — the browser job above
-  # covers all of them, unlike `themes`, which deliberately skips the theme the
-  # main `verify` already built.
-  discover-all-themes:
-    name: Discover every theme
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      themes: ${{ steps.discover.outputs.themes }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: List every theme in the tree
-        id: discover
-        run: |
-          themes=$(node --input-type=module -e "
-            import { discoverThemeIds } from './scripts/themes.mjs';
-            console.log(JSON.stringify(discoverThemeIds()));
-          ")
-          echo "discovered: $themes"
-          echo "themes=$themes" >> "$GITHUB_OUTPUT"
-
   # The browser gate (plan, jalon 5). Everything the container contracts cannot
   # see: accessibility, keyboard order, page zoom, the no-JavaScript path, and
   # the compiled design.
@@ -332,20 +348,23 @@ jobs:
   # deploy path; making it download 150 MB of Chromium to answer would be a bad
   # trade for everyone who is not changing a template.
   #
-  # Every theme, not just the pilot's. What it asserts is a set of storefront
-  # contracts — a WCAG violation and an unreachable cart are defects in any
-  # design — and the per-theme design signature only exists per theme.
+  # In the core, every theme, the configured one included. What it asserts is
+  # a set of storefront contracts — a WCAG violation and an unreachable cart
+  # are defects in any design — and the per-theme design signature only exists
+  # per theme. In a shop, its own theme, on a pull request: the core's themes
+  # passed here before the tag the shop runs was published, and the push to
+  # `main` re-runs `verify` alone.
   browser:
     name: Browser (${{ matrix.theme }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: discover-all-themes
-    if: needs.discover-all-themes.outputs.themes != '[]'
+    needs: context
+    if: needs.context.outputs.browser != '[]'
 
     strategy:
       fail-fast: false
       matrix:
-        theme: ${{ fromJSON(needs.discover-all-themes.outputs.themes) }}
+        theme: ${{ fromJSON(needs.context.outputs.browser) }}
 
     env:
       THEME: ${{ matrix.theme }}
@@ -419,48 +438,24 @@ jobs:
           path: test-results/
           retention-days: 7
 
-  # Which themes exist is a property of the TREE, not of this file: a generated
-  # store carries its merchant-owned theme plus whatever shipped themes it kept,
-  # and a hardcoded list here would silently stop covering them. Discovery
-  # asks the same resolver the build uses.
-  discover:
-    name: Discover themes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      themes: ${{ steps.discover.outputs.themes }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: List themes not covered by the main job
-        id: discover
-        run: |
-          themes=$(node --input-type=module -e "
-            import { discoverThemeIds, resolveConfiguredTheme } from './scripts/themes.mjs';
-            const configured = resolveConfiguredTheme().id;
-            console.log(JSON.stringify(discoverThemeIds().filter((id) => id !== configured)));
-          ")
-          echo "discovered: $themes"
-          echo "themes=$themes" >> "$GITHUB_OUTPUT"
-
   # The main job verifies whichever theme theme.config.json names. The
   # contract suite exists precisely to hold for ANY design — so run it against
   # every other theme in the tree. Not the full `verify`: the parts this omits
   # (integration, MCP, scaffold, Stripe country data) are set-independent and
   # would only multiply the bill.
+  #
+  # In the core only: a shop's other themes are the core's, which passed here.
   themes:
     name: Verify theme (${{ matrix.theme }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: discover
-    if: needs.discover.outputs.themes != '[]'
+    needs: context
+    if: needs.context.outputs.themes != '[]'
 
     strategy:
       fail-fast: false
       matrix:
-        theme: ${{ fromJSON(needs.discover.outputs.themes) }}
+        theme: ${{ fromJSON(needs.context.outputs.themes) }}
 
     env:
       THEME: ${{ matrix.theme }}
