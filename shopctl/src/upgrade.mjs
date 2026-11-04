@@ -283,7 +283,8 @@ export function checkoutBranch(cwd, branch) {
  *
  * A conflict on a GENERATED file is the exception, and is resolved here: nobody
  * chooses between two outputs of a generator. The new core's copy is taken, and
- * the upgrade re-renders `wrangler.jsonc` from the shop's manifest right after.
+ * the upgrade re-renders `wrangler.jsonc` from the shop's manifest, and
+ * `.github/dependabot.yml` for a shop, right after (ticket #81).
  * The shop's rendering conflicts with the core's own `wrangler.jsonc` at every
  * version that edits it, since the two differ from the first line: v0.3.26
  * stopped the pilot's upgrade there for a file the next step rewrote anyway

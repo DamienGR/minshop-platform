@@ -230,3 +230,21 @@ describe('loadProductDetail public-ID policy', () => {
     await expect(load()).resolves.toEqual({ status: 'not_found' });
   });
 });
+
+// Ticket #84. A theme keys its own data by product — a sweet's colour — and
+// read it off `card.href` in a list but had nothing to read on the page, so it
+// re-derived the slug from the name, which broke at the first rename.
+describe('the product page’s own address', () => {
+  it('is the href its card links to, from the slug and not the name', async () => {
+    rows.product = { ...rows.product, name: 'Renamed Tee' };
+    const { buildProductCard } = await import('../../src/features/storefront/productCard');
+
+    const loaded = await load();
+
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    expect(loaded.model.href).toBe('/products/sample-tee');
+    const card = buildProductCard({ ...rows.product, card_variants: null } as never, { currency: 'usd' });
+    expect(loaded.model.href).toBe(card.href);
+  });
+});

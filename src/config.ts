@@ -112,11 +112,15 @@ export interface SiteConfig {
     baseUrl: string;
   };
   /**
-   * Customer-facing order number, derived from the internal id (the id stays the
-   * key; this is just the friendly receipt number). `offset` sets the start;
-   * `step` spaces consecutive orders; `randomStep` adds a deterministic per-order
-   * jitter in [0, randomStep] so the number doesn't read as a raw count. Keep
-   * step > randomStep so numbers stay unique. Security is the random public_id.
+   * LEGACY receipt number, for orders that predate prefixed public IDs only
+   * (ticket #85). An order shows its `ord_` reference (`orderReference()` in
+   * features/orders/number.ts), and every order this core records has one, so
+   * on a shop created by `shopctl new` these values change nothing at all:
+   * "start numbering at 1000" is not something this setting can do. They
+   * stay because an order whose public_id is a bare 0005 hex value keeps the
+   * number its buyer was already given, computed from the internal id:
+   * `offset` sets the start, `step` spaces consecutive orders, `randomStep`
+   * adds a deterministic jitter in [0, randomStep]. Keep step > randomStep.
    */
   orderNumber: {
     offset: number;
@@ -282,10 +286,12 @@ function defaultConfig(): SiteConfig {
       maxWidth: 1000,
       baseUrl: (env.IMAGE_BASE_URL ?? '').replace(/\/+$/, ''),
     },
+    // Legacy orders only (see SiteConfig.orderNumber): a new order shows its
+    // ord_ reference whatever these say.
     orderNumber: {
-      offset: 1000, // first order shows as #1000
-      step: 1, // 1 = sequential; raise to spread numbers out
-      randomStep: 0, // 0 = none; up to (step - 1) to jitter and obscure the count
+      offset: 1000,
+      step: 1,
+      randomStep: 0,
     },
     shipping: {
       enabled: true,

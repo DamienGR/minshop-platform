@@ -84,8 +84,9 @@ Use the narrowest customization surface that fits the change:
    values live in D1 and apply without a deploy. Provider credentials belong
    here too, where the secret vault stores them encrypted.
 2. **`src/store.config.ts`** for versioned, build-time settings: currency,
-   shipping zones and rates, image dimensions, order numbering, and
-   template-only features. Override only changed keys; never customize
+   shipping zones and rates, image dimensions, and template-only features.
+   (`orderNumber` numbers only orders older than the `ord_` references: a new
+   order shows its reference, whatever it says.) Override only changed keys; never customize
    `src/config.ts` defaults directly.
 3. **`src/themes/<theme>/tokens.css`** for brand colors, fonts, surfaces, and
    corner radii — each theme owns its `@theme` block. `src/styles/overrides.css`
@@ -116,11 +117,15 @@ is the list; `npm run check:paths` fails on a path no rule covers, and
   edit one, but never as an unremarked customization: each core edit is a
   divergence to re-resolve at the next upgrade.
 - **client** — the merchant's. `client/`, `imports/`, `src/store.config.ts`,
-  `src/styles/overrides.css`, `theme.config.json`, `public/`, and the shop's own
-  theme under `src/themes/`. The core never edits these, which is what keeps an
+  `src/styles/overrides.css`, `theme.config.json`, `public/`, the shop's own
+  theme under `src/themes/`, and `.github/README.md`, its home page on GitHub
+  (the core ships none). The core never edits these, which is what keeps an
   upgrade merge clean.
 - **generated** — a tool's. `wrangler.jsonc`, `schemas/*.schema.json`,
-  `.github/CODEOWNERS`. An unexpected diff means a generator ran.
+  `.github/CODEOWNERS`, `.github/dependabot.yml` (rendered by `check-paths.mjs
+  --write` from `scripts/dependabot.mjs`: a shop's turns version updates off,
+  since its dependencies move with the core). An unexpected diff means a
+  generator ran.
 
 In a shop repository (one with `client/client.yaml`), a pull request touching a
 core file needs a `core-change` label or an `Approves-core-change:` trailer —

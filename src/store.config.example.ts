@@ -21,6 +21,10 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   // images: { maxWidth: 1000 },      // optimization on/off lives in Admin
   //
   // orderNumber: { offset: 1000, step: 1, randomStep: 0 },
+  //                                  // LEGACY ONLY (ticket #85): the number of an
+  //                                  // order older than the ord_ references. A
+  //                                  // new order shows its ord_ reference, so
+  //                                  // this cannot make numbering start at 1000
   //
   // Terms of sale and VAT (ADR 0010). `termsVersion` is stamped on every order
   // that accepts them — BUMP IT whenever the wording changes in a way a

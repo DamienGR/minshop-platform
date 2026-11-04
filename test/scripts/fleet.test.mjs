@@ -11,6 +11,7 @@ import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { compareVersions, isBreakingStep, latestVersion, versionsBetween } from '../../shopctl/src/version.mjs';
 import { readRegistry, selectShops } from '../../shopctl/src/fleet.mjs';
 import { CORE_TAG, CORE_VERSION, GIT_ENV, cloneCoreTemplate, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
+import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -362,6 +363,68 @@ describe('shopctl core upgrade', () => {
     // And the shop still passes its own gates, with the NEW core's copy of them.
     const gates = agency.run(['config', 'validate'], { cwd: shop });
     expect(gates.status, gates.stdout).toBe(EXIT_CODES.ok);
+
+    // Every file the step changed is the release's, the manifest's or a render:
+    // the pull request's core-change gate has nothing to ask (ticket #86).
+    expect(report.coreChange).toEqual({ evaluated: true, paths: [], approved: null });
+    expect(stderr).toContain('porte core-change : aucun fichier du cœur à approuver');
+  });
+
+  // Ticket #86. A core file both sides edited merges cleanly and comes out as
+  // neither's copy: the File ownership job of the pull request then fails on
+  // it. The upgrade said ✓ throughout, on two demonstration shops. It now
+  // names the file and the way to approve it, in its report and in the pull
+  // request.
+  it('names the core files the pull request will ask an approval for', () => {
+    const agency = workspace({ forge: true });
+    const shop = agency.shop();
+    const original = read(shop, 'scripts/check-toolchain.mjs');
+    writeFileSync(join(shop, 'scripts/check-toolchain.mjs'), `${original}// note de la boutique\n`);
+    git(['add', '-A'], shop);
+    git(['commit', '--quiet', '-m', 'Annoter un fichier du cœur', '-m', 'Approves-core-change: une note'], shop);
+    agency.publish({ files: { 'scripts/check-toolchain.mjs': `// correctif du socle\n${original}` } });
+
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG, '--open-pr'], { cwd: shop });
+    // Not a refusal: the merge is sound, and an approval settles it.
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(read(shop, 'scripts/check-toolchain.mjs')).toBe(`// correctif du socle\n${original}// note de la boutique\n`);
+    // The shop's earlier approval is outside the step's range: it approved the
+    // edit, not what a merge made of it.
+    expect(report.coreChange).toEqual({ evaluated: true, paths: ['scripts/check-toolchain.mjs'], approved: null });
+    expect(stderr).toContain('le job « File ownership » de la pull request échouera');
+    expect(stderr).toContain('  scripts/check-toolchain.mjs');
+    expect(stderr).toContain('Approves-core-change: <raison>');
+    const [pull] = agency.github().repos['agence/shop-boutique-un'].pulls;
+    expect(pull.body).toContain('## Écarts du cœur à approuver (1)');
+    expect(pull.body).toContain('- `scripts/check-toolchain.mjs`');
+    expect(pull.body).toContain('- [ ] écarts du cœur relus et approuvés');
+
+    // Approved on the branch, the way the demo shops did it: the re-run says so.
+    git(['commit', '--quiet', '--allow-empty', '-m', 'Approuver la fusion', '-m', 'Approves-core-change: note gardée'], shop);
+    const again = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    expect(again.status, again.stderr).toBe(EXIT_CODES.ok);
+    expect(again.report.coreChange).toEqual({
+      evaluated: true,
+      paths: ['scripts/check-toolchain.mjs'],
+      approved: 'Approves-core-change: note gardée',
+    });
+    expect(again.stderr).toContain('approuvé par Approves-core-change: note gardée');
+  });
+
+  // The label is set on the pull request, in CI: an operator's shell that
+  // carries the variable is not an approval anyone gave.
+  it('judges the core-change gate without the operator’s MINSHOP_CORE_CHANGE', () => {
+    const agency = workspace();
+    const shop = agency.shop();
+    const original = read(shop, 'scripts/check-toolchain.mjs');
+    writeFileSync(join(shop, 'scripts/check-toolchain.mjs'), `${original}// note de la boutique\n`);
+    git(['add', '-A'], shop);
+    git(['commit', '--quiet', '-m', 'Annoter un fichier du cœur'], shop);
+    agency.publish({ files: { 'scripts/check-toolchain.mjs': `// correctif du socle\n${original}` } });
+
+    const { status, report } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop, env: { MINSHOP_CORE_CHANGE: 'approved' } });
+    expect(status).toBe(EXIT_CODES.ok);
+    expect(report.coreChange).toMatchObject({ paths: ['scripts/check-toolchain.mjs'], approved: null });
   });
 
   // Read before the fetch, the stale clone's starting point was the last tag
@@ -537,6 +600,42 @@ describe('shopctl core upgrade', () => {
       `Passer la boutique boutique-un au socle ${TO_TAG}`,
       `Fusionner le socle ${TO_TAG}`,
     ]);
+  });
+
+  // Ticket #81. A shop renders .github/dependabot.yml for itself, so a release
+  // that edits the core's conflicts there exactly like wrangler.jsonc: taken
+  // from the core, rendered again for the shop, and nothing to approve.
+  it('renders a shop’s Dependabot configuration again after a release that edits the core’s', () => {
+    const agency = workspace();
+    const shop = agency.shop();
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    const daily = (text) => text.replace('interval: "weekly"\n    open-pull-requests-limit: 5', 'interval: "daily"\n    open-pull-requests-limit: 5');
+    const generator = read(agency.core, 'scripts/dependabot.mjs');
+    expect(daily(generator)).not.toBe(generator);
+    agency.publish({ files: { 'scripts/dependabot.mjs': daily(generator), [DEPENDABOT_FILE]: daily(read(agency.core, DEPENDABOT_FILE)) } });
+
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(stderr).toContain(`repris du socle : ${DEPENDABOT_FILE}`);
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    expect(report.coreChange).toEqual({ evaluated: true, paths: [], approved: null });
+  });
+
+  // A shop created before ticket #81 carries the core's copy: its first upgrade
+  // renders the shop's, and the pull request's gate takes it for a render.
+  it('gives a shop created before ticket #81 its own Dependabot configuration', () => {
+    const agency = workspace();
+    const shop = agency.shop();
+    writeFileSync(join(shop, DEPENDABOT_FILE), renderDependabot({ shop: false }));
+    git(['add', '-A'], shop);
+    git(['commit', '--quiet', '-m', 'La boutique d’avant le ticket #81'], shop);
+    agency.publish();
+
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    expect(git(['show', '--name-only', '--format=', 'HEAD'], shop).split('\n')).toContain(DEPENDABOT_FILE);
+    expect(report.coreChange).toEqual({ evaluated: true, paths: [], approved: null });
   });
 
   // Resumed, the step used to start from the newest LOCAL tag below the target.

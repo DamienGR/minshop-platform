@@ -10,7 +10,7 @@ import { stockState } from '../products/stock';
 import { catalogPath } from '../settings/home';
 import { formatMoney, toMajorUnits, currencyDecimals } from '../../money';
 import { requirePublicId } from '../catalog/serialize';
-import { buildProductCard } from './productCard';
+import { buildProductCard, productHref } from './productCard';
 import { customFieldName } from '../products/customization';
 import { readTags } from '../products/tags';
 import type {
@@ -201,6 +201,7 @@ export async function loadProductDetail(
     model: {
       id: requirePublicId(product.public_id, product.id, 'product'),
       name: product.name,
+      href: productHref(product.slug),
       description: product.description,
       descriptionHtml: product.description
         ? renderMarkdown(product.description, { baseUrl: options.imageBaseUrl })

@@ -117,9 +117,26 @@ nom tombe sur celui d'un témoin — le témoin lui-même, ou `<témoin>-staging
 
 Elle clone **un tag**, **avec son historique**, renomme le remote du socle en
 `core`, crée la branche de travail, écrit le manifeste et le thème de la
-boutique, rend `wrangler.jsonc` depuis le manifeste, exécute les portes que la
-boutique transporte, commite, installe les dépendances, puis liste les actions
-suivantes.
+boutique, sa page d'accueil GitHub (`.github/README.md`), rend `wrangler.jsonc`
+depuis le manifeste et les fichiers générés pour une boutique, exécute les
+portes que la boutique transporte, commite, installe les dépendances, puis liste
+les actions suivantes.
+
+**Dependabot n'ouvre aucune pull request dans une boutique** (ticket #81).
+`.github/dependabot.yml` est généré (`scripts/dependabot.mjs`) : celui du socle
+propose les montées chaque semaine, celui d'une boutique met
+`open-pull-requests-limit` à 0, car `package.json` et `package-lock.json` sont
+des fichiers du cœur qui bougent avec `core upgrade`. `new` et `core upgrade`
+le rendent ; la première mise à niveau d'une boutique plus ancienne le lui
+donne. Les alertes de vulnérabilité restent ; laisser « Dependabot security
+updates » éteint dans les réglages du dépôt, pour la même raison.
+
+**La page d'accueil du dépôt est celle de la boutique** (ticket #83). GitHub
+affiche `.github/README.md` avant le `README.md` racine, qui reste la
+documentation du socle. Ce fichier appartient à la boutique : le socle n'en
+livre aucun, donc aucune mise à niveau n'y entre en conflit, et la porte de
+neutralité, qui ne lit que les fichiers du cœur, le laisse nommer la boutique.
+Une boutique plus ancienne peut l'ajouter à la main, une fois montée.
 
 Trois propriétés valent d'être connues avant de lire le code.
 
@@ -144,6 +161,7 @@ de version de schéma ([ADR 0008](../docs/architecture/decisions/0008-format-du-
 ```sh
 npm run shopctl -- repo --reviewer <login>
 npm run shopctl -- new <slug> --account <id> --create-repo --reviewer <login>
+npm run shopctl -- repo --no-environments   # boutique sans compte Cloudflare
 ```
 
 Le dépôt est **déduit** quand rien ne le nomme : `<owner>/shop-<slug>`, sous le
@@ -159,6 +177,15 @@ Crée ou confirme, de façon rejouable : le dépôt GitHub (**privé** par défa
 la branche sur le remote, les environnements `staging` et `production`, et leurs
 secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`. Une nouvelle boutique
 passe ainsi de neuf gestes à trois commandes.
+
+**Sans compte Cloudflare, le dépôt seul** (ticket #82). Les secrets nomment le
+compte de chaque environnement : sans `cloudflare.accountId` au manifeste (ni
+`CLOUDFLARE_ACCOUNT_ID`), la commande refuse avant de rien créer. Une maquette
+ou une démonstration qu'aucun compte ne porte encore prend `--no-environments`
+(ou `new … --create-repo --no-environments`) : le dépôt est créé selon les mêmes
+règles, la branche poussée, et ni environnement ni secret n'est posé. Relancée
+sans l'option une fois le compte déclaré, la commande reprend le dépôt tel quel
+et crée le reste.
 
 **Elle enveloppe `gh`, et c'est forcé plutôt que préféré.** Un secret
 d'environnement GitHub se chiffre en sealed box libsodium — X25519, Blake2b,
@@ -470,7 +497,8 @@ deux ne coïncident plus — un manifeste édité à la main, une fusion prise s
 bump qui va avec.
 
 **Une mise à niveau propose, elle ne déploie pas.** Elle récupère le tag, crée
-`socle/<tag>`, fusionne, met `coreVersion` à jour, rend les fichiers générés,
+`socle/<tag>`, fusionne, met `coreVersion` à jour, rend les fichiers générés
+(`wrangler.jsonc`, `.github/dependabot.yml`),
 exécute les portes que la boutique transporte — celles de la **nouvelle**
 version — et, avec `--open-pr`, pousse et ouvre la pull request. Elle n'appelle
 jamais `shopctl deploy` et ne fusionne aucune pull request : la mise en
@@ -481,6 +509,16 @@ version antérieure, une version qui réécrit une migration déjà publiée
 (ADR 0006). **Un conflit** est nommé fichier par fichier avec la propriété de
 chacun et **laissé dans l'arbre** — le résoudre est un travail git à cet
 endroit ; `--abort-on-conflict` défait la fusion pour l'appelant qui préfère.
+
+**La porte de la pull request est jugée avant elle** (ticket #86). Un fichier du
+cœur que la boutique avait modifié et que la version modifie aussi fusionne
+sans conflit, mais n'est plus la copie exacte ni de l'une ni de l'autre : le
+job « File ownership » demandera une nouvelle approbation. La mise à niveau
+lance donc aussi le `check-paths.mjs --changed` de la boutique contre la
+branche de départ, nomme ces fichiers avec la marche à suivre — l'étiquette
+`core-change` sur la pull request, ou un commit portant le trailer
+`Approves-core-change: <raison>` — et, avec `--open-pr`, les liste dans la
+pull request. C'est un avertissement : la fusion est saine.
 
 **La flotte est déclarée**, jamais découverte. `fleet.json`, dans l'espace de
 travail de l'agence, à côté des boutiques :

@@ -181,7 +181,11 @@ jobs:
       # or for one on workers.dev by the repository variable STAGING_URL. A shop
       # built straight on its production (ADR 0015, amended 2026-10-27) has
       # neither, and its night is the production's backup and watch, not a red
-      # staging job asking for an origin that was never meant to exist.
+      # staging job asking for an origin that was never meant to exist. Nor
+      # has a shop not deployed yet (ticket #80): a mock-up, a demonstration,
+      # a shop whose repository `shopctl repo --no-environments` made. Its night
+      # is green, the production jobs warning that their token is absent, and
+      # the first deploy turns the checks on with nothing to re-enable.
       - name: Read the manifest
         id: shop
         env:
@@ -405,7 +409,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN absent de l'environnement backup : la production n'est pas sauvegardée cette nuit (ADR 0005). Posez CLOUDFLARE_API_TOKEN_BACKUP et relancez shopctl repo."
+            echo "::warning::CLOUDFLARE_API_TOKEN absent de l'environnement backup : pas de sauvegarde de la production cette nuit (ADR 0005). Attendu tant que la boutique n'est pas en ligne ; sinon, posez CLOUDFLARE_API_TOKEN_BACKUP et relancez shopctl repo."
             exit 0
           fi
           node shopctl/bin/shopctl.mjs backup --env production --upload --json | tee backup-production.json
@@ -464,7 +468,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt : la production n'est pas surveillée cette nuit."
+            echo "::warning::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt : pas de surveillance de la production cette nuit. Attendu tant que la boutique n'est pas en ligne ; sinon, posez ce secret et MONITOR_CLOUDFLARE_ACCOUNT_ID."
             exit 0
           fi
           node shopctl/bin/shopctl.mjs monitor --env production --hours 24 --json | tee monitor-production.json

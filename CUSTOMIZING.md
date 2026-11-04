@@ -145,6 +145,9 @@ response for cache invalidation.
   while it is active, else the newest product in stock, else the newest — null
   only for an empty catalog. Its image is resolved as the page's LCP.
 - `texts` holds every key your `texts.ts` declares (below), `{}` without one.
+- `route` says which of the two routes is rendering: `home` at `/`, `products`
+  at `/products`. A home that is a showcase and a `/products` that stays a
+  list read this — never the prefix of a sort or page link.
 
 Two controls to keep:
 
@@ -159,12 +162,15 @@ with `class`; don't rebuild their links.
 
 The same `Catalog.astro` renders `/` and `/products`, so one edit changes both —
 which is why sort and page links are built from the current path rather than a
-hardcoded one.
+hardcoded one, and why `route` is there for a theme that wants the two to differ.
 
 ## The product page contract
 
 `ProductDetail.astro` receives two models. `model` is presentation — name,
-formatted price, categories, gallery images, related cards, availability.
+formatted price, categories, gallery images, related cards, availability — and
+the page's own `href`, the same string as the product's card `href`: data your
+theme keys by product (a colour per product, say) is read by that key on the
+card and on the page alike, and survives a rename in the admin.
 `purchase` is everything the buy controls need, with the decisions already made:
 `soldOut` accounts for variant-level inventory, and `showAddToCart`/`showBuyNow`
 already fold in the store's cart and buy-now toggles and whether any payment

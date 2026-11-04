@@ -265,11 +265,58 @@ describe('shopctl repo', () => {
       expect(environments.production.secrets.CLOUDFLARE_ACCOUNT_ID).toBe('0123456789abcdef0123456789abcdef');
     });
 
-    it('refuses to run when no account id can be found', () => {
+    // Refused BEFORE anything is created (ticket #82): the refusal used to come
+    // after the repository, the push and three environments.
+    it('refuses to run when no account id can be found, and creates nothing', () => {
       const target = forgeShop({ accountId: null });
       const result = target.run(['repo'], TOKENS);
       expect(result.status).toBe(EXIT_CODES.precondition);
       expect(result.stderr).toMatch(/aucun identifiant de compte Cloudflare/);
+      expect(result.stderr).toContain('shopctl repo --no-environments');
+      expect(target.github().repos).toEqual({});
+    });
+  });
+
+  // Ticket #82. A mock-up or a demo shop no Cloudflare account carries yet:
+  // its repository was made by hand with `gh repo create`, bypassing the
+  // command's choices (private, shop-<slug>, the push).
+  describe('--no-environments', () => {
+    it('creates the repository and pushes, with no environment and no secret', () => {
+      const target = forgeShop({ accountId: null });
+      const { status, report, stderr } = target.json(['repo', '--no-environments']);
+      expect(status, stderr).toBe(EXIT_CODES.ok);
+      expect(report).toMatchObject({
+        repository: { nameWithOwner: target.nameWithOwner, created: true, visibility: 'private' },
+        branch: { name: 'main', pushed: true },
+        environments: [],
+        secrets: [],
+        skipped: ['environments'],
+      });
+      const repo = target.github().repos[target.nameWithOwner];
+      expect(repo.environments).toEqual({});
+      expect(target.github().calls.some(({ argv }) => argv[0] === 'secret')).toBe(false);
+      // And it says how the environments come later.
+      expect(stderr).toMatch(/staging, production, backup non créés \(--no-environments\)/);
+      expect(stderr).toContain('relancez `shopctl repo` sans l\'option');
+    });
+
+    it('leaves the environments to a second run, once the account is known', () => {
+      const target = forgeShop({ accountId: null });
+      expect(target.run(['repo', '--no-environments']).status).toBe(EXIT_CODES.ok);
+
+      const second = target.json(['repo'], { ...TOKENS, CLOUDFLARE_ACCOUNT_ID: 'a1b2c3d4e5f60718293a4b5c6d7e8f90' });
+      expect(second.status, second.stderr).toBe(EXIT_CODES.ok);
+      expect(second.report.repository.created).toBe(false);
+      const environments = target.github().repos[target.nameWithOwner].environments;
+      expect(Object.keys(environments)).toEqual(['staging', 'production', BACKUP_ENVIRONMENT]);
+      expect(environments.staging.secrets.CLOUDFLARE_ACCOUNT_ID).toBe('a1b2c3d4e5f60718293a4b5c6d7e8f90');
+    });
+
+    it('is refused beside --fleet, which creates no environment anyway', () => {
+      const target = forgeShop();
+      const result = target.run(['repo', '--no-environments', '--fleet', 'agence/minshop-fleet']);
+      expect(result.status).toBe(EXIT_CODES.usage);
+      expect(target.github().repos).toEqual({});
     });
   });
 

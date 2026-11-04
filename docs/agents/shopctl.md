@@ -231,7 +231,10 @@ XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
 CLI cannot encrypt one at all. It creates the repository — derived as `<owner>/shop-<slug>` when neither
 `--origin` nor the tree's remote names one, and announced before it is created
 — pushes, creates both environments and sets their Cloudflare secrets;
-idempotently, asking GitHub first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
+idempotently, asking GitHub first. The account each secret names is resolved
+before anything is created, and its absence refuses the run then; a shop no
+account carries yet takes `--no-environments`, which stops after the push, and
+a second run without it adds the rest (ticket #82). Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
 rule, because GitHub never returns a secret's value: "already there" cannot be
 read as "already correct". A third environment, `backup`, carries the Nightly's
 backup of production (ADR 0005's RPO once staging is gone): no reviewer,
@@ -274,16 +277,26 @@ from the shop's origin brings none: `core status` names a declared tag the
 clone lacks instead of blaming the manifest, and an upgrade fetches the core's
 tags BEFORE it reads where the shop is. It then branches `socle/<tag>`,
 merges, bumps the manifest, re-renders the generated files, runs the gates the
-shop now carries, and with `--open-pr` opens the pull request. It never deploys
+shop now carries, and with `--open-pr` opens the pull request. Among those
+gates is the one the pull request will meet: the shop's own `check-paths.mjs
+--changed --base <the branch it started from>`, without the operator's
+`MINSHOP_CORE_CHANGE`. A core file the shop had edited and the release edited
+too merges cleanly yet is neither's copy, so File ownership fails on it
+(ticket #86): the upgrade warns, names each file and the approval (the
+`core-change` label or an `Approves-core-change:` trailer), and lists them in
+the pull request. A warning, not a refusal — the merge is sound. It never deploys
 and never merges a pull request: production stays behind the GitHub
 Environment. It refuses a dirty tree, a
 downgrade, and a version that rewrites a published migration (ADR 0006); a
 conflict is named file by file WITH its ownership and left in the tree, because
 resolving it is git work there. Except on a GENERATED file: nobody chooses
 between two outputs of a generator, so the new core's copy is taken and the
-upgrade re-renders `wrangler.jsonc` right after — the shop's rendering differs
-from the core's own copy from its first line, and conflicts with every version
-that edits it. Re-run after a hand resolution, the command resumes on the
+upgrade re-renders `wrangler.jsonc` and `.github/dependabot.yml` right after
+(`check-paths.mjs --write`) — the shop's rendering differs from the core's own
+copy from its first line, and conflicts with every version that edits it. The
+Dependabot file is generated for that reason (ticket #81): Dependabot has no
+condition on the repository it runs in, and a shop's dependencies are core
+files, so a shop's rendering opens no version update at all. Re-run after a hand resolution, the command resumes on the
 upgrade branch, and reads where the step started from the merge's first
 parent, never from the newest local tag below the target. The fleet is DECLARED in `fleet.json` next to
 the shops — never discovered by scanning, because the command writes — and one

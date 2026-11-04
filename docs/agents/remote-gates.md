@@ -88,7 +88,10 @@ Once staging is destroyed at the launch, the repository
 variable `STAGING_RETIRED` turns the staging half off, with a notice; and the
 staging half runs only for a DECLARED staging — the manifest's `stagingDomain`,
 or the repository variable `STAGING_URL` — so a shop built straight on its
-production gets a notice instead of a red job. `shopctl certify` reads the
+production gets a notice instead of a red job. So does a shop not deployed
+yet (ticket #80): no staging declared, and the two production jobs warn that
+their token is absent, so its night is green until the first deploy turns the
+checks on, with no workflow to disable and re-enable. `shopctl certify` reads the
 production jobs' outcome, steps included, and so do their names: renaming one
 is a change to `certify.test.mjs` too. A check
 whose credential is absent is skipped with a warning, never passed silently.

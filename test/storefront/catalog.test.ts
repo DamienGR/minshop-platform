@@ -6,6 +6,7 @@ import {
   buildCatalogCategories,
   buildPaginationModel,
   buildSortModel,
+  catalogRoute,
 } from '../../src/features/storefront/catalog';
 import type { Category } from '../../src/features/categories/db';
 import { buildProductCard } from '../../src/features/storefront/productCard';
@@ -46,6 +47,7 @@ const product = (n: number, overrides: Partial<ListedProduct> = {}): ListedProdu
 });
 
 const model = (overrides: Partial<CatalogPageModel> = {}): CatalogPageModel => ({
+  route: 'products',
   eyebrow: 'Shop',
   heading: 'All products',
   categories: [
@@ -75,6 +77,16 @@ const category = (id: number, name: string, overrides: Partial<Category> = {}): 
   description: null,
   created_at: '2026-01-01T00:00:00Z',
   ...overrides,
+});
+
+// Ticket #84. One model serves both routes, and a theme that makes its home a
+// showcase read which one from the prefix of its sort links.
+describe('catalogRoute', () => {
+  it('names the home at `/` and the list everywhere else it is mounted', () => {
+    expect(catalogRoute('/')).toBe('home');
+    expect(catalogRoute('/products')).toBe('products');
+    expect(catalogRoute('/products/')).toBe('products');
+  });
 });
 
 describe('buildCatalogCategories', () => {

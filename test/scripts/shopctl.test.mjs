@@ -28,7 +28,8 @@ import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
 import { WITNESS_CLIENTS_DIR, discoverManifests } from '../../scripts/manifest.mjs';
 // The core fixture and the git identity live in a helper: the fleet suite
 // (jalon 9) creates the same "core at a tag" and a second copy would drift.
-import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
+import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
+import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, shop } from '../helpers/provisioned-shop.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
@@ -449,6 +450,16 @@ describe('shopctl new', () => {
     expect(report.nextSteps.some((step) => step.startsWith('npm run shopctl -- repo'))).toBe(true);
   });
 
+  // Ticket #82: the repository alone, for a shop no account carries yet. It
+  // means nothing without the repository it qualifies.
+  it('refuses --no-environments without --create-repo, before touching the disk', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--no-environments'], work);
+    expect(result.status).toBe(EXIT_CODES.usage);
+    expect(result.stderr).toContain('shopctl repo --no-environments');
+    expect(treeFiles(work)).toEqual([]);
+  });
+
   it('refuses a slug the platform already uses', () => {
     const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
     expect(result.status).toBe(EXIT_CODES.input);
@@ -654,9 +665,13 @@ describe('shopctl new', () => {
     //
     // Added or modified is derived rather than pinned, because this suite ships
     // into generated shops and runs there: the fixture core built from a SHOP's
-    // tree already carries a client manifest, so the same command modifies what
-    // it would otherwise add. The paths do not move; only the letter does.
+    // tree carries that shop's own files (its theme, its imports/), so the same
+    // command modifies what it would otherwise add. The paths do not move; only
+    // the letter does.
     const expected = [
+      '.github/README.md',
+      // Rendered for a shop (ticket #81) from the core's rendering.
+      DEPENDABOT_FILE,
       'client/client.yaml',
       'client/signatures/boutique-du-port.json',
       'imports/README.md',
@@ -682,6 +697,18 @@ describe('shopctl new', () => {
     expect(readFileSync(join(shop, 'client/signatures/boutique-du-port.json'), 'utf8')).toBe(
       readFileSync(join(core(), 'test/browser/__signatures__/default.json'), 'utf8'),
     );
+
+    expect(readFileSync(join(shop, DEPENDABOT_FILE), 'utf8')).toBe(renderDependabot({ shop: true }));
+
+    // The repository's home page is the shop's (ticket #83): GitHub shows it
+    // ahead of the core's README.md, and the core never ships one.
+    const home = readFileSync(join(shop, '.github/README.md'), 'utf8');
+    expect(home).toMatch(/^# Boutique Du Port\n/);
+    expect(home).toContain(`socle Minshop (${CORE_TAG} à sa création)`);
+    expect(home).toContain('[`src/themes/boutique-du-port/`](../src/themes/boutique-du-port/)');
+    // The placeholder domain is not presented as the shop's address.
+    expect(home).toContain('domaine à déclarer dans le manifeste');
+    expect(home).not.toContain('example.com');
 
     expect(readFileSync(join(shop, 'client/client.yaml'), 'utf8')).toBe(
       `# Manifeste de la boutique Boutique Du Port.
@@ -740,6 +767,26 @@ theme:
   id: boutique-du-port
 `,
     );
+  });
+
+  // Asked of the TAG's ownership map, not the host's: a core that gates
+  // .github/README.md as its own would refuse a shop's name in it, and the
+  // shop would fail its first gate for a file `new` chose to write.
+  it('writes no home page for a core tag that keeps .github/README.md', () => {
+    const older = createCoreRepository(mkdtempSync(join(tmpdir(), 'shopctl-core-older-')));
+    const rules = join(older, 'scripts/path-ownership.mjs');
+    const text = readFileSync(rules, 'utf8');
+    const start = text.indexOf("  {\n    // Before `.github/**`");
+    const end = text.indexOf("codeowners: '/.github/README.md',\n  },\n") + "codeowners: '/.github/README.md',\n  },\n".length;
+    expect(start).toBeGreaterThan(-1);
+    writeFileSync(rules, text.slice(0, start) + text.slice(end));
+    execFileSync('node', ['scripts/check-paths.mjs', '--write'], { cwd: older, encoding: 'utf8' });
+    const tag = publishVersion(older, { version: nextMinor() });
+
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-ancienne', '--from', older, '--core', tag, '--no-install'], work);
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(work, 'shop-boutique-ancienne/.github/README.md'))).toBe(false);
   });
 
   // ADR 0003: the history is what makes the next upgrade an ordinary merge, and

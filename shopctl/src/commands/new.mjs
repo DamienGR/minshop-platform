@@ -140,6 +140,9 @@ export const newUsage = `Usage: shopctl new <slug> [options]
   --reviewer <login>  Relecteur obligatoire en production, avec --create-repo
   --fleet <dépôt>     Avec --create-repo, sur le compte mutualisé : le dépôt de
                       flotte la déploie, aucun secret Cloudflare n'est posé
+  --no-environments   Avec --create-repo, le dépôt seul, sans environnement ni
+                      secret : une boutique qu'aucun compte Cloudflare ne porte
+                      encore (maquette, démonstration)
   --no-install        Ne pas installer les dépendances
   --no-verify         Ne pas exécuter la vérification minimale
   --json              Rapport de création lisible par une machine
@@ -348,6 +351,9 @@ export function runNew(args, reporter) {
   const createRepo = args.values['--create-repo'] === true;
   const fleet = args.values['--fleet'] === undefined ? null : fleetRepositoryName(args.values['--fleet']);
   if (fleet && !createRepo) throw usageError('--fleet ne vaut qu\'avec --create-repo.', 'Sans dépôt créé, `shopctl repo --fleet <dépôt>` le pose ensuite depuis la boutique.');
+  const createEnvironments = args.values['--no-environments'] !== true;
+  if (!createEnvironments && !createRepo) throw usageError('--no-environments ne vaut qu\'avec --create-repo.', 'Sans dépôt créé, `shopctl repo --no-environments` le crée ensuite depuis la boutique.');
+  if (!createEnvironments && fleet) throw usageError('--no-environments et --fleet ne vont pas ensemble.', 'Une boutique de la flotte ne reçoit déjà aucun environnement.');
   const originUrl = args.values['--origin']
     ? String(args.values['--origin'])
     : createRepo
@@ -470,12 +476,27 @@ export function runNew(args, reporter) {
   writeFileSync(resolve(target, 'theme.config.json'), `${JSON.stringify({ theme }, null, 2)}\n`);
   mkdirSync(resolve(target, 'imports'), { recursive: true });
   writeFileSync(resolve(target, 'imports/README.md'), importsReadme(slug));
-  reporter.ok(`manifeste client/client.yaml, thème src/themes/${theme}/ (copié de ${referenceTheme}), imports/`);
+  // The repository's home page on GitHub (ticket #83), which shows this file
+  // ahead of the core's README.md. Written only by a core that gives it to the
+  // shop: an older tag's ownership map makes it a core file, which its
+  // core-neutrality gate would refuse for naming the shop.
+  const homePage = ownedByShop(target, SHOP_HOME_PAGE);
+  if (homePage) {
+    writeFileSync(
+      resolve(target, SHOP_HOME_PAGE),
+      shopHomePage({ displayName, domain: domainFrom === 'placeholder' ? null : domain, theme, tag }),
+    );
+  }
+  reporter.ok(`manifeste client/client.yaml, thème src/themes/${theme}/ (copié de ${referenceTheme}), imports/${homePage ? `, ${SHOP_HOME_PAGE}` : ''}`);
 
   // The build inputs come from the manifest, never from a hand-edited file:
   // rendering them here is what makes the shop buildable at its first commit.
   run('node', ['scripts/prepare-client.mjs', slug], { cwd: target, stdio: 'ignore' });
-  reporter.ok('wrangler.jsonc rendu depuis le manifeste');
+  // The files the ownership gate renders, now that the tree is a shop: the
+  // shop's .github/dependabot.yml opens no version update (ticket #81). By the
+  // tag's own script; a failure here is the gates' to report, just below.
+  capture('node', ['scripts/check-paths.mjs', '--write'], { cwd: target, allowFailure: true });
+  reporter.ok('wrangler.jsonc rendu depuis le manifeste, fichiers générés rendus pour une boutique');
 
   // Staged before verification, because the gates read the INDEX (`git
   // ls-files`): an untracked manifest is invisible to exactly the checks that
@@ -568,6 +589,7 @@ export function runNew(args, reporter) {
           .map((entry) => entry.trim())
           .filter(Boolean),
         fleet,
+        createEnvironments,
         json: reporter.json,
         // `new` emits its own document; a second one on the same stdout would
         // break every caller that pipes it into a parser.
@@ -612,7 +634,7 @@ export function runNew(args, reporter) {
     ...(forgeError !== null
       ? ['npm run shopctl -- repo   # reprend la création du dépôt là où elle a échoué']
       : forge !== null
-      ? []
+      ? (createEnvironments ? [] : ['npm run shopctl -- repo   # une fois le compte déclaré : environnements et secrets'])
       : originUrl
         ? [`npm run shopctl -- repo   # crée le dépôt, les environnements et leurs secrets`, `git push -u origin ${branch}`]
         : ['git remote add origin <url> && npm run shopctl -- repo']),
@@ -790,6 +812,56 @@ function takenByWitness(slug, files, outcome) {
       `Choose another slug. ${outcome}`,
     ].join('\n'),
   );
+}
+
+/** Where GitHub looks first for a repository's home page (ticket #83). */
+export const SHOP_HOME_PAGE = '.github/README.md';
+
+/**
+ * Whether the cloned tag gives `path` to the shop, asked of ITS ownership map
+ * with its own script (ADR 0009: the shop's scripts, never the host's copy). A
+ * tag older than the rule would gate the file as the core's.
+ */
+function ownedByShop(target, path) {
+  const result = capture(
+    'node',
+    ['--input-type=module', '-e', `import { classifyPath } from './scripts/path-ownership.mjs'; console.log(classifyPath(${JSON.stringify(path)})?.owner ?? '');`],
+    { cwd: target, allowFailure: true },
+  );
+  return result.status === 0 && result.stdout.trim() === 'client';
+}
+
+/**
+ * The shop's home page on GitHub (ticket #83).
+ *
+ * GitHub shows `.github/README.md` before the root README.md, which is the
+ * core's documentation and stays so. This one is the shop's from the first
+ * commit, and the core never ships one, so the merchant's presentation —
+ * screenshots, content, launch — can grow here without a conflict at any
+ * upgrade. Links are relative to `.github/`, where GitHub resolves them.
+ *
+ * @param {{ displayName: string, domain: string|null, theme: string, tag: string }} values
+ *        `domain` null while it is the documentation placeholder
+ */
+export function shopHomePage({ displayName, domain, theme, tag }) {
+  return `# ${displayName}
+
+La boutique en ligne ${displayName}, sur le socle Minshop (${tag} à sa création).
+
+- **Production** : ${domain ? `https://${domain}` : 'domaine à déclarer dans le manifeste'}
+- **Manifeste** : [\`client/client.yaml\`](../client/client.yaml)
+- **Thème** : [\`src/themes/${theme}/\`](../src/themes/${theme}/)
+- **Catalogue** : [\`imports/\`](../imports/)
+
+Cette page est celle de la boutique : \`shopctl new\` l'a écrite, et le socle ne
+la touche jamais. GitHub l'affiche en page d'accueil du dépôt à la place du
+README du socle. Présentez-y la boutique : captures, contenu, mise en ligne.
+
+La documentation du socle, commune à toutes les boutiques, reste dans
+[\`README.md\`](../README.md), [\`CUSTOMIZING.md\`](../CUSTOMIZING.md) et
+[\`AGENTS.md\`](../AGENTS.md). La version du socle que porte la boutique :
+\`npm run shopctl -- core status\`.
+`;
 }
 
 /** The README `shopctl new` drops in a shop's imports/ directory.

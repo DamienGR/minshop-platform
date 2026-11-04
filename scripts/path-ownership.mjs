@@ -52,6 +52,12 @@ export const OWNERSHIP_RULES = [
     codeowners: '/.github/CODEOWNERS',
   },
   {
+    pattern: '.github/dependabot.yml',
+    owner: 'generated',
+    why: 'Rendered by check-paths.mjs from scripts/dependabot.mjs: version updates in the core, none in a shop, whose dependencies move with its core version.',
+    codeowners: '/.github/dependabot.yml',
+  },
+  {
     pattern: 'schemas/*.schema.json',
     owner: 'generated',
     why: 'Rendered from scripts/manifest-schema.mjs; committed so editors can validate a manifest.',
@@ -64,6 +70,18 @@ export const OWNERSHIP_RULES = [
     codeowners: '/wrangler.jsonc',
   },
 
+  {
+    // Before `.github/**`, whose rule would make it the core's. GitHub shows
+    // `.github/README.md` on a repository's home page ahead of the root
+    // README.md (ticket #83), which is the core's documentation: a shop that
+    // presents itself there needs a file the core never ships, so that no
+    // upgrade conflicts on it and the core-neutrality gate, which reads core
+    // files only, lets it name the shop.
+    pattern: '.github/README.md',
+    owner: 'client',
+    why: 'The shop\'s home page on GitHub, written by `shopctl new`. The core ships none.',
+    codeowners: '/.github/README.md',
+  },
   {
     pattern: 'client/**',
     owner: 'client',

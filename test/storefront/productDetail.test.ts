@@ -83,6 +83,7 @@ const withOptions = (overrides: Partial<ProductPurchaseModel> = {}) =>
 const detail = (overrides: Partial<ProductDetailModel> = {}): ProductDetailModel => ({
   id: 'prod_k7m2qx8vn6',
   name: 'Sample Tee',
+  href: '/products/sample-tee',
   description: 'A shirt.',
   descriptionHtml: '<p>A shirt.</p>',
   formattedPrice: '$24.00',
