@@ -15,6 +15,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
+import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 import { OPERATOR_ENV } from './operator-env.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
@@ -84,6 +85,18 @@ export function resetStoreOverrides(core) {
 }
 
 /**
+ * What a shop tracks and a core never does.
+ *
+ * Run from a shop (the Generated shop job runs every suite there), THIS tree
+ * is a shop, and a copy of it would be a shop too: `check-paths --changed`
+ * tells a core release from a shop's commit by the absence of the client
+ * manifest, and vouched for nothing the fixture core merged in. The home page
+ * is the shop's own (the core ships none), and the Dependabot configuration
+ * is rendered for the core below, as a core tag carries it.
+ */
+const SHOP_ONLY = ['client/client.yaml', '.github/README.md'];
+
+/**
  * @param {string} root directory to create the core in
  * @param {{ tag?: string, dir?: string }} [options]
  * @returns {string} path to the core repository
@@ -92,11 +105,12 @@ export function createCoreRepository(root, { tag = CORE_TAG, dir = 'core' } = {}
   const core = join(root, dir);
   mkdirSync(core, { recursive: true });
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: CORE, encoding: 'utf8' }).split('\0').filter(Boolean);
-  for (const file of tracked) {
+  for (const file of tracked.filter((path) => !SHOP_ONLY.includes(path))) {
     mkdirSync(dirname(join(core, file)), { recursive: true });
     cpSync(join(CORE, file), join(core, file));
   }
   resetStoreOverrides(core);
+  writeFileSync(join(core, DEPENDABOT_FILE), renderDependabot({ shop: false }));
   git(['init', '--quiet', '--initial-branch=main'], core);
   git(['add', '-A'], core);
   git(['commit', '--quiet', '-m', `Core ${tag}`], core);

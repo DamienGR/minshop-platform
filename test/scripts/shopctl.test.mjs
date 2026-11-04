@@ -665,13 +665,13 @@ describe('shopctl new', () => {
     //
     // Added or modified is derived rather than pinned, because this suite ships
     // into generated shops and runs there: the fixture core built from a SHOP's
-    // tree already carries a client manifest, so the same command modifies what
-    // it would otherwise add. The paths do not move; only the letter does.
+    // tree carries that shop's own files (its theme, its imports/), so the same
+    // command modifies what it would otherwise add. The paths do not move; only
+    // the letter does.
     const expected = [
       '.github/README.md',
-      // Rendered for a shop (ticket #81): changed, unless the fixture core is
-      // itself built from a shop, whose copy is already that rendering.
-      ...(readFileSync(join(core(), DEPENDABOT_FILE), 'utf8') === renderDependabot({ shop: true }) ? [] : [DEPENDABOT_FILE]),
+      // Rendered for a shop (ticket #81) from the core's rendering.
+      DEPENDABOT_FILE,
       'client/client.yaml',
       'client/signatures/boutique-du-port.json',
       'imports/README.md',
