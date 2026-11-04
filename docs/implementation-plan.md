@@ -2595,7 +2595,9 @@ Le workflow `Nightly` (`.github/workflows/nightly.yml`, étape 0 de la
 certification) porte les huit lignes. Les deux cochées tournent dans tout dépôt,
 socle compris, sans compte : `npm run verify` sur une D1 bâtie des seules
 migrations, et `npm audit` gaté au niveau `high` sur les dépendances
-d'exécution du Worker et du serveur MCP. Les six autres interrogent le staging
+d'exécution du Worker et du serveur MCP. Dans une boutique, dépôt privé qui
+paie ses minutes, la suite ne tourne que le lundi et à la demande : son
+`Verify` la passe sur chaque commit de `main` (ticket #181). Les six autres interrogent le staging
 d'une boutique — sauvegarde vers son bucket `-backups`, restauration de cette
 archive par `shopctl restore --local` dans la D1 du runner, portes distantes,
 session Stripe test expirée par l'API de Stripe dont le webhook doit rendre

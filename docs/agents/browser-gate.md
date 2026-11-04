@@ -7,7 +7,9 @@ invariants and the rules that apply everywhere. Read this before working on `tes
 drives it with Playwright (`playwright.config.mjs`, specs in `test/browser/`).
 It is NOT in `npm run verify`, deliberately: `verify` is what a shop runs on a
 laptop and in the deploy path, and it must not need a 150 MB browser download to
-answer. CI gives it its own job per theme.
+answer. CI gives it its own job per theme: every theme in the core, and in a
+shop its own theme only, on a pull request (ticket #181,
+`scripts/ci-context.mjs`).
 
 It exists because the container contracts are structurally blind to a whole
 class of defect. They render a component from props and assert on the markup —

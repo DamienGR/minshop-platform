@@ -139,10 +139,35 @@ describe('the nightly workflow', () => {
         expect(jobBody(job).match(/if-no-files-found: (\w+)/)[1], job).toBe('ignore');
       }
       expect(step('production-backup', 'Verify the archive')).toMatch(/if: \$\{\{ steps\.backup\.outputs\.id != '' \}\}/);
+
+      // The full suite, asked of the same shop: on demand, it runs (ticket #181).
+      const suite = run('detect', 'Decide whether the full suite runs', { EVENT: 'workflow_dispatch' });
+      expect(suite.status, suite.stderr).toBe(0);
+      // The file is the detect job's: the manifest step wrote to it first.
+      expect(suite.outputs).toMatch(/^suite=true$/m);
     } finally {
       // The links go, never what they point at.
       rmSync(shop, { recursive: true, force: true });
     }
+  });
+
+  // A shop is a private repository that pays its minutes, and its Verify passes
+  // the suite on each commit of `main` (ticket #181): its night runs the suite
+  // on Mondays and on demand, scripts/ci-context.mjs deciding. The core, public,
+  // keeps every night. The days themselves are in ci-context.test.mjs.
+  it('runs the full suite as scripts/ci-context.mjs decides, from the detect job', () => {
+    const suite = workflow.slice(workflow.indexOf('\n  suite:\n'), workflow.indexOf('\n  audit:\n'));
+    expect(suite).toMatch(/^ {4}needs: detect$/m);
+    expect(suite.match(/^ {4}if: (.*)$/m)[1]).toBe("${{ github.event.schedule != '17 15 * * *' && needs.detect.outputs.suite == 'true' }}");
+    const detect = workflow.slice(workflow.indexOf('  detect:'), workflow.indexOf('\n  staging:\n'));
+    expect(detect).toMatch(/suite: \$\{\{ steps\.suite\.outputs\.suite \}\}/);
+    const decide = detect.slice(detect.indexOf('- name: Decide whether the full suite runs')).split('\n      - name:')[0];
+    expect(decide).toMatch(/id: suite\n/);
+    expect(decide).toMatch(/EVENT: \$\{\{ github\.event_name \}\}/);
+    expect(decide).toMatch(/node scripts\/ci-context\.mjs nightly --event "\$EVENT"/);
+    // The audit stays nightly everywhere: advisories arrive without a commit.
+    const audit = workflow.slice(workflow.indexOf('\n  audit:\n'), workflow.indexOf('  detect:'));
+    expect(audit).not.toMatch(/needs:/);
   });
 
   // On the shared account (ADR 0019) the shop's repository holds no Cloudflare

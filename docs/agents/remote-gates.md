@@ -75,7 +75,10 @@ ASYNCHRONOUSLY on purpose: the stand-ins answer from the parent, and a
 `spawnSync` would deadlock the Worker on them.
 
 `.github/workflows/nightly.yml` strings them together every night (plan
-§7.3): everywhere, `npm run verify` on a clean D1 and `npm audit`; in a shop
+§7.3): everywhere, `npm audit` and `npm run verify` on a clean D1 — the
+suite every night in the core, on Mondays and on demand in a shop, whose
+Verify passes it on each commit of `main` (ticket #181,
+`scripts/ci-context.mjs`); in a shop
 repository, against staging, backup, `restore --local`, the remote gates,
 `shopctl monitor`, Stripe and e-mail — and two production reads, neither
 through the `production` environment, whose reviewers would hold every night:
