@@ -337,7 +337,8 @@ The label and help are shown to the merchant, so write them in French. A field
 left empty, or holding the default, shows the default; a text longer than
 `maxLength` is refused at saving, with a message. `text` is one line;
 `markdown` arrives as `html`, rendered without HTML the way a page body is.
-Write the default as it is stored (trimmed, and on one line for `text`):
+Write the default as it is stored (trimmed, and on one line for `text`, where
+a no-break space — U+202F before `? ! ; :` — is kept as typed):
 `test/storefront/themeTexts.test.ts` holds every theme on disk to the rules,
 yours included. Keep a key once merchants have written to it — a renamed key is
 a text that silently returns to its default.

@@ -92,11 +92,19 @@ export function validThemeTextSlots(declared: unknown): ThemeTextSlot[] {
   return kept;
 }
 
+/**
+ * Whitespace a line may break at: `\s` less the no-break spaces (U+00A0,
+ * U+2007, U+202F). Those are French typography, not spacing to tidy — the
+ * space before `? ! ; :` (ticket #175) — and `\s` alone matches them too.
+ */
+const BREAKING_SPACES = /[^\S\u00a0\u2007\u202f]+/g;
+
 /** A value as it is stored: line endings unified, trimmed, and for a one-line
- *  text every run of whitespace a single space. */
+ *  text every run of breaking whitespace a single space. A no-break space is
+ *  kept where it was typed or pasted, so the line does not wrap before `?`. */
 export function normalizeThemeText(format: ThemeTextSlot['format'], value: string): string {
   const unified = value.replace(/\r\n?/g, '\n');
-  return format === 'text' ? unified.replace(/\s+/g, ' ').trim() : unified.trim();
+  return format === 'text' ? unified.replace(BREAKING_SPACES, ' ').trim() : unified.trim();
 }
 
 /** One write: a value, or null to return the slot to its default. */

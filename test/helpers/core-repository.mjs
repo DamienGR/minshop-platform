@@ -68,6 +68,22 @@ export function git(args, cwd) {
 }
 
 /**
+ * Give the fixture core the core's own, empty `storeOverrides`.
+ *
+ * Run from a shop, THIS tree's src/store.config.ts is the merchant's: a shop in
+ * franchise en base says so there (ADR 0024). The witness shops `shopctl new`
+ * makes from the fixture declare the template's 20 % in their manifest, and
+ * would inherit a build that disagrees, which their manifest gate refuses.
+ */
+export function resetStoreOverrides(core) {
+  const path = join(core, 'src/store.config.ts');
+  const text = readFileSync(path, 'utf8');
+  const start = text.indexOf('export const storeOverrides');
+  if (start === -1) throw new Error('src/store.config.ts declares no storeOverrides');
+  writeFileSync(path, `${text.slice(0, start)}export const storeOverrides: DeepPartial<SiteConfig> = {};\n`);
+}
+
+/**
  * @param {string} root directory to create the core in
  * @param {{ tag?: string, dir?: string }} [options]
  * @returns {string} path to the core repository
@@ -80,6 +96,7 @@ export function createCoreRepository(root, { tag = CORE_TAG, dir = 'core' } = {}
     mkdirSync(dirname(join(core, file)), { recursive: true });
     cpSync(join(CORE, file), join(core, file));
   }
+  resetStoreOverrides(core);
   git(['init', '--quiet', '--initial-branch=main'], core);
   git(['add', '-A'], core);
   git(['commit', '--quiet', '-m', `Core ${tag}`], core);

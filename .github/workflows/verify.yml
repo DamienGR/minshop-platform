@@ -184,6 +184,10 @@ jobs:
         run: |
           git config --global user.name "Minshop CI"
           git config --global user.email "ci@example.com"
+          # In a shop, src/store.config.ts is the merchant's: the tagged core
+          # takes the core's empty overrides, as the test fixture does.
+          node --input-type=module -e "(await import('./test/helpers/core-repository.mjs')).resetStoreOverrides('.')"
+          git diff --quiet -- src/store.config.ts || git commit --quiet --message "Core storeOverrides" -- src/store.config.ts
           version="$(node -p "require('./package.json').version")"
           git tag -f "v${version}"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"

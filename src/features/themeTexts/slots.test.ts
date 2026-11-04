@@ -63,6 +63,13 @@ describe('a theme’s text declaration (ticket #165)', () => {
     expect(themeTextSlotProblems({ texts: [] })).toEqual(['`texts` must be an array of slots.']);
   });
 
+  // Ticket #175: `\s` matches the no-break spaces, so a default written in
+  // French typography read as "not written as it is stored".
+  it('accepts a one-line default typeset in French, no-break spaces included', () => {
+    expect(themeTextSlotProblems([{ ...title, default: 'Une question\u202f? Écrivez-moi' }])).toEqual([]);
+    expect(themeTextSlotProblems([{ ...title, default: 'Atelier\u00a0: Bouillac' }])).toEqual([]);
+  });
+
   it('keeps the slots a running shop can read when one is broken', () => {
     expect(validThemeTextSlots([title, { ...intro, maxLength: -1 }, { ...title, label: 'Doublon' }])).toEqual([title]);
     expect(validThemeTextSlots(undefined)).toEqual([]);
@@ -73,6 +80,17 @@ describe('the merchant’s texts', () => {
   it('stores a one-line text on one line, a Markdown text trimmed', () => {
     expect(normalizeThemeText('text', '  Né  à\r\nl’atelier ')).toBe('Né à l’atelier');
     expect(normalizeThemeText('markdown', '\r\nUn.\r\n\r\nDeux.  \n')).toBe('Un.\n\nDeux.');
+  });
+
+  // Ticket #175: a word processor puts a no-break space before « : » and « ? »;
+  // folded into an ordinary one, the storefront could wrap the line before them.
+  it('keeps the no-break spaces of a one-line text, folding only the breaking ones', () => {
+    expect(normalizeThemeText('text', ' Une question\u00a0?  Écrivez-moi\u202f:\r\n\tici ')).toBe(
+      'Une question\u00a0? Écrivez-moi\u202f: ici',
+    );
+    expect(normalizeThemeText('text', 'Prix\u2007: 12\u00a0€')).toBe('Prix\u2007: 12\u00a0€');
+    const parsed = parseThemeTextsForm(form({ [themeTextField('hero.title')]: 'Une question\u202f?' }), [title]);
+    expect(parsed).toEqual({ writes: [{ key: 'hero.title', value: 'Une question\u202f?' }] });
   });
 
   it('returns a slot to its default when the field is empty or unchanged', () => {
