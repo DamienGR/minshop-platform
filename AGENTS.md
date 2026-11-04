@@ -84,8 +84,9 @@ Use the narrowest customization surface that fits the change:
    values live in D1 and apply without a deploy. Provider credentials belong
    here too, where the secret vault stores them encrypted.
 2. **`src/store.config.ts`** for versioned, build-time settings: currency,
-   shipping zones and rates, image dimensions, order numbering, and
-   template-only features. Override only changed keys; never customize
+   shipping zones and rates, image dimensions, and template-only features.
+   (`orderNumber` numbers only orders older than the `ord_` references: a new
+   order shows its reference, whatever it says.) Override only changed keys; never customize
    `src/config.ts` defaults directly.
 3. **`src/themes/<theme>/tokens.css`** for brand colors, fonts, surfaces, and
    corner radii — each theme owns its `@theme` block. `src/styles/overrides.css`

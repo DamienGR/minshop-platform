@@ -11,7 +11,6 @@ import type { DeepPartial, SiteConfig } from './config';
  *
  *   currency: 'usd',
  *   images: { maxWidth: 1000 },
- *   orderNumber: { offset: 1000 },
  *
  * Operational switches and integrations belong in Admin → Settings.
  */
