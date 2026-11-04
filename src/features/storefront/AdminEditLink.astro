@@ -1,0 +1,73 @@
+---
+/**
+ * The admin's shortcut from a storefront page to its admin screen (ticket
+ * #178): a small fixed button, hidden from everyone else.
+ *
+ * The page around it is shared at the edge, so the markup is the same for every
+ * visitor: the link ships hidden and WITHOUT an href, which a crawler would
+ * otherwise follow into /admin. The script below fills both in once the admin
+ * gate has said yes. The rule and its two signals: features/auth/adminHint.ts.
+ *
+ * Placed by the route, not by the theme, so it works under every theme,
+ * a shop's own included, without the theme knowing it exists. `ink` and
+ * `paper` are tokens every theme declares, and they contrast by contract.
+ */
+interface Props {
+  /** The admin screen, e.g. productEditHref(model.id). */
+  href: string;
+  /** A catalog string: t('admin.products.storefrontEdit'). */
+  label: string;
+}
+
+const { href, label } = Astro.props;
+---
+
+<a
+  data-admin-edit
+  data-admin-href={href}
+  hidden
+  rel="nofollow"
+  class="fixed bottom-4 left-4 z-30 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper shadow-lg hover:opacity-90"
+>
+  {label}
+</a>
+
+<script>
+  import {
+    ADMIN_HINT_COOKIE,
+    ADMIN_PROBE_PATH,
+    hasAdminHint,
+    isAdminProbeAnswer,
+  } from '../auth/adminHint';
+
+  // A shopper has no hint, so for them this stops at the cookie read: no
+  // request leaves the page.
+  const link = document.querySelector('[data-admin-edit]');
+  const href = link instanceof HTMLAnchorElement ? link.dataset.adminHref : undefined;
+  if (link instanceof HTMLAnchorElement && href && hasAdminHint(document.cookie)) {
+    // `manual`: under Cloudflare Access a refused probe is a redirect to the
+    // Access login, which `follow` would turn into a 200 HTML page.
+    fetch(ADMIN_PROBE_PATH, { redirect: 'manual', headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (response.ok) {
+          if (isAdminProbeAnswer(await response.json().catch(() => null))) {
+            link.href = href;
+            link.hidden = false;
+          }
+          return;
+        }
+        // A refusal means the hint outlived the session: drop it, so the next
+        // page does not ask again. Any other failure keeps it for next time.
+        if (
+          response.status === 401 ||
+          response.status === 403 ||
+          response.type === 'opaqueredirect'
+        ) {
+          document.cookie = `${ADMIN_HINT_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+        }
+      })
+      .catch(() => {
+        // Offline, or the Worker did not answer: no shortcut this time.
+      });
+  }
+</script>

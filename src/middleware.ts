@@ -5,6 +5,7 @@ import { verifyAccessJwt } from './features/auth/access';
 import { accessGateDecision } from './features/auth/accessGate';
 import { verifySession } from './features/auth/session';
 import { adminCredential } from './features/auth/admin';
+import { ADMIN_HINT_COOKIE, ADMIN_HINT_MAX_AGE } from './features/auth/adminHint';
 import {
   getStoreSettings,
   parseStoreSettings,
@@ -68,6 +69,24 @@ function isProtected(pathname: string): boolean {
     pathname === '/api/admin' ||
     pathname.startsWith('/api/admin/')
   );
+}
+
+/**
+ * Mark a browser the gate has just let into the admin, for the storefront's
+ * edit shortcut (ticket #178). The mark is a hint, never an authority: the
+ * shortcut asks /api/admin/session before it shows anything
+ * (features/auth/adminHint.ts). Written only when absent, so an admin page
+ * does not send a Set-Cookie on every response.
+ */
+function markAdminBrowser(context: APIContext): void {
+  if (context.cookies.get(ADMIN_HINT_COOKIE)?.value === '1') return;
+  context.cookies.set(ADMIN_HINT_COOKIE, '1', {
+    path: '/',
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: context.url.protocol === 'https:',
+    maxAge: ADMIN_HINT_MAX_AGE,
+  });
 }
 
 async function gate(context: APIContext, next: MiddlewareNext): Promise<Response> {
@@ -167,7 +186,10 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
   if (!isProtected(context.url.pathname)) return next();
 
   // 1. Localhost dev has no Access edge — don't lock yourself out.
-  if (import.meta.env.DEV) return next();
+  if (import.meta.env.DEV) {
+    markAdminBrowser(context);
+    return next();
+  }
 
   // 2. Steady state: an admin password is set (via the setup wizard) → require a
   //    valid signed session. Checked before the Access header so it can't be
@@ -179,7 +201,10 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     const session = context.cookies.get('admin_session')?.value ?? null;
     // Sign/verify with AUTH_SECRET (high-entropy key); the credential is the bound tag.
     const signingKey = env.AUTH_SECRET || cred.tagSource;
-    if (await verifySession(session, signingKey, cred.tagSource, Date.now() / 1000)) return next();
+    if (await verifySession(session, signingKey, cred.tagSource, Date.now() / 1000)) {
+      markAdminBrowser(context);
+      return next();
+    }
     // Not authenticated: humans go to the login form, API callers get 401.
     if (path.startsWith('/api/')) {
       return new Response(t('admin.shell.gate.authRequired'), { status: 401 });
@@ -213,6 +238,7 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     }
     if (identity) {
       context.locals.adminEmail = identity.email;
+      markAdminBrowser(context);
       return next();
     }
     return new Response(t('admin.shell.gate.invalidAccessToken'), { status: 403 });
