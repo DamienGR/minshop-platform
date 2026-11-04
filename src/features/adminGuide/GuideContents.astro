@@ -1,0 +1,54 @@
+---
+import { t } from '../i18n';
+import type { GuideChapter } from './guide';
+
+/**
+ * The guide itself: its contents, then every chapter. One markup for the page
+ * (/admin/guide) and for the side panel, which fetches it from
+ * /admin/guide/panneau. Chapter bodies come from renderMarkdown(): no raw HTML.
+ */
+interface Props {
+  chapters: readonly GuideChapter[];
+}
+
+const { chapters } = Astro.props;
+const core = chapters.filter((chapter) => chapter.origin === 'core');
+const shop = chapters.filter((chapter) => chapter.origin === 'shop');
+---
+
+<nav aria-labelledby="guide-contents" class="admin-guide-contents mb-8 rounded-md border border-line bg-white/60 px-5 py-4 text-sm">
+  <h2 id="guide-contents" class="mb-2 text-xs uppercase tracking-widest text-gray-600">{t('admin.guide.contents')}</h2>
+  <ol class="space-y-1">
+    {
+      core.map((chapter) => (
+        <li>
+          <a href={`#${chapter.anchor}`} class="text-accent hover:underline">
+            {chapter.title}
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+  {
+    shop.length > 0 && (
+      <Fragment>
+        <p class="mb-1 mt-4 text-xs uppercase tracking-widest text-gray-600">{t('admin.guide.shopChapters')}</p>
+        <ol class="space-y-1">
+          {shop.map((chapter) => (
+            <li>
+              <a href={`#${chapter.anchor}`} class="text-accent hover:underline">
+                {chapter.title}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </Fragment>
+    )
+  }
+</nav>
+
+{
+  chapters.map((chapter) => (
+    <section class="admin-guide-chapter markdown-content" data-guide-origin={chapter.origin} set:html={chapter.html} />
+  ))
+}

@@ -51,3 +51,47 @@
 :root {
   --minshop-css-entry: admin;
 }
+
+/* The admin guide's side panel (ticket #188, features/adminGuide). Closed, it
+   is not there. Open, <html> carries data-guide-open — set before the first
+   paint by AdminLayout's inline script when the panel was open on the
+   previous screen — and the panel is docked on the right from 64rem, the page
+   making room for it, or laid over the page below that. */
+:root {
+  --guide-width: 26rem;
+}
+.admin-guide-panel {
+  display: none;
+}
+html[data-guide-open] .admin-guide-panel {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, var(--guide-width));
+  border-inline-start: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: 0 0 2rem rgb(17 24 39 / 0.15);
+}
+@media (min-width: 64rem) {
+  html[data-guide-open] body {
+    padding-inline-end: var(--guide-width);
+  }
+  html[data-guide-open] .admin-guide-panel {
+    box-shadow: none;
+  }
+}
+/* A size down in the panel, which sits beside a screen, and the panel's whole
+   width rather than the page's reading measure. */
+.admin-guide-panel .markdown-content {
+  --prose-measure: none;
+  --prose-h2-size: 1.25rem;
+  --prose-h3-size: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.admin-guide-panel .admin-guide-contents {
+  margin-bottom: 1.5rem;
+}

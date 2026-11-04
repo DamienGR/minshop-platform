@@ -49,6 +49,10 @@ const ROOT = resolve(new URL('..', import.meta.url).pathname);
 const WITNESS_DIR = 'test/fixtures/clients';
 export const ROOT_DIR = ROOT;
 export const NOTES_DIR = 'docs/migrations';
+/** The admin guide's chapters (ticket #188): a tree that carries them owes
+ *  each version's notes a word on what the version does to the guide. */
+export const GUIDE_DIR = 'src/features/adminGuide/chapters';
+export const GUIDE_SECTION = 'Guide administrateur';
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 /** Git, in the tree being examined — never in "the repository this file happens
@@ -237,6 +241,19 @@ export function releaseFindings(root = ROOT, { publish = false } = {}) {
     message: hasNotes ? notes : `${notes} manque ou est vide — une version qu'aucune note n'accompagne se met à niveau à l'aveugle`,
   });
 
+  // The guide ships with the version that changes the screens it describes: a
+  // release is the moment someone says whether it still does (ticket #188).
+  if (hasNotes && existsSync(join(root, GUIDE_DIR))) {
+    const said = noteSection(readFileSync(join(root, notes), 'utf8'), GUIDE_SECTION);
+    checks.push({
+      check: 'guide administrateur',
+      ok: Boolean(said),
+      message: said
+        ? `${notes} dit ce que la version change au guide de l'administration`
+        : `${notes} n'a pas de section « ## ${GUIDE_SECTION} » remplie : dites quels chapitres changent, ou que le guide est inchangé`,
+    });
+  }
+
   if (publish) {
     const { taken, source } = tagIsTaken(tag, root);
     checks.push({
@@ -303,6 +320,21 @@ export function setVersion(version, root = ROOT) {
   return written;
 }
 
+/** The text under a note's `## <heading>`, up to the next `## `, comments
+ *  left out: null when the section is missing or says nothing. */
+export function noteSection(text, heading) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.trim() === `## ${heading}`);
+  if (start === -1) return null;
+  const end = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  const body = lines
+    .slice(start + 1, end === -1 ? undefined : end)
+    .join('\n')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
+  return body || null;
+}
+
 /** The skeleton a version's notes start from. Sections rather than prose: an
  *  empty section is a question someone has to answer, a blank file is not. */
 export function notesTemplate(version) {
@@ -322,6 +354,13 @@ export function notesTemplate(version) {
 ## À faire dans la boutique
 
 - rien / …
+
+## Guide administrateur
+
+<!-- Les chapitres de src/features/adminGuide/chapters/ que cette version
+     modifie, pour un écran de l'administration qui a changé. -->
+
+- inchangé / chapitres mis à jour : …
 
 ## Compatibilité
 

@@ -199,6 +199,38 @@ describe('renderMarkdown — source map', () => {
   });
 });
 
+describe('renderMarkdown — heading ids (admin guide, ticket #188)', () => {
+  it('gives each heading the id the caller names, from its plain text and level', () => {
+    const seen: [string, number][] = [];
+    const html = renderMarkdown('## Les **commandes**\n\n### Rembourser `vite`', {
+      headingId: (text, level) => {
+        seen.push([text, level]);
+        return `guide-${level}`;
+      },
+    });
+    expect(seen).toEqual([
+      ['Les commandes', 2],
+      ['Rembourser vite', 3],
+    ]);
+    expect(html).toContain('<h2 id="guide-2">Les <strong>commandes</strong></h2>');
+    expect(html).toContain('<h3 id="guide-3">Rembourser <code>vite</code></h3>');
+  });
+
+  it('leaves a heading without an id when the caller returns none', () => {
+    expect(renderMarkdown('## Titre', { headingId: () => undefined })).toBe('<h2>Titre</h2>\n');
+  });
+
+  it('escapes the id like any attribute', () => {
+    const html = renderMarkdown('## Titre', { headingId: () => '"><script>' });
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('id="&quot;&gt;&lt;script&gt;"');
+  });
+
+  it('renders a page body without ids: a merchant heading claims none', () => {
+    expect(renderMarkdown('## Livraison')).toBe('<h2>Livraison</h2>\n');
+  });
+});
+
 describe('extractMediaKeys', () => {
   it('finds root-relative references', () => {
     expect(extractMediaKeys('![a](/images/media/a.webp)')).toEqual(['media/a.webp']);

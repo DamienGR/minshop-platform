@@ -1,0 +1,225 @@
+---
+import { t } from '../i18n';
+import Rich from '../i18n/Rich.astro';
+
+/**
+ * The guide's side panel (ticket #188), on every admin screen.
+ *
+ * Without its script the footer link is a plain link to /admin/guide, the
+ * whole guide on a page of its own. With it, the link opens the guide beside
+ * the screen, on the chapter of that screen, and the merchant keeps working
+ * next to it. The panel stays open from one screen to the next: its state is
+ * in sessionStorage, and AdminLayout's inline script reopens it before the
+ * first paint, so the page does not jump sideways once this script runs.
+ *
+ * The guide is fetched on the first opening, not rendered into every admin
+ * page, and kept for the browser session under its revision: a deployment
+ * that changes a chapter changes the revision, and the next opening fetches
+ * again. No <iframe>: the security headers forbid framing, even by the shop
+ * itself (`frame-ancestors 'none'`), and they are right to.
+ */
+interface Props {
+  /** guideRevision(): the session's copy of the guide is stale once it changes. */
+  revision: string;
+}
+
+const { revision } = Astro.props;
+---
+
+<aside
+  id="admin-guide"
+  data-guide-panel
+  data-guide-revision={revision}
+  aria-labelledby="admin-guide-title"
+  class="admin-guide-panel"
+>
+  <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+    <h2 id="admin-guide-title" tabindex="-1" class="font-serif text-lg tracking-tight text-gray-900 outline-none">
+      {t('admin.guide.title')}
+    </h2>
+    <div class="flex shrink-0 items-center gap-4 text-xs uppercase tracking-widest">
+      <a href="/admin/guide" class="text-gray-600 hover:text-brand">{t('admin.guide.panel.fullPage')}</a>
+      <button
+        type="button"
+        data-guide-close
+        class="rounded-md border border-line px-3 py-1.5 uppercase tracking-widest text-gray-700 transition hover:border-brand hover:text-brand"
+      >
+        {t('admin.guide.panel.close')}
+      </button>
+    </div>
+  </div>
+  <div data-guide-body class="admin-guide-body min-h-0 flex-1 overflow-y-auto px-5 py-4">
+    <p class="text-sm text-gray-600">{t('admin.common.loading')}</p>
+  </div>
+  <template data-guide-failed>
+    <p class="text-sm text-gray-700">
+      <Rich message="admin.guide.panel.loadFailed" href="/admin/guide" linkClass="text-accent underline" />
+    </p>
+  </template>
+</aside>
+
+<script>
+  /** What the panel remembers between two screens of one browser tab. */
+  interface PanelState {
+    open: boolean;
+    scroll: number;
+  }
+
+  /** The guide as fetched, under the revision it was fetched at. */
+  interface GuideCopy {
+    revision: string;
+    html: string;
+  }
+
+  // AdminLayout's inline script reads STATE_KEY too: rename both or neither.
+  const STATE_KEY = 'minshop.adminGuide';
+  const COPY_KEY = 'minshop.adminGuide.copy';
+
+  function read<T>(key: string): T | null {
+    try {
+      const raw = sessionStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+      // Storage off, private mode, or a value this script did not write.
+      return null;
+    }
+  }
+
+  function write(key: string, value: unknown): void {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // A full or disabled storage only costs the panel its memory.
+    }
+  }
+
+  /** The panel, wired once its four parts are known to be on the page. */
+  function setUp(panel: HTMLElement, body: HTMLElement, title: HTMLElement, failed: HTMLTemplateElement): void {
+    const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-guide-link]')];
+    const root = document.documentElement;
+    const revision = panel.dataset.guideRevision ?? '';
+    let loading: Promise<boolean> | undefined;
+
+    const isOpen = () => root.hasAttribute('data-guide-open');
+
+    const remember = () => write(STATE_KEY, { open: isOpen(), scroll: body.scrollTop } satisfies PanelState);
+
+    const showFailure = () => body.replaceChildren(failed.content.cloneNode(true));
+
+    /** The guide's markup, from this session's copy or from the server. */
+    function load(): Promise<boolean> {
+      loading ??= (async () => {
+        const copy = read<GuideCopy>(COPY_KEY);
+        let html = copy?.revision === revision ? copy.html : null;
+        if (html === null) {
+          const response = await fetch('/admin/guide/panneau', { credentials: 'same-origin' });
+          // A lapsed session answers with the login page, through a redirect.
+          if (!response.ok || response.redirected) return false;
+          html = await response.text();
+          write(COPY_KEY, { revision, html } satisfies GuideCopy);
+        }
+        // renderMarkdown()'s output (no raw HTML), from this shop's own server.
+        body.innerHTML = html;
+        return true;
+      })().catch(() => false);
+      return loading;
+    }
+
+    /** Scroll the panel, never the screen under it, to one of its headings. */
+    function scrollToAnchor(anchor: string): void {
+      const target = body.querySelector<HTMLElement>(`#${CSS.escape(anchor)}`);
+      if (!target) return;
+      body.scrollTop += target.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
+    }
+
+    function setExpanded(): void {
+      for (const link of links) link.setAttribute('aria-expanded', String(isOpen()));
+    }
+
+    async function open(anchor: string | null): Promise<void> {
+      root.setAttribute('data-guide-open', '');
+      setExpanded();
+      remember();
+      if (!(await load())) return showFailure();
+      if (anchor) scrollToAnchor(anchor);
+      remember();
+      title.focus();
+    }
+
+    function close(focusLink: boolean): void {
+      root.removeAttribute('data-guide-open');
+      setExpanded();
+      remember();
+      if (focusLink) links[0]?.focus();
+    }
+
+    /** Open as it was left on the previous screen: same place in the guide, focus untouched. */
+    async function restore(): Promise<void> {
+      const state = read<PanelState>(STATE_KEY);
+      if (!state?.open) {
+        if (isOpen()) close(false);
+        return;
+      }
+      root.setAttribute('data-guide-open', '');
+      setExpanded();
+      if (!(await load())) return showFailure();
+      body.scrollTop = state.scroll;
+    }
+
+    for (const link of links) {
+      link.setAttribute('aria-controls', panel.id);
+      link.addEventListener('click', (event) => {
+        // A click that asks for a new tab or window gets the page.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (isOpen()) close(false);
+        else void open(new URL(link.href).hash.slice(1) || null);
+      });
+    }
+
+    panel.querySelector('[data-guide-close]')?.addEventListener('click', () => close(true));
+    panel.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      close(true);
+    });
+
+    // The contents and a chapter's cross-references move within the panel,
+    // and leave the address of the screen alone.
+    body.addEventListener('click', (event) => {
+      const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null;
+      if (!link) return;
+      event.preventDefault();
+      scrollToAnchor(link.getAttribute('href')!.slice(1));
+    });
+
+    let saving: number | undefined;
+    body.addEventListener(
+      'scroll',
+      () => {
+        window.clearTimeout(saving);
+        saving = window.setTimeout(remember, 150);
+      },
+      { passive: true },
+    );
+    window.addEventListener('pagehide', remember);
+    // Back to a screen kept in the browser's cache: the panel may have been
+    // opened or closed on another screen since.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) void restore();
+    });
+
+    setExpanded();
+    if (isOpen()) void restore();
+  }
+
+  const panel = document.querySelector<HTMLElement>('[data-guide-panel]');
+  const body = panel?.querySelector<HTMLElement>('[data-guide-body]');
+  const title = panel?.querySelector<HTMLElement>('#admin-guide-title');
+  const failed = panel?.querySelector<HTMLTemplateElement>('template[data-guide-failed]');
+  // The guide's own page IS the guide: a panel over it would show it twice,
+  // and give every heading two elements with one id.
+  const onGuidePage = location.pathname.replace(/\/$/, '') === '/admin/guide';
+
+  if (panel && body && title && failed && !onGuidePage) setUp(panel, body, title, failed);
+</script>

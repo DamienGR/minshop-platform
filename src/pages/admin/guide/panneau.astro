@@ -1,0 +1,13 @@
+---
+import GuideContents from '../../../features/adminGuide/GuideContents.astro';
+import { adminGuide } from '../../../features/adminGuide/content';
+
+// The guide without the admin's shell, which the side panel fetches on its
+// first opening (ticket #188). A partial: no doctype, no head. Under /admin,
+// so the middleware's gate closes it like every other admin route.
+export const partial = true;
+
+const chapters = adminGuide();
+---
+
+<GuideContents chapters={chapters} />

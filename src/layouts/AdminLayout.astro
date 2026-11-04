@@ -7,6 +7,10 @@ import { env } from 'cloudflare:workers';
 import { countUnresolvedInventoryExceptions } from '../features/orders/db';
 import { LANG, t, tn } from '../features/i18n';
 import { activeThemeTextSlots } from '../features/themeTexts/active';
+import GuidePanel from '../features/adminGuide/GuidePanel.astro';
+import { adminGuideRevision } from '../features/adminGuide/content';
+import { guideHref } from '../features/adminGuide/guide';
+import { CORE_VERSION, supportHref } from '../features/adminShell/footer';
 // Admin's OWN stylesheet — never global.css, which carries the active
 // storefront set's tokens and base-layer rules. A dark set would otherwise
 // restyle every authenticated Admin page (see src/styles/admin.css).
@@ -81,6 +85,14 @@ const nav: { key: Section; label: string; href: string }[] = [
 ];
 // Label of the section we're on — shown in the collapsed mobile disclosure.
 const currentLabel = nav.find((n) => n.key === active)?.label ?? t('admin.shell.nav.menu');
+// The footer (ticket #186): the core this shop runs, the guide open at this
+// screen's chapter (ticket #188), and whom to write to — an address the shop's
+// code declares (`admin.supportEmail`), so no link when it declares none.
+const footerGuideHref = guideHref(active);
+const footerSupportHref = supportHref(
+  config.admin.supportEmail,
+  t('admin.shell.footer.supportSubject', { boutique: storeName, version: CORE_VERSION }),
+);
 ---
 
 <!doctype html>
@@ -97,9 +109,20 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? t('admin.shell.
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{pageTitle}</title>
+    {/* The guide's panel reopens before the first paint when it was open on
+        the previous screen; done later, by GuidePanel's script, the page
+        would jump sideways under the merchant's eyes. Same key and same
+        exception (the guide's own page) as that script. */}
+    <script is:inline>
+      try {
+        if (location.pathname.replace(/\/$/, '') !== '/admin/guide' && JSON.parse(sessionStorage.getItem('minshop.adminGuide') || 'null')?.open) {
+          document.documentElement.setAttribute('data-guide-open', '');
+        }
+      } catch {}
+    </script>
   </head>
-  <body class="min-h-screen bg-paper text-ink antialiased">
-    <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 sm:flex-row sm:gap-10">
+  <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
+    <div class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 sm:flex-row sm:gap-10">
       <aside class="w-full shrink-0 sm:w-52 sm:border-r sm:border-line sm:pr-6">
         <a href="/" class="mb-4 block font-serif text-xl tracking-tight sm:mb-8">{storeName}</a>
 
@@ -254,5 +277,25 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? t('admin.shell.
         <slot />
       </main>
     </div>
+    <footer
+      data-admin-footer
+      aria-label={t('admin.shell.footer.label')}
+      class="sticky bottom-0 z-30 border-t border-line bg-paper"
+    >
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-1 px-6 py-2 text-xs text-gray-600">
+        <span>{t('admin.shell.footer.version', { version: CORE_VERSION })}</span>
+        <a href={footerGuideHref} data-guide-link class="underline-offset-2 hover:text-brand hover:underline">
+          {t('admin.shell.footer.guide')}
+        </a>
+        {
+          footerSupportHref && (
+            <a href={footerSupportHref} class="underline-offset-2 hover:text-brand hover:underline">
+              {t('admin.shell.footer.support')}
+            </a>
+          )
+        }
+      </div>
+    </footer>
+    <GuidePanel revision={adminGuideRevision()} />
   </body>
 </html>

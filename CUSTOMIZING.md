@@ -20,6 +20,7 @@ theme engine and no code editor in Admin — you edit source, build, and deploy.
 | `src/themes/<your-theme>/ContentPage.astro` | The frame around a merchant's Markdown page. |
 | `src/themes/<your-theme>/tokens.css` | Your theme's design tokens: the `@theme` block (colors, fonts, radii) plus the prose and container scales. |
 | `src/themes/<your-theme>/texts.ts` | Optional. The texts your theme lets the merchant edit in Admin → Textes du thème — see "Texts the merchant edits". |
+| `client/guide/*.md` | Optional. Your shop's own chapters of the admin guide, after the core's — see "Chapters of the admin guide". |
 
 That is the whole store-owned surface.
 
@@ -348,6 +349,35 @@ a no-break space — U+202F before `? ! ; :` — is kept as typed):
 `test/storefront/themeTexts.test.ts` holds every theme on disk to the rules,
 yours included. Keep a key once merchants have written to it — a renamed key is
 a text that silently returns to its default.
+
+## Chapters of the admin guide
+
+The admin's guide (« Guide de l’administration », opened from the footer of
+every admin screen, beside the screen) explains the core's screens. What only
+your shop knows — what your theme does with a tag, which texts it lets the
+merchant change, how its home is built — goes in `client/guide/`, one
+Markdown file per chapter:
+
+```md
+## L’accueil de votre boutique
+
+### Changer la photo de la une
+
+1. Ouvrez **Médias**, puis cliquez sur **Importer**.
+2. …
+```
+
+- The chapters follow the core's, under « Propre à votre boutique », in the
+  order of their file names: number them (`01-accueil.md`, `02-etiquettes.md`).
+- Each opens with its title, a `##` heading, and holds no other at that level:
+  its sections are `###`.
+- Write for the merchant, in French: short tasks, numbered steps, the screen's
+  labels in bold, no jargon.
+- `npm test` (`src/features/adminGuide/guide.test.ts`) holds them to the
+  core's rules: French typography (`’`, and a narrow no-break space, U+202F,
+  before `? ! ; :` and inside « »), and links that lead to a chapter of the
+  guide (`#guide-orders`, `#guide-boutique-accueil`) or to an admin screen.
+- They render like a page body: Markdown, never HTML.
 
 ## Styling
 
