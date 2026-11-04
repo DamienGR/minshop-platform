@@ -28,7 +28,7 @@ import { RESERVED_THEME_IDS } from '../../scripts/themes.mjs';
 import { WITNESS_CLIENTS_DIR, discoverManifests } from '../../scripts/manifest.mjs';
 // The core fixture and the git identity live in a helper: the fleet suite
 // (jalon 9) creates the same "core at a tag" and a second copy would drift.
-import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git } from '../helpers/core-repository.mjs';
+import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, shop } from '../helpers/provisioned-shop.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
@@ -667,6 +667,7 @@ describe('shopctl new', () => {
     // tree already carries a client manifest, so the same command modifies what
     // it would otherwise add. The paths do not move; only the letter does.
     const expected = [
+      '.github/README.md',
       'client/client.yaml',
       'client/signatures/boutique-du-port.json',
       'imports/README.md',
@@ -692,6 +693,16 @@ describe('shopctl new', () => {
     expect(readFileSync(join(shop, 'client/signatures/boutique-du-port.json'), 'utf8')).toBe(
       readFileSync(join(core(), 'test/browser/__signatures__/default.json'), 'utf8'),
     );
+
+    // The repository's home page is the shop's (ticket #83): GitHub shows it
+    // ahead of the core's README.md, and the core never ships one.
+    const home = readFileSync(join(shop, '.github/README.md'), 'utf8');
+    expect(home).toMatch(/^# Boutique Du Port\n/);
+    expect(home).toContain(`socle Minshop (${CORE_TAG} à sa création)`);
+    expect(home).toContain('[`src/themes/boutique-du-port/`](../src/themes/boutique-du-port/)');
+    // The placeholder domain is not presented as the shop's address.
+    expect(home).toContain('domaine à déclarer dans le manifeste');
+    expect(home).not.toContain('example.com');
 
     expect(readFileSync(join(shop, 'client/client.yaml'), 'utf8')).toBe(
       `# Manifeste de la boutique Boutique Du Port.
@@ -750,6 +761,26 @@ theme:
   id: boutique-du-port
 `,
     );
+  });
+
+  // Asked of the TAG's ownership map, not the host's: a core that gates
+  // .github/README.md as its own would refuse a shop's name in it, and the
+  // shop would fail its first gate for a file `new` chose to write.
+  it('writes no home page for a core tag that keeps .github/README.md', () => {
+    const older = createCoreRepository(mkdtempSync(join(tmpdir(), 'shopctl-core-older-')));
+    const rules = join(older, 'scripts/path-ownership.mjs');
+    const text = readFileSync(rules, 'utf8');
+    const start = text.indexOf("  {\n    // Before `.github/**`");
+    const end = text.indexOf("codeowners: '/.github/README.md',\n  },\n") + "codeowners: '/.github/README.md',\n  },\n".length;
+    expect(start).toBeGreaterThan(-1);
+    writeFileSync(rules, text.slice(0, start) + text.slice(end));
+    execFileSync('node', ['scripts/check-paths.mjs', '--write'], { cwd: older, encoding: 'utf8' });
+    const tag = publishVersion(older, { version: nextMinor() });
+
+    const work = workspace();
+    const result = shopctl(['new', 'boutique-ancienne', '--from', older, '--core', tag, '--no-install'], work);
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(work, 'shop-boutique-ancienne/.github/README.md'))).toBe(false);
   });
 
   // ADR 0003: the history is what makes the next upgrade an ordinary merge, and

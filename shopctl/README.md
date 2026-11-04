@@ -117,9 +117,16 @@ nom tombe sur celui d'un témoin — le témoin lui-même, ou `<témoin>-staging
 
 Elle clone **un tag**, **avec son historique**, renomme le remote du socle en
 `core`, crée la branche de travail, écrit le manifeste et le thème de la
-boutique, rend `wrangler.jsonc` depuis le manifeste, exécute les portes que la
-boutique transporte, commite, installe les dépendances, puis liste les actions
-suivantes.
+boutique, sa page d'accueil GitHub (`.github/README.md`), rend `wrangler.jsonc`
+depuis le manifeste, exécute les portes que la boutique transporte, commite,
+installe les dépendances, puis liste les actions suivantes.
+
+**La page d'accueil du dépôt est celle de la boutique** (ticket #83). GitHub
+affiche `.github/README.md` avant le `README.md` racine, qui reste la
+documentation du socle. Ce fichier appartient à la boutique : le socle n'en
+livre aucun, donc aucune mise à niveau n'y entre en conflit, et la porte de
+neutralité, qui ne lit que les fichiers du cœur, le laisse nommer la boutique.
+Une boutique plus ancienne peut l'ajouter à la main, une fois montée.
 
 Trois propriétés valent d'être connues avant de lire le code.
 

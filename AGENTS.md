@@ -117,8 +117,9 @@ is the list; `npm run check:paths` fails on a path no rule covers, and
   edit one, but never as an unremarked customization: each core edit is a
   divergence to re-resolve at the next upgrade.
 - **client** — the merchant's. `client/`, `imports/`, `src/store.config.ts`,
-  `src/styles/overrides.css`, `theme.config.json`, `public/`, and the shop's own
-  theme under `src/themes/`. The core never edits these, which is what keeps an
+  `src/styles/overrides.css`, `theme.config.json`, `public/`, the shop's own
+  theme under `src/themes/`, and `.github/README.md`, its home page on GitHub
+  (the core ships none). The core never edits these, which is what keeps an
   upgrade merge clean.
 - **generated** — a tool's. `wrangler.jsonc`, `schemas/*.schema.json`,
   `.github/CODEOWNERS`. An unexpected diff means a generator ran.

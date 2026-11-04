@@ -72,6 +72,10 @@ describe('the ownership map', () => {
     ['wrangler.jsonc', 'generated'],
     ['schemas/client-1.schema.json', 'generated'],
     ['.github/CODEOWNERS', 'generated'],
+    // GitHub's first choice for a home page (ticket #83): the shop's, ahead of
+    // the core's README.md, while the rest of .github/ stays the core's.
+    ['.github/README.md', 'client'],
+    ['.github/workflows/nightly.yml', 'core'],
   ])('gives %s to the %s', (path, owner) => {
     expect(classifyPath(path).owner).toBe(owner);
   });
@@ -232,6 +236,7 @@ describe('.github/CODEOWNERS', () => {
     ['theme.config.json', 'client'],
     ['wrangler.jsonc', 'generated'],
     ['.github/CODEOWNERS', 'generated'],
+    ['.github/README.md', 'client'],
     ['.github/workflows/verify.yml', 'core'],
     ['migrations/0001_init.sql', 'core'],
     ['package.json', 'core'],

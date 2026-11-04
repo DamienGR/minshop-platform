@@ -46,6 +46,8 @@
 /theme.config.json
 # client: The shop manifest and everything non-sensitive that belongs to the merchant.
 /client/
+# client: The shop's home page on GitHub, written by `shopctl new`. The core ships none.
+/.github/README.md
 # generated: Rendered from wrangler.template.jsonc for one instance. Hand edits are lost at the next render.
 /wrangler.jsonc @DamienGR
 # generated: Rendered from scripts/manifest-schema.mjs; committed so editors can validate a manifest.
