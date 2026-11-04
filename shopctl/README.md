@@ -482,6 +482,16 @@ version antérieure, une version qui réécrit une migration déjà publiée
 chacun et **laissé dans l'arbre** — le résoudre est un travail git à cet
 endroit ; `--abort-on-conflict` défait la fusion pour l'appelant qui préfère.
 
+**La porte de la pull request est jugée avant elle** (ticket #86). Un fichier du
+cœur que la boutique avait modifié et que la version modifie aussi fusionne
+sans conflit, mais n'est plus la copie exacte ni de l'une ni de l'autre : le
+job « File ownership » demandera une nouvelle approbation. La mise à niveau
+lance donc aussi le `check-paths.mjs --changed` de la boutique contre la
+branche de départ, nomme ces fichiers avec la marche à suivre — l'étiquette
+`core-change` sur la pull request, ou un commit portant le trailer
+`Approves-core-change: <raison>` — et, avec `--open-pr`, les liste dans la
+pull request. C'est un avertissement : la fusion est saine.
+
 **La flotte est déclarée**, jamais découverte. `fleet.json`, dans l'espace de
 travail de l'agence, à côté des boutiques :
 

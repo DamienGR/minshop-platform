@@ -31,7 +31,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CLIENT_MANIFEST } from '../../../scripts/manifest.mjs';
 import { inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
-import { describeGateFailure, runShopGates } from '../gates.mjs';
+import { describeGateFailure, runCoreChangeGate, runShopGates } from '../gates.mjs';
 import { withCoreVersion } from '../manifest-template.mjs';
 import { assertForgeReady, openPullRequest, originUrl } from '../forge.mjs';
 import { capture, run } from '../process.mjs';
@@ -494,6 +494,8 @@ export function upgradeShop({
 
   // ------------------------------------------------------- 6. les portes
   let checks = [];
+  /** @type {ReturnType<typeof runCoreChangeGate>|null} */
+  let coreChange = null;
   if (verify) {
     const gates = runShopGates(root);
     checks = gates.checks;
@@ -506,6 +508,31 @@ export function upgradeShop({
         `la boutique ne passe plus ses propres portes après la fusion de ${target.tag}.`,
         `La branche ${branch} est conservée dans ${root} pour être lue. Rien n'a été poussé ni déployé.`,
         { branch, checks },
+      );
+    }
+
+    // The pull request's own gate (ticket #86). Not a refusal: the merge is
+    // sound and a core file both sides edited is the ADR 0003 case, which an
+    // approval settles. What was wrong is the ✓ printed here before CI's ✗.
+    coreChange = runCoreChangeGate(root, base);
+    if (!coreChange.evaluated) {
+      reporter.warn(
+        `porte core-change non évaluée : ${coreChange.reason}`,
+        'La CI de la pull request la jugera : le job « File ownership » dit quels fichiers du cœur demandent une approbation.',
+      );
+    } else if (coreChange.core.length === 0) {
+      reporter.ok('porte core-change : aucun fichier du cœur à approuver');
+    } else if (coreChange.approved) {
+      reporter.ok(`porte core-change : ${coreChange.core.length} fichier${coreChange.core.length > 1 ? 's' : ''} du cœur, approuvé${coreChange.core.length > 1 ? 's' : ''} par ${coreChange.approved}`);
+    } else {
+      reporter.warn(
+        `porte core-change : ${coreChange.core.length} fichier${coreChange.core.length > 1 ? 's' : ''} du cœur sans approbation, le job « File ownership » de la pull request échouera.`,
+        [
+          ...coreChange.core.slice(0, 10).map((path) => `  ${path}`),
+          ...(coreChange.core.length > 10 ? [`  … et ${coreChange.core.length - 10} autres`] : []),
+          `La boutique les avait modifiés et ${target.tag} aussi : la fusion n'est l'exacte copie ni de l'un ni de l'autre (ADR 0003).`,
+          'Relisez-les, puis approuvez : étiquette `core-change` sur la pull request, ou un commit portant le trailer `Approves-core-change: <raison>`.',
+        ].join('\n'),
       );
     }
   } else {
@@ -527,7 +554,7 @@ export function upgradeShop({
       branch,
       base,
       title: `Socle ${target.tag}`,
-      body: pullRequestBody({ slug, from: fromVersion, target, migrations, notes, drift: state.drift }),
+      body: pullRequestBody({ slug, from: fromVersion, target, migrations, notes, drift: state.drift, coreChange }),
     });
     reporter.ok(`pull request ${pullRequest.created ? 'ouverte' : 'déjà ouverte'}${pullRequest.url ? ` : ${pullRequest.url}` : ''}`);
   }
@@ -548,6 +575,7 @@ export function upgradeShop({
     notes: notes.map(({ version, file }) => ({ version, file })),
     drift: state.drift,
     checks,
+    coreChange: coreChange && { evaluated: coreChange.evaluated, paths: coreChange.core, approved: coreChange.approved },
     pullRequest,
   };
 }
@@ -560,7 +588,7 @@ export function upgradeShop({
  * this shop had already diverged on. The last one is the interesting column: it
  * is the list of places where the merge made a choice.
  */
-export function pullRequestBody({ slug, from, target, migrations, notes, drift }) {
+export function pullRequestBody({ slug, from, target, migrations, notes, drift, coreChange = null }) {
   const lines = [
     `Mise à niveau du socle de **${slug}** : ${from ? `v${from}` : 'version inconnue'} → **${target.tag}**.`,
     '',
@@ -582,6 +610,27 @@ export function pullRequestBody({ slug, from, target, migrations, notes, drift }
     if (drift.length > 20) lines.push(`- … et ${drift.length - 20} autres`);
     lines.push('', 'C\'est là que la fusion a dû choisir. À relire en premier.', '');
   }
-  lines.push('## Avant de fusionner', '', '- [ ] `npm run verify` vert', '- [ ] `shopctl deploy --env staging` puis smoke test', '- [ ] notes de migration appliquées', '');
+  // The files the File ownership job will name (ticket #86), said where the
+  // reviewer reads first rather than discovered in a red check.
+  const toApprove = coreChange?.evaluated && !coreChange.approved ? coreChange.core : [];
+  if (toApprove.length > 0) {
+    lines.push(`## Écarts du cœur à approuver (${toApprove.length})`, '');
+    lines.push(
+      `La boutique avait modifié ces fichiers du cœur, et ${target.tag} aussi : la fusion n'est l'exacte copie ni de l'un ni de l'autre, et le job « File ownership » échoue tant qu'ils ne sont pas approuvés (ADR 0003).`,
+      '',
+    );
+    for (const path of toApprove.slice(0, 20)) lines.push(`- \`${path}\``);
+    if (toApprove.length > 20) lines.push(`- … et ${toApprove.length - 20} autres`);
+    lines.push('', 'Relisez-les, puis posez l\'étiquette `core-change` sur cette pull request, ou poussez un commit portant le trailer `Approves-core-change: <raison>`.', '');
+  }
+  lines.push(
+    '## Avant de fusionner',
+    '',
+    '- [ ] `npm run verify` vert',
+    '- [ ] `shopctl deploy --env staging` puis smoke test',
+    '- [ ] notes de migration appliquées',
+    ...(toApprove.length > 0 ? ['- [ ] écarts du cœur relus et approuvés'] : []),
+    '',
+  );
   return lines.join('\n');
 }

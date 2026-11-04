@@ -274,7 +274,14 @@ from the shop's origin brings none: `core status` names a declared tag the
 clone lacks instead of blaming the manifest, and an upgrade fetches the core's
 tags BEFORE it reads where the shop is. It then branches `socle/<tag>`,
 merges, bumps the manifest, re-renders the generated files, runs the gates the
-shop now carries, and with `--open-pr` opens the pull request. It never deploys
+shop now carries, and with `--open-pr` opens the pull request. Among those
+gates is the one the pull request will meet: the shop's own `check-paths.mjs
+--changed --base <the branch it started from>`, without the operator's
+`MINSHOP_CORE_CHANGE`. A core file the shop had edited and the release edited
+too merges cleanly yet is neither's copy, so File ownership fails on it
+(ticket #86): the upgrade warns, names each file and the approval (the
+`core-change` label or an `Approves-core-change:` trailer), and lists them in
+the pull request. A warning, not a refusal — the merge is sound. It never deploys
 and never merges a pull request: production stays behind the GitHub
 Environment. It refuses a dirty tree, a
 downgrade, and a version that rewrites a published migration (ADR 0006); a

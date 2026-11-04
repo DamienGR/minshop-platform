@@ -38,6 +38,46 @@ export function runShopGates(root) {
 }
 
 /**
+ * The core-change gate the upgrade's pull request will meet (ticket #86).
+ *
+ * `runShopGates` asks whether the tree is sound; this asks what the File
+ * ownership job of the pull request will decide, which is a different question
+ * with a different answer. A core file the shop had edited and the release
+ * edited too comes out of the merge as neither's copy, so it is a core change
+ * nobody has approved yet (ADR 0003) — and the upgrade used to say ✓ before CI
+ * said ✗ on it, on the two demonstration shops' first upgrades.
+ *
+ * The SHOP's own script, `--changed --base` the branch the step started from,
+ * exactly as CI runs it. Without MINSHOP_CORE_CHANGE: in CI it comes from the
+ * pull request's label, which does not exist yet, and an operator's shell that
+ * carried it would turn the answer into the one CI will not give.
+ *
+ * @param {string} root shop tree
+ * @param {string} base the branch the upgrade started from
+ * @returns {{ evaluated: boolean, core: string[], approved: string|null, reason: string|null }}
+ */
+export function runCoreChangeGate(root, base, env = process.env) {
+  const { MINSHOP_CORE_CHANGE: _label, ...childEnv } = env;
+  const result = capture('node', ['scripts/check-paths.mjs', '--changed', '--base', base, '--json'], {
+    cwd: root,
+    allowFailure: true,
+    env: childEnv,
+  });
+  let report = null;
+  try {
+    report = JSON.parse(result.stdout);
+  } catch {
+    report = null;
+  }
+  const gate = report?.gate;
+  if (!gate) {
+    const reason = (result.stderr || result.stdout).trim().split('\n')[0] || `code ${result.status}`;
+    return { evaluated: false, core: [], approved: null, reason };
+  }
+  return { evaluated: true, core: gate.enforced === false ? [] : (gate.core ?? []), approved: gate.approved?.by ?? null, reason: null };
+}
+
+/**
  * The first lines worth showing from a gate that failed.
  *
  * The manifest gate answers in JSON, so its raw stdout is a document rather
