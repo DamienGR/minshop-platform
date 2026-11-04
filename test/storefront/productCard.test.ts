@@ -7,6 +7,12 @@ import {
   type ProductCardOptions,
 } from '../../src/features/storefront/productCard';
 import type { ListedProduct } from '../../src/features/products/cardVariants';
+import { isShippedTheme, resolveTheme } from '../../scripts/themes.mjs';
+
+/** The core's own themes draw nothing from what the card model newly offers —
+ *  tags, variants. A shop's own theme is where those get drawn, so the
+ *  assertions that say so hold the shipped themes only. */
+const shipped = isShippedTheme(resolveTheme().id);
 
 const product = (overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   id: 42,
@@ -96,12 +102,16 @@ describe('buildProductCard', () => {
     expect(image.src).not.toBe('media/sample-tee.jpg');
   });
 
-  it('hands the theme the product tags, untouched by the shipped card (ticket #159)', async () => {
+  it('hands the theme the product tags (ticket #159)', () => {
     const tagged = cardFor(product({ tags: 'non-cousu,nouveau' }));
     expect(tagged.tags).toEqual(['non-cousu', 'nouveau']);
     expect(cardFor(product()).tags).toEqual([]);
+  });
+
+  it.skipIf(!shipped)('leaves the shipped card untouched by the tags (ticket #159)', async () => {
     // The shipped themes draw nothing from a tag: only a store's own theme
     // gives one a meaning, so the default card renders the same either way.
+    const tagged = cardFor(product({ tags: 'non-cousu,nouveau' }));
     expect(await render(ProductCard, tagged)).toBe(await render(ProductCard, cardFor(product())));
   });
 
@@ -182,7 +192,7 @@ describe('the card variants (ticket #161)', () => {
     expect(Object.keys(variant).sort()).toEqual(['image', 'inStock', 'label']);
   });
 
-  it('leaves the shipped card unchanged when it has variants to show', async () => {
+  it.skipIf(!shipped)('leaves the shipped card unchanged when it has variants to show', async () => {
     // The shipped themes draw no swatches: the same product renders the same
     // whether or not its variants came along, prices and availability aside.
     const bare = await render(ProductCard, cardFor(product()));

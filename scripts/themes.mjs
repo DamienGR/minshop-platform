@@ -77,6 +77,22 @@ export function discoverThemeIds(root = process.cwd()) {
   return ids.sort();
 }
 
+/**
+ * A theme the core ships, as opposed to a shop's own. The core keeps a design
+ * signature for each of its themes beside the browser gate (SIGNATURES_DIR); a
+ * shop's theme keeps its signature under client/. design-signature.spec.mjs
+ * tells the two apart the same way.
+ *
+ * The storefront contract holds the shipped themes to drawing nothing from what
+ * a model newly offers — category photos, tags, variants, the product put
+ * forward, theme texts — so a merchant filling those in changes nothing on
+ * them. A shop's own theme is where they get drawn: held to the same rule, it
+ * would fail the moment it used one.
+ */
+export function isShippedTheme(id, root = process.cwd()) {
+  return isValidThemeId(id) && existsSync(resolve(root, SIGNATURES_DIR, `${id}.json`));
+}
+
 export function themePath(id, root = process.cwd()) {
   if (!isValidThemeId(id)) throw new Error(themeError(`"${id}" is not a valid theme id.`, root));
   // Resolved and re-checked rather than concatenated: an id that escaped the

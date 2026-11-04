@@ -5,7 +5,7 @@ import AltCatalog from './fixtures/catalog/AltCatalog.astro';
 import { texts as fixtureTexts } from './fixtures/catalog/texts';
 import { activeThemeTextSlots } from '../../src/features/themeTexts/active';
 import { resolveThemeTexts, themeTextSlotProblems, validThemeTextSlots } from '../../src/features/themeTexts/slots';
-import { resolveTheme } from '../../scripts/themes.mjs';
+import { isShippedTheme, resolveTheme } from '../../scripts/themes.mjs';
 import { buildPaginationModel, buildSortModel } from '../../src/features/storefront/catalog';
 import type { CatalogPageModel } from '../../src/features/storefront/models';
 
@@ -78,7 +78,8 @@ describe('a template reading its texts', () => {
     expect(html).not.toMatch(/<img src=x|<script>x/);
   });
 
-  it('leaves a theme that reads none unchanged', async () => {
+  // A shipped theme reads none; a shop's own theme may declare and read its own.
+  it.skipIf(!isShippedTheme(resolveTheme().id))('leaves a theme that reads none unchanged', async () => {
     const texts = resolveThemeTexts(fixtureTexts, new Map([['hero.title', 'La carte cadeau']]));
     expect(await render(Catalog, model(texts))).toBe(await render(Catalog, model({})));
   });
