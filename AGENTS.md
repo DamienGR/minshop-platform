@@ -122,7 +122,10 @@ is the list; `npm run check:paths` fails on a path no rule covers, and
   (the core ships none). The core never edits these, which is what keeps an
   upgrade merge clean.
 - **generated** — a tool's. `wrangler.jsonc`, `schemas/*.schema.json`,
-  `.github/CODEOWNERS`. An unexpected diff means a generator ran.
+  `.github/CODEOWNERS`, `.github/dependabot.yml` (rendered by `check-paths.mjs
+  --write` from `scripts/dependabot.mjs`: a shop's turns version updates off,
+  since its dependencies move with the core). An unexpected diff means a
+  generator ran.
 
 In a shop repository (one with `client/client.yaml`), a pull request touching a
 core file needs a `core-change` label or an `Approves-core-change:` trailer —

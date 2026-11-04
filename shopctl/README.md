@@ -118,8 +118,18 @@ nom tombe sur celui d'un témoin — le témoin lui-même, ou `<témoin>-staging
 Elle clone **un tag**, **avec son historique**, renomme le remote du socle en
 `core`, crée la branche de travail, écrit le manifeste et le thème de la
 boutique, sa page d'accueil GitHub (`.github/README.md`), rend `wrangler.jsonc`
-depuis le manifeste, exécute les portes que la boutique transporte, commite,
-installe les dépendances, puis liste les actions suivantes.
+depuis le manifeste et les fichiers générés pour une boutique, exécute les
+portes que la boutique transporte, commite, installe les dépendances, puis liste
+les actions suivantes.
+
+**Dependabot n'ouvre aucune pull request dans une boutique** (ticket #81).
+`.github/dependabot.yml` est généré (`scripts/dependabot.mjs`) : celui du socle
+propose les montées chaque semaine, celui d'une boutique met
+`open-pull-requests-limit` à 0, car `package.json` et `package-lock.json` sont
+des fichiers du cœur qui bougent avec `core upgrade`. `new` et `core upgrade`
+le rendent ; la première mise à niveau d'une boutique plus ancienne le lui
+donne. Les alertes de vulnérabilité restent ; laisser « Dependabot security
+updates » éteint dans les réglages du dépôt, pour la même raison.
 
 **La page d'accueil du dépôt est celle de la boutique** (ticket #83). GitHub
 affiche `.github/README.md` avant le `README.md` racine, qui reste la
@@ -487,7 +497,8 @@ deux ne coïncident plus — un manifeste édité à la main, une fusion prise s
 bump qui va avec.
 
 **Une mise à niveau propose, elle ne déploie pas.** Elle récupère le tag, crée
-`socle/<tag>`, fusionne, met `coreVersion` à jour, rend les fichiers générés,
+`socle/<tag>`, fusionne, met `coreVersion` à jour, rend les fichiers générés
+(`wrangler.jsonc`, `.github/dependabot.yml`),
 exécute les portes que la boutique transporte — celles de la **nouvelle**
 version — et, avec `--open-pr`, pousse et ouvre la pull request. Elle n'appelle
 jamais `shopctl deploy` et ne fusionne aucune pull request : la mise en

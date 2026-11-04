@@ -11,6 +11,7 @@ import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { compareVersions, isBreakingStep, latestVersion, versionsBetween } from '../../shopctl/src/version.mjs';
 import { readRegistry, selectShops } from '../../shopctl/src/fleet.mjs';
 import { CORE_TAG, CORE_VERSION, GIT_ENV, cloneCoreTemplate, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
+import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -599,6 +600,42 @@ describe('shopctl core upgrade', () => {
       `Passer la boutique boutique-un au socle ${TO_TAG}`,
       `Fusionner le socle ${TO_TAG}`,
     ]);
+  });
+
+  // Ticket #81. A shop renders .github/dependabot.yml for itself, so a release
+  // that edits the core's conflicts there exactly like wrangler.jsonc: taken
+  // from the core, rendered again for the shop, and nothing to approve.
+  it('renders a shop’s Dependabot configuration again after a release that edits the core’s', () => {
+    const agency = workspace();
+    const shop = agency.shop();
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    const daily = (text) => text.replace('interval: "weekly"\n    open-pull-requests-limit: 5', 'interval: "daily"\n    open-pull-requests-limit: 5');
+    const generator = read(agency.core, 'scripts/dependabot.mjs');
+    expect(daily(generator)).not.toBe(generator);
+    agency.publish({ files: { 'scripts/dependabot.mjs': daily(generator), [DEPENDABOT_FILE]: daily(read(agency.core, DEPENDABOT_FILE)) } });
+
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(stderr).toContain(`repris du socle : ${DEPENDABOT_FILE}`);
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    expect(report.coreChange).toEqual({ evaluated: true, paths: [], approved: null });
+  });
+
+  // A shop created before ticket #81 carries the core's copy: its first upgrade
+  // renders the shop's, and the pull request's gate takes it for a render.
+  it('gives a shop created before ticket #81 its own Dependabot configuration', () => {
+    const agency = workspace();
+    const shop = agency.shop();
+    writeFileSync(join(shop, DEPENDABOT_FILE), renderDependabot({ shop: false }));
+    git(['add', '-A'], shop);
+    git(['commit', '--quiet', '-m', 'La boutique d’avant le ticket #81'], shop);
+    agency.publish();
+
+    const { status, report, stderr } = agency.json(['core', 'upgrade', '--to', TO_TAG], { cwd: shop });
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(read(shop, DEPENDABOT_FILE)).toBe(renderDependabot({ shop: true }));
+    expect(git(['show', '--name-only', '--format=', 'HEAD'], shop).split('\n')).toContain(DEPENDABOT_FILE);
+    expect(report.coreChange).toEqual({ evaluated: true, paths: [], approved: null });
   });
 
   // Resumed, the step used to start from the newest LOCAL tag below the target.

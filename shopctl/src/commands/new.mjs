@@ -492,7 +492,11 @@ export function runNew(args, reporter) {
   // The build inputs come from the manifest, never from a hand-edited file:
   // rendering them here is what makes the shop buildable at its first commit.
   run('node', ['scripts/prepare-client.mjs', slug], { cwd: target, stdio: 'ignore' });
-  reporter.ok('wrangler.jsonc rendu depuis le manifeste');
+  // The files the ownership gate renders, now that the tree is a shop: the
+  // shop's .github/dependabot.yml opens no version update (ticket #81). By the
+  // tag's own script; a failure here is the gates' to report, just below.
+  capture('node', ['scripts/check-paths.mjs', '--write'], { cwd: target, allowFailure: true });
+  reporter.ok('wrangler.jsonc rendu depuis le manifeste, fichiers générés rendus pour une boutique');
 
   // Staged before verification, because the gates read the INDEX (`git
   // ls-files`): an untracked manifest is invisible to exactly the checks that

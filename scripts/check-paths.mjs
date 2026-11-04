@@ -27,13 +27,15 @@
  *   node scripts/check-paths.mjs [--json] [--write]
  *   node scripts/check-paths.mjs --changed [--base <ref>]
  *
- *   --write  regenerate .github/CODEOWNERS instead of failing on drift
+ *   --write  regenerate .github/CODEOWNERS and .github/dependabot.yml instead
+ *            of failing on drift
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { OWNERS, classifyPaths, coreChangeGate, renderCodeowners } from './path-ownership.mjs';
 import { CLIENT_MANIFEST, isShopRepository, loadManifest, renderWrangler, wranglerSubstitutions } from './manifest.mjs';
+import { DEPENDABOT_FILE, renderDependabot } from './dependabot.mjs';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
@@ -63,6 +65,28 @@ function checkCodeowners() {
     return {
       ok: false,
       message: `${CODEOWNERS_FILE} no longer matches scripts/path-ownership.mjs. It is only ever read by GitHub, on someone else's pull request, so drift here is invisible until a core change is approved by nobody. Run \`npm run check:paths -- --write\`.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * .github/dependabot.yml, as scripts/dependabot.mjs renders it for this tree:
+ * version updates in the core, none in a shop (ticket #81). Read by GitHub
+ * alone, like CODEOWNERS, so a hand edit would only show as a pull request
+ * Dependabot opens, or stops opening, weeks later.
+ */
+function checkDependabot(shop) {
+  const path = resolve(root, DEPENDABOT_FILE);
+  const expected = renderDependabot({ shop });
+  if (write) {
+    writeFileSync(path, expected);
+    return { ok: true, wrote: true };
+  }
+  if (!existsSync(path) || readFileSync(path, 'utf8') !== expected) {
+    return {
+      ok: false,
+      message: `${DEPENDABOT_FILE} is not what scripts/dependabot.mjs renders for ${shop ? 'a shop' : 'the core'}. Edit the configuration there, then run \`npm run check:paths -- --write\`.`,
     };
   }
   return { ok: true };
@@ -134,6 +158,15 @@ function carriedFromCore(merge, paths) {
  * invalid manifest or a leftover placeholder, vouches for nothing.
  */
 function renderedFromTree(paths) {
+  const dependabot = resolve(root, DEPENDABOT_FILE);
+  const rendered =
+    paths.includes(DEPENDABOT_FILE) && existsSync(dependabot) && readFileSync(dependabot, 'utf8') === renderDependabot({ shop: true })
+      ? [DEPENDABOT_FILE]
+      : [];
+  return [...rendered, ...renderedWrangler(paths)];
+}
+
+function renderedWrangler(paths) {
   const output = resolve(root, WRANGLER_FILE);
   if (!paths.includes(WRANGLER_FILE) || !existsSync(output)) return [];
   try {
@@ -159,6 +192,7 @@ const tracked = git('ls-files').split('\n').filter(Boolean);
 const map = classifyPaths(tracked);
 const codeowners = checkCodeowners();
 const shop = isShopRepository(root);
+const dependabot = checkDependabot(shop);
 
 let gate = null;
 if (changed) {
@@ -170,10 +204,10 @@ if (changed) {
   gate = { base, approved, ...coreChangeGate({ paths, isShop: shop, approval: approved, carried, rendered }) };
 }
 
-const ok = map.unclassified.length === 0 && codeowners.ok && (gate === null || gate.ok);
+const ok = map.unclassified.length === 0 && codeowners.ok && dependabot.ok && (gate === null || gate.ok);
 
 if (asJson) {
-  console.log(JSON.stringify({ ok, repository: shop ? 'shop' : 'core', owners: map.owned, unclassified: map.unclassified, codeowners, gate }, null, 2));
+  console.log(JSON.stringify({ ok, repository: shop ? 'shop' : 'core', owners: map.owned, unclassified: map.unclassified, codeowners, dependabot, gate }, null, 2));
   process.exit(ok ? 0 : 1);
 }
 
@@ -189,6 +223,10 @@ if (map.unclassified.length > 0) {
 if (codeowners.wrote) console.log(`✓ ${CODEOWNERS_FILE} regenerated`);
 else if (!codeowners.ok) console.error(`✗ ${codeowners.message}`);
 else console.log(`✓ ${CODEOWNERS_FILE} matches the ownership rules`);
+
+if (dependabot.wrote) console.log(`✓ ${DEPENDABOT_FILE} rendered for ${shop ? 'a shop: no version update' : 'the core'}`);
+else if (!dependabot.ok) console.error(`✗ ${dependabot.message}`);
+else console.log(`✓ ${DEPENDABOT_FILE} rendered for ${shop ? 'a shop: no version update' : 'the core'}`);
 
 if (gate) {
   if (!gate.enforced) {

@@ -52,5 +52,7 @@
 /wrangler.jsonc @DamienGR
 # generated: Rendered from scripts/manifest-schema.mjs; committed so editors can validate a manifest.
 /schemas/ @DamienGR
+# generated: Rendered by check-paths.mjs from scripts/dependabot.mjs: version updates in the core, none in a shop, whose dependencies move with its core version.
+/.github/dependabot.yml @DamienGR
 # generated: Rendered from this file by check-paths.mjs.
 /.github/CODEOWNERS @DamienGR

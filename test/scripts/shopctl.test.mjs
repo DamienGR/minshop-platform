@@ -29,6 +29,7 @@ import { WITNESS_CLIENTS_DIR, discoverManifests } from '../../scripts/manifest.m
 // The core fixture and the git identity live in a helper: the fleet suite
 // (jalon 9) creates the same "core at a tag" and a second copy would drift.
 import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
+import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, shop } from '../helpers/provisioned-shop.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
@@ -668,6 +669,9 @@ describe('shopctl new', () => {
     // it would otherwise add. The paths do not move; only the letter does.
     const expected = [
       '.github/README.md',
+      // Rendered for a shop (ticket #81): changed, unless the fixture core is
+      // itself built from a shop, whose copy is already that rendering.
+      ...(readFileSync(join(core(), DEPENDABOT_FILE), 'utf8') === renderDependabot({ shop: true }) ? [] : [DEPENDABOT_FILE]),
       'client/client.yaml',
       'client/signatures/boutique-du-port.json',
       'imports/README.md',
@@ -693,6 +697,8 @@ describe('shopctl new', () => {
     expect(readFileSync(join(shop, 'client/signatures/boutique-du-port.json'), 'utf8')).toBe(
       readFileSync(join(core(), 'test/browser/__signatures__/default.json'), 'utf8'),
     );
+
+    expect(readFileSync(join(shop, DEPENDABOT_FILE), 'utf8')).toBe(renderDependabot({ shop: true }));
 
     // The repository's home page is the shop's (ticket #83): GitHub shows it
     // ahead of the core's README.md, and the core never ships one.

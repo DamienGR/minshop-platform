@@ -489,8 +489,12 @@ export function upgradeShop({
   const manifestPath = resolve(root, shop.file ?? CLIENT_MANIFEST);
   writeFileSync(manifestPath, withCoreVersion(readFileSync(manifestPath, 'utf8'), target.version));
   run('node', ['scripts/prepare-client.mjs', slug], { cwd: root, stdio: 'ignore' });
+  // And the files the ownership gate renders, by the new core's script: a
+  // shop's .github/dependabot.yml is the core's rendered for a shop (ticket
+  // #81), and the merge took the core's copy if the two conflicted.
+  capture('node', ['scripts/check-paths.mjs', '--write'], { cwd: root, allowFailure: true });
   const bump = commitAll(root, `Passer la boutique ${slug} au socle ${target.tag}`);
-  reporter.ok(`manifeste à ${target.version}, configuration Wrangler rendue${bump.committed ? '' : ' (rien à valider)'}`);
+  reporter.ok(`manifeste à ${target.version}, configuration Wrangler et fichiers générés rendus${bump.committed ? '' : ' (rien à valider)'}`);
 
   // ------------------------------------------------------- 6. les portes
   let checks = [];

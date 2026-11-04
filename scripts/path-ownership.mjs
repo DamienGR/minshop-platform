@@ -52,6 +52,12 @@ export const OWNERSHIP_RULES = [
     codeowners: '/.github/CODEOWNERS',
   },
   {
+    pattern: '.github/dependabot.yml',
+    owner: 'generated',
+    why: 'Rendered by check-paths.mjs from scripts/dependabot.mjs: version updates in the core, none in a shop, whose dependencies move with its core version.',
+    codeowners: '/.github/dependabot.yml',
+  },
+  {
     pattern: 'schemas/*.schema.json',
     owner: 'generated',
     why: 'Rendered from scripts/manifest-schema.mjs; committed so editors can validate a manifest.',
