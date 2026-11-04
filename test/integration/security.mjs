@@ -376,6 +376,91 @@ try {
     ok('rotating the password invalidates the sessions issued before it');
   }
 
+  /* ================================ 3a. the storefront's edit shortcut */
+
+  section('Raccourci d\'édition sur la fiche produit (ticket #178)');
+  {
+    // The storefront page is shared at the edge, so it cannot know who asks:
+    // the shortcut ships hidden, and only the admin gate decides whether it
+    // shows (src/features/auth/adminHint.ts). Each half is checked here.
+    const product = generatePublicId('product');
+    await db
+      .prepare(
+        `INSERT INTO products (public_id, name, slug, description, price_cents, currency, stock, active)
+         VALUES (?, 'Bol émaillé', 'bol-emaille', '', 2400, 'eur', 5, 1)`,
+      )
+      .bind(product)
+      .run();
+    const hash = (await db
+      .prepare("SELECT value FROM settings WHERE key = 'admin_password_hash'")
+      .first()).value;
+    const cookie = `admin_session=${await signSession(AUTH_SECRET, hash, 3600, Date.now() / 1000)}`;
+
+    for (const [who, headers] of [
+      ['a shopper', {}],
+      ['the admin', { cookie: `${cookie}; admin_hint=1` }],
+    ]) {
+      const page = await fetch('/products/bol-emaille', { headers });
+      assert.equal(page.status, 200);
+      assert.equal(
+        page.headers.get('cache-control'),
+        'public, max-age=0, s-maxage=600',
+        `the page served to ${who} is no longer shared at the edge`,
+      );
+      assert.equal(page.headers.get('set-cookie'), null, `the page served to ${who} set a cookie`);
+      const anchor = (await page.text()).match(/<a\b[^>]*\bdata-admin-edit\b[^>]*>/)?.[0];
+      assert.ok(anchor, `the page served to ${who} has no shortcut`);
+      assert.match(anchor, /\shidden[\s>]/, 'the shortcut ships hidden');
+      assert.doesNotMatch(anchor, /\shref=/, 'the shortcut ships an admin URL a crawler would follow');
+      assert.ok(
+        anchor.includes(`data-admin-href="/admin/products/${product}/edit"`),
+        `the shortcut does not name the product's screen: ${anchor}`,
+      );
+    }
+    ok('the product page is the same shared page for everyone, its shortcut hidden and without an href');
+
+    const anonymous = await fetch('/api/admin/session', { headers: { cookie: 'admin_hint=1' } });
+    assert.equal(anonymous.status, 401, 'a forged hint opened the probe');
+    const probe = await fetch('/api/admin/session', { headers: { cookie } });
+    assert.equal(probe.status, 200);
+    assert.deepEqual(await probe.json(), { admin: true });
+    assert.equal(probe.headers.get('cache-control'), 'private, no-store');
+    ok('the probe answers yes to a session alone, and is never stored');
+
+    const opened = await fetch('/admin', { headers: { cookie } });
+    assert.equal(opened.status, 200);
+    const hint = opened.headers.get('set-cookie') ?? '';
+    assert.match(hint, /(?:^|,\s*)admin_hint=1;/, 'a verified session left no hint');
+    assert.doesNotMatch(hint, /HttpOnly/i, 'the hint must be readable by the storefront script');
+    assert.match(hint, /SameSite=Lax/);
+    assert.match(hint, /Secure/);
+    assert.match(hint, /Path=\//);
+    const kept = await fetch('/admin', { headers: { cookie: `${cookie}; admin_hint=1` } });
+    assert.doesNotMatch(kept.headers.get('set-cookie') ?? '', /admin_hint/, 'the hint is rewritten on every page');
+    for (const [what, headers] of [
+      ['an anonymous visit', {}],
+      ['a forged session', { cookie: 'admin_session=v1.9999999999.0000000000000000.00' }],
+    ]) {
+      for (const path of ['/admin', '/admin/login', '/api/admin/session']) {
+        const refused = await fetch(path, { headers });
+        assert.doesNotMatch(
+          refused.headers.get('set-cookie') ?? '',
+          /admin_hint=1/,
+          `${what} of ${path} was given the hint`,
+        );
+      }
+    }
+    ok('the hint is written once, beside a verified session, never to a refused caller');
+
+    const logout = await fetch('/admin/logout', { headers: { cookie: `${cookie}; admin_hint=1` } });
+    assert.equal(logout.status, 303);
+    const cleared = logout.headers.get('set-cookie') ?? '';
+    for (const name of ['admin_session', 'admin_hint']) {
+      assert.match(cleared, new RegExp(`(?:^|,\\s*)${name}=[^;]*;[^,]*(?:Max-Age=0|Expires=Thu, 01 Jan 1970)`, 'i'), `logout kept ${name}`);
+    }
+    ok('logging out clears the hint with the session');
+  }
+
   /* ===================================== 3b. a vault key the browser filled */
 
   section('Coffre — le mot de passe que le navigateur verse dans une clé');

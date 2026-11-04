@@ -3373,3 +3373,27 @@ Damien le jour même, qui accepte l'ADR 0029) :
 Tenu par `test/integration/place-map.mjs`. Reste à faire : la page « Où me
 trouver » de la première boutique réelle, une carte par point de vente, vue en
 production sur son domaine.
+
+### 13.11 Le raccourci d'édition sur la fiche produit
+
+Noté le 2026-11-04 (ticket #178) : sur une fiche produit, l'administrateur
+connecté veut un lien vers l'écran de modification du produit, et lui seul.
+Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-04, sans migration. La fiche produit est partagée par le cache
+de l'arête, donc la même pour tous : elle porte le lien caché, sans adresse,
+et un script le révèle.
+
+- le middleware pose un cookie `admin_hint`, lisible par le script, à côté
+  d'une session qu'il vient de vérifier (mot de passe ou Access) ; la
+  déconnexion l'efface ;
+- sans ce cookie, le script s'arrête : la page d'un acheteur n'envoie aucune
+  requête ;
+- avec lui, il demande `GET /api/admin/session`, derrière la porte de
+  l'administration ; seul un oui montre « Modifier ce produit », un refus
+  efface le cookie ;
+- le bouton est posé par la route, pas par le thème : il vaut pour tous les
+  thèmes, celui d'une boutique compris.
+
+Tenu par la section 3a de `test/integration/security.mjs` et par
+`test/browser/admin-edit-link.spec.mjs`.

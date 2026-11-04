@@ -2,6 +2,8 @@
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import ProductDetail from '#theme/ProductDetail.astro';
+import AdminEditLink from '../../features/storefront/AdminEditLink.astro';
+import { productEditHref } from '../../features/auth/adminHint';
 import { loadProductDetail } from '../../features/storefront/productDetail';
 import { getConfig } from '../../config';
 import { publicOrigin } from '../../features/http/origin';
@@ -35,6 +37,10 @@ if (loaded.backfillRelated) {
 
 <Layout title={seo.title} description={seo.description ?? undefined} image={seo.imagePath}>
   <ProductDetail model={model} purchase={purchase} />
+  {/* The admin's way back to this product's screen (ticket #178): hidden from
+      everyone else, and the same bytes for everyone, so the edge cache stays
+      shared. */}
+  <AdminEditLink href={productEditHref(model.id)} label={t('admin.products.storefrontEdit')} />
 
   <script is:inline type="application/ld+json" set:html={seo.jsonLd} />
 
