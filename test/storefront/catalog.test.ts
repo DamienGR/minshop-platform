@@ -11,6 +11,13 @@ import type { Category } from '../../src/features/categories/db';
 import { buildProductCard } from '../../src/features/storefront/productCard';
 import type { CatalogPageModel } from '../../src/features/storefront/models';
 import type { ListedProduct } from '../../src/features/products/cardVariants';
+import { isShippedTheme, resolveTheme } from '../../scripts/themes.mjs';
+
+/** The core's own themes draw nothing from what the catalog model newly offers
+ *  — category photos and sentences, the product put forward. A shop's own theme
+ *  is where those get drawn, so the assertions that say so hold the shipped
+ *  themes only. */
+const shipped = isShippedTheme(resolveTheme().id);
 
 const product = (n: number, overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   id: n,
@@ -197,7 +204,7 @@ describe('the store-owned catalog', () => {
     expect(html).toContain('10,01\u00a0\u20ac');
   });
 
-  it('renders the same with or without category images and descriptions', async () => {
+  it.skipIf(!shipped)('renders the same with or without category images and descriptions', async () => {
     // Ticket #158: the shipped themes read neither, so a merchant filling them
     // in for a theme that does changes nothing on these.
     const bare = await render(Catalog, model());
@@ -219,7 +226,7 @@ describe('the store-owned catalog', () => {
     expect(dressed).toBe(bare);
   });
 
-  it('renders the same whether or not a product is put forward', async () => {
+  it.skipIf(!shipped)('renders the same whether or not a product is put forward', async () => {
     // Ticket #164: the model offers it; the shipped themes do not show it.
     const bare = await render(Catalog, model());
     const featured = await render(

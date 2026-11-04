@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   RESERVED_THEME_IDS,
+  SHOP_SIGNATURES_DIR,
+  SIGNATURES_DIR,
   discoverThemeIds,
+  isShippedTheme,
   isValidThemeId,
   normalizeThemeId,
   resolveTheme,
@@ -142,5 +145,36 @@ describe('resolveTheme', () => {
     expect(() => resolveTheme(fixture(['default', 'acme'], '{"theme":"deafult"}'))).toThrow(
       /Available themes: acme, default/,
     );
+  });
+});
+
+describe('isShippedTheme', () => {
+  const signature = (root, dir, id) => {
+    mkdirSync(join(root, dir), { recursive: true });
+    writeFileSync(join(root, dir, `${id}.json`), '{}\n');
+  };
+
+  it('knows a theme the core ships by its signature beside the browser gate', () => {
+    const root = fixture(['default', 'acme']);
+    signature(root, SIGNATURES_DIR, 'default');
+    signature(root, SHOP_SIGNATURES_DIR, 'acme');
+
+    expect(isShippedTheme('default', root)).toBe(true);
+    // A shop's own theme records its signature under client/: not one of the core's.
+    expect(isShippedTheme('acme', root)).toBe(false);
+  });
+
+  it('answers no for anything that is not a theme id', () => {
+    const root = fixture([]);
+    signature(root, 'test/browser', 'default');
+
+    expect(isShippedTheme('../default', root)).toBe(false);
+    expect(isShippedTheme('', root)).toBe(false);
+  });
+
+  it('counts the reference theme in this tree', () => {
+    // The contract assertions reserved to the shipped themes (catalog, product
+    // card, theme texts) would skip in silence if this said no.
+    expect(isShippedTheme('default')).toBe(true);
   });
 });
