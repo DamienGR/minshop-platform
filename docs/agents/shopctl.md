@@ -231,7 +231,10 @@ XSalsa20-Poly1305) and Node 22 has no XSalsa20-Poly1305, so a dependency-free
 CLI cannot encrypt one at all. It creates the repository — derived as `<owner>/shop-<slug>` when neither
 `--origin` nor the tree's remote names one, and announced before it is created
 — pushes, creates both environments and sets their Cloudflare secrets;
-idempotently, asking GitHub first. Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
+idempotently, asking GitHub first. The account each secret names is resolved
+before anything is created, and its absence refuses the run then; a shop no
+account carries yet takes `--no-environments`, which stops after the push, and
+a second run without it adds the rest (ticket #82). Secrets are REWRITTEN rather than kept, the opposite of the Cloudflare
 rule, because GitHub never returns a secret's value: "already there" cannot be
 read as "already correct". A third environment, `backup`, carries the Nightly's
 backup of production (ADR 0005's RPO once staging is gone): no reviewer,

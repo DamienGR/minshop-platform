@@ -449,6 +449,16 @@ describe('shopctl new', () => {
     expect(report.nextSteps.some((step) => step.startsWith('npm run shopctl -- repo'))).toBe(true);
   });
 
+  // Ticket #82: the repository alone, for a shop no account carries yet. It
+  // means nothing without the repository it qualifies.
+  it('refuses --no-environments without --create-repo, before touching the disk', () => {
+    const work = workspace();
+    const result = shopctl(['new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--no-environments'], work);
+    expect(result.status).toBe(EXIT_CODES.usage);
+    expect(result.stderr).toContain('shopctl repo --no-environments');
+    expect(treeFiles(work)).toEqual([]);
+  });
+
   it('refuses a slug the platform already uses', () => {
     const result = shopctl(['new', RESERVED_SLUGS[0], '--from', core(), '--core', CORE_TAG], workspace());
     expect(result.status).toBe(EXIT_CODES.input);

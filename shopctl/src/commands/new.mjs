@@ -140,6 +140,9 @@ export const newUsage = `Usage: shopctl new <slug> [options]
   --reviewer <login>  Relecteur obligatoire en production, avec --create-repo
   --fleet <dépôt>     Avec --create-repo, sur le compte mutualisé : le dépôt de
                       flotte la déploie, aucun secret Cloudflare n'est posé
+  --no-environments   Avec --create-repo, le dépôt seul, sans environnement ni
+                      secret : une boutique qu'aucun compte Cloudflare ne porte
+                      encore (maquette, démonstration)
   --no-install        Ne pas installer les dépendances
   --no-verify         Ne pas exécuter la vérification minimale
   --json              Rapport de création lisible par une machine
@@ -348,6 +351,9 @@ export function runNew(args, reporter) {
   const createRepo = args.values['--create-repo'] === true;
   const fleet = args.values['--fleet'] === undefined ? null : fleetRepositoryName(args.values['--fleet']);
   if (fleet && !createRepo) throw usageError('--fleet ne vaut qu\'avec --create-repo.', 'Sans dépôt créé, `shopctl repo --fleet <dépôt>` le pose ensuite depuis la boutique.');
+  const createEnvironments = args.values['--no-environments'] !== true;
+  if (!createEnvironments && !createRepo) throw usageError('--no-environments ne vaut qu\'avec --create-repo.', 'Sans dépôt créé, `shopctl repo --no-environments` le crée ensuite depuis la boutique.');
+  if (!createEnvironments && fleet) throw usageError('--no-environments et --fleet ne vont pas ensemble.', 'Une boutique de la flotte ne reçoit déjà aucun environnement.');
   const originUrl = args.values['--origin']
     ? String(args.values['--origin'])
     : createRepo
@@ -568,6 +574,7 @@ export function runNew(args, reporter) {
           .map((entry) => entry.trim())
           .filter(Boolean),
         fleet,
+        createEnvironments,
         json: reporter.json,
         // `new` emits its own document; a second one on the same stdout would
         // break every caller that pipes it into a parser.
@@ -612,7 +619,7 @@ export function runNew(args, reporter) {
     ...(forgeError !== null
       ? ['npm run shopctl -- repo   # reprend la création du dépôt là où elle a échoué']
       : forge !== null
-      ? []
+      ? (createEnvironments ? [] : ['npm run shopctl -- repo   # une fois le compte déclaré : environnements et secrets'])
       : originUrl
         ? [`npm run shopctl -- repo   # crée le dépôt, les environnements et leurs secrets`, `git push -u origin ${branch}`]
         : ['git remote add origin <url> && npm run shopctl -- repo']),

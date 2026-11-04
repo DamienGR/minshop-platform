@@ -25,6 +25,11 @@
  * environment at all — a staging run that could read the production token
  * would make the separation decorative.
  *
+ * `--no-environments` stops after step 2 (ticket #82): a mock-up or a demo shop
+ * that no Cloudflare account carries yet still gets its repository the way
+ * every other shop does — named `shop-<slug>`, private, pushed — and the same
+ * command, re-run once the account is declared, adds the environments.
+ *
  * On the shared Cloudflare account (ADR 0019), `--fleet <owner/repo>` replaces
  * steps 3 and 4: no token can be limited to one shop's database, so the shop's
  * repository gets none, and a variable naming the fleet repository that holds
@@ -78,6 +83,10 @@ export const repoUsage = `Usage: shopctl repo [options]
                       séparée par des virgules.
   --public            Créer le dépôt public. Par défaut : privé.
   --no-push           Ne pas pousser la branche.
+  --no-environments   Créer le dépôt et pousser la branche seulement : ni
+                      environnement ni secret. Pour une boutique qu'aucun compte
+                      Cloudflare ne porte encore ; relancez sans l'option une
+                      fois cloudflare.accountId au manifeste.
   --dry-run           Interroger GitHub et n'écrire nulle part.
   --shop <slug>       Manifeste à utiliser quand l'arbre en contient plusieurs.
   --fleet <dépôt>     Boutique du compte mutualisé (ADR 0019) : le dépôt de flotte
@@ -163,6 +172,12 @@ export function runRepo(args, reporter) {
       hint: repoUsage.trim(),
     });
   }
+  if (args.values['--no-environments'] === true && args.values['--fleet'] !== undefined) {
+    throw new ShopctlError('--no-environments et --fleet ne vont pas ensemble.', {
+      kind: 'usage',
+      hint: 'Une boutique de la flotte ne reçoit déjà aucun environnement : `shopctl repo --fleet <dépôt>` seul.',
+    });
+  }
   const dryRun = args.values['--dry-run'] === true;
   const json = args.values['--json'] === true;
   const shop = resolveShop(process.cwd(), args.values['--shop']);
@@ -181,8 +196,38 @@ export function runRepo(args, reporter) {
     visibility: args.values['--public'] === true ? 'public' : 'private',
     push: args.values['--no-push'] !== true,
     fleet: args.values['--fleet'] === undefined ? null : fleetRepositoryName(args.values['--fleet']),
+    createEnvironments: args.values['--no-environments'] !== true,
   });
   return 0;
+}
+
+/**
+ * The Cloudflare account each environment's secrets name, or the refusal.
+ *
+ * One account per environment, because ADR 0015 puts them on two: the Deploy
+ * workflow reads CLOUDFLARE_ACCOUNT_ID from the environment it runs in, and a
+ * production pointed at the agency's account would be refused by every
+ * command it runs — or, worse, accepted by an agency token.
+ *
+ * Asked BEFORE anything is created (ticket #82): the refusal used to come after
+ * the repository, the push and three environments, and a demo shop with no
+ * account got a repository by hand instead.
+ */
+function environmentAccounts(manifest, env) {
+  const accounts = Object.fromEntries(
+    ENVIRONMENTS.map((name) => [name, environmentAccount(manifest, name).id ?? env.CLOUDFLARE_ACCOUNT_ID ?? null]),
+  );
+  const unknown = ENVIRONMENTS.filter((name) => !accounts[name]);
+  if (unknown.length > 0) {
+    throw preconditionError(
+      `aucun identifiant de compte Cloudflare à poser dans ${unknown.length === ENVIRONMENTS.length ? 'les environnements' : unknown.join(', ')}.`,
+      [
+        'Ajoutez cloudflare.accountId au manifeste de la boutique (et cloudflare.productionAccountId si la production vit sur le compte du client, ADR 0015), ou exportez CLOUDFLARE_ACCOUNT_ID. Sans lui, le workflow Deploy ne saurait pas quel compte viser.',
+        'Une boutique qu\'aucun compte ne porte encore (maquette, démonstration) : `shopctl repo --no-environments` crée le dépôt et pousse la branche, sans environnement. Rien n\'a été créé.',
+      ].join('\n'),
+    );
+  }
+  return accounts;
 }
 
 /**
@@ -211,6 +256,7 @@ export function setupRepository({
   visibility = 'private',
   push = true,
   fleet = null,
+  createEnvironments = true,
   env = process.env,
   emit = true,
 }) {
@@ -219,8 +265,11 @@ export function setupRepository({
   reporter.section('GitHub');
   assertForgeReady({ cwd: root });
   // Refused before anything is written, like every other bad input. A shop of
-  // the fleet places no token at all, so there is none to judge.
-  const backupToken = fleet ? null : backupTokenFor(env);
+  // the fleet places no token at all, so there is none to judge, and neither
+  // does a repository created without its environments.
+  const placesSecrets = !fleet && createEnvironments;
+  const backupToken = placesSecrets ? backupTokenFor(env) : null;
+  const accounts = placesSecrets ? environmentAccounts(manifest, env) : null;
 
   // Three sources, in decreasing order of how explicit they are: the flag, the
   // remote the tree already has, and the convention. The convention is only
@@ -297,6 +346,29 @@ export function setupRepository({
     return report;
   }
 
+  if (!createEnvironments) {
+    reporter.section('Environnements');
+    reporter.todo(
+      `${[...ENVIRONMENTS, BACKUP_ENVIRONMENT].join(', ')} non créés (--no-environments) : aucun secret Cloudflare posé.`,
+      'Une fois la boutique rattachée à un compte (cloudflare.accountId au manifeste), relancez `shopctl repo` sans l\'option : il reprend le dépôt et la branche tels quels, et crée les environnements et leurs secrets.',
+    );
+    const report = {
+      command: 'repo',
+      ok: true,
+      dryRun,
+      shop: manifest.client.slug,
+      repository: { ...target, url, created, derived, visibility },
+      branch: { name: head, pushed },
+      environments: [],
+      secrets: [],
+      missingTokens: [],
+      skipped: ['environments'],
+    };
+    if (emit) reporter.result(report);
+    if (!json) reporter.section(`Dépôt prêt, sans environnements : https://github.com/${target.nameWithOwner}`);
+    return report;
+  }
+
   // ── 3. the environments ───────────────────────────────────────────────────
   reporter.section('Environnements');
   // A repository that does not exist yet has no environments to list, and
@@ -363,20 +435,6 @@ export function setupRepository({
 
   // ── 4. the secrets ────────────────────────────────────────────────────────
   reporter.section('Secrets d\'environnement');
-  // One account per environment, because ADR 0015 puts them on two: the
-  // Deploy workflow reads CLOUDFLARE_ACCOUNT_ID from the environment it runs
-  // in, and a production pointed at the agency's account would be refused by
-  // every command it runs — or, worse, accepted by an agency token.
-  const accounts = Object.fromEntries(
-    ENVIRONMENTS.map((name) => [name, environmentAccount(manifest, name).id ?? env.CLOUDFLARE_ACCOUNT_ID ?? null]),
-  );
-  const unknown = ENVIRONMENTS.filter((name) => !accounts[name]);
-  if (unknown.length > 0) {
-    throw preconditionError(
-      `aucun identifiant de compte Cloudflare à poser dans ${unknown.length === ENVIRONMENTS.length ? 'les environnements' : unknown.join(', ')}.`,
-      'Ajoutez cloudflare.accountId au manifeste de la boutique (et cloudflare.productionAccountId si la production vit sur le compte du client, ADR 0015), ou exportez CLOUDFLARE_ACCOUNT_ID. Sans lui, le workflow Deploy ne saurait pas quel compte viser.',
-    );
-  }
 
   // The operator's own key, so that what the CI seals the operator can open:
   // `backup pull` then `restore` on a laptop is the way back from a bad night.

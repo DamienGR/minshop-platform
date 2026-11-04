@@ -60,7 +60,7 @@ Options globales:
 
 /** @type {Record<string, { run: Function, usage: string, values: Record<string,string>, flags: string[] }>} */
 export const COMMANDS = {
-  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify', '--create-repo'] },
+  new: { run: runNew, usage: newUsage, values: NEW_OPTIONS, flags: ['--no-install', '--no-verify', '--create-repo', '--no-environments'] },
   doctor: { run: runDoctor, usage: doctorUsage, values: {}, flags: ['--offline'] },
   config: { run: runConfig, usage: configUsage, values: {}, flags: [] },
   catalog: {
@@ -69,7 +69,7 @@ export const COMMANDS = {
     values: CATALOG_OPTIONS,
     flags: ['--dry-run', '--remote', '--create-categories', '--allow-slug-change', '--allow-remove-variants'],
   },
-  repo: { run: runRepo, usage: repoUsage, values: REPO_OPTIONS, flags: ['--dry-run', '--public', '--no-push'] },
+  repo: { run: runRepo, usage: repoUsage, values: REPO_OPTIONS, flags: ['--dry-run', '--public', '--no-push', '--no-environments'] },
   provision: { run: runProvision, usage: provisionUsage, values: PROVISION_OPTIONS, flags: ['--dry-run'] },
   deploy: {
     run: runDeploy,

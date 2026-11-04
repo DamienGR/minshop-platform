@@ -144,6 +144,7 @@ de version de schéma ([ADR 0008](../docs/architecture/decisions/0008-format-du-
 ```sh
 npm run shopctl -- repo --reviewer <login>
 npm run shopctl -- new <slug> --account <id> --create-repo --reviewer <login>
+npm run shopctl -- repo --no-environments   # boutique sans compte Cloudflare
 ```
 
 Le dépôt est **déduit** quand rien ne le nomme : `<owner>/shop-<slug>`, sous le
@@ -159,6 +160,15 @@ Crée ou confirme, de façon rejouable : le dépôt GitHub (**privé** par défa
 la branche sur le remote, les environnements `staging` et `production`, et leurs
 secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`. Une nouvelle boutique
 passe ainsi de neuf gestes à trois commandes.
+
+**Sans compte Cloudflare, le dépôt seul** (ticket #82). Les secrets nomment le
+compte de chaque environnement : sans `cloudflare.accountId` au manifeste (ni
+`CLOUDFLARE_ACCOUNT_ID`), la commande refuse avant de rien créer. Une maquette
+ou une démonstration qu'aucun compte ne porte encore prend `--no-environments`
+(ou `new … --create-repo --no-environments`) : le dépôt est créé selon les mêmes
+règles, la branche poussée, et ni environnement ni secret n'est posé. Relancée
+sans l'option une fois le compte déclaré, la commande reprend le dépôt tel quel
+et crée le reste.
 
 **Elle enveloppe `gh`, et c'est forcé plutôt que préféré.** Un secret
 d'environnement GitHub se chiffre en sealed box libsodium — X25519, Blake2b,
