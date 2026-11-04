@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+const CORE = new URL('../../', import.meta.url).pathname;
 
 /**
  * The nightly workflow (plan §7.3), read as text: like deploy.yml, it is the
@@ -79,6 +84,65 @@ describe('the nightly workflow', () => {
     // Retired wins over declared: the manifest of a launched shop still names
     // the preview's hostname.
     expect(detect.indexOf('STAGING_RETIRED" ]')).toBeLessThan(detect.indexOf('staging=true'));
+  });
+
+  // A shop not deployed yet (ticket #80) — a mock-up, a demonstration, a
+  // repository `shopctl repo --no-environments` made — declares no staging and
+  // holds no token. Its night must be green: the operator who gets a red run
+  // every night for an expected state disables the workflow, and forgets to
+  // turn it back on after the first deploy. The steps are RUN, not read, on a
+  // shop with the witness manifest that declares no staging.
+  it('gives a shop not deployed yet a green night, saying what it skipped', () => {
+    const shop = mkdtempSync(join(tmpdir(), 'nightly-undeployed-'));
+    mkdirSync(join(shop, 'client'));
+    copyFileSync(join(CORE, 'test/fixtures/clients/canary-minimal/client.yaml'), join(shop, 'client/client.yaml'));
+    for (const dir of ['shopctl', 'scripts', 'src', 'node_modules', 'package.json']) symlinkSync(join(CORE, dir), join(shop, dir));
+    const jobBody = (name) => workflow.slice(workflow.indexOf(`\n  ${name}:\n`)).split(/\n {2}[a-z-]+:\n/)[1];
+    const step = (job, name) => jobBody(job).slice(jobBody(job).indexOf(`- name: ${name}\n`)).split('\n      - name:')[0];
+    const run = (job, name, env) => {
+      const script = step(job, name).match(/run: \|\n((?:\s{10}.*\n)+)/)[1].replace(/^ {10}/gm, '');
+      const output = join(shop, `${job}.output`);
+      const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-c', script], {
+        cwd: shop,
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, GITHUB_OUTPUT: output, ...env },
+      });
+      let outputs = '';
+      try {
+        outputs = readFileSync(output, 'utf8');
+      } catch {
+        outputs = '';
+      }
+      return { status: result.status, stdout: result.stdout, stderr: result.stderr, outputs };
+    };
+
+    try {
+      // A shop, with no staging: the staging job does not run, and the run says why.
+      const detect = run('detect', 'Read the manifest', { STAGING_RETIRED: '', STAGING_URL: '', FLEET: '' });
+      expect(detect.status, detect.stderr).toBe(0);
+      expect(detect.outputs).toContain('slug=canary-minimal');
+      expect(detect.outputs).not.toContain('staging=true');
+      expect(detect.stdout).toMatch(/::notice::Aucun staging déclaré/);
+
+      // The two production jobs run, and stand aside without their token: a
+      // warning that says it is expected, never an error, never a pass in silence.
+      for (const [job, name, warned] of [
+        ['production-backup', 'Back up production', /::warning::CLOUDFLARE_API_TOKEN absent .* Attendu tant que la boutique n'est pas en ligne/],
+        ['production-watch', 'Error rate and quotas', /::warning::MONITOR_CLOUDFLARE_API_TOKEN absent .* Attendu tant que la boutique n'est pas en ligne/],
+      ]) {
+        const result = run(job, name, { CLOUDFLARE_API_TOKEN: '', CLOUDFLARE_ACCOUNT_ID: '', SHOPCTL_BACKUP_KEY: '' });
+        expect(result.status, `${job}: ${result.stderr}`).toBe(0);
+        expect(result.stdout, job).toMatch(warned);
+        expect(result.outputs, job).toBe('');
+        // What would need the token or what it produced is skipped with it.
+        expect(step(job, 'Install dependencies'), job).toMatch(/if: \$\{\{ env\.CLOUDFLARE_API_TOKEN != '' \}\}/);
+        expect(jobBody(job).match(/if-no-files-found: (\w+)/)[1], job).toBe('ignore');
+      }
+      expect(step('production-backup', 'Verify the archive')).toMatch(/if: \$\{\{ steps\.backup\.outputs\.id != '' \}\}/);
+    } finally {
+      // The links go, never what they point at.
+      rmSync(shop, { recursive: true, force: true });
+    }
   });
 
   // On the shared account (ADR 0019) the shop's repository holds no Cloudflare
