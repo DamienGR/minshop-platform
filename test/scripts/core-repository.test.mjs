@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { builtVat } from '../../scripts/store-vat.mjs';
 import { DEFAULT_VAT_RATE_BPS, vatTerms } from '../../src/features/legal/vat.ts';
@@ -11,6 +11,13 @@ import { createCoreRepository, resetStoreOverrides } from '../helpers/core-repos
 const CORE_VAT = vatTerms({ vatRateBps: DEFAULT_VAT_RATE_BPS, vatExemption: null });
 
 const HEADER = "import type { DeepPartial, SiteConfig } from './config';\n\n/** The merchant's settings. */\n";
+
+// Building the fixture core copies, commits and packs every file the tree
+// tracks, and a shop's tree carries its catalogue photos too. Two seconds here,
+// four in a shop, and past vitest's five-second default on both GitHub runners
+// of a shop's upgrade pull request. The other suites that build one say the
+// same (shopctl, fleet).
+vi.setConfig({ testTimeout: 60_000 });
 
 function tree(storeConfig) {
   const dir = mkdtempSync(join(tmpdir(), 'minshop-core-fixture-'));
