@@ -45,6 +45,20 @@ async function layoutOf(root) {
   };
 }
 
+/**
+ * Every photo under `root` loaded. A body image is lazy, so `load` does not
+ * wait for it, and one below the fold loads only once scrolled to. Measured
+ * before its bitmap, a photo has no height: on a fast runner the studio
+ * theme's first line then sat exactly at its bottom, and the test failed on a
+ * layout no visitor sees.
+ */
+async function photosLoaded(root) {
+  for (const photo of await root.locator('img').all()) {
+    await photo.scrollIntoViewIfNeeded();
+    await expect.poll(() => photo.evaluate((img) => img.complete && img.naturalHeight > 0)).toBe(true);
+  }
+}
+
 /** Wide enough for the photos to stand beside their text (base.css). */
 const wide = (page) => (page.viewportSize()?.width ?? 0) >= 640;
 
@@ -52,6 +66,7 @@ test('la photo se place du côté dit, le texte à côté, l’intertitre dessou
   await page.goto(FIXTURE.photoPage);
   await settle(page);
   const root = page.locator('.markdown-content');
+  await photosLoaded(root);
   // The word never reaches the page: no tooltip reading « gauche ».
   await expect(root.locator('img[title]')).toHaveCount(0);
   const at = await layoutOf(root);
@@ -102,7 +117,8 @@ test('les boutons de l’éditeur placent la photo, l’aperçu la montre, un se
   // The preview goes through the same renderer and stylesheet.
   const preview = page.locator('[data-preview]');
   if (await preview.isVisible()) {
-    await expect(preview.locator('.markdown-media--left img')).toBeVisible();
+    await expect(preview.locator('.markdown-media--left img')).toBeAttached();
+    await photosLoaded(preview);
     if (wide(page)) {
       const photo = await boxes(preview.locator('.markdown-media--left img'));
       const text = await boxes(preview.locator('.markdown-media--left + p'));
