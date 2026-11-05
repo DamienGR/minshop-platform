@@ -25,8 +25,9 @@
  * an argument is in the process table and in the CI log before the process has
  * read it.
  */
-import { capture, isAvailable } from './process.mjs';
+import { capture, describe, isAvailable } from './process.mjs';
 import { externalError, inputError, preconditionError } from './errors.mjs';
+import { redact } from './secrets.mjs';
 
 /** Run one `gh` command. */
 export function gh(args, { cwd, input, allowFailure = false, env = process.env } = {}) {
@@ -374,6 +375,34 @@ export function repositoryVariable(nameWithOwner, name, { cwd } = {}) {
   if (result.status !== 0) return null;
   const value = parseDocument(result.stdout)?.value;
   return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * An organisation variable as one repository's workflows see it, or null.
+ *
+ * Asked of the REPOSITORY, not of the organisation: reading
+ * `orgs/{org}/actions/variables/{name}` takes a classic token with `admin:org`,
+ * write access to the whole organisation, where this list takes the `repo`
+ * scope `gh auth login` already grants. And it answers what a workflow of that
+ * repository reads: a variable restricted to other repositories, or one GitHub
+ * Free keeps from a private repository, is not in it.
+ *
+ * A 404 is "no organisation to ask" (a repository owned by a user). Any other
+ * failure — gh not signed in, a token without access — is THROWN, because "not
+ * set" and "could not ask" have different remedies and the caller says which.
+ * One page of a hundred: an organisation sharing more variables than that with
+ * one shop's repository is not one this CLI was written for.
+ */
+export function organizationVariable(nameWithOwner, name, { cwd } = {}) {
+  const args = ['api', `repos/${nameWithOwner}/actions/organization-variables?per_page=100`];
+  const result = gh(args, { cwd, allowFailure: true });
+  if (result.status !== 0) {
+    if (/\(HTTP 404\)/.test(result.stderr)) return null;
+    const reason = result.stderr.split('\n').map((line) => line.trim()).find(Boolean);
+    throw externalError(`${describe('gh', args)} exited with status ${result.status}.`, reason ? redact(reason) : null);
+  }
+  const variable = (parseDocument(result.stdout)?.variables ?? []).find((entry) => entry?.name === name);
+  return typeof variable?.value === 'string' && variable.value !== '' ? variable.value : null;
 }
 
 /** One file of a repository's default branch, as text, or null. */

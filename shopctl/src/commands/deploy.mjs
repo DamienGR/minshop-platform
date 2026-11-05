@@ -63,6 +63,7 @@ import { keyId, loadKey } from '../backup/crypto.mjs';
 import { SMOKE_WAIT_SECONDS, originFromDeployOutput, runSmoke } from '../smoke.mjs';
 import { environmentHost, resourceNames } from '../../../scripts/manifest.mjs';
 import { guardOwner } from '../owner.mjs';
+import { organizationVariable, originUrl, parseGithubRemote, repositoryVariable } from '../forge.mjs';
 import { cnameInstruction, fallbackOrigin, findCustomHostname, hostnameState, locateHostname } from '../saas.mjs';
 
 export const DEPLOY_OPTIONS = {
@@ -102,7 +103,9 @@ En production, une sauvegarde chiffrée est prise avant les migrations ; si elle
 commerçant, son nom d'hôte personnalisé doit exister et être actif sur la zone
 (CLOUDFLARE_API_TOKEN pour le vérifier). Le lien d'aide du pied de page de
 l'administration écrit à l'adresse de MINSHOP_SUPPORT_EMAIL, que le déploiement
-passe au Worker ; sans elle, il n'apparaît pas.
+passe au Worker ; absente du shell, gh la lit dans les variables GitHub du dépôt
+de la boutique, puis de son organisation (hors workflow) ; sans elle, il
+n'apparaît pas.
 `;
 
 /**
@@ -140,16 +143,75 @@ export function runVerification(root, { stdio = 'inherit' } = {}) {
 export const SUPPORT_EMAIL_VARIABLE = 'MINSHOP_SUPPORT_EMAIL';
 const SUPPORT_ADDRESS = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>".]+$/;
 
+function checkSupportAddress(address, source, remedy) {
+  if (!SUPPORT_ADDRESS.test(address)) {
+    throw inputError(`${source} = « ${address} » n'est pas une adresse e-mail.`, `Attendu : une seule adresse, comme support@agence.example. ${remedy}`);
+  }
+  return address;
+}
+
 export function resolveSupportEmail(env = process.env) {
   const address = String(env[SUPPORT_EMAIL_VARIABLE] ?? '').trim();
   if (!address) return null;
-  if (!SUPPORT_ADDRESS.test(address)) {
-    throw inputError(
-      `${SUPPORT_EMAIL_VARIABLE} = « ${address} » n'est pas une adresse e-mail.`,
-      'Attendu : une seule adresse, comme support@agence.example. Retirez la variable pour déployer sans lien d\'aide.',
-    );
+  return checkSupportAddress(address, SUPPORT_EMAIL_VARIABLE, 'Retirez la variable pour déployer sans lien d\'aide.');
+}
+
+/**
+ * The same address, when the shell has none: the GitHub variable the Deploy
+ * workflow reads, asked through `gh` of the shop's own repository.
+ *
+ * So that a workstation deploys what the workflow deploys without the operator
+ * copying into every shell an address GitHub already holds — the copy is the
+ * one that goes stale. Two places, in the order a workflow resolves them: the
+ * repository's variable, then the organisation's shared with it (the one the
+ * agency sets once for its fleet).
+ *
+ * Never inside a workflow. There, GitHub has already resolved
+ * `vars.MINSHOP_SUPPORT_EMAIL` for the workflow's own repository, and the
+ * fleet's Deploy checks out a shop that is not that repository: a second
+ * reading could answer differently. The workflow's answer stays the only one,
+ * and its absence the warning.
+ *
+ * Never fatal either: no GitHub origin, no gh, gh not signed in, and the
+ * deployment goes on without the link, as before, with `reason` saying why.
+ * Only an answer that is not one address stops it, as it would in a workflow.
+ */
+export function githubSupportEmail(root, { env = process.env } = {}) {
+  const none = { address: null, from: null, label: null, asked: null, reason: null };
+  if (env.GITHUB_ACTIONS === 'true') return none;
+  let asked;
+  try {
+    const url = originUrl(root);
+    asked = url ? parseGithubRemote(url).nameWithOwner : null;
+  } catch {
+    asked = null;
   }
-  return address;
+  if (!asked) return none;
+  let found;
+  try {
+    const fromRepository = repositoryVariable(asked, SUPPORT_EMAIL_VARIABLE, { cwd: root });
+    found = fromRepository
+      ? { value: fromRepository, from: 'repository', label: `la variable GitHub du dépôt ${asked}` }
+      : { value: organizationVariable(asked, SUPPORT_EMAIL_VARIABLE, { cwd: root }), from: 'organization', label: `la variable GitHub de l'organisation ${asked.split('/')[0]}` };
+  } catch (error) {
+    const reason = [error.message, error.hint].filter(Boolean).join(' ');
+    return { ...none, asked, reason };
+  }
+  if (!found.value) return { ...none, asked };
+  const address = checkSupportAddress(
+    found.value.trim(),
+    `${SUPPORT_EMAIL_VARIABLE} (${found.label})`,
+    `Corrigez-la sur GitHub, ou exportez ${SUPPORT_EMAIL_VARIABLE} pour la remplacer.`,
+  );
+  return { ...none, address, from: found.from, label: found.label, asked };
+}
+
+/** The address a deployment passes, and where it came from: the shell first,
+ *  then GitHub. `from` is what the JSON report carries. */
+export function locateSupportEmail(root, { env = process.env } = {}) {
+  const address = resolveSupportEmail(env);
+  if (address) return { address, from: 'environment', label: SUPPORT_EMAIL_VARIABLE, asked: null, reason: null };
+  return githubSupportEmail(root, { env });
 }
 
 /**
@@ -199,7 +261,8 @@ export async function runDeploy(args, reporter) {
     throw usageError(`--smoke-wait « ${args.values['--smoke-wait']} » n'est pas un nombre de secondes entre 0 et 600.`);
   }
   // Read here for the same reason: a typo in the address costs nothing yet.
-  const supportEmail = resolveSupportEmail();
+  const support = locateSupportEmail(root);
+  const supportEmail = support.address;
 
   // Production is never a default and never an accident. `--yes` is eight
   // characters and is the difference between deploying to staging and
@@ -312,11 +375,16 @@ export async function runDeploy(args, reporter) {
   reporter.section('Configuration');
   renderEnvironmentConfig({ root, manifest, env, databaseId });
   reporter.ok(`wrangler.jsonc rendu pour ${names.worker}`);
-  if (supportEmail) reporter.ok(`adresse du support ${supportEmail} (depuis ${SUPPORT_EMAIL_VARIABLE})`);
+  if (supportEmail) reporter.ok(`adresse du support ${supportEmail} (depuis ${support.label})`);
   else {
+    const asked = support.asked
+      ? support.reason
+        ? `gh n'a pas pu lire les variables GitHub de ${support.asked} : ${support.reason} `
+        : `Ni le dépôt ${support.asked} ni son organisation ne la déclarent. `
+      : '';
     reporter.warn(
       `${SUPPORT_EMAIL_VARIABLE} n'est pas posée : le pied de page de l'administration n'aura pas de lien d'aide.`,
-      `Sauf si src/store.config.ts déclare admin.supportEmail. Posez-la dans l'environnement qui déploie (le shell, ou la variable GitHub du même nom pour le workflow Deploy), puis redéployez.`,
+      `${asked}Sauf si src/store.config.ts déclare admin.supportEmail. Posez-la dans le shell, ou en variable GitHub de l'organisation qui porte les boutiques (le workflow Deploy la lit, et gh depuis un poste), puis redéployez.`,
     );
   }
   // A warning, not a refusal: the preview is still private, and an admin that
@@ -384,7 +452,7 @@ export async function runDeploy(args, reporter) {
   if (dryRun) {
     reporter.todo(skipBuild ? 'dist/ serait réutilisé' : '`npm run build` serait exécuté');
     reporter.todo(`${names.worker} serait téléversé`);
-    reporter.result({ command: 'deploy', ok: true, dryRun: true, shop: manifest.client.slug, env, account, resources: names, databaseId, supportEmail });
+    reporter.result({ command: 'deploy', ok: true, dryRun: true, shop: manifest.client.slug, env, account, resources: names, databaseId, supportEmail, supportEmailFrom: support.from });
     reporter.section('Simulation terminée. Relancez sans --dry-run pour déployer.');
     return 0;
   }
@@ -480,6 +548,7 @@ export async function runDeploy(args, reporter) {
     resources: names,
     databaseId,
     supportEmail,
+    supportEmailFrom: support.from,
     backup,
     bookmark,
     origin,

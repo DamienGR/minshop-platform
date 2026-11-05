@@ -706,6 +706,93 @@ describe('shopctl deploy', () => {
       expect(result.stderr).toMatch(/MINSHOP_SUPPORT_EMAIL/);
       expect(target.read().calls.some(({ argv }) => argv[0] === 'deploy')).toBe(false);
     });
+
+    // From a workstation, the GitHub variable the Deploy workflow reads: the
+    // agency sets it once on the organisation, and no shell carries a copy of
+    // it that goes stale. GITHUB_ACTIONS emptied, because the suite itself runs
+    // in a workflow, where the lookup is (rightly) never made.
+    describe('when the shell has none, from GitHub', () => {
+      const LOCAL = { GITHUB_ACTIONS: '' };
+      const RUN = ['deploy', '--env', 'staging', ...FAST, '--skip-smoke'];
+      const shared = (value, repositories) => ({ agence: { variables: { MINSHOP_SUPPORT_EMAIL: { value, ...(repositories ? { repositories } : {}) } } } });
+      const forged = (organizations, repository = {}) => {
+        const target = provisioned('staging', { forge: true });
+        target.github({ repos: { [target.nameWithOwner]: { visibility: 'public', ...repository } }, organizations });
+        return target;
+      };
+      const upload = (target) => target.read().calls.find(({ argv }) => argv[0] === 'deploy')?.argv.slice(1);
+      const variableReads = (target) => target.github().calls.map(({ argv }) => argv.join(' ')).filter((call) => call.includes('variables'));
+
+      it('takes the organisation\'s variable, asked of the shop\'s repository', () => {
+        const target = forged(shared('support@agence.example'));
+        const result = target.json(RUN, LOCAL);
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report).toMatchObject({ supportEmail: 'support@agence.example', supportEmailFrom: 'organization' });
+        expect(result.stderr).toContain('adresse du support support@agence.example (depuis la variable GitHub de l\'organisation agence)');
+        expect(upload(target)).toEqual(['--var', 'MINSHOP_SUPPORT_EMAIL:support@agence.example']);
+        // The repository's list, which the `repo` scope reads; never the
+        // organisation's own endpoint, which asks a classic token for admin:org.
+        expect(variableReads(target)).toContain(`api repos/${target.nameWithOwner}/actions/organization-variables?per_page=100`);
+        expect(variableReads(target).some((call) => call.includes('orgs/'))).toBe(false);
+      });
+
+      it('prefers the repository\'s own variable, as a workflow does', () => {
+        const target = forged(shared('support@agence.example'), { variables: { MINSHOP_SUPPORT_EMAIL: 'aide@studio.example' } });
+        const result = target.json(RUN, LOCAL);
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report).toMatchObject({ supportEmail: 'aide@studio.example', supportEmailFrom: 'repository' });
+        expect(result.stderr).toContain(`(depuis la variable GitHub du dépôt ${target.nameWithOwner})`);
+        expect(upload(target)).toEqual(['--var', 'MINSHOP_SUPPORT_EMAIL:aide@studio.example']);
+      });
+
+      it('asks GitHub nothing when the shell names an address', () => {
+        const target = forged(shared('support@agence.example'));
+        const result = target.json(RUN, { ...LOCAL, MINSHOP_SUPPORT_EMAIL: 'autre@agence.example' });
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report).toMatchObject({ supportEmail: 'autre@agence.example', supportEmailFrom: 'environment' });
+        expect(variableReads(target)).toEqual([]);
+      });
+
+      // There, GitHub resolved `vars.MINSHOP_SUPPORT_EMAIL` for the workflow's
+      // own repository; the fleet's checks out a shop that is not that one.
+      it('leaves a workflow to its own vars', () => {
+        const target = forged(shared('support@agence.example'));
+        const result = target.json(RUN, { GITHUB_ACTIONS: 'true' });
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report).toMatchObject({ supportEmail: null, supportEmailFrom: null });
+        expect(variableReads(target)).toEqual([]);
+        expect(result.stderr).toContain('MINSHOP_SUPPORT_EMAIL n\'est pas posée');
+      });
+
+      it('ignores a variable the organisation does not share with the shop, and says where it looked', () => {
+        const target = forged(shared('support@agence.example', ['agence/une-autre-boutique']));
+        const result = target.json(RUN, LOCAL);
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report.supportEmail).toBeNull();
+        expect(result.stderr).toContain(`Ni le dépôt ${target.nameWithOwner} ni son organisation ne la déclarent.`);
+        expect(upload(target)).toEqual([]);
+      });
+
+      // "Could not ask" is not "not set": the warning names the remedy.
+      it('deploys without the link when gh cannot ask, and says why', () => {
+        const target = forged(shared('support@agence.example'));
+        target.github({ authenticated: false });
+        const result = target.json(RUN, LOCAL);
+        expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+        expect(result.report.supportEmail).toBeNull();
+        expect(result.stderr).toContain(`gh n'a pas pu lire les variables GitHub de ${target.nameWithOwner}`);
+        expect(result.stderr).toContain('gh auth login');
+        expect(upload(target)).toEqual([]);
+      });
+
+      it('refuses a GitHub value the footer would hide, naming where it came from', () => {
+        const target = forged(shared('support@agence.example, compta@agence.example'));
+        const result = target.run(RUN, LOCAL);
+        expect(result.status).toBe(EXIT_CODES.input);
+        expect(result.stderr).toContain('MINSHOP_SUPPORT_EMAIL (la variable GitHub de l\'organisation agence)');
+        expect(upload(target)).toBeUndefined();
+      });
+    });
   });
 
   describe('a production deployment', () => {

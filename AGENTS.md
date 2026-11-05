@@ -89,7 +89,8 @@ Use the narrowest customization surface that fits the change:
    order shows its reference, whatever it says.) The address the admin's footer
    offers for help (`admin.supportEmail`) is not, as a rule: it is the agency's,
    `MINSHOP_SUPPORT_EMAIL` in the environment that deploys, which `shopctl
-   deploy` passes to the Worker; set one here only for a shop someone else
+   deploy` passes to the Worker (a workstation without it gets the GitHub
+   variable, through `gh`); set one here only for a shop someone else
    supports. Override only changed keys; never customize `src/config.ts`
    defaults directly.
 3. **`src/themes/<theme>/tokens.css`** for brand colors, fonts, surfaces, and
