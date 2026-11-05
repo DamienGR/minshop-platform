@@ -37,6 +37,10 @@ export default getViteConfig(
       // time in child processes (git, the CLI, the wrangler double) that each
       // want a core, so a worker per core is the knee, not more.
       maxWorkers: '100%',
+      // One temporary root for the run, set as TMPDIR before any worker starts
+      // and removed at the end: the suites build real trees, and they used to
+      // leave gigabytes behind on every run (ticket #184).
+      globalSetup: ['test/helpers/temp-root.mjs'],
       include: [
         'src/**/*.test.ts',
         'test/storefront/**/*.test.{ts,mjs}',

@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
@@ -13,6 +12,7 @@ import { FLEET_FILES, fleetAccount, monitorTokenFor } from '../../shopctl/src/co
 import { GIT_ENV } from '../helpers/core-repository.mjs';
 import { OPERATOR_ENV } from '../helpers/operator-env.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, shop } from '../helpers/provisioned-shop.mjs';
+import { scratchDir } from '../helpers/scratch.mjs';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -30,7 +30,7 @@ const template = (name) => readFileSync(resolve(CORE, 'shopctl/templates/fleet',
  * for one shop.
  */
 function fleetWorkspace({ shops = [], git = true } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'shopctl-fleet-'));
+  const root = scratchDir('shopctl-fleet-');
   writeFileSync(join(root, 'fleet.json'), `${JSON.stringify({ schemaVersion: 1, shops }, null, 2)}\n`);
   const bin = join(root, '.bin');
   mkdirSync(bin);
@@ -52,7 +52,7 @@ function fleetWorkspace({ shops = [], git = true } = {}) {
     return result;
   };
   if (git) {
-    const remote = mkdtempSync(join(tmpdir(), 'shopctl-fleet-remote-'));
+    const remote = scratchDir('shopctl-fleet-remote-');
     spawnSync('git', ['init', '--bare', '--quiet', remote]);
     sh(['init', '--quiet', '--initial-branch=main']);
     sh(['config', 'user.name', 'Minshop Tests']);
@@ -85,7 +85,7 @@ function fleetWorkspace({ shops = [], git = true } = {}) {
 
 describe('a registry entry\'s repository', () => {
   const registry = (shops) => {
-    const root = mkdtempSync(join(tmpdir(), 'registry-'));
+    const root = scratchDir('registry-');
     const file = join(root, 'fleet.json');
     writeFileSync(file, JSON.stringify({ schemaVersion: 1, shops }));
     return file;
@@ -256,7 +256,7 @@ describe('the fleet\'s helper script', () => {
   });
 
   it('refuses a shop below the core floor', () => {
-    const tree = mkdtempSync(join(tmpdir(), 'shop-tree-'));
+    const tree = scratchDir('shop-tree-');
     writeFileSync(join(tree, 'package.json'), JSON.stringify({ version: '0.3.31' }));
     const below = helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree]);
     expect(below.status).toBe(1);

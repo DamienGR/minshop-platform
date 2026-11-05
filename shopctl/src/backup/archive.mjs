@@ -33,7 +33,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { canonical, digest } from './dump.mjs';
-import { inputError, verificationError } from '../errors.mjs';
+import { inputError, preconditionError, verificationError } from '../errors.mjs';
 
 /** The archive layout's own version. A reader that meets a higher one stops
  *  rather than guessing at a field it does not know.
@@ -72,6 +72,45 @@ export function archivePrefix(slug, env) {
 export function backupId(slug, env, at = new Date()) {
   const stamp = at.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
   return `${archivePrefix(slug, env)}${stamp}`;
+}
+
+/** How many seconds `nextBackupId` waits for before it gives up: one is enough
+ *  on any clock that moves forward, the rest absorb a clock stepped back by a
+ *  time sync. */
+const ID_ATTEMPTS = 3;
+
+/** Blocks the thread for `ms` milliseconds. The whole backup is synchronous,
+ *  and the wait is under a second. */
+function pauseSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(0, ms));
+}
+
+/**
+ * The id the next backup of an environment takes in `repository`.
+ *
+ * An id is stamped to the SECOND, and two backups in the same second used to
+ * share one: the second wrote into the first one's directory and the archive
+ * that came out mixed two runs' files (ticket #196). A script that backs up
+ * twice, or a nightly run started again, is enough. When the second's
+ * directory is taken, this waits for the next second rather than adding
+ * milliseconds to the id: the format `list`, `prune`, the retention prefix and
+ * every runbook read stays the one they know.
+ *
+ * Throws only when the clock does not move forward over three seconds, which
+ * means an archive stamped in the future is already in the repository.
+ */
+export function nextBackupId(repository, slug, env, { now = () => new Date(), pause = pauseSync } = {}) {
+  let id = null;
+  for (let attempt = 0; attempt < ID_ATTEMPTS; attempt += 1) {
+    const at = now();
+    id = backupId(slug, env, at);
+    if (!existsSync(join(repository, id))) return id;
+    pause(1000 - at.getUTCMilliseconds());
+  }
+  throw preconditionError(
+    `une sauvegarde « ${id} » existe déjà dans ${repository}, et l'horloge n'avance pas au-delà.`,
+    "Vérifiez l'heure de cette machine : une archive datée de l'avenir occupe déjà l'identifiant.",
+  );
 }
 
 /** An id a path can be built from. Ids are generated here, but one also arrives

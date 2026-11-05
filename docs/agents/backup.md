@@ -57,6 +57,16 @@ Six properties hold, and each one is a test:
   archive only when it is BOTH older than `--keep-days` and beyond `--keep`: a
   shop that stopped being backed up must not lose its last archive to an age rule.
 
+An archive's id is the shop, the environment and the UTC second it was taken
+(`atelier-staging-20261105T144542Z`): it sorts chronologically as text, which
+is what makes `list` and `prune` free, and its `<slug>-<env>-` prefix is what
+the bucket's retention rule expires. Two backups in one second used to share
+it, the second writing into the first one's directory (ticket #196).
+`nextBackupId` waits for the next second when the directory is taken, rather
+than adding milliseconds that `list`, the retention prefix and the runbooks
+would all have to learn; a second still taken three seconds on means a clock
+that went back, and the run stops on a precondition (exit 4).
+
 `restore --local` writes into the tree's own `.wrangler/state` instead of an
 environment: no account, no resource, the same comparison at the end. It is
 how the nightly run proves the archive it just took still opens and still

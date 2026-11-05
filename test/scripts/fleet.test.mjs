@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // .mjs like its neighbours: tsconfig pins `types` to the Cloudflare types, so
 // node builtins have no declarations in a .ts file here.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
@@ -12,6 +11,7 @@ import { compareVersions, isBreakingStep, latestVersion, versionsBetween } from 
 import { readRegistry, selectShops } from '../../shopctl/src/fleet.mjs';
 import { CORE_TAG, CORE_VERSION, GIT_ENV, cloneCoreTemplate, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
 import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
+import { scratchDir } from '../helpers/scratch.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -66,7 +66,7 @@ const NOTES_NEXT = [
  * nothing about the upgrade an agency actually runs.
  */
 function workspace({ shops = ['boutique-un'], forge = false, registry = true } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'shopctl-fleet-'));
+  const root = scratchDir('shopctl-fleet-');
   const core = cloneCoreTemplate(root);
   const bin = join(root, '.bin');
   const ghState = join(root, 'gh-state.json');
@@ -93,7 +93,7 @@ function workspace({ shops = ['boutique-un'], forge = false, registry = true } =
       // A LOCAL bare repository reached through `url.<path>.insteadOf`, so the
       // URL shopctl parses and hands to `gh` is a genuine github.com one while
       // the push never leaves the machine.
-      const remote = mkdtempSync(join(tmpdir(), 'shopctl-remote-'));
+      const remote = scratchDir('shopctl-remote-');
       const nameWithOwner = `agence/shop-${slug}`;
       const originUrl = `git@github.com:${nameWithOwner}.git`;
       spawnSync('git', ['init', '--bare', '--quiet', remote], { encoding: 'utf8' });
@@ -326,7 +326,7 @@ describe('shopctl core status', () => {
   // legitimately describes it. What the command refuses is a tree that is
   // neither, and that is what this builds.
   it('refuses to run outside a shop', () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), 'shopctl-not-a-shop-'));
+    const elsewhere = scratchDir('shopctl-not-a-shop-');
     git(['init', '--quiet', '--initial-branch=main'], elsewhere);
     const result = spawnSync('node', [BIN, 'core', 'status'], { cwd: elsewhere, encoding: 'utf8', env: GIT_ENV });
     expect(result.status).toBe(EXIT_CODES.precondition);
@@ -731,7 +731,7 @@ describe('the fleet registry', () => {
   };
 
   it('reads shops relative to its own directory', () => {
-    const root = mkdtempSync(join(tmpdir(), 'registry-'));
+    const root = scratchDir('registry-');
     mkdirSync(join(root, 'shop-a/client'), { recursive: true });
     writeFileSync(join(root, 'shop-a/client/client.yaml'), 'schemaVersion: 1\n');
     const fleet = readRegistry(
@@ -741,21 +741,21 @@ describe('the fleet registry', () => {
   });
 
   it('refuses a schema version it does not read', () => {
-    const root = mkdtempSync(join(tmpdir(), 'registry-'));
+    const root = scratchDir('registry-');
     expect(() => readRegistry(registryAt(root, { schemaVersion: 2, shops: [{ slug: 'a', path: 'shop-a' }] }))).toThrow(/schemaVersion/);
   });
 
   // Two entries for one shop would upgrade it twice and report it twice, and
   // the second report would describe a tree the first had already moved.
   it('refuses the same shop declared twice', () => {
-    const root = mkdtempSync(join(tmpdir(), 'registry-'));
+    const root = scratchDir('registry-');
     expect(() =>
       readRegistry(registryAt(root, { schemaVersion: 1, shops: [{ slug: 'a', path: 'x' }, { slug: 'a', path: 'y' }] })),
     ).toThrow(/deux fois/);
   });
 
   it('refuses --only naming a shop it has never heard of', () => {
-    const root = mkdtempSync(join(tmpdir(), 'registry-'));
+    const root = scratchDir('registry-');
     const fleet = readRegistry(registryAt(root, { schemaVersion: 1, shops: [{ slug: 'a', path: 'x' }] }));
     expect(selectShops(fleet, 'a').map((shop) => shop.slug)).toEqual(['a']);
     expect(() => selectShops(fleet, 'b')).toThrow(/inconnue/);

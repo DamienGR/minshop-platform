@@ -532,6 +532,11 @@ today's config.
 - Comments explain *why*, match surrounding density.
 - Colocate tests: `foo.ts` + `foo.test.ts`. Test pure logic; integration (D1/R2)
   lives in `test/integration/`, against real migrations and the built Worker.
+- A unit test's temporary directory comes from `scratchDir(prefix)`
+  (`test/helpers/scratch.mjs`), which removes it when the test ends. Under
+  vitest, TMPDIR is a root that `test/helpers/temp-root.mjs` removes at the
+  end of the run, and the line it prints counts what the suites left: before
+  ticket #184 a run left 1.5 to 4 GB in /tmp.
 - Don't install npm packages without asking. Don't run deploy/publish commands
   unless explicitly told.
 - After non-trivial UI changes, screenshot to verify, or run

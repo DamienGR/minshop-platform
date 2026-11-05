@@ -50,8 +50,8 @@ import {
   DEFAULT_KEEP_DAYS,
   DEFAULT_REPOSITORY,
   authenticatedHeader,
-  backupId,
   listArchives,
+  nextBackupId,
   objectContext,
   objectFile,
   pooledElsewhere,
@@ -279,7 +279,7 @@ export function captureBackup({ manifest, root, env, account, key, repository, w
     );
   }
 
-  const id = backupId(manifest.client.slug, env, new Date());
+  const id = nextBackupId(repository, manifest.client.slug, env);
   const directory = join(repository, id);
 
   if (dryRun) {
