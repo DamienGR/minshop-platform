@@ -16,6 +16,8 @@ Les autres photos, les variantes et la personnalisation s’ajoutent ensuite, en
 
 Cliquez sur son nom dans la liste, changez ce qu’il faut, puis cliquez sur **Enregistrer les modifications**. **Voir sur la boutique** montre le résultat.
 
+Vous pouvez aussi partir de la boutique : tant que votre session est ouverte, la fiche de chaque produit affiche **Modifier ce produit**, en bas à gauche. Vos clients ne voient pas ce bouton.
+
 ### Les photos
 
 - **Ajouter des images** importe des photos de votre ordinateur. **Choisir dans la médiathèque** reprend une photo déjà importée.
