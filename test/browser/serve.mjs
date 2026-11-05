@@ -21,9 +21,10 @@
  * Usage: node test/browser/serve.mjs <port>
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
 import { adminPasswordHash } from './admin.mjs';
 
 const port = process.argv[2] ?? '8788';
@@ -88,16 +89,68 @@ wrangler([
   `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('L’atelier', 'atelier', '${PHOTO_PAGE}', 1, 'page_ph0t0s0000')`,
 ]);
 
+// A row of photos and a photo alone (ticket #194), for page-gallery.spec.mjs:
+// three images one under the other, then a portrait taller than the screen.
+// Measured, like an image the media library took in: the width attribute is
+// what a capped height must not squash.
+const GALLERY_PAGE = [
+  'Trois photos l’une sous l’autre, sans ligne vide : une rangée.',
+  '',
+  '![Le devant](/images/media/tee-front.jpg)',
+  '![Le dos](/images/media/tee-back.jpg)',
+  '![Le côté](/images/media/tee-side.jpg)',
+  '',
+  'Une photo seule, en hauteur :',
+  '',
+  '![Un portrait](/images/media/portrait.png)',
+].join('\n');
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('En images', 'en-images', '${GALLERY_PAGE}', 1, 'page_ga11ery000'); ` +
+    "INSERT OR IGNORE INTO media (image_key, original_name, mime_type, width, height, public_id) VALUES " +
+    "('media/tee-front.jpg', 'tee-front.jpg', 'image/png', 600, 600, 'med_teefr00000'), " +
+    "('media/tee-back.jpg', 'tee-back.jpg', 'image/png', 600, 600, 'med_teeback000'), " +
+    "('media/tee-side.jpg', 'tee-side.jpg', 'image/png', 600, 600, 'med_tees1de000'), " +
+    "('media/portrait.png', 'portrait.png', 'image/png', 900, 1200, 'med_p0rtra1t00'); " +
+    'INSERT OR IGNORE INTO page_media (page_id, media_id) SELECT p.id, m.id FROM pages p, media m ' +
+    "WHERE p.slug = 'en-images' AND m.image_key IN ('media/tee-front.jpg', 'media/tee-back.jpg', 'media/tee-side.jpg', 'media/portrait.png')",
+]);
+
+// The product page's gallery follows a variant the shopper chose, never the
+// one the server checks (ticket #185). sample-tee's default (Small, the first
+// in stock) shows the SECOND photo, and a third photo belongs to a variant
+// the shopper can pick (Large stays sold out, for the specs that need one).
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  'INSERT INTO product_images (product_id, image_key, position, public_id) ' +
+    "SELECT id, 'media/tee-side.jpg', 2, 'pimg_s1de000000' FROM products WHERE slug = 'sample-tee'; " +
+    'INSERT INTO product_variants (product_id, label, price_cents, stock, sku, position, public_id, image_id) ' +
+    "SELECT p.id, 'Medium', 2600, 4, 'TEE-M', 2, 'var_m3d0000000', i.id FROM products p " +
+    "JOIN product_images i ON i.product_id = p.id AND i.image_key = 'media/tee-side.jpg' WHERE p.slug = 'sample-tee'; " +
+    'UPDATE product_variants SET image_id = (SELECT i.id FROM product_images i ' +
+    "WHERE i.product_id = product_variants.product_id AND i.image_key = 'media/tee-back.jpg') " +
+    "WHERE label = 'Small' AND product_id = (SELECT id FROM products WHERE slug = 'sample-tee')",
+]);
+
 // The gallery rows point at object keys. Without the objects the product page
 // renders broken images, and "does this image actually load" is one of the
 // things the suite asks.
 const bucket = bucketName();
-for (const key of ['media/tee-front.jpg', 'media/tee-back.jpg']) {
+for (const key of ['media/tee-front.jpg', 'media/tee-back.jpg', 'media/tee-side.jpg']) {
   wrangler([
     'r2', 'object', 'put', `${bucket}/${key}`, '--local', '--persist-to', state,
     '--file', 'public/placeholder.png', '--content-type', 'image/png',
   ]);
 }
+// The portrait: no such file in the repository, so one is drawn here.
+const portrait = join(state, 'portrait.png');
+writeFileSync(portrait, solidPng(900, 1200));
+wrangler([
+  'r2', 'object', 'put', `${bucket}/media/portrait.png`, '--local', '--persist-to', state,
+  '--file', portrait, '--content-type', 'image/png',
+]);
 
 const child = spawn(
   'npx',
@@ -120,6 +173,31 @@ const child = spawn(
 
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
 child.on('exit', (code) => process.exit(code ?? 0));
+
+/** A PNG of one grey, `width` by `height`: 8-bit RGB, one IDAT. */
+function solidPng(width, height) {
+  const row = Buffer.alloc(1 + width * 3, 0xb4);
+  row[0] = 0; // filter: none
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // colour type: RGB
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 /** The R2 bucket this build is bound to, read from the rendered config rather
  *  than from wrangler.jsonc: the build is what the suite serves, and a shop's

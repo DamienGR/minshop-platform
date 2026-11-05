@@ -3483,3 +3483,32 @@ Fait le 2026-11-05, sans migration :
 Tenu par `src/features/pages/markdown.test.ts`, `mediaSide.test.ts` et
 `test/browser/page-photo.spec.mjs`, qui mesure la photo, le texte à côté et
 l'intertitre dessous, sur ordinateur et sur téléphone, dans chaque thème.
+
+### 13.14 Une rangée de photos dans une page
+
+Noté le 2026-11-05 (ticket #194) : des photos écrites l'une sous l'autre
+s'empilaient en pleine largeur, alors que l'aide de « Large » et le guide
+promettaient des grilles ; une photo en hauteur dépassait la hauteur de
+l'écran. Relevé sur « La marque » de la première boutique réelle. Aucun des
+jalons 0 à 10 n'avance.
+
+Fait le 2026-11-05, sans migration :
+
+- le rendu marque le paragraphe qui ne tient que des images, séparées par des
+  sauts de ligne ou des espaces (`markdown-gallery`) : le CSS seul ne le
+  distingue pas d'une phrase qui contient deux images. Une ligne vide commence
+  une autre rangée ; dans une phrase, une liste ou une citation, rien ne
+  change ;
+- `base.css` en fait une rangée : toutes les photos au même format carré
+  (`aspect-ratio`, `object-fit: cover`), toute la rangée sur une ligne
+  au-delà de la largeur d'un téléphone, deux par ligne en dessous ;
+- une photo seule garde ses proportions, centrée, et s'arrête à
+  `min(80vh, 42rem)` : `object-fit: contain`, parce que l'attribut `width`
+  qui réserve sa place avant le chargement écraserait la photo sous une
+  hauteur bornée seule ;
+- l'aide de « Large » et le chapitre « Pages » du guide parlent de rangées de
+  photos, et le guide dit comment en faire une.
+
+Tenu par `src/features/pages/markdown.test.ts` et
+`test/browser/page-gallery.spec.mjs`, sur ordinateur et sur téléphone, dans
+chaque thème.

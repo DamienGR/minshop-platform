@@ -92,7 +92,7 @@ export const pages = {
     'Colonne étroite, titre centré. Idéal pour la présentation de la boutique et l’histoire de la marque.',
   'admin.pages.layout.wide.label': 'Large',
   'admin.pages.layout.wide.hint':
-    'Pleine largeur, titre aligné à gauche. Idéal pour les guides des tailles, les tableaux et les grilles d’images.',
+    'Pleine largeur, titre aligné à gauche. Idéal pour les guides des tailles, les tableaux et les rangées de photos.',
 
   // ─── Validation et messages d’enregistrement ───────────────────────────────────
   'admin.pages.form.titleRequired': 'Le titre est obligatoire.',

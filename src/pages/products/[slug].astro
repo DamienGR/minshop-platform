@@ -45,8 +45,9 @@ if (loaded.backfillRelated) {
   <script is:inline type="application/ld+json" set:html={seo.jsonLd} />
 
   {/* Live price + hero image: reflect the chosen variant + checked add-ons. No-JS
-      still works — the server computes the real price in cart/checkout, and the
-      gallery's primary image shows by default. */}
+      still works — the server computes the real price in cart/checkout. With
+      or without JS the gallery opens on its first photo, the merchant's
+      (ticket #185): it moves only to a variant the shopper chose. */}
   <script>
     // @ts-nocheck -- plain-JS client script (annotations would ship to the browser)
     const form = document.querySelector('[data-options-form]');
@@ -77,6 +78,9 @@ if (loaded.backfillRelated) {
         }
       };
 
+      // The variant the price last reflected, so a second read of the same
+      // form (pageshow, below) does not pull back a gallery the shopper moved.
+      let seen = null;
       const update = (scroll) => {
         const v = form.querySelector('input[name="variant_id"]:checked');
         let cents = v ? Number(v.getAttribute('data-price')) : base;
@@ -85,11 +89,32 @@ if (loaded.backfillRelated) {
         }
         out.textContent = fmt.format(cents / divisor);
         if (scroll && v) showImage(v.getAttribute('data-image-id') || '');
+        seen = v;
       };
-      // Sync price + carousel to the default-selected variant on load, and on every
-      // change. Setting track.scrollLeft only moves the carousel, never the page.
-      form.addEventListener('change', () => update(true));
-      update(true);
+      // Only a change of variant moves the carousel: an add-on ticked or a
+      // personalisation field left (ticket #125) keeps the photo the shopper
+      // is looking at. Setting track.scrollLeft only moves the carousel, never
+      // the page.
+      form.addEventListener('change', (event) => {
+        const target = event.target;
+        update(target instanceof HTMLInputElement && target.name === 'variant_id');
+      });
+      // The variant checked by the server is the first in stock, not a choice:
+      // the gallery stays on the merchant's first photo, the one the product
+      // card, og:image and the JSON-LD show, and the only one loaded eagerly
+      // (ProductGallery). A choice the browser hands back on Back is not the
+      // server's default, so the gallery follows it; Chromium hands it back
+      // only at pageshow, after load and with no change event, so the form is
+      // read again there. A page back from the bfcache (`persisted`) is the
+      // page as it was left: nothing to read.
+      const sync = () => {
+        const v = form.querySelector('input[name="variant_id"]:checked');
+        update(Boolean(v && !v.defaultChecked && v !== seen));
+      };
+      sync();
+      window.addEventListener('pageshow', (event) => {
+        if (!event.persisted) sync();
+      });
     }
   </script>
 

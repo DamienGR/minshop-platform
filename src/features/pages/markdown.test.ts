@@ -203,6 +203,72 @@ describe('renderMarkdown — a photo beside its text (ticket #195)', () => {
   });
 });
 
+describe('renderMarkdown — a row of photos (ticket #194)', () => {
+  const img = (name: string, title = '') =>
+    `![Photo ${name}](/images/media/${name}.webp${title ? ` "${title}"` : ''})`;
+
+  it('marks images written one under the other, with no blank line, as a row', () => {
+    const html = renderMarkdown([img('a'), img('b'), img('c')].join('\n'));
+    expect(html).toMatch(/^<p class="markdown-gallery"><img src="\/images\/media\/a\.webp"/);
+    expect(html.match(/<img /g)).toHaveLength(3);
+    expect(html).not.toContain('markdown-media');
+  });
+
+  it('takes images on one line, separated by spaces, as a row too', () => {
+    expect(renderMarkdown(`${img('a')} ${img('b')}`)).toContain('<p class="markdown-gallery">');
+  });
+
+  it('writes no <br> among the photos, whatever ends the line', () => {
+    const html = renderMarkdown(`${img('a')}  \n${img('b')}\\\n${img('c')}`);
+    expect(html).toContain('<p class="markdown-gallery">');
+    expect(html).not.toContain('<br');
+    expect(html.match(/<img /g)).toHaveLength(3);
+  });
+
+  it('makes two rows of two paragraphs: a blank line starts the next row', () => {
+    const html = renderMarkdown(`${img('a')}\n${img('b')}\n\n${img('c')}\n${img('d')}`);
+    expect(html.match(/<p class="markdown-gallery">/g)).toHaveLength(2);
+  });
+
+  it('leaves a sentence with two images a sentence', () => {
+    const html = renderMarkdown(`Avant ${img('a')} et après ${img('b')}.`);
+    expect(html).toMatch(/^<p>Avant <img/);
+    expect(html).not.toContain('markdown-gallery');
+  });
+
+  it('leaves images that are links where they are', () => {
+    const html = renderMarkdown(`[${img('a')}](/products)\n[${img('b')}](/products)`);
+    expect(html).not.toContain('markdown-gallery');
+  });
+
+  it('makes no row inside a list or a quote', () => {
+    expect(renderMarkdown(`- ${img('a')}\n  ${img('b')}`)).not.toContain('markdown-gallery');
+    expect(renderMarkdown(`> ${img('a')}\n> ${img('b')}`)).not.toContain('markdown-gallery');
+  });
+
+  it('keeps a side word out of the row, and out of the page', () => {
+    const html = renderMarkdown(`${img('a', 'gauche')}\n${img('b', 'droite')}`);
+    expect(html).toContain('<p class="markdown-gallery">');
+    expect(html).not.toContain('markdown-media');
+    expect(html).not.toContain('title=');
+  });
+
+  it('keeps the class beside the editor’s source lines', () => {
+    const html = renderMarkdown(`${img('a')}\n${img('b')}`, { sourceMap: true });
+    expect(html).toContain('<p class="markdown-gallery" data-source-line="1" data-source-end="3">');
+  });
+
+  it('keeps each photo’s reserved size', () => {
+    const dimensions = new Map([
+      ['media/a.webp', { width: 1200, height: 1600 }],
+      ['media/b.webp', { width: 1600, height: 1200 }],
+    ]);
+    const html = renderMarkdown(`${img('a')}\n${img('b')}`, { dimensions });
+    expect(html).toContain('width="1200" height="1600"');
+    expect(html).toContain('width="1600" height="1200"');
+  });
+});
+
 describe('renderMarkdown — escaped alt text', () => {
   // The editor escapes \ [ and ] when inserting an image. These assert what
   // that escaping has to survive: the result must stay ONE image with the
