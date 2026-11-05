@@ -3441,3 +3441,14 @@ d'aide, alors chaque déploiement écrit l'adresse qu'il pose, ou avertit qu'il
 n'en a aucune, et refuse une valeur que le pied de page ignorerait. Une
 boutique aidée par quelqu'un d'autre garde `admin.supportEmail` dans son
 `store.config.ts`, qui l'emporte.
+
+Le même jour, Damien veut qu'un déploiement lancé du poste la reçoive aussi
+sans qu'il la recopie dans son shell, où la copie vieillit. Absente du shell,
+`deploy` la demande donc à GitHub avec `gh`, au dépôt de la boutique (son
+`origin`) : sa variable de dépôt d'abord, puis celle de l'organisation partagée
+avec lui, l'ordre d'un workflow. Par la liste `organization-variables` du dépôt,
+que le scope `repo` de `gh auth login` lit, et pas par l'organisation, qui
+demanderait `admin:org`. Jamais dans un workflow, où `vars` a déjà répondu pour
+son propre dépôt, et jamais bloquant : sans origine GitHub, sans `gh` ou sans
+session, le déploiement avertit, dit pourquoi, et part sans le lien. Seule une
+valeur qui n'est pas une adresse l'arrête, comme dans un workflow.

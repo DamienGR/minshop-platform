@@ -269,10 +269,15 @@ de l'administration propose d'écrire au support (ticket #186), à l'adresse de
 n'est écrite dans aucun fichier, ni du socle ni de la boutique. `deploy` la passe au Worker
 (`wrangler deploy --var`, jamais `wrangler.jsonc`, qui est suivi) et dit
 laquelle il a posée ; sans elle, il avertit que le lien d'aide disparaît, et
-il refuse une valeur qui n'est pas une seule adresse. Sur le poste de l'agence,
-elle s'exporte avec `MINSHOP_DOMAIN_SUFFIX` ; pour les workflows Deploy, c'est
-une variable GitHub du même nom, sur l'organisation qui porte les boutiques et
-sur le dépôt de flotte. Une boutique que quelqu'un d'autre aide déclare la
+il refuse une valeur qui n'est pas une seule adresse. Pour les workflows Deploy,
+c'est une variable GitHub du même nom, sur l'organisation qui porte les
+boutiques et sur le dépôt de flotte. Sur le poste de l'agence, `deploy` lit la
+même : absente du shell, il la demande à `gh` au dépôt de la boutique (son
+`origin`), la variable du dépôt d'abord, puis celle de l'organisation partagée
+avec lui. Le scope `repo` de `gh auth login` suffit. Exportée dans le shell,
+elle l'emporte et rien n'est demandé ; dans un workflow, rien n'est demandé non
+plus, `vars` a déjà répondu. Sans `gh`, sans session ou sans origine GitHub,
+l'avertissement dit pourquoi. Une boutique que quelqu'un d'autre aide déclare la
 sienne dans `src/store.config.ts` (`admin.supportEmail`), qui l'emporte.
 
 ## Le cycle de vie d'une boutique

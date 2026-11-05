@@ -29,6 +29,9 @@
  *                   `files`: { path: text }, the default branch's contents
  *                   a run: { databaseId, workflow, createdAt, status, conclusion, headSha, jobs }
  *                   a job: { name, status, conclusion, completedAt, steps: [{ name, conclusion }] }
+ *   organizations   { owner: { variables: { NAME: { value, repositories } } } }
+ *                   an organisation's Actions variables; `repositories`, when
+ *                   present, the "owner/name"s it is shared with (else all)
  *   users           { login: id }
  *   refuseReviewers boolean                 the free-plan private-repo refusal
  *   calls           [{ argv, stdin }]       appended to on every invocation
@@ -119,6 +122,10 @@ if (argv[0] === 'repo' && argv[1] === 'create') {
 }
 
 if (argv[0] === 'api') {
+  // What the real gh says, and exits with, when no account is signed in.
+  if (state.authenticated === false) {
+    fail('To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.', 4);
+  }
   const method = flag('--method') ?? 'GET';
   const path = argv.find((argument, index) => !argument.startsWith('-') && index > 0 && argv[index - 1] !== '--method');
 
@@ -209,6 +216,19 @@ if (argv[0] === 'api') {
     const value = state.repos[name]?.variables?.[key];
     if (value === undefined) fail('gh: Not Found (HTTP 404)');
     done(JSON.stringify({ name: key, value }));
+  }
+
+  // The organisation variables shared with one repository, as its workflows
+  // see them: one page, `per_page` in the query string. A repository the
+  // account does not hold is a 404, like the API's.
+  const organizationVariables = path?.match(/^repos\/(([^/]+)\/[^/?]+)\/actions\/organization-variables(?:\?.*)?$/);
+  if (organizationVariables && method === 'GET') {
+    const [, name, owner] = organizationVariables;
+    if (!state.repos[name]) fail('gh: Not Found (HTTP 404)');
+    const variables = Object.entries(state.organizations?.[owner]?.variables ?? {})
+      .filter(([, variable]) => !variable.repositories || variable.repositories.includes(name))
+      .map(([key, variable]) => ({ name: key, value: variable.value, created_at: '2026-11-05T00:00:00Z', updated_at: '2026-11-05T00:00:00Z' }));
+    done(JSON.stringify({ total_count: variables.length, variables }));
   }
 
   // A file of the default branch, base64 as the contents API sends it.

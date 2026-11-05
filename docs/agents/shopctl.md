@@ -256,6 +256,15 @@ file: `MINSHOP_SUPPORT_EMAIL` in the deploying environment, which `deploy`
 validates as the footer does (`supportHref()`, one corpus in the deploy suite),
 passes as `wrangler deploy --var` and reports; without it, a warning says the
 link is gone. Never through the rendered `wrangler.jsonc`, which is tracked.
+On a workstation whose shell lacks it, `deploy` reads the GitHub variable the
+Deploy workflow reads, through `gh` and the shop's `origin`
+(`githubSupportEmail()`): the repository's variable, then the organisation's
+shared with it, from `repos/…/actions/organization-variables`, which the `repo`
+scope reads where the organisation's endpoint wants `admin:org`. Never inside a
+workflow (`GITHUB_ACTIONS`), where `vars` already answered for the workflow's
+own repository, and never fatal: no origin, no gh or no session leaves the
+warning, with the reason. The report's `supportEmailFrom` says which source
+won (`environment`, `repository`, `organization`, or `null`).
 The smoke test can fail the command, and an unreachable site is a failure, never
 a pass. Cloudflare's own answer on a name that leads to no Worker yet — a
 `404`, "There is nothing here yet" or `error code: 1042` depending on what the
