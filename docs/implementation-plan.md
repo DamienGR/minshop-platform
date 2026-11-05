@@ -3522,7 +3522,8 @@ même jour retient pour les pages des modèles fournis par le thème, avec dans
 chaque zone des blocs nommés et cette lightbox ; ce lot est le premier. Aucun
 des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-05, sans migration :
+Fait le 2026-11-05, sans migration (PR #206, fusionnée par Damien le jour
+même) :
 
 - le rendu, sur option (`lightbox`), fait de chaque photo d'une rangée (#194)
   un lien vers la photo elle-même, marqué `data-lightbox` : sans JavaScript,
@@ -3563,7 +3564,8 @@ photos. Syntaxe choisie par Damien le même jour : `::: colonnes` ouvre le
 bloc, `::: colonne` sépare deux colonnes, `:::` le ferme. ADR 0030. Aucun des
 jalons 0 à 10 n'avance.
 
-Fait le 2026-11-05, sans migration :
+Fait le 2026-11-05, sans migration (PR #207, fusionnée par Damien le jour
+même, qui accepte l'ADR 0030) :
 
 - une règle de bloc de markdown-it (`src/features/pages/blocks.ts`) lit les
   blocs nommés, sur option (`blocks`) : la page publiée et son aperçu. Les
