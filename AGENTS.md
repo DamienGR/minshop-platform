@@ -87,9 +87,10 @@ Use the narrowest customization surface that fits the change:
    shipping zones and rates, image dimensions, and template-only features.
    (`orderNumber` numbers only orders older than the `ord_` references: a new
    order shows its reference, whatever it says.) The address the admin's footer
-   offers for help (`admin.supportEmail`) defaults to the agency's, in
-   `src/config.ts`, for the whole fleet: set it here only for a shop someone
-   else supports. Override only changed keys; never customize `src/config.ts`
+   offers for help (`admin.supportEmail`) is not, as a rule: it is the agency's,
+   `MINSHOP_SUPPORT_EMAIL` in the environment that deploys, which `shopctl
+   deploy` passes to the Worker; set one here only for a shop someone else
+   supports. Override only changed keys; never customize `src/config.ts`
    defaults directly.
 3. **`src/themes/<theme>/tokens.css`** for brand colors, fonts, surfaces, and
    corner radii — each theme owns its `@theme` block. `src/styles/overrides.css`

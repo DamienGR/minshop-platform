@@ -87,7 +87,8 @@ const nav: { key: Section; label: string; href: string }[] = [
 const currentLabel = nav.find((n) => n.key === active)?.label ?? t('admin.shell.nav.menu');
 // The footer (ticket #186): the core this shop runs, the guide open at this
 // screen's chapter (ticket #188), and whom to write to: `admin.supportEmail`,
-// the agency's by default, a shop's own when its code sets one, no link if ''.
+// the address the deploy passes unless the shop's code sets its own, no link
+// without one.
 const footerGuideHref = guideHref(active);
 const footerSupportHref = supportHref(
   config.admin.supportEmail,

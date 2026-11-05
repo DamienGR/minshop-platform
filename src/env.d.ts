@@ -67,6 +67,11 @@ declare namespace Cloudflare {
     STORE_NAME: string;
     // Fallback IANA time zone; setup/admin settings store the runtime override.
     TIME_ZONE?: string;
+    // The admin footer's help address (ticket #186), which `shopctl deploy`
+    // passes from the MINSHOP_SUPPORT_EMAIL of the environment that deploys; no
+    // file renders it. Absent = no help link, unless store.config.ts sets
+    // admin.supportEmail.
+    MINSHOP_SUPPORT_EMAIL?: string;
     // 'on' switches relay points on when the shop's store.config.ts leaves
     // config.features.relayPoints unset. Local runs and tests only: the wrangler
     // template renders no such var, so a deployed environment takes the build's

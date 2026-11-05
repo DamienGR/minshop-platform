@@ -87,6 +87,9 @@ const child = spawn(
     '--var', 'AUTH_SECRET:browser-suite-auth-secret',
     // Without a vault, Réglages shows no key field to save.
     '--var', 'SECRETS_KEK:browser-suite-key-encryption-key',
+    // The admin footer's help address, passed the way `shopctl deploy` passes
+    // the agency's (ticket #186): a var, never a file.
+    '--var', 'MINSHOP_SUPPORT_EMAIL:support@agence.example',
     '--ip', '127.0.0.1',
     '--port', port,
   ],

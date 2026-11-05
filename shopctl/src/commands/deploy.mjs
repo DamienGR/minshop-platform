@@ -53,7 +53,7 @@ import {
   whoami,
   wrangler,
 } from '../cloudflare.mjs';
-import { ShopctlError, preconditionError, usageError, verificationError } from '../errors.mjs';
+import { ShopctlError, inputError, preconditionError, usageError, verificationError } from '../errors.mjs';
 import { run } from '../process.mjs';
 import { requireEnvironment, resolveShop } from '../shop.mjs';
 import { INTERNAL_SECRETS, generateSecret, renderEnvironmentConfig } from './provision.mjs';
@@ -100,7 +100,9 @@ Les ressources doivent exister : \`shopctl provision --env <env>\` d'abord.
 En production, une sauvegarde chiffrée est prise avant les migrations ; si elle
 échoue, rien n'est déployé. Quand cloudflare.saasZone sert le domaine du
 commerçant, son nom d'hôte personnalisé doit exister et être actif sur la zone
-(CLOUDFLARE_API_TOKEN pour le vérifier).
+(CLOUDFLARE_API_TOKEN pour le vérifier). Le lien d'aide du pied de page de
+l'administration écrit à l'adresse de MINSHOP_SUPPORT_EMAIL, que le déploiement
+passe au Worker ; sans elle, il n'apparaît pas.
 `;
 
 /**
@@ -113,6 +115,41 @@ commerçant, son nom d'hôte personnalisé doit exister et être actif sur la zo
  */
 export function runVerification(root, { stdio = 'inherit' } = {}) {
   run('npm', ['run', 'verify'], { cwd: root, stdio });
+}
+
+/**
+ * The address the admin's footer offers for help (ticket #186), from the
+ * environment that deploys.
+ *
+ * The agency's, the same for its whole fleet, and written in no file: not the
+ * core's src/config.ts, because a core that knows one agency cannot be sold to
+ * a second (why `shopctl new` takes MINSHOP_DOMAIN_SUFFIX from the environment
+ * too), and not each shop's, because one address copied into every repository
+ * is one address to change in every repository. The Worker reads it as a var,
+ * the default of `admin.supportEmail`; a shop someone else supports sets its
+ * own in src/store.config.ts, which wins.
+ *
+ * Its weakness is why the deployment REPORTS it: a shell or a workflow without
+ * the variable deploys a footer with no help link, and the report says so
+ * rather than leaving a merchant to find out on the day they need help.
+ *
+ * Checked as the footer checks it (`supportHref()`,
+ * src/features/adminShell/footer.ts; the deploy suite holds the two to one
+ * corpus): an address the footer refuses would deploy a link nobody sees.
+ */
+export const SUPPORT_EMAIL_VARIABLE = 'MINSHOP_SUPPORT_EMAIL';
+const SUPPORT_ADDRESS = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>".]+$/;
+
+export function resolveSupportEmail(env = process.env) {
+  const address = String(env[SUPPORT_EMAIL_VARIABLE] ?? '').trim();
+  if (!address) return null;
+  if (!SUPPORT_ADDRESS.test(address)) {
+    throw inputError(
+      `${SUPPORT_EMAIL_VARIABLE} = « ${address} » n'est pas une adresse e-mail.`,
+      'Attendu : une seule adresse, comme support@agence.example. Retirez la variable pour déployer sans lien d\'aide.',
+    );
+  }
+  return address;
 }
 
 /**
@@ -161,6 +198,8 @@ export async function runDeploy(args, reporter) {
   if (!Number.isInteger(smokeWait) || smokeWait < 0 || smokeWait > 600) {
     throw usageError(`--smoke-wait « ${args.values['--smoke-wait']} » n'est pas un nombre de secondes entre 0 et 600.`);
   }
+  // Read here for the same reason: a typo in the address costs nothing yet.
+  const supportEmail = resolveSupportEmail();
 
   // Production is never a default and never an accident. `--yes` is eight
   // characters and is the difference between deploying to staging and
@@ -273,6 +312,13 @@ export async function runDeploy(args, reporter) {
   reporter.section('Configuration');
   renderEnvironmentConfig({ root, manifest, env, databaseId });
   reporter.ok(`wrangler.jsonc rendu pour ${names.worker}`);
+  if (supportEmail) reporter.ok(`adresse du support ${supportEmail} (depuis ${SUPPORT_EMAIL_VARIABLE})`);
+  else {
+    reporter.warn(
+      `${SUPPORT_EMAIL_VARIABLE} n'est pas posée : le pied de page de l'administration n'aura pas de lien d'aide.`,
+      `Sauf si src/store.config.ts déclare admin.supportEmail. Posez-la dans l'environnement qui déploie (le shell, ou la variable GitHub du même nom pour le workflow Deploy), puis redéployez.`,
+    );
+  }
   // A warning, not a refusal: the preview is still private, and an admin that
   // already has a password still opens. What breaks is the first run — behind
   // Access every request carries an assertion, the Worker has nothing to
@@ -338,7 +384,7 @@ export async function runDeploy(args, reporter) {
   if (dryRun) {
     reporter.todo(skipBuild ? 'dist/ serait réutilisé' : '`npm run build` serait exécuté');
     reporter.todo(`${names.worker} serait téléversé`);
-    reporter.result({ command: 'deploy', ok: true, dryRun: true, shop: manifest.client.slug, env, account, resources: names, databaseId });
+    reporter.result({ command: 'deploy', ok: true, dryRun: true, shop: manifest.client.slug, env, account, resources: names, databaseId, supportEmail });
     reporter.section('Simulation terminée. Relancez sans --dry-run pour déployer.');
     return 0;
   }
@@ -356,7 +402,9 @@ export async function runDeploy(args, reporter) {
   // Read BEFORE the upload: the version serving now is the one to come back to
   // if this one fails. Asked after, it can only be guessed from a list.
   const rollback = activeVersion(names.worker, { cwd: root });
-  const uploaded = wrangler(['deploy'], { cwd: root });
+  // The address rides the upload as a var, not the rendered wrangler.jsonc:
+  // that file is tracked, and the address belongs in no file.
+  const uploaded = wrangler(['deploy', ...(supportEmail ? ['--var', `${SUPPORT_EMAIL_VARIABLE}:${supportEmail}`] : [])], { cwd: root });
   // The custom domain first: it is the route this command just rendered, and
   // wrangler lists it bare — "preview.example.fr (custom domain)" — with no
   // workers.dev URL beside it once that door is shut. Read from the output,
@@ -431,6 +479,7 @@ export async function runDeploy(args, reporter) {
     account: { id: account.id, name: account.name },
     resources: names,
     databaseId,
+    supportEmail,
     backup,
     bookmark,
     origin,

@@ -7,7 +7,8 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { smokeFailure } from '../../shopctl/src/commands/deploy.mjs';
+import { SUPPORT_EMAIL_VARIABLE, resolveSupportEmail, smokeFailure } from '../../shopctl/src/commands/deploy.mjs';
+import { supportHref } from '../../src/features/adminShell/footer.ts';
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { GATED_CHECKS, SMOKE_CHECKS, evaluateSmoke, originFromDeployOutput, runSmoke } from '../../shopctl/src/smoke.mjs';
 import { names, shop } from '../helpers/provisioned-shop.mjs';
@@ -410,6 +411,56 @@ describe('the smoke test against a live origin', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The admin footer's help address (ticket #186): the agency's, in the
+// environment that deploys rather than in any file.
+
+describe('the support address', () => {
+  it('takes one address from the environment, trimmed', () => {
+    expect(resolveSupportEmail({ [SUPPORT_EMAIL_VARIABLE]: ' support@agence.example ' })).toBe('support@agence.example');
+  });
+
+  it('reads an unset or empty variable as no address', () => {
+    expect(resolveSupportEmail({})).toBeNull();
+    expect(resolveSupportEmail({ [SUPPORT_EMAIL_VARIABLE]: '  ' })).toBeNull();
+  });
+
+  // The footer drops an address it cannot use, silently: a deployment that took
+  // one would put up a link nobody sees.
+  it('refuses what is not one address, naming the variable', () => {
+    expect(() => resolveSupportEmail({ [SUPPORT_EMAIL_VARIABLE]: 'support@agence.example, compta@agence.example' })).toThrow(
+      /MINSHOP_SUPPORT_EMAIL/,
+    );
+  });
+
+  // Two copies of one rule, the Worker's and the build-less CLI's: held to one
+  // corpus, so the CLI never accepts what the footer then hides.
+  it('accepts exactly the addresses the footer shows', () => {
+    const corpus = [
+      'support@agence.example',
+      'prenom.nom+aide@studio-exemple.fr',
+      'a@b.co',
+      'support',
+      'support@agence',
+      'support@agence.fr.',
+      'a@@agence.fr',
+      'un support@agence.fr',
+      'support@agence.fr;compta@agence.fr',
+      'Support <support@agence.fr>',
+      '"support"@agence.fr',
+    ];
+    for (const address of corpus) {
+      let deployed;
+      try {
+        deployed = resolveSupportEmail({ [SUPPORT_EMAIL_VARIABLE]: address }) !== null;
+      } catch {
+        deployed = false;
+      }
+      expect(deployed, address).toBe(supportHref(address, 'sujet') !== null);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 
 describe('shopctl deploy', () => {
   it('refuses to run without --env', () => {
@@ -620,6 +671,40 @@ describe('shopctl deploy', () => {
       target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
       target.run(['deploy', '--env', 'production', '--yes', ...FAST, '--skip-smoke']);
       expect(target.read().deploys).toEqual([names(target.slug, 'staging').worker, names(target.slug, 'production').worker]);
+    });
+
+    // Ticket #186: the agency's address reaches the Worker from the deploying
+    // environment, and nothing writes it into the shop's tracked files.
+    it('passes the support address to the Worker as a var, and says which', () => {
+      const target = provisioned();
+      const result = target.json(['deploy', '--env', 'staging', ...FAST, '--skip-smoke'], { MINSHOP_SUPPORT_EMAIL: 'support@agence.example' });
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      expect(result.report.supportEmail).toBe('support@agence.example');
+      expect(result.stderr).toContain('adresse du support support@agence.example (depuis MINSHOP_SUPPORT_EMAIL)');
+
+      const upload = target.read().calls.find(({ argv }) => argv[0] === 'deploy');
+      expect(upload.argv.slice(1)).toEqual(['--var', 'MINSHOP_SUPPORT_EMAIL:support@agence.example']);
+      expect(readFileSync(join(target.root, 'wrangler.jsonc'), 'utf8')).not.toContain('support@agence.example');
+    });
+
+    // The weakness of a variable no file keeps: a shell or a workflow without it
+    // deploys a footer with no help link. Said, so nobody learns it from a
+    // merchant who could not find whom to write to.
+    it('warns that a deployment without the variable takes the help link away', () => {
+      const target = provisioned();
+      const result = target.json(['deploy', '--env', 'staging', ...FAST, '--skip-smoke']);
+      expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+      expect(result.report.supportEmail).toBeNull();
+      expect(result.stderr).toContain('MINSHOP_SUPPORT_EMAIL n\'est pas posée');
+      expect(target.read().calls.find(({ argv }) => argv[0] === 'deploy').argv).not.toContain('--var');
+    });
+
+    it('refuses an address the footer would hide, before anything is uploaded', () => {
+      const target = provisioned();
+      const result = target.run(['deploy', '--env', 'staging', ...FAST, '--skip-smoke'], { MINSHOP_SUPPORT_EMAIL: 'support@agence.example; compta@agence.example' });
+      expect(result.status).toBe(EXIT_CODES.input);
+      expect(result.stderr).toMatch(/MINSHOP_SUPPORT_EMAIL/);
+      expect(target.read().calls.some(({ argv }) => argv[0] === 'deploy')).toBe(false);
     });
   });
 

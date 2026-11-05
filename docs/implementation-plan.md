@@ -347,7 +347,9 @@ dans l'environnement plutôt que dans le code : `MINSHOP_DOMAIN_SUFFIX` fait de
 `--domain` un `<slug>.<suffixe>`, et `CLOUDFLARE_ACCOUNT_ID` sert de `--account`.
 Les écrire en dur serait impossible de toute façon — `config:validate` échoue sur
 tout fichier du cœur contenant le domaine d'une boutique — et ce serait surtout
-un socle qui connaît une agence, donc invendable à la seconde.
+un socle qui connaît une agence, donc invendable à la seconde. L'adresse du
+support suit la même règle, au déploiement plutôt qu'à la création :
+`MINSHOP_SUPPORT_EMAIL` (§13.12).
 
 `shopctl new` s'appelle aussi **sans cloner le socle**, ce qui est la forme que
 prend la toute première boutique d'une machine :
@@ -3410,10 +3412,7 @@ Fait le 2026-11-04, sans migration, en version mineure (v0.6.0) :
 - un pied de page collé au bas de chaque écran de l'administration : la
   version du socle, « Guide de l'administration » et « Vous rencontrez un
   problème ou une difficulté ? », un e-mail prérempli vers l'adresse du
-  support (`admin.supportEmail`) : celle de l'agence par défaut, dans
-  `src/config.ts`, commune à toute la flotte (choix de Damien le 2026-11-05),
-  ou celle qu'une boutique déclare dans `store.config.ts`, jamais dans
-  Réglages ;
+  support (`admin.supportEmail`), jamais dans Réglages ;
 - un guide en Markdown, un chapitre par section du menu plus « Premiers pas »,
   dans `src/features/adminGuide/chapters/` ; ceux d'une boutique vont dans
   `client/guide/` et suivent ceux du socle ;
@@ -3429,3 +3428,16 @@ Tenu par `src/features/adminGuide/guide.test.ts`, qui échoue sur un écran sans
 chapitre, un libellé en gras qu'aucun écran n'affiche plus, un lien mort ou une
 typographie fausse, et par `test/browser/admin-guide.spec.mjs`. Reste à faire :
 un chapitre propre à la première boutique réelle.
+
+L'adresse du support est celle de l'agence pour toute la flotte. Le 2026-11-05,
+Damien la place d'abord dans `src/config.ts` du socle, puis la veut hors du
+code : un socle qui connaît une agence ne se vend pas à une seconde, la raison
+pour laquelle `MINSHOP_DOMAIN_SUFFIX` vit déjà dans l'environnement (§5.2).
+C'est donc `MINSHOP_SUPPORT_EMAIL`, dans l'environnement qui déploie (le poste
+de l'agence, une variable GitHub pour les workflows Deploy), que `shopctl
+deploy` passe au Worker comme variable et jamais par un fichier suivi. Sa
+faiblesse est connue et dite : un déploiement lancé sans elle retire le lien
+d'aide, alors chaque déploiement écrit l'adresse qu'il pose, ou avertit qu'il
+n'en a aucune, et refuse une valeur que le pied de page ignorerait. Une
+boutique aidée par quelqu'un d'autre garde `admin.supportEmail` dans son
+`store.config.ts`, qui l'emporte.
