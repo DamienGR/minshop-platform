@@ -117,6 +117,9 @@ try {
        body_markdown TEXT NOT NULL DEFAULT '',
        published INTEGER NOT NULL DEFAULT 0,
        layout TEXT NOT NULL DEFAULT 'standard',
+       -- migrations/0056_page_models.sql: the page's model and its zones.
+       model TEXT NOT NULL DEFAULT '',
+       zones TEXT NOT NULL DEFAULT '{}',
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
        updated_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     `CREATE TABLE page_media (
