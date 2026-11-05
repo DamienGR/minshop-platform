@@ -421,9 +421,53 @@
     display: flow-root;
   }
 }
+/* A photo alone keeps its proportions, centred, and stops short of the
+   screen's height (ticket #194): a portrait at the measure's full width was
+   taller than the screen, 1 024 px at 48rem. `contain` and not a shrinking
+   box: the width attribute (markdown.ts, `dimensions`) is what reserves the
+   photo's room before it loads, and with it a capped height alone would
+   squash the photo; `width: auto` would keep the shape and lose the room.
+   A capped portrait therefore sits centred in a box as wide as before. */
+.markdown-content .markdown-media img {
+  max-height: min(80vh, 42rem);
+  object-fit: contain;
+}
+/* A row of photos (ticket #194): images written one under the other with no
+   blank line are one paragraph, which the renderer marks .markdown-gallery
+   (features/pages/markdown.ts). One shape for all, square like the product
+   photos, cropped from the centre, so a portrait and a landscape line up.
+   Past a phone's width the whole row stands on one line; below it, two to a
+   line, an odd last one centred. A blank line starts another row. The flex
+   basis sets each photo's width (the width attribute only reserves room)
+   and the ratio its height, so a row keeps its room before it loads too. */
+.markdown-content .markdown-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+.markdown-content .markdown-gallery img {
+  flex: 0 1 calc((100% - 0.75rem) / 2);
+  min-width: 0;
+  aspect-ratio: 1;
+  object-fit: cover;
+  margin: 0;
+}
+@media (min-width: 640px) {
+  .markdown-content .markdown-gallery {
+    flex-wrap: nowrap;
+  }
+  .markdown-content .markdown-gallery img {
+    flex: 1 1 0;
+  }
+}
 /* What starts below a photo set beside its text: a heading, a rule, a map,
-   another photo. Without a float above, `clear` changes nothing. */
-.markdown-content :is(h1, h2, h3, h4, h5, h6, hr, .markdown-media, .place-map, .place-map-error) {
+   another photo, a row of them. Without a float above, `clear` changes
+   nothing. */
+.markdown-content
+  :is(h1, h2, h3, h4, h5, h6, hr, .markdown-media, .markdown-gallery, .place-map, .place-map-error) {
   clear: both;
 }
 /* A photo with too little text beside it still ends inside the page, before

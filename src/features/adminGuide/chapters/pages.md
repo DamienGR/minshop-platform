@@ -24,11 +24,21 @@ Sur un téléphone, la photo reste au-dessus du texte. Un second clic sur le mê
 
 Le bouton ajoute `"gauche"` ou `"droite"` à la fin de la photo : vous pouvez aussi l’écrire vous-même.
 
+### Mettre des photos en rangée
+
+1. Insérez la première photo avec **Image**, puis passez à la ligne.
+2. Insérez la suivante avec **Image**, et ainsi de suite : une photo par ligne, sans ligne vide entre elles.
+3. **Aperçu** montre les photos côte à côte, toutes au même format carré.
+
+Une ligne vide entre deux photos commence une nouvelle rangée. Sur un téléphone, les photos vont deux par deux.
+
+Une photo seule, elle, garde sa forme et ne dépasse pas la hauteur de l’écran.
+
 ### Choisir une mise en page
 
 - **Standard** : pour les textes longs, comme les conditions de vente.
 - **Éditorial** : titre centré, pour présenter la boutique.
-- **Large** : toute la largeur, pour les tableaux et les grilles de photos.
+- **Large** : toute la largeur, pour les tableaux et les rangées de photos, qui y gagnent en taille.
 
 ### Les « [À COMPLÉTER] »
 

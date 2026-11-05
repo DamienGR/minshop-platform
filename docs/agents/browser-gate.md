@@ -73,6 +73,21 @@ What it asserts, and why each one is here rather than in vitest:
   word, and the preview shows it. The unit tests prove the classes; only a
   browser applies the stylesheet that places them. `serve.mjs` seeds the page,
   which the axe and reflow routes walk too. Skipped against `BASE_URL`.
+- **a row of photos** (`page-gallery.spec.mjs`) — page images written one
+  under the other with no blank line (ticket #194): one square shape for all,
+  the whole row on one line past a phone's width, two to a line on a phone
+  with an odd last one centred; a portrait alone stops short of the screen's
+  height without being squashed, its width attribute still reserving its
+  room; the editor's preview shows the row. `serve.mjs` seeds the page and
+  measures its photos, and draws the portrait. Skipped against `BASE_URL`.
+- **product gallery** (`product-gallery.spec.mjs`) — the product page opens
+  on the merchant's first photo even when the variant checked by default is
+  linked to another (ticket #185); a variant the shopper picks brings its
+  photo, an add-on ticked does not move the gallery, and Back hands the
+  chosen variant's price and photo back (Chromium restores the form at
+  pageshow, after the script ran). `serve.mjs` links sample-tee's default to
+  its second photo and adds an in-stock Medium on a third. Skipped against
+  `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

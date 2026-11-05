@@ -151,11 +151,28 @@ function imagesIn(tokens: Token[]): Token[] {
   );
 }
 
+/** What separates the images of a row: a line break, or nothing but spaces. */
+function isGap(token: Token): boolean {
+  return (
+    token.type === 'softbreak' ||
+    token.type === 'hardbreak' ||
+    (token.type === 'text' && token.content.trim() === '')
+  );
+}
+
 /**
  * A paragraph that holds one image and nothing else is a photo of the page,
  * and says so: `markdown-media`, which base.css starts below a photo set
  * beside its text. When that image's title is a side word (mediaSide.ts,
  * ticket #195), the paragraph also takes the side's class, from a closed list.
+ *
+ * A paragraph that holds several images and nothing else — written one under
+ * the other with no blank line, which Markdown joins into one paragraph — is
+ * a row of photos (ticket #194): `markdown-gallery`, which base.css lays out
+ * as a row. CSS alone cannot tell it from a sentence that holds two images
+ * (`p:has(> img + img)` takes both), hence the class. A line break that ends
+ * in two spaces or a backslash would be a `<br>` among the photos: in a row
+ * it is the line break any other one is.
  *
  * The word itself never reaches the page, wherever the image stands: in
  * `title` it would be a tooltip reading « gauche ». Only a photo at the top
@@ -176,10 +193,17 @@ function installMediaRule(instance: MarkdownItInstance): void {
 
       const open = state.tokens[idx - 1];
       if (open?.type !== 'paragraph_open' || open.level !== 0 || open.hidden) return;
-      const content = children.filter((child) => !(child.type === 'text' && child.content.trim() === ''));
-      if (content.length !== 1 || content[0].type !== 'image') return;
-      open.attrJoin('class', 'markdown-media');
-      if (sides[0]) open.attrJoin('class', `markdown-media--${sides[0]}`);
+      const content = children.filter((child) => !isGap(child));
+      if (!content.every((child) => child.type === 'image')) return;
+      if (content.length === 1) {
+        open.attrJoin('class', 'markdown-media');
+        if (sides[0]) open.attrJoin('class', `markdown-media--${sides[0]}`);
+        return;
+      }
+      open.attrJoin('class', 'markdown-gallery');
+      token.children = children.map((child) =>
+        child.type === 'hardbreak' ? new state.Token('softbreak', 'br', 0) : child,
+      );
     });
   });
 }
