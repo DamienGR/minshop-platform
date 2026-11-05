@@ -363,6 +363,9 @@ today's config.
     never from the block's text. A map's tiles come through the shop's relay,
     which fetches only tiles a published map draws: never point a page at a
     third-party tile server, and never let the relay take a URL.
+    An image titled `"gauche"` or `"droite"` stands beside its text (ticket
+    #195): the word becomes a class from a closed list
+    (`features/pages/mediaSide.ts`) and is never written out.
 12. **A log line is written, never forwarded.** Structured events with fields
     you chose; an error from a provider goes through `logSafe()`
     (`features/observability/logSafe.ts`), which masks e-mail addresses and

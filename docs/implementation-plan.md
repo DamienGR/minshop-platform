@@ -3452,3 +3452,34 @@ demanderait `admin:org`. Jamais dans un workflow, où `vars` a déjà répondu p
 son propre dépôt, et jamais bloquant : sans origine GitHub, sans `gh` ou sans
 session, le déploiement avertit, dit pourquoi, et part sans le lien. Seule une
 valeur qui n'est pas une adresse l'arrête, comme dans un workflow.
+
+### 13.13 Une photo à côté de son texte dans une page
+
+Noté le 2026-11-05 (ticket #195) : sur une page de présentation (« La marque »
+de la première boutique réelle), une photo à côté de son texte, à gauche ou à
+droite, comme sur les sites que les boutiques quittent. Aucun des jalons 0 à 10
+n'avance.
+
+Fait le 2026-11-05, sans migration :
+
+- la syntaxe est le titre d'une image Markdown, un mot parmi deux :
+  `![…](/images/… "gauche")` ou `"droite"`. C'est du CommonMark : un lecteur
+  qui ne connaît pas le mot montre l'image ;
+- le rendu marque le paragraphe qui ne tient qu'une image (`markdown-media`)
+  et son côté (`markdown-media--left`, `--right`), d'une liste fermée
+  (`features/pages/mediaSide.ts`) : le mot n'est jamais écrit, ni en classe ni
+  en infobulle, ce qui garde l'invariant 11. Un autre titre reste un titre ;
+  dans une phrase, une liste, une citation ou une rangée de photos (#194), le
+  mot ne déplace rien ;
+- au-delà de la largeur d'un téléphone, la photo flotte de son côté sur 40 %
+  de la mesure et les paragraphes suivants courent à côté, puis dessous ; un
+  intertitre, un filet, une carte ou une autre photo repartent dessous. Sur
+  téléphone, la photo reste au-dessus du texte ;
+- dans l'éditeur, « À gauche » et « À droite », après « Image », écrivent le
+  mot sur l'image de la ligne du curseur, ou le retirent au second clic ;
+  l'aperçu passe par le même rendu et la même feuille ;
+- le chapitre « Pages » du guide dit comment faire.
+
+Tenu par `src/features/pages/markdown.test.ts`, `mediaSide.test.ts` et
+`test/browser/page-photo.spec.mjs`, qui mesure la photo, le texte à côté et
+l'intertitre dessous, sur ordinateur et sur téléphone, dans chaque thème.

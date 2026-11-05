@@ -30,6 +30,8 @@ export const FIXTURE = REMOTE
       emptyCategory: '/categories/bientot',
       page: '/pages/about',
       contact: '/pages/contact',
+      // Photos beside their text (ticket #195); seeded by serve.mjs.
+      photoPage: '/pages/atelier',
       search: 'sample',
     };
 
@@ -59,6 +61,7 @@ export const ROUTES = [
   { name: 'recherche vide', path: '/search?q=zzzznomatch', why: 'aucun résultat' },
   { name: 'page de contenu', path: FIXTURE.page, why: 'la prose du marchand' },
   { name: 'contact', path: FIXTURE.contact, why: 'le formulaire de contact sous sa page' },
+  { name: 'photos à côté du texte', path: FIXTURE.photoPage, why: 'une photo à gauche, une à droite' },
   { name: 'panier', path: '/cart', why: 'le shell hors navigation' },
   { name: 'introuvable', path: '/no-such-page', why: 'la 404' },
 ].filter((route) => route.path);

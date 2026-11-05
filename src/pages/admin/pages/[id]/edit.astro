@@ -107,6 +107,22 @@ const tools: Array<{ action: string; value: string; label: string; title: string
     caret: MAP_CARET,
   },
 ];
+
+// After « Image »: they move the photo on the caret's line beside its text, or
+// back to full width on a second press (ticket #195). The value is the word the
+// image's title takes, the syntax of features/pages/mediaSide.ts.
+const sideTools: Array<{ value: string; label: string; title: string }> = [
+  {
+    value: 'gauche',
+    label: t('admin.pages.editor.tool.imageLeftShort'),
+    title: t('admin.pages.editor.tool.imageLeft'),
+  },
+  {
+    value: 'droite',
+    label: t('admin.pages.editor.tool.imageRightShort'),
+    title: t('admin.pages.editor.tool.imageRight'),
+  },
+];
 ---
 
 <AdminLayout title={t('admin.pages.edit.documentTitle', { titre: page.title })} active="pages">
@@ -162,6 +178,7 @@ const tools: Array<{ action: string; value: string; label: string; title: string
     data-msg-preview-failed-status={t('admin.pages.editor.previewFailedStatus')}
     data-msg-link-text={t('admin.pages.editor.linkText')}
     data-msg-alt-prompt={t('admin.pages.editor.altPrompt')}
+    data-msg-side-no-image={t('admin.pages.editor.sideNoImage')}
   >
     <div class="flex flex-wrap gap-4">
       <label class="block flex-1 text-xs uppercase tracking-widest text-gray-400">
@@ -259,6 +276,19 @@ const tools: Array<{ action: string; value: string; label: string; title: string
               label="Image"
               buttonClass="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
             />
+            {
+              sideTools.map((tool) => (
+                <button
+                  type="button"
+                  data-tool="side"
+                  data-value={tool.value}
+                  title={tool.title}
+                  class="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
+                >
+                  {tool.label}
+                </button>
+              ))
+            }
           </div>
 
           {/* Never h-full: that resolves to 100% of the pane, and the pane is
@@ -346,6 +376,8 @@ const tools: Array<{ action: string; value: string; label: string; title: string
 </AdminLayout>
 
 <script>
+  import { toggleImageSide } from '../../../../features/pages/mediaSide';
+
   const form = document.querySelector<HTMLFormElement>('[data-page-form]');
   const editor = form?.querySelector<HTMLTextAreaElement>('[data-editor]');
   const preview = form?.querySelector<HTMLElement>('[data-preview]');
@@ -391,6 +423,25 @@ const tools: Array<{ action: string; value: string; label: string; title: string
         const block = `${lead}${value}\n`;
         const caret = lead.length + Number(button.dataset.caret ?? value.length);
         replaceSelection(block, caret, caret);
+      } else if (kind === 'side' && (value === 'gauche' || value === 'droite')) {
+        // The image on the caret's line, whatever is selected: the button
+        // places a photo, it does not wrap text.
+        const body = editor.value;
+        const caret = editor.selectionStart;
+        const lineStart = body.lastIndexOf('\n', caret - 1) + 1;
+        const next = body.indexOf('\n', caret);
+        const lineEnd = next === -1 ? body.length : next;
+        const edit = toggleImageSide(body.slice(lineStart, lineEnd), caret - lineStart, value);
+        if (!edit) {
+          window.alert(msg.msgSideNoImage ?? '');
+          editor.focus();
+          return;
+        }
+        editor.setRangeText(edit.line, lineStart, lineEnd, 'preserve');
+        editor.focus();
+        // Select the image, so the change is in view and a second press finds it.
+        editor.setSelectionRange(lineStart + edit.start, lineStart + edit.end);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
 

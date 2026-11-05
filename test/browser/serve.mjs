@@ -66,6 +66,28 @@ wrangler([
     "INSERT OR REPLACE INTO settings (key, value) VALUES ('contact_to', 'atelier@exemple.test'), ('enc:resend_api_key', 'browser-suite-placeholder')",
 ]);
 
+// A page with photos beside their text (ticket #195), for page-photo.spec.mjs.
+// Here and not in the shared fixtures: the HTML baselines would change with
+// the sitemap. The photos are the gallery's objects, put below.
+const PHOTO_PAGE = [
+  '![Mes mains à l’atelier](/images/media/tee-front.jpg "gauche")',
+  '',
+  'Chaque pièce naît sur l’établi, coupée, assemblée et finie à la main, d’un bout à l’autre, dans le même atelier depuis douze ans.',
+  '',
+  'Un second paragraphe continue à côté de la photo, tant qu’elle descend plus bas que lui.',
+  '',
+  '## Les matières',
+  '',
+  '![Une toile de lin lavé](/images/media/tee-back.jpg "droite")',
+  '',
+  'Du lin lavé, tissé en France, choisi pour sa tenue et sa douceur.',
+].join('\n');
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('L’atelier', 'atelier', '${PHOTO_PAGE}', 1, 'page_ph0t0s0000')`,
+]);
+
 // The gallery rows point at object keys. Without the objects the product page
 // renders broken images, and "does this image actually load" is one of the
 // things the suite asks.
