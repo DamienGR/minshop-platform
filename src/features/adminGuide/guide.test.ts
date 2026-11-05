@@ -148,13 +148,20 @@ describe('the guide’s chapters', () => {
 
 describe('the guide this build carries', () => {
   it('reads the chapters next to it, the theme’s texts only when the theme declares some', () => {
-    const anchors = adminGuide().map((chapter) => chapter.anchor);
+    const guide = adminGuide();
+    const anchors = guide.filter((chapter) => chapter.origin === 'core').map((chapter) => chapter.anchor);
     const expected = CORE_CHAPTERS.map((name) => `guide-${name}`);
 
     // The core's own theme may or may not declare texts: either way the
     // chapter follows the menu entry, and nothing else is left out.
     expect(anchors.filter((anchor) => anchor !== 'guide-themeTexts')).toEqual(
       expected.filter((anchor) => anchor !== 'guide-themeTexts'),
+    );
+    // Then the shop's own, every file of client/guide/: none in the core's
+    // repository, the ones it wrote in a shop. A test that held the whole guide
+    // to the core's list failed in the first shop that wrote a chapter.
+    expect(guide.slice(anchors.length).map((chapter) => chapter.anchor)).toEqual(
+      buildGuide(shop).map((chapter) => chapter.anchor),
     );
     expect(adminGuideRevision()).toMatch(/^[0-9a-f]{8}$/);
   });

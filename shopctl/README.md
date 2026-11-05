@@ -228,7 +228,7 @@ l'ordre du plan §5.5 : ressources, configuration, `npm run verify`, bookmark
 Time Travel en production, migrations, build, téléversement, secrets différés,
 test de fumée.
 
-Quatre propriétés valent d'être connues.
+Cinq propriétés valent d'être connues.
 
 **Rien qui touche un compte n'a de valeur par défaut.** `--env` est obligatoire,
 `--yes` l'est en production, et le compte Cloudflare attendu doit être nommé —
@@ -262,6 +262,18 @@ annonce. Il nomme la version vers laquelle
 revenir plutôt que de revenir tout seul : un rollback automatique se
 déclencherait aussi sur un contrôle qui a échoué parce que le réseau n'atteignait
 pas le site.
+
+**L'adresse du support vient de l'environnement qui déploie.** Le pied de page
+de l'administration propose d'écrire au support (ticket #186), à l'adresse de
+`MINSHOP_SUPPORT_EMAIL` : celle de l'agence, la même pour toute sa flotte, qui
+n'est écrite dans aucun fichier, ni du socle ni de la boutique. `deploy` la passe au Worker
+(`wrangler deploy --var`, jamais `wrangler.jsonc`, qui est suivi) et dit
+laquelle il a posée ; sans elle, il avertit que le lien d'aide disparaît, et
+il refuse une valeur qui n'est pas une seule adresse. Sur le poste de l'agence,
+elle s'exporte avec `MINSHOP_DOMAIN_SUFFIX` ; pour les workflows Deploy, c'est
+une variable GitHub du même nom, sur l'organisation qui porte les boutiques et
+sur le dépôt de flotte. Une boutique que quelqu'un d'autre aide déclare la
+sienne dans `src/store.config.ts` (`admin.supportEmail`), qui l'emporte.
 
 ## Le cycle de vie d'une boutique
 

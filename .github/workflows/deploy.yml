@@ -120,6 +120,10 @@ jobs:
       # refuses to start without it (plan §9): it seals the backup taken before
       # the migrations, so that whoever holds the key can open what CI took.
       SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
+      # The admin footer's help address (ticket #186): the agency's, the same
+      # for every shop, so a GitHub variable rather than a file, set once on the
+      # organisation that holds the shops. Unset, the deploy says the link is gone.
+      MINSHOP_SUPPORT_EMAIL: ${{ vars.MINSHOP_SUPPORT_EMAIL }}
 
     steps:
       - name: Check out repository

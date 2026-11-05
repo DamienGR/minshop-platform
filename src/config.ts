@@ -236,9 +236,12 @@ export interface SiteConfig {
   /**
    * The Admin's footer (ticket #186). `supportEmail` is where its « Vous
    * rencontrez un problème ou une difficulté ? » writes: whoever supports the
-   * shop, the agency for a shop it runs. Set in the shop's code, never in
-   * Admin → Réglages: a merchant asking for help does not get to choose who
-   * answers. '' = no link.
+   * shop. By default the MINSHOP_SUPPORT_EMAIL var, which `shopctl deploy`
+   * passes from the environment that deploys: the agency's address, the same
+   * for its whole fleet and written in no file, this one least of all (a core
+   * that knows one agency cannot be sold to a second). A shop someone else
+   * supports sets its own in store.config.ts. Never in Admin → Réglages: a
+   * merchant asking for help does not get to choose who answers. '' = no link.
    */
   admin: {
     supportEmail: string;
@@ -361,7 +364,7 @@ function defaultConfig(): SiteConfig {
       },
     },
     admin: {
-      supportEmail: '', // the footer's help link — set yours in store.config.ts ('' = none)
+      supportEmail: env.MINSHOP_SUPPORT_EMAIL ?? '', // the footer's help link, from the deploy ('' = none)
     },
   };
 }

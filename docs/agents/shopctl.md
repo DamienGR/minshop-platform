@@ -251,6 +251,11 @@ attached to production's images bucket, and a staging or local build that used
 it would serve production's objects — so a production `deploy` refuses, before
 the backup, a declared domain that is not attached to that bucket: every
 product image would link to it.
+The admin footer's help address (ticket #186) is the agency's and lives in no
+file: `MINSHOP_SUPPORT_EMAIL` in the deploying environment, which `deploy`
+validates as the footer does (`supportHref()`, one corpus in the deploy suite),
+passes as `wrangler deploy --var` and reports; without it, a warning says the
+link is gone. Never through the rendered `wrangler.jsonc`, which is tracked.
 The smoke test can fail the command, and an unreachable site is a failure, never
 a pass. Cloudflare's own answer on a name that leads to no Worker yet — a
 `404`, "There is nothing here yet" or `error code: 1042` depending on what the

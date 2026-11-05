@@ -43,6 +43,15 @@ test('le pied de page ouvre le guide à côté de l’écran, sur son chapitre',
   await expect(page.getByRole('heading', { level: 1, name: 'Commandes' })).toBeAttached();
 });
 
+// The address is the var the deployment passes (MINSHOP_SUPPORT_EMAIL, from
+// serve.mjs here): the one path from the deploying environment to the footer
+// that no unit test walks.
+test('le pied de page écrit au support à l’adresse que le déploiement passe', async ({ page }) => {
+  await login(page, '/admin/orders');
+  const support = page.locator('[data-admin-footer]').getByRole('link', { name: 'Vous rencontrez un problème' });
+  await expect(support).toHaveAttribute('href', /^mailto:support@agence\.example\?subject=/);
+});
+
 test('le guide reste ouvert d’un écran à l’autre, au même endroit, et Échap le referme', async ({ page }) => {
   await login(page, '/admin/products');
   await footerLink(page).click();

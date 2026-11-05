@@ -86,8 +86,9 @@ const nav: { key: Section; label: string; href: string }[] = [
 // Label of the section we're on — shown in the collapsed mobile disclosure.
 const currentLabel = nav.find((n) => n.key === active)?.label ?? t('admin.shell.nav.menu');
 // The footer (ticket #186): the core this shop runs, the guide open at this
-// screen's chapter (ticket #188), and whom to write to — an address the shop's
-// code declares (`admin.supportEmail`), so no link when it declares none.
+// screen's chapter (ticket #188), and whom to write to: `admin.supportEmail`,
+// the address the deploy passes unless the shop's code sets its own, no link
+// without one.
 const footerGuideHref = guideHref(active);
 const footerSupportHref = supportHref(
   config.admin.supportEmail,

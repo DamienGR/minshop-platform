@@ -60,9 +60,11 @@ What it asserts, and why each one is here rather than in vitest:
   screen, on that screen's chapter, keeps it open and in place on the next
   screen, and closes on Escape with focus back on the link; the guide's
   contents scroll the panel, never the screen or its URL. Without a script, the
-  same link leads to `/admin/guide`. The panel is a script that fetches the
-  guide and remembers its state per tab, none of which a container render or a
-  form post can see. Skipped against `BASE_URL`.
+  same link leads to `/admin/guide`. The help link writes to the address the
+  deployment passes: `serve.mjs` gives the Worker one, as `shopctl deploy`
+  does. The panel is a script that fetches the guide and remembers its state
+  per tab, none of which a container render or a form post can see. Skipped
+  against `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

@@ -116,6 +116,10 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
+      # The admin footer's help address (ticket #186), the same for every shop
+      # of the fleet: a variable of this repository or its organisation. Unset,
+      # the deploy says the link is gone.
+      MINSHOP_SUPPORT_EMAIL: ${{ vars.MINSHOP_SUPPORT_EMAIL }}
 
     steps:
       - name: Check out the shop
