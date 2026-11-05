@@ -385,6 +385,54 @@
   border-radius: 0.375rem;
   margin: 1.5rem auto;
 }
+/* A photo beside its text (ticket #195): `![…](/images/… "gauche")` or
+   `"droite"`. The renderer marks the paragraph that holds one image and
+   nothing else (.markdown-media) and its side (--left, --right); the word
+   never reaches the page (features/pages/mediaSide.ts). Past a phone's width
+   the photo floats on its side over 40 % of the measure, and the paragraphs
+   after it run beside it, then under it. On a phone it stays above its text,
+   like any other photo. */
+@media (min-width: 640px) {
+  .markdown-content .markdown-media--left,
+  .markdown-content .markdown-media--right {
+    width: 40%;
+    /* Also the room above whatever clears it: a heading's own top margin
+       is spent on the clearance. */
+    margin-bottom: 1.5rem;
+  }
+  .markdown-content .markdown-media--left {
+    float: left;
+    margin-right: 1.5rem;
+  }
+  .markdown-content .markdown-media--right {
+    float: right;
+    margin-left: 1.5rem;
+  }
+  /* The float sets the width, so the photo fills it; the top margin lines it
+     up with the first line of the text beside it rather than its line box. */
+  .markdown-content .markdown-media--left img,
+  .markdown-content .markdown-media--right img {
+    width: 100%;
+    margin: 0.375rem 0 0;
+  }
+  /* A list's bullets and a quote's rule sit in their box's left edge, which
+     runs under a left photo: such a box keeps clear of the photo instead. */
+  .markdown-content :is(.markdown-media--left, .markdown-media--right) ~ :is(ul, ol, blockquote) {
+    display: flow-root;
+  }
+}
+/* What starts below a photo set beside its text: a heading, a rule, a map,
+   another photo. Without a float above, `clear` changes nothing. */
+.markdown-content :is(h1, h2, h3, h4, h5, h6, hr, .markdown-media, .place-map, .place-map-error) {
+  clear: both;
+}
+/* A photo with too little text beside it still ends inside the page, before
+   whatever follows the article (the contact form, the footer). */
+.markdown-content::after {
+  content: '';
+  display: block;
+  clear: both;
+}
 /* The map of a place (a ```carte block, ADR 0029; features/maps/render.ts).
    No script: the tiles are a CSS grid the server sized, shifted so the place
    sits at the centre of the frame, where the pin is. The frame never grows

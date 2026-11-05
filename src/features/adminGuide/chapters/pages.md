@@ -14,6 +14,16 @@ Les boutons ajoutent des signes autour du texte, comme des étoiles : c’est 
 
 Une page publiée n’est encore dans aucun menu : ajoutez-la dans [Navigation](#guide-navigation) pour que vos clients la trouvent.
 
+### Mettre une photo à côté du texte
+
+1. Insérez la photo avec **Image**, sur une ligne à elle, juste au-dessus du texte qui l’accompagne.
+2. Le curseur sur la ligne de la photo, cliquez sur **À gauche** ou **À droite**.
+3. **Aperçu** montre la photo à côté des paragraphes qui la suivent. Un intertitre, une carte ou une autre photo repartent en dessous.
+
+Sur un téléphone, la photo reste au-dessus du texte. Un second clic sur le même bouton la remet en pleine largeur.
+
+Le bouton ajoute `"gauche"` ou `"droite"` à la fin de la photo : vous pouvez aussi l’écrire vous-même.
+
 ### Choisir une mise en page
 
 - **Standard** : pour les textes longs, comme les conditions de vente.

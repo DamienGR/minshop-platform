@@ -9,6 +9,7 @@ import {
   type PlaceMapOptions,
 } from '../maps/render.ts';
 import { tileGrid, type Tile } from '../maps/tiles.ts';
+import { mediaSideOf } from './mediaSide.ts';
 
 /**
  * Server-only Markdown renderer, shared by the storefront route and the admin
@@ -143,6 +144,46 @@ function installImageRule(
   };
 }
 
+/** Every image among inline tokens, a link's included. */
+function imagesIn(tokens: Token[]): Token[] {
+  return tokens.flatMap((token) =>
+    token.type === 'image' ? [token] : token.children?.length ? imagesIn(token.children) : [],
+  );
+}
+
+/**
+ * A paragraph that holds one image and nothing else is a photo of the page,
+ * and says so: `markdown-media`, which base.css starts below a photo set
+ * beside its text. When that image's title is a side word (mediaSide.ts,
+ * ticket #195), the paragraph also takes the side's class, from a closed list.
+ *
+ * The word itself never reaches the page, wherever the image stands: in
+ * `title` it would be a tooltip reading « gauche ». Only a photo at the top
+ * level of the body moves; one inside a sentence, a list, a quote or a row of
+ * photos stays where it is. Any other title stays a title.
+ */
+function installMediaRule(instance: MarkdownItInstance): void {
+  instance.core.ruler.push('minshop_media', (state) => {
+    state.tokens.forEach((token, idx) => {
+      if (token.type !== 'inline') return;
+      const children = token.children ?? [];
+      const images = imagesIn(children);
+      if (images.length === 0) return;
+      const sides = images.map((image) => mediaSideOf(String(image.attrGet('title') ?? '')));
+      images.forEach((image, i) => {
+        if (sides[i] && image.attrs) image.attrs = image.attrs.filter(([name]) => name !== 'title');
+      });
+
+      const open = state.tokens[idx - 1];
+      if (open?.type !== 'paragraph_open' || open.level !== 0 || open.hidden) return;
+      const content = children.filter((child) => !(child.type === 'text' && child.content.trim() === ''));
+      if (content.length !== 1 || content[0].type !== 'image') return;
+      open.attrJoin('class', 'markdown-media');
+      if (sides[0]) open.attrJoin('class', `markdown-media--${sides[0]}`);
+    });
+  });
+}
+
 /**
  * A ```carte fence becomes a map, built from the parsed place and never from
  * the block's text (features/maps/render.ts). Every other fence keeps
@@ -202,6 +243,7 @@ export function renderMarkdown(markdown: string, options: RenderOptions = {}): s
     typographer: false,
   });
   installImageRule(instance, baseUrl, options.dimensions);
+  installMediaRule(instance);
   if (options.placeMaps) installPlaceMapRule(instance, options.placeMaps, options.sourceMap === true);
   if (options.headingId) installHeadingIdRule(instance, options.headingId);
 

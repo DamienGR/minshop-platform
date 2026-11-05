@@ -140,6 +140,69 @@ describe('renderMarkdown — images', () => {
   });
 });
 
+describe('renderMarkdown — a photo beside its text (ticket #195)', () => {
+  const photo = (title: string) => `![Mes mains à l’atelier](/images/media/a.webp "${title}")`;
+
+  it('marks the paragraph of a photo titled « gauche » with its side', () => {
+    const html = renderMarkdown(`${photo('gauche')}\n\nLe texte qui l’accompagne.`);
+    expect(html).toContain('<p class="markdown-media markdown-media--left"><img');
+    expect(html).toContain('<p>Le texte qui l’accompagne.</p>');
+  });
+
+  it('and « droite » with the other side', () => {
+    expect(renderMarkdown(photo('droite'))).toContain('<p class="markdown-media markdown-media--right"><img');
+  });
+
+  it('reads the word whatever its case or spaces', () => {
+    expect(renderMarkdown(photo(' Gauche '))).toContain('markdown-media--left');
+  });
+
+  it('never writes the word out: no tooltip reading « gauche »', () => {
+    const html = renderMarkdown(photo('gauche'));
+    expect(html).not.toContain('title=');
+    expect(html).not.toContain('gauche');
+  });
+
+  it('keeps any other title a title, the paragraph a plain photo', () => {
+    const html = renderMarkdown(photo('À gauche de la porte'));
+    expect(html).toContain('title="À gauche de la porte"');
+    expect(html).toContain('<p class="markdown-media"><img');
+    expect(html).not.toContain('markdown-media--');
+  });
+
+  it('marks a photo with no title as a photo, so the CSS starts it below a side one', () => {
+    expect(renderMarkdown('![Photo](/images/media/a.webp)')).toContain('<p class="markdown-media"><img');
+  });
+
+  it('moves nothing in a row of photos (#194), and still drops the word', () => {
+    const html = renderMarkdown(`${photo('gauche')}\n![Autre](/images/media/b.webp)`);
+    expect(html).not.toContain('markdown-media');
+    expect(html).not.toContain('title=');
+  });
+
+  it('moves nothing inside a sentence', () => {
+    const html = renderMarkdown(`Voici ${photo('droite')} dans le texte.`);
+    expect(html).toMatch(/^<p>Voici <img/);
+    expect(html).not.toContain('title=');
+  });
+
+  it('moves nothing inside a list or a quote: only a photo of the body itself', () => {
+    expect(renderMarkdown(`- ${photo('gauche')}`)).not.toContain('markdown-media');
+    expect(renderMarkdown(`> ${photo('gauche')}`)).not.toContain('markdown-media');
+  });
+
+  it('keeps the class beside the editor’s source lines', () => {
+    const html = renderMarkdown(photo('gauche'), { sourceMap: true });
+    expect(html).toContain('<p class="markdown-media markdown-media--left" data-source-line="1"');
+  });
+
+  it('writes the class from its closed list, never from the title', () => {
+    const html = renderMarkdown(photo('gauche" onerror="alert(1)'));
+    expect(html).not.toContain('markdown-media--');
+    expect(html).not.toContain('onerror="');
+  });
+});
+
 describe('renderMarkdown — escaped alt text', () => {
   // The editor escapes \ [ and ] when inserting an image. These assert what
   // that escaping has to survive: the result must stay ONE image with the

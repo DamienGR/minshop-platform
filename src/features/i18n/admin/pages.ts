@@ -57,6 +57,12 @@ export const pages = {
   'admin.pages.editor.tool.quote': 'Citation',
   'admin.pages.editor.tool.code': 'Code en ligne',
   'admin.pages.editor.tool.codeShort': 'Code',
+  // After « Image » (ticket #195): the photo on the caret's line, beside its text.
+  'admin.pages.editor.tool.imageLeft': 'Photo de cette ligne à gauche du texte',
+  'admin.pages.editor.tool.imageLeftShort': 'À gauche',
+  'admin.pages.editor.tool.imageRight': 'Photo de cette ligne à droite du texte',
+  'admin.pages.editor.tool.imageRightShort': 'À droite',
+  'admin.pages.editor.sideNoImage': 'Placez d’abord le curseur sur la ligne d’une image.',
   // The empty editor's placeholder, one key per line of Markdown: the syntax
   // around these words is built in the template, so a translation cannot break it.
   'admin.pages.editor.placeholder.heading': 'Un intertitre',

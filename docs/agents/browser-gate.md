@@ -65,6 +65,14 @@ What it asserts, and why each one is here rather than in vitest:
   does. The panel is a script that fetches the guide and remembers its state
   per tab, none of which a container render or a form post can see. Skipped
   against `BASE_URL`.
+- **photos beside their text** (`page-photo.spec.mjs`) — a page image titled
+  `"gauche"` or `"droite"` (ticket #195): past a phone's width the photo
+  stands on its side and the next paragraph's first line runs beside it; on a
+  phone it stays above its text; the next heading starts below it; no `title`
+  reaches the page. The editor's « À gauche » and « À droite » set and undo the
+  word, and the preview shows it. The unit tests prove the classes; only a
+  browser applies the stylesheet that places them. `serve.mjs` seeds the page,
+  which the axe and reflow routes walk too. Skipped against `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's
