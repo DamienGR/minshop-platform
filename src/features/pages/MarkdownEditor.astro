@@ -1,0 +1,820 @@
+---
+/**
+ * The Markdown editor of a page: toolbar, image picker, and an Aperçu
+ * rendered by the storefront's own renderer (invariant 11). The body of every
+ * page uses it, and so does each Markdown zone of a theme's page model (ticket
+ * #205, ADR 0031), each with its own preview.
+ *
+ * It holds no <form>: it sits in the page's. The script's strings ride on
+ * `data-msg-*` attributes of its root, so the catalog never ships to the
+ * browser, and its queries stay inside that root, so a page holds several.
+ */
+import MediaPicker from '../media/MediaPicker.astro';
+import { t } from '../i18n';
+
+interface Props {
+  /** The field the text is sent as: `body_markdown`, or a zone's. */
+  name: string;
+  value: string;
+  /** Unique on the page: the field's id, and its image picker's. */
+  id: string;
+  label?: string;
+  help?: string;
+  /** In characters, as the server counts them; the field's bound too. */
+  maxLength?: number;
+  rows?: number;
+  /** The empty field's text; the body's cheat sheet below by default, none
+   *  when empty. */
+  placeholder?: string;
+}
+
+// Shown only while the body is empty. Doubles as the Markdown cheat sheet for a
+// merchant who has never written any — it covers exactly what the toolbar above
+// can insert, so the buttons and the hint teach the same syntax.
+// Built line by line: the catalog holds the words, this holds the syntax, so a
+// translation can never break the Markdown it is teaching.
+const PLACEHOLDER = [
+  `## ${t('admin.pages.editor.placeholder.heading')}`,
+  '',
+  t('admin.pages.editor.placeholder.intro'),
+  '',
+  `**${t('admin.pages.editor.placeholder.bold')}**  ` +
+    `_${t('admin.pages.editor.placeholder.italic')}_  \`code\``,
+  '',
+  `- ${t('admin.pages.editor.placeholder.bulletList')}`,
+  `- ${t('admin.pages.editor.placeholder.anotherItem')}`,
+  '',
+  `1. ${t('admin.pages.editor.placeholder.numberedList')}`,
+  `2. ${t('admin.pages.editor.placeholder.anotherItem')}`,
+  '',
+  `> ${t('admin.pages.editor.placeholder.quote')}`,
+  '',
+  `[${t('admin.pages.editor.placeholder.link')}](https://example.com)`,
+  '',
+  `![${t('admin.pages.editor.placeholder.imageAlt')}](/images/media/photo.webp)`,
+  '',
+  '```carte',
+  `lieu: ${t('admin.pages.editor.mapTemplate.name')}`,
+  'position: 48.8566, 2.3522',
+  '```',
+].join('\n');
+
+// The « Carte » tool's block: the map of a place (ADR 0029). The keys are
+// syntax, like `##`; only the sample values are words. The caret lands after
+// `position: `, the one line the merchant has to look up.
+const MAP_BLOCK = [
+  '```carte',
+  `lieu: ${t('admin.pages.editor.mapTemplate.name')}`,
+  `adresse: ${t('admin.pages.editor.mapTemplate.address')}`,
+  'position: ',
+  '```',
+].join('\n');
+const MAP_CARET = MAP_BLOCK.indexOf('position: ') + 'position: '.length;
+
+// The « Colonnes » tool's block: two columns (ADR 0030). `::: colonnes`,
+// `::: colonne` and `:::` are syntax; the sample texts are words, and the
+// first one comes selected, so typing replaces it.
+const COLUMNS_FIRST = t('admin.pages.editor.columnsTemplate.first');
+const COLUMNS_BLOCK = [
+  '::: colonnes',
+  COLUMNS_FIRST,
+  '',
+  '::: colonne',
+  t('admin.pages.editor.columnsTemplate.second'),
+  ':::',
+].join('\n');
+const COLUMNS_CARET = COLUMNS_BLOCK.indexOf(COLUMNS_FIRST);
+
+// Toolbar buttons are declarative: each carries the syntax to wrap or insert,
+// so the script stays one generic selection handler rather than nine.
+const tools: Array<{
+  action: string;
+  value: string;
+  label: string;
+  title: string;
+  caret?: number;
+  caretEnd?: number;
+}> = [
+  { action: 'prefix', value: '## ', label: 'H2', title: t('admin.pages.editor.tool.heading') },
+  {
+    action: 'wrap',
+    value: '**',
+    label: t('admin.pages.editor.tool.boldShort'),
+    title: t('admin.pages.editor.tool.bold'),
+  },
+  { action: 'wrap', value: '_', label: 'I', title: t('admin.pages.editor.tool.italic') },
+  {
+    action: 'link',
+    value: '',
+    label: t('admin.pages.editor.tool.link'),
+    title: t('admin.pages.editor.tool.link'),
+  },
+  {
+    action: 'prefix',
+    value: '- ',
+    label: t('admin.pages.editor.tool.listShort'),
+    title: t('admin.pages.editor.tool.list'),
+  },
+  { action: 'prefix', value: '1. ', label: '1.', title: t('admin.pages.editor.tool.numberedList') },
+  {
+    action: 'prefix',
+    value: '> ',
+    label: t('admin.pages.editor.tool.quote'),
+    title: t('admin.pages.editor.tool.quote'),
+  },
+  {
+    action: 'wrap',
+    value: '`',
+    label: t('admin.pages.editor.tool.codeShort'),
+    title: t('admin.pages.editor.tool.code'),
+  },
+  {
+    action: 'block',
+    value: MAP_BLOCK,
+    label: t('admin.pages.editor.tool.mapShort'),
+    title: t('admin.pages.editor.tool.map'),
+    caret: MAP_CARET,
+  },
+  {
+    action: 'block',
+    value: COLUMNS_BLOCK,
+    label: t('admin.pages.editor.tool.columnsShort'),
+    title: t('admin.pages.editor.tool.columns'),
+    caret: COLUMNS_CARET,
+    caretEnd: COLUMNS_CARET + COLUMNS_FIRST.length,
+  },
+];
+
+// After « Image »: they move the photo on the caret's line beside its text, or
+// back to full width on a second press (ticket #195). The value is the word the
+// image's title takes, the syntax of features/pages/mediaSide.ts.
+const sideTools: Array<{ value: string; label: string; title: string }> = [
+  {
+    value: 'gauche',
+    label: t('admin.pages.editor.tool.imageLeftShort'),
+    title: t('admin.pages.editor.tool.imageLeft'),
+  },
+  {
+    value: 'droite',
+    label: t('admin.pages.editor.tool.imageRightShort'),
+    title: t('admin.pages.editor.tool.imageRight'),
+  },
+];
+
+const { name, value, id, label, help, maxLength, rows = 24 } = Astro.props;
+const placeholder = Astro.props.placeholder ?? PLACEHOLDER;
+const fieldId = `${id}-field`;
+const helpId = `${id}-help`;
+---
+
+<div
+  data-markdown-editor
+  class="mt-6"
+  data-msg-rendering={t('admin.pages.editor.rendering')}
+  data-msg-preview-failed={t('admin.pages.editor.previewFailed')}
+  data-msg-preview-failed-status={t('admin.pages.editor.previewFailedStatus')}
+  data-msg-link-text={t('admin.pages.editor.linkText')}
+  data-msg-alt-prompt={t('admin.pages.editor.altPrompt')}
+  data-msg-side-no-image={t('admin.pages.editor.sideNoImage')}
+>
+  {
+    label && (
+      <label for={fieldId} class="block text-xs uppercase tracking-widest text-gray-400">
+        {label}
+      </label>
+    )
+  }
+  {
+    help && (
+      <p id={helpId} class="mt-1 text-xs text-gray-400">
+        {help}
+      </p>
+    )
+  }
+  <div class:list={['overflow-clip rounded-md border border-line', (label || help) && 'mt-2']}>
+    {/* Markdown / Côte à côte / Aperçu. Rendered hidden and revealed by the script,
+        because without JavaScript there is nothing to switch between — the
+        textarea is the whole editor and the preview never populates. */}
+    <div
+      data-modes
+      hidden
+      role="group"
+      aria-label={t('admin.pages.editor.viewLabel')}
+      class="flex items-center gap-1 border-b border-line px-2 py-2"
+    >
+      <button
+        type="button"
+        data-mode="write"
+        class="rounded px-3 py-1.5 text-xs uppercase tracking-widest text-gray-500"
+        aria-pressed="false"
+      >
+        Markdown
+      </button>
+      <button
+        type="button"
+        data-mode="split"
+        class="rounded px-3 py-1.5 text-xs uppercase tracking-widest text-gray-500"
+        aria-pressed="false"
+      >
+        {t('admin.pages.editor.mode.split')}
+      </button>
+      <button
+        type="button"
+        data-mode="preview"
+        class="rounded px-3 py-1.5 text-xs uppercase tracking-widest text-gray-500"
+        aria-pressed="false"
+      >
+        {t('admin.common.preview')}
+      </button>
+    </div>
+
+    {/* Split becomes two columns only where there's room for two readable
+        measures; below lg it stacks, so the mode still means something on a
+        phone instead of disappearing from the control. */}
+    <div data-panes class="lg:divide-x lg:divide-line">
+      {/* flex column so the textarea can fill the leftover height rather than
+          claiming 100% of a parent that also contains the toolbar. */}
+      <div data-pane="write" class="flex min-w-0 flex-col">
+        {/* Sticky (ticket #203): the field grows with the text and the page
+            scrolls, so on a long page the tools would otherwise be a scroll
+            back up away. It sticks within this pane, so it leaves with the
+            editor. Opaque, or the text would run through it; z-10 keeps it
+            under the admin's footer (z-30) and the guide panel (z-40). */}
+        <div
+          data-toolbar
+          class="sticky top-0 z-10 flex min-h-11 flex-wrap items-center gap-1 border-b border-line bg-paper px-2 py-1"
+        >
+          {
+            tools.map((tool) => (
+              <button
+                type="button"
+                data-tool={tool.action}
+                data-value={tool.value}
+                data-caret={tool.caret}
+                data-caret-end={tool.caretEnd}
+                title={tool.title}
+                class="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
+              >
+                {tool.label}
+              </button>
+            ))
+          }
+          {/* Compact trigger so the toolbar stays one row. At the default
+              size it is 34px against the 24px tool buttons, which wrapped the
+              toolbar onto a second line and pushed the editor 46px below the
+              preview in split view. */}
+          <MediaPicker
+            id={id}
+            label="Image"
+            buttonClass="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
+          />
+          {
+            sideTools.map((tool) => (
+              <button
+                type="button"
+                data-tool="side"
+                data-value={tool.value}
+                title={tool.title}
+                class="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
+              >
+                {tool.label}
+              </button>
+            ))
+          }
+        </div>
+
+        {/* Never h-full: that resolves to 100% of the pane, and the pane is
+            toolbar + textarea, so the textarea overshot by the toolbar's
+            height and hung past the container's rounded border.
+            The script sets min-height to the content height, so the field
+            grows with the text and never scrolls on its own — the page
+            scrolls instead. flex-1 still lets it stretch to fill the pane
+            when the preview is the taller column. */}
+        <textarea
+          name={name}
+          id={fieldId}
+          data-editor
+          rows={rows}
+          maxlength={maxLength}
+          aria-describedby={help ? helpId : undefined}
+          spellcheck="true"
+          placeholder={placeholder || undefined}
+          class="block w-full flex-1 resize-none overflow-hidden border-0 px-4 py-3 font-mono text-sm leading-relaxed focus:outline-none"
+          >{value}</textarea
+        >
+      </div>
+
+      {/* hidden attribute, not a class: visibility is entirely the script's
+          job now, so there is no responsive utility to fight with. Starts
+          hidden so a no-JS editor shows the textarea alone. */}
+      <div data-pane="preview" hidden class="min-w-0 border-t border-line lg:border-t-0">
+        <div
+          class="flex h-11 items-center justify-between border-b border-line px-4 text-xs uppercase tracking-widest text-gray-400"
+        >
+          <span>
+            {t('admin.common.preview')}
+            <span class="normal-case tracking-normal">· {t('admin.pages.editor.previewHint')}</span>
+          </span>
+          {/* Reserved space, so the row doesn't reflow each time it renders. */}
+          <span data-preview-status class="text-gray-300"></span>
+        </div>
+        {/* Server-rendered by the same renderer the storefront uses. The
+            endpoint supplies .markdown-content and the layout variables, so
+            this pane shows the real measure and title alignment. */}
+        <div data-preview class="overflow-x-auto px-4 py-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { toggleImageSide } from './mediaSide';
+
+  /**
+   * One editor: the page's body, or a Markdown zone of its model (ADR 0031).
+   * Every query stays inside its root, so a page holds as many as it needs.
+   */
+  const mount = (root: HTMLElement) => {
+    const editor = root.querySelector<HTMLTextAreaElement>('[data-editor]');
+    const preview = root.querySelector<HTMLElement>('[data-preview]');
+    if (!editor || !preview) return;
+    // Server-rendered French strings (see the data-msg-* attributes on the root).
+    const msg = root.dataset;
+    /** Replace the selection, then restore a sensible cursor/selection. */
+    const replaceSelection = (text: string, selectFrom: number, selectTo: number) => {
+      const { selectionStart: start, selectionEnd: end } = editor;
+      editor.setRangeText(text, start, end, 'preserve');
+      editor.focus();
+      editor.setSelectionRange(start + selectFrom, start + selectTo);
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const selected = () => editor.value.slice(editor.selectionStart, editor.selectionEnd);
+
+    const toolbar = root.querySelector<HTMLElement>('[data-toolbar]');
+    toolbar?.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-tool]');
+      if (!button) return;
+      const kind = button.dataset.tool;
+      const value = button.dataset.value ?? '';
+      const text = selected();
+
+      if (kind === 'wrap') {
+        // Wrapping keeps the selection so the same click can be undone by
+        // pressing the button again mentally — and typing replaces the text.
+        replaceSelection(`${value}${text}${value}`, value.length, value.length + text.length);
+      } else if (kind === 'prefix') {
+        // Line-oriented: apply to every selected line, not just the first.
+        const body = (text || '').split('\n').map((line) => `${value}${line}`).join('\n');
+        replaceSelection(body, 0, body.length);
+      } else if (kind === 'link') {
+        const label = text || (msg.msgLinkText ?? '');
+        const md = `[${label}](https://)`;
+        // Put the caret in the URL, which is the part that still needs typing.
+        replaceSelection(md, md.length - 1, md.length - 1);
+      } else if (kind === 'block') {
+        // A block stands on its own lines, after a blank one unless it opens
+        // the body; it replaces the selection rather than wrapping it.
+        const before = editor.value.slice(0, editor.selectionStart);
+        const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+        const block = `${lead}${value}\n`;
+        const caret = lead.length + Number(button.dataset.caret ?? value.length);
+        // A block may select its sample text, so typing replaces it.
+        const caretEnd = button.dataset.caretEnd ? lead.length + Number(button.dataset.caretEnd) : caret;
+        replaceSelection(block, caret, caretEnd);
+      } else if (kind === 'side' && (value === 'gauche' || value === 'droite')) {
+        // The image on the caret's line, whatever is selected: the button
+        // places a photo, it does not wrap text.
+        const body = editor.value;
+        const caret = editor.selectionStart;
+        const lineStart = body.lastIndexOf('\n', caret - 1) + 1;
+        const next = body.indexOf('\n', caret);
+        const lineEnd = next === -1 ? body.length : next;
+        const edit = toggleImageSide(body.slice(lineStart, lineEnd), caret - lineStart, value);
+        if (!edit) {
+          window.alert(msg.msgSideNoImage ?? '');
+          editor.focus();
+          return;
+        }
+        editor.setRangeText(edit.line, lineStart, lineEnd, 'preserve');
+        editor.focus();
+        // Select the image, so the change is in view and a second press finds it.
+        editor.setSelectionRange(lineStart + edit.start, lineStart + edit.end);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    // Media picker → insert an image at the cursor. Alt text is prompted for
+    // rather than left empty: an unlabelled image is an accessibility failure,
+    // and the filename is rarely a good description.
+    // The picker is this editor's own: its event bubbles to this root alone.
+    root.addEventListener('media:selected', (event) => {
+      const detail = (event as CustomEvent).detail as { imageKey: string; url: string };
+      const raw = window.prompt(msg.msgAltPrompt ?? '', '') ?? '';
+      // Escape \ [ and ]. A lone ] closes the alt span early; a lone [ opens a
+      // link, so "Photo of [blue shirt" turns the rest into a link instead of
+      // an image. The backslash has to be escaped too or it eats the next char.
+      const alt = raw.replace(/([\\[\]])/g, '\\$1');
+      // Root-relative, never detail.url: with IMAGE_BASE_URL set that is an
+      // absolute CDN address, which would be baked into the stored body. The
+      // renderer applies the origin at render time and extractMediaKeys matches
+      // this form, so changing IMAGE_BASE_URL never requires rewriting content.
+      const md = `![${alt}](/images/${detail.imageKey})`;
+      replaceSelection(md, 2, 2 + alt.length);
+    });
+
+    const status = root.querySelector<HTMLElement>('[data-preview-status]');
+    const previewPane = root.querySelector<HTMLElement>('[data-pane="preview"]');
+    const writePane = root.querySelector<HTMLElement>('[data-pane="write"]');
+    // The layout is the page's, not one editor's: the body's preview and a
+    // zone's both follow the form's select, when it has one.
+    // Cast rather than parameterise: the Workers `Element` type in scope here
+    // doesn't satisfy querySelector's generic constraint for HTMLSelectElement.
+    const layoutSelect = root.closest('form')?.querySelector('[data-layout-select]') as HTMLSelectElement | null;
+    const panes = root.querySelector<HTMLElement>('[data-panes]');
+    const modeBar = root.querySelector<HTMLElement>('[data-modes]');
+    const MODE_KEY = 'minshop:page-editor-mode';
+
+    let inFlight: AbortController | null = null;
+    let lastRendered: string | null = null;
+    let timer: number | undefined;
+
+    /** offsetParent is null while a pane is display:none — no point rendering. */
+    const previewVisible = () => !!previewPane?.offsetParent;
+
+    const render = async () => {
+      if (!previewVisible()) return;
+      const markdown = editor.value;
+      // Every input the preview depends on belongs in this key. Leave one out
+      // and a change to it looks identical to "nothing changed", so the render
+      // is skipped.
+      const key = `${layoutSelect?.value ?? ''} ${markdown}`;
+      if (key === lastRendered) return; // nothing changed since the last render
+
+      // Supersede any request still in flight: with fast typing the responses
+      // can otherwise land out of order and leave stale HTML in the pane.
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
+      if (status) status.textContent = msg.msgRendering ?? '';
+
+      const body = new FormData();
+      body.append('body_markdown', markdown);
+      // Send the chosen layout so the preview uses the same measure and title
+      // alignment the storefront will.
+      if (layoutSelect) body.append('layout', layoutSelect.value);
+      try {
+        const res = await fetch('/api/admin/pages/preview', {
+          method: 'POST',
+          body,
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(
+            (msg.msgPreviewFailedStatus ?? '').replace('{statut}', () => String(res.status)),
+          );
+        }
+        // Server-rendered by the same renderer the storefront uses, with raw
+        // HTML disabled, so this is the storefront's own escaped output.
+        preview.innerHTML = await res.text();
+        lastRendered = key;
+        if (status) status.textContent = '';
+      } catch (err) {
+        if (controller.signal.aborted) return; // superseded, not a failure
+        if (status) status.textContent = '';
+        preview.textContent = err instanceof Error ? err.message : (msg.msgPreviewFailed ?? '');
+      } finally {
+        if (inFlight === controller) inFlight = null;
+      }
+    };
+
+    /**
+     * Grow the field to its content so it never scrolls on its own — one page
+     * scrollbar instead of a nested one. min-height rather than height, so
+     * flex-1 can still stretch it to fill the pane when the preview is taller.
+     * Runs unthrottled: it is a layout read/write on one element, not a fetch.
+     */
+    /**
+     * Floor of `rows` lines. Without it an empty page collapses to a single
+     * line, which would clip the multi-line Markdown placeholder to its first
+     * row — exactly when a merchant most needs to read it.
+     */
+    const minRowsHeight = () => {
+      const cs = getComputedStyle(editor);
+      const line = parseFloat(cs.lineHeight) || 20;
+      const rows = Number(editor.rows) || 10;
+      return rows * line + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    };
+
+    const autosize = () => {
+      // A hidden textarea reports scrollHeight 0; skip so it isn't collapsed.
+      if (!editor.offsetParent) return;
+      // Collapsing the field to measure it shortens the page for an instant,
+      // and the browser answers by clamping the scroll or by moving it to keep
+      // an anchor in place: on a phone, down a long text, a click on a tool
+      // threw the page thousands of pixels away. With the toolbar in reach
+      // there (ticket #203), that click is the common case: put the page back.
+      const { scrollX, scrollY } = window;
+      editor.style.minHeight = '0px';
+      editor.style.minHeight = `${Math.max(editor.scrollHeight, minRowsHeight())}px`;
+      if (window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
+    };
+
+    /** Trailing debounce: render once typing pauses, not on every keystroke. */
+    const scheduleRender = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(render, 350);
+    };
+
+    editor.addEventListener('input', () => {
+      autosize();
+      scheduleRender();
+    });
+    layoutSelect?.addEventListener('change', scheduleRender);
+    // Wrapping changes with the pane width, so the height has to be recomputed.
+    window.addEventListener('resize', autosize);
+
+    /** Character offset where a 1-based source line starts. */
+    const offsetOfLine = (line: number) => {
+      const lines = editor.value.split('\n');
+      let offset = 0;
+      for (let i = 0; i < Math.min(line - 1, lines.length); i++) offset += lines[i].length + 1;
+      return offset;
+    };
+
+    /**
+     * Vertical offset of a character within the field, in pixels.
+     *
+     * Counting newlines is not enough: the textarea soft-wraps, so one source
+     * line can occupy many visual rows and a paragraph-based estimate drifts
+     * further the longer the document gets. This mirrors the text into a hidden
+     * div with the same width, font, and padding, so the browser reproduces the
+     * exact wrapping and the marker's offsetTop is the real position.
+     */
+    const caretTopWithin = (offset: number): number => {
+      const cs = getComputedStyle(editor);
+      const mirror = document.createElement('div');
+      for (const prop of [
+        'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing',
+        'lineHeight', 'textTransform', 'wordSpacing', 'textIndent', 'tabSize',
+        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+        'boxSizing',
+      ] as const) {
+        mirror.style[prop] = cs[prop];
+      }
+      mirror.style.position = 'absolute';
+      mirror.style.visibility = 'hidden';
+      mirror.style.left = '-9999px';
+      mirror.style.top = '0';
+      mirror.style.height = 'auto';
+      mirror.style.whiteSpace = 'pre-wrap';
+      mirror.style.overflowWrap = 'break-word';
+      mirror.style.width = `${editor.getBoundingClientRect().width}px`;
+
+      const marker = document.createElement('span');
+      // A non-empty marker so it has a box even at the very end of the text.
+      marker.textContent = editor.value.slice(offset, offset + 1) || '.';
+      // appendChild, not append: the Workers types in scope here resolve
+      // `append` to a non-DOM signature.
+      mirror.appendChild(document.createTextNode(editor.value.slice(0, offset)));
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      const top = marker.offsetTop;
+      mirror.remove();
+      return top;
+    };
+
+    /** Select a range, focus the field, and bring it into view. */
+    const selectRange = (start: number, end: number) => {
+      editor.focus();
+      editor.setSelectionRange(start, end);
+
+      // The field never scrolls internally (it grows to fit), so scrolling the
+      // PAGE to the caret is what actually reveals it.
+      const caretTop = editor.getBoundingClientRect().top + window.scrollY + caretTopWithin(start);
+      const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
+      const viewTop = window.scrollY;
+      const viewBottom = viewTop + window.innerHeight;
+      // Leave it alone when it is already comfortably on screen — scrolling on
+      // every click would yank the page around for no reason. The top of the
+      // window is the toolbar's once it sticks (ticket #203): a caret under it
+      // is not on screen.
+      const covered = toolbar?.offsetHeight ?? 0;
+      if (caretTop > viewTop + covered + lineHeight && caretTop < viewBottom - lineHeight * 3) return;
+      window.scrollTo({
+        top: Math.max(0, caretTop - window.innerHeight / 3),
+        behavior: 'smooth',
+      });
+    };
+
+    /**
+     * Word boundaries around an offset, roughly as a double-click would pick
+     * them. Letters and digits from any script, plus the apostrophes and hyphens
+     * that sit inside words ("don't", "size-chart"). Clicking whitespace or
+     * punctuation returns a collapsed range, so the caret just lands there.
+     */
+    const WORD_CHAR = /[\p{L}\p{N}_'’-]/u;
+    const wordAround = (text: string, offset: number): [number, number] => {
+      const onWord = WORD_CHAR.test(text[offset] ?? '');
+      // Clicking immediately after a word still selects that word.
+      const anchor = onWord ? offset : WORD_CHAR.test(text[offset - 1] ?? '') ? offset - 1 : -1;
+      if (anchor < 0) return [offset, offset];
+      let start = anchor;
+      let end = anchor;
+      while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
+      while (end < text.length && WORD_CHAR.test(text[end])) end++;
+      return [start, end];
+    };
+
+    /** Rendered-text offset of a click, measured within `block`. */
+    const renderedOffsetAt = (block: HTMLElement, x: number, y: number): number | null => {
+      // caretPositionFromPoint is the standard; WebKit still ships the older
+      // caretRangeFromPoint. Without either we fall back to the whole line.
+      // Cast through unknown rather than intersecting with Document: the lib
+      // declaration marks caretRangeFromPoint deprecated, and it is still the
+      // only one WebKit implements, so intersecting would flag every use.
+      const doc = document as unknown as {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      let node: Node | null = null;
+      let offset = 0;
+      const pos = doc.caretPositionFromPoint?.(x, y);
+      if (pos) {
+        node = pos.offsetNode;
+        offset = pos.offset;
+      } else {
+        const range = doc.caretRangeFromPoint?.(x, y);
+        if (!range) return null;
+        node = range.startContainer;
+        offset = range.startOffset;
+      }
+      if (!node || !block.contains(node)) return null;
+
+      // Sum the text preceding the clicked node inside this block.
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let total = 0;
+      let current: Node | null;
+      while ((current = walker.nextNode())) {
+        if (current === node) return total + offset;
+        total += current.textContent?.length ?? 0;
+      }
+      return null;
+    };
+
+    /**
+     * Map an offset in a block's RENDERED text to an offset in its SOURCE.
+     *
+     * Rendered text is the source with the syntax taken out, so walking both and
+     * advancing the rendered pointer only on a match lands on the right
+     * character: `**bold**` skips the asterisks, `- item` skips the marker, and
+     * `[label](url)` matches the label then skips the target.
+     *
+     * It can drift inside an unusual construct, and then the caret is a few
+     * characters off. The BLOCK is still right, because that comes from the
+     * parser's own source map rather than from this heuristic.
+     */
+    const mapRenderedToSource = (
+      source: string,
+      renderedText: string,
+      renderedOffset: number,
+    ): number => {
+      const target = Math.min(renderedOffset, renderedText.length);
+      let si = 0;
+      let ri = 0;
+      while (ri < target && si < source.length) {
+        if (source[si] === renderedText[ri]) ri++;
+        si++;
+      }
+      return si;
+    };
+
+    // Click anywhere in the preview to land on the source that produced it.
+    // Blocks carry their source line range; an image selects its whole
+    // ![alt](src) span so it can be edited or replaced wholesale.
+    preview.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      // A link in the preview, a row's photo included (ticket #205), would
+      // leave the editor and what it holds unsaved: a click here is a request
+      // to edit what was clicked, never to follow it.
+      if (target.closest('a')) event.preventDefault();
+      const block = target.closest<HTMLElement>('[data-source-line]');
+      if (!block) return;
+      const line = Number(block.dataset.sourceLine);
+      if (!Number.isFinite(line)) return;
+
+      // Measure the click BEFORE anything can change the layout: switching mode
+      // hides this pane, and once it is out of the layout there is no caret
+      // position to read from those coordinates.
+      const blockText = block.textContent ?? '';
+      const renderedOffset = renderedOffsetAt(
+        block,
+        (event as MouseEvent).clientX,
+        (event as MouseEvent).clientY,
+      );
+
+      // In Preview-only mode the editor is hidden, so there is nowhere to put
+      // the caret. Switch to the source view — the click is a request to go and
+      // edit this, and making the user switch manually would lose the spot they
+      // picked. Measuring the caret's position also needs the field visible.
+      if (writePane?.hidden) setMode('write');
+
+      const lineStart = offsetOfLine(line);
+
+      if (target.tagName === 'IMG') {
+        // Inline tokens have no source map, so find the image syntax at or after
+        // the block's first line. Images are inserted on their own line, so this
+        // is exact for anything the editor wrote.
+        const match = /!\[[^\]]*\]\([^)]*\)/.exec(editor.value.slice(lineStart));
+        if (match) {
+          const start = lineStart + match.index;
+          selectRange(start, start + match[0].length);
+          return;
+        }
+      }
+
+      const endLine = Number(block.dataset.sourceEnd);
+      const blockEnd = Number.isFinite(endLine)
+        ? offsetOfLine(endLine)
+        : (editor.value.indexOf('\n', lineStart) + 1 || editor.value.length);
+
+      if (renderedOffset !== null) {
+        const caret =
+          lineStart +
+          mapRenderedToSource(
+            editor.value.slice(lineStart, blockEnd),
+            blockText,
+            renderedOffset,
+          );
+        // Select the word under the click. Highlighting it makes the landing
+        // spot visible — a bare caret in a wall of monospace is easy to lose —
+        // and it is immediately replaceable by typing.
+        const [start, end] = wordAround(editor.value, caret);
+        selectRange(start, end);
+        return;
+      }
+
+      // No caret API — select the line so the click still does something useful.
+      const lineEnd = editor.value.indexOf('\n', lineStart);
+      selectRange(lineStart, lineEnd === -1 ? editor.value.length : lineEnd);
+    });
+
+    // Markdown / Côte à côte / Aperçu. The control only exists with JavaScript, so
+    // it is revealed here rather than rendered visible and then broken.
+    const modeButtons = root.querySelectorAll<HTMLButtonElement>('[data-mode]');
+    const setMode = (mode: string) => {
+      modeButtons.forEach((button) => {
+        const active = button.dataset.mode === mode;
+        button.setAttribute('aria-pressed', String(active));
+        button.classList.toggle('bg-gray-100', active);
+        button.classList.toggle('text-gray-700', active);
+        button.classList.toggle('text-gray-500', !active);
+      });
+      if (writePane) writePane.hidden = mode === 'preview';
+      if (previewPane) previewPane.hidden = mode === 'write';
+      // Two columns only in split, and only where two measures fit.
+      panes?.classList.toggle('lg:grid', mode === 'split');
+      panes?.classList.toggle('lg:grid-cols-2', mode === 'split');
+      try {
+        localStorage.setItem(MODE_KEY, mode);
+      } catch {
+        // Private browsing or storage disabled — the mode just won't persist.
+      }
+      // The pane may have been hidden while edits happened, so catch it up.
+      if (mode !== 'write') render();
+      // The field measures as 0 while hidden, so size it once it is on screen
+      // and after the column width has changed.
+      autosize();
+    };
+
+    modeButtons.forEach((button) =>
+      button.addEventListener('click', () => setMode(button.dataset.mode!)),
+    );
+    if (modeBar) modeBar.hidden = false;
+
+    let initial = 'split';
+    try {
+      const stored = localStorage.getItem(MODE_KEY);
+      if (stored === 'write' || stored === 'split' || stored === 'preview') initial = stored;
+    } catch {
+      // Ignore and use the default.
+    }
+    setMode(initial); // also performs the first render
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-markdown-editor]').forEach(mount);
+</script>
+
+<style is:global>
+  /* The preview HTML is injected at runtime, so Astro's scoped styles can't
+     reach it — hence is:global, narrowed to [data-preview] which exists only
+     on this screen. Signals that blocks are clickable. */
+  [data-preview] [data-source-line] {
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  [data-preview] [data-source-line]:hover {
+    background: rgba(0, 0, 0, 0.035);
+  }
+</style>

@@ -368,6 +368,94 @@ export interface ContentPageModel {
   layoutStyle: string;
 }
 
+/**
+ * A page model a theme declares (ticket #205, ADR 0031) in its optional
+ * `src/themes/<id>/pageModels.ts`, drawn by `src/themes/<id>/pages/<key>.astro`:
+ *
+ *     import type { ThemePageModel } from '../../features/storefront/models';
+ *     export const pageModels = [
+ *       {
+ *         key: 'marque',
+ *         label: 'La marque',
+ *         help: 'Une accroche, puis l’histoire de la marque.',
+ *         body: { label: 'L’histoire' },
+ *         zones: [
+ *           { key: 'accroche', label: 'Accroche', format: 'text', maxLength: 160 },
+ *         ],
+ *       },
+ *     ] satisfies ThemePageModel[];
+ *
+ * The labels and helps are shown in the editor, so they are written for the
+ * merchant, in French. The layout is the template's: the merchant picks the
+ * model and writes in its zones, nothing more.
+ */
+export interface ThemePageModel {
+  /** The model's name in the database and its template's file name,
+   *  `pages/<key>.astro`: lowercase letters, digits and inner hyphens. */
+  key: string;
+  label: string;
+  /** One sentence under the model's choice in the editor. */
+  help?: string;
+  /** The page's own text, its body: every model has one. */
+  body: { label: string; help?: string };
+  /** The other zones, in the editor's order. */
+  zones: ThemePageZone[];
+}
+
+/** A zone: one text, or a list of entries the merchant adds, removes and orders. */
+export type ThemePageZone = ThemePageTextZone | ThemePageListZone;
+
+/** One text of the page, beside its body. */
+export interface ThemePageTextZone {
+  /** What the template reads, `model.zones['accroche']`. */
+  key: string;
+  label: string;
+  help?: string;
+  /** `text`: one line, whitespace collapsed. `markdown`: rendered like the body. */
+  format: 'text' | 'markdown';
+  /** In characters, 20 000 at most. A longer text is refused at saving. */
+  maxLength: number;
+}
+
+/** Entries of the same shape: a shop's points of sale, its workshops. */
+export interface ThemePageListZone {
+  /** What the template reads, `model.lists['points']`. */
+  key: string;
+  label: string;
+  help?: string;
+  /** What one entry is called in the editor: « Point de vente ». */
+  itemLabel: string;
+  /** 50 at most. */
+  maxItems: number;
+  /** The fields of one entry, `entry['nom']`; the first names the entry in
+   *  the editor. */
+  fields: ThemePageField[];
+}
+
+/** One field of a list's entry. */
+export interface ThemePageField {
+  key: string;
+  label: string;
+  help?: string;
+  format: 'text' | 'markdown';
+  /** In characters, 20 000 at most. */
+  maxLength: number;
+}
+
+/**
+ * A page drawn by its theme's model. What a `ContentPage` gets, plus every
+ * zone the model declares: `{ text, html }` like a theme text, `html` being
+ * the Markdown rendered and sanitized upstream exactly as the body is (null
+ * for a `text` zone, '' for an empty `markdown` one). A list arrives in the
+ * merchant's order, each entry with every declared field.
+ */
+export interface ModelPageModel extends ContentPageModel {
+  /** The model's key. */
+  model: string;
+  zones: Record<string, ThemeText>;
+  lists: Record<string, Array<Record<string, ThemeText>>>;
+}
+
 /** The fields of the contact form, as the visitor typed them. */
 export interface ContactFormValues {
   name: string;

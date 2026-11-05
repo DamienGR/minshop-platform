@@ -1,0 +1,37 @@
+---
+import type { ModelPageModel } from '../../../features/storefront/models';
+
+/**
+ * Atelier — « Où nous trouver » (pageModels.ts).
+ *
+ * L'introduction, puis un point de vente par section, dans l'ordre où le
+ * marchand les a rangés : son nom en titre, son adresse, ses horaires, sa
+ * carte. Un point sans adresse ni horaires reste un titre ; un champ vide ne
+ * dessine rien.
+ *
+ * La carte est un bloc ```carte comme dans le corps : elle arrive rendue,
+ * ses tuiles passant par le relais de la page (ADR 0029), qui sait lire les
+ * zones du modèle. Rien ici ne choisit un serveur de tuiles.
+ */
+interface Props {
+  model: ModelPageModel;
+}
+
+const { model } = Astro.props;
+const points = model.lists.points ?? [];
+---
+
+<article class="markdown-content py-10" data-page-model={model.model}>
+  <h1>{model.title}</h1>
+  <Fragment set:html={model.html} />
+  {
+    points.map((point) => (
+      <section class="mt-10 border-t border-line pt-6">
+        <h2>{point.nom?.text}</h2>
+        {point.adresse?.text && <p class="text-muted">{point.adresse.text}</p>}
+        {point.horaires?.html && <Fragment set:html={point.horaires.html} />}
+        {point.carte?.html && <Fragment set:html={point.carte.html} />}
+      </section>
+    ))
+  }
+</article>

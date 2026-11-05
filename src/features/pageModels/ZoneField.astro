@@ -1,0 +1,62 @@
+---
+/**
+ * One text of a page model in the editor (ADR 0031): a text zone, or one
+ * field of a list's entry. A line of text is an input; a Markdown text gets
+ * the body's own editor, toolbar and Aperçu included.
+ *
+ * The field's `maxlength` is the server's limit, counted by the browser in
+ * UTF-16 units where the server counts characters: an emoji counts twice
+ * there, so the field is a little stricter than the rule, never looser. It
+ * keeps the merchant from typing past a limit the server would refuse, with
+ * nothing saved.
+ */
+import MarkdownEditor from '../pages/MarkdownEditor.astro';
+import type { ThemePageField } from '../storefront/models';
+import { formatNumber, t } from '../i18n';
+
+interface Props {
+  /** A text zone and a list's field share their shape. */
+  field: Pick<ThemePageField, 'label' | 'help' | 'format' | 'maxLength'>;
+  /** The form field, `zoneFieldName()`. */
+  name: string;
+  /** Unique on the page. */
+  id: string;
+  value: string;
+  /** Shown instead of the field's own label: « Points de vente, 2 — Nom ». */
+  label?: string;
+}
+
+const { field, name, id, value } = Astro.props;
+const label = Astro.props.label ?? field.label;
+const help = [field.help, t('admin.pages.zones.max', { max: formatNumber(field.maxLength) })]
+  .filter(Boolean)
+  .join(' · ');
+---
+
+{
+  field.format === 'markdown' ? (
+    <MarkdownEditor
+      name={name}
+      id={id}
+      value={value}
+      label={label}
+      help={help}
+      maxLength={field.maxLength}
+      rows={8}
+      placeholder=""
+    />
+  ) : (
+    <label class="mt-6 block text-xs uppercase tracking-widest text-gray-400">
+      {label}
+      <input
+        type="text"
+        name={name}
+        id={id}
+        value={value}
+        maxlength={field.maxLength}
+        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+      />
+      <span class="mt-1 block normal-case tracking-normal text-gray-400">{help}</span>
+    </label>
+  )
+}

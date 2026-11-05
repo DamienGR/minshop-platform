@@ -51,6 +51,25 @@ Pour deux colonnes de largeurs différentes, écrivez `::: colonnes 1/2` (une é
 
 Sur un téléphone, les colonnes passent l’une sous l’autre, dans l’ordre où vous les avez écrites. Si un bloc ne s’affichera pas comme prévu, l’**Aperçu** le dit au-dessus des colonnes, avec sa ligne.
 
+### Choisir un modèle de page
+
+Votre thème peut proposer des modèles de page : une page dessinée d’avance, où vous remplissez des zones (une accroche, une liste de points de vente) en plus du texte de la page. Le choix **Modèle** n’apparaît que si le thème en propose ; **Basique** est la page telle que décrite plus haut.
+
+1. Dans **Modèle**, choisissez le modèle, puis cliquez sur **Enregistrer** : ses zones apparaissent sous le texte de la page.
+2. Remplissez chaque zone. Une zone de texte a sa barre d’outils et son **Aperçu**, comme la page. Sous chaque zone, le nombre de caractères qu’elle prend.
+3. **Aperçu de la page** ouvre, dans un nouvel onglet, la page entière telle que la boutique l’affichera, sans rien enregistrer.
+4. Cliquez sur **Enregistrer**.
+
+Le modèle fixe sa mise en page : le choix de la mise en page disparaît. Revenir à **Basique** garde ce que vous avez écrit dans les zones : en reprenant le modèle, vous le retrouvez.
+
+### Remplir une liste
+
+Une zone peut être une liste : des points de vente, chacun avec son nom, son adresse, ses horaires, sa carte.
+
+- Pour ajouter une entrée, ouvrez « Ajouter » sous la liste, remplissez-la, puis enregistrez. Une nouvelle entrée vide attend la suivante.
+- **Monter** et **Descendre** changent l’ordre et enregistrent la page.
+- Pour retirer une entrée, cochez **Retirer à l’enregistrement**, puis enregistrez.
+
 ### Choisir une mise en page
 
 - **Standard** : pour les textes longs, comme les conditions de vente.

@@ -20,6 +20,7 @@ theme engine and no code editor in Admin — you edit source, build, and deploy.
 | `src/themes/<your-theme>/ContentPage.astro` | The frame around a merchant's Markdown page. |
 | `src/themes/<your-theme>/tokens.css` | Your theme's design tokens: the `@theme` block (colors, fonts, radii) plus the prose and container scales. |
 | `src/themes/<your-theme>/texts.ts` | Optional. The texts your theme lets the merchant edit in Admin → Textes du thème — see "Texts the merchant edits". |
+| `src/themes/<your-theme>/pageModels.ts`, `pages/<key>.astro` | Optional. The page models your theme offers in a page's editor, and the template that draws each — see "Page models". |
 | `client/guide/*.md` | Optional. Your shop's own chapters of the admin guide, after the core's — see "Chapters of the admin guide". |
 
 That is the whole store-owned surface.
@@ -349,6 +350,77 @@ a no-break space — U+202F before `? ! ; :` — is kept as typed):
 `test/storefront/themeTexts.test.ts` holds every theme on disk to the rules,
 yours included. Keep a key once merchants have written to it — a renamed key is
 a text that silently returns to its default.
+
+## Page models
+
+A page the merchant writes is « Basique » by default: its body in your
+`ContentPage`. A page whose layout is yours — a brand page with a tagline and
+a box of commitments, a list of points of sale — is a **page model** (ADR
+0031): declare it in `src/themes/<your-theme>/pageModels.ts`, draw it in
+`src/themes/<your-theme>/pages/<key>.astro`, and the page editor offers it
+beside « Basique ». No declaration, nothing changes.
+
+```ts
+import type { ThemePageModel } from '../../features/storefront/models';
+
+export const pageModels = [
+  {
+    key: 'points-de-vente',
+    label: 'Où nous trouver',
+    help: 'Une introduction, puis vos points de vente.',
+    body: { label: 'Introduction' },
+    zones: [
+      { key: 'accroche', label: 'Accroche', format: 'text', maxLength: 160 },
+      {
+        key: 'points', label: 'Points de vente', itemLabel: 'Point de vente', maxItems: 20,
+        fields: [
+          { key: 'nom', label: 'Nom', format: 'text', maxLength: 100 },
+          { key: 'horaires', label: 'Horaires', format: 'markdown', maxLength: 1000 },
+        ],
+      },
+    ],
+  },
+] satisfies ThemePageModel[];
+```
+
+```astro
+---
+import type { ModelPageModel } from '../../../features/storefront/models';
+const { model } = Astro.props as { model: ModelPageModel };
+---
+<article class="markdown-content">
+  <h1>{model.title}</h1>
+  {model.zones.accroche.text && <p>{model.zones.accroche.text}</p>}
+  <Fragment set:html={model.html} />
+  {model.lists.points.map((point) => (
+    <section>
+      <h2>{point.nom.text}</h2>
+      <Fragment set:html={point.horaires.html} />
+    </section>
+  ))}
+</article>
+```
+
+Every model has the page's body, which the model names. A zone is a text —
+`text`, one line, or `markdown`, rendered exactly like the body (rows of
+photos, columns, maps) — or a list of entries the merchant adds, removes and
+reorders. Your template receives what `ContentPage` does, plus every declared
+zone as `{ text, html }` (`html` is null for `text`, '' for an empty
+`markdown`) and every list in the merchant's order, each entry with every
+field: embed the HTML, never parse or escape it, and keep
+`class="markdown-content"`. The layout is yours: the merchant picks the model,
+not a width. Labels and helps are shown in the editor, so write them in
+French.
+
+The key of a model is its template's file name; a zone's or a field's key is
+letters and digits. `test/storefront/pageModels.test.ts` holds every theme on
+disk to the rules, checks that each model has its template and each template
+its model, and renders each template with every zone filled, then with every
+zone empty: a zone your template does not draw fails there, and so does a
+template that breaks on an empty list. Keep a key
+once merchants have written to it — a renamed zone is a text the page keeps
+but no longer shows. The `atelier` theme carries two witnesses, « La marque »
+and « Où nous trouver », to copy from.
 
 ## Chapters of the admin guide
 

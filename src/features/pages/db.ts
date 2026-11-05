@@ -9,6 +9,10 @@ export interface Page {
   published: number;
   /** Layout preset key; see features/pages/layouts.ts. */
   layout: string;
+  /** The theme's page model, '' for « Basique » (migration 0056, ADR 0031). */
+  model: string;
+  /** What the model's zones hold, as JSON (features/pageModels/zones.ts). */
+  zones: string;
   public_id: string | null;
   created_at: string;
   updated_at: string;

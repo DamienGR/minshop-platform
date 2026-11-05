@@ -51,3 +51,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0028](0028-commentaire-de-commande.md) | Un commentaire de l'acheteur sur sa commande | Accepté |
 | [0029](0029-carte-d-un-lieu.md) | La carte d'un lieu dans une page, tuiles relayées par la boutique | Accepté |
 | [0030](0030-blocs-nommes-colonnes.md) | Des blocs nommés dans les pages : le texte en colonnes | Accepté |
+| [0031](0031-modeles-de-page-du-theme.md) | Des modèles de page déclarés par le thème | Proposé |

@@ -1,0 +1,134 @@
+---
+/**
+ * The zones of the page's model in the editor (ticket #205, ADR 0031), after
+ * its body: a line of text, a Markdown text with its own Aperçu, or a list of
+ * entries the merchant adds, removes and reorders.
+ *
+ * All of it works without JavaScript (invariant 1). « Monter » and
+ * « Descendre » are the form's own submit buttons: they save the page with
+ * the entry moved, and the editor comes back to the list (`#zone-<key>`). A
+ * new entry is the blank one under « Ajouter », saved with the page, and
+ * open while the list is empty; « Retirer » is a box, so a removal waits for
+ * the save like any other change.
+ *
+ * Every stored entry is shown, even past a bound the theme lowered since: the
+ * save then refuses and says so, rather than drop an entry the merchant
+ * never saw go.
+ */
+import ZoneField from './ZoneField.astro';
+import type { ThemePageModel } from '../storefront/models';
+import { isListZone } from './declaration';
+import { ZONE_MOVE, zoneFieldName, zoneMoveValue, zoneRemoveName, type StoredZones } from './zones';
+import { formatNumber, t } from '../i18n';
+
+interface Props {
+  model: ThemePageModel;
+  zones: StoredZones;
+}
+
+const { model, zones } = Astro.props;
+const textOf = (key: string) => {
+  const value = zones[key];
+  return typeof value === 'string' ? value : '';
+};
+const entriesOf = (key: string) => {
+  const value = zones[key];
+  return Array.isArray(value) ? value : [];
+};
+const buttonClass =
+  'rounded-md border border-line px-3 py-1 text-xs uppercase tracking-wider text-gray-600 hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-gray-600';
+---
+
+{
+  model.zones.map((zone) => {
+    if (!isListZone(zone)) {
+      return (
+        <div id={`zone-${zone.key}`}>
+          <ZoneField field={zone} name={zoneFieldName(zone.key)} id={`zone-${zone.key}-text`} value={textOf(zone.key)} />
+        </div>
+      );
+    }
+    const entries = entriesOf(zone.key);
+    const [first] = zone.fields;
+    const blank = entries.length;
+    return (
+      <fieldset id={`zone-${zone.key}`} class="mt-8 rounded-md border border-line px-4 pb-5">
+        <legend class="px-1 text-xs uppercase tracking-widest text-gray-400">{zone.label}</legend>
+        {zone.help && <p class="text-xs text-gray-500">{zone.help}</p>}
+        <p class="mt-1 text-xs text-gray-400">
+          {t('admin.pages.zones.list.count', {
+            nombre: formatNumber(entries.length),
+            max: formatNumber(zone.maxItems),
+          })}
+          {entries.length > 1 && <> · {t('admin.pages.zones.list.moveHint')}</>}
+        </p>
+
+        {entries.map((entry, index) => (
+          <fieldset class="mt-4 rounded-md border border-line px-4 pb-4">
+            <legend class="px-1 text-sm text-gray-700">
+              {t('admin.pages.zones.list.entry', { element: zone.itemLabel, numero: index + 1 })}
+              {first.format === 'text' && entry[first.key] && (
+                <span class="text-gray-400"> · {entry[first.key]}</span>
+              )}
+            </legend>
+            <div class="flex flex-wrap items-center gap-2">
+              {entries.length > 1 && (
+                <>
+                  <button
+                    type="submit"
+                    name={ZONE_MOVE}
+                    value={zoneMoveValue(zone.key, index, 'up')}
+                    disabled={index === 0}
+                    class={buttonClass}
+                  >
+                    {t('admin.pages.zones.list.up')}
+                  </button>
+                  <button
+                    type="submit"
+                    name={ZONE_MOVE}
+                    value={zoneMoveValue(zone.key, index, 'down')}
+                    disabled={index === entries.length - 1}
+                    class={buttonClass}
+                  >
+                    {t('admin.pages.zones.list.down')}
+                  </button>
+                </>
+              )}
+              <label class="ml-auto flex items-center gap-2 text-xs text-gray-600">
+                <input type="checkbox" name={zoneRemoveName(zone.key, index)} class="rounded" />
+                {t('admin.pages.zones.list.remove')}
+              </label>
+            </div>
+            {zone.fields.map((field) => (
+              <ZoneField
+                field={field}
+                name={zoneFieldName(zone.key, index, field.key)}
+                id={`zone-${zone.key}-${index}-${field.key}`}
+                value={entry[field.key] ?? ''}
+              />
+            ))}
+          </fieldset>
+        ))}
+
+        {entries.length >= zone.maxItems ? (
+          <p class="mt-4 text-xs text-gray-500">{t('admin.pages.zones.list.full')}</p>
+        ) : (
+          <details class="mt-4" open={entries.length === 0}>
+            <summary class="cursor-pointer text-sm text-accent">
+              {t('admin.pages.zones.list.add', { element: zone.itemLabel })}
+            </summary>
+            <p class="mt-2 text-xs text-gray-500">{t('admin.pages.zones.list.addHint')}</p>
+            {zone.fields.map((field) => (
+              <ZoneField
+                field={field}
+                name={zoneFieldName(zone.key, blank, field.key)}
+                id={`zone-${zone.key}-${blank}-${field.key}`}
+                value=""
+              />
+            ))}
+          </details>
+        )}
+      </fieldset>
+    );
+  })
+}
