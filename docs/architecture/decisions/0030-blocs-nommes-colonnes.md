@@ -1,6 +1,6 @@
 # ADR 0030 — Des blocs nommés dans les pages : le texte en colonnes
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #207 par Damien, le 2026-11-05)
 - **Date** : 2026-11-05
 - **Jalon** : après le pilote (plan §13.16, ticket #205, lot 2) ; aucun des
   jalons 0 à 10
