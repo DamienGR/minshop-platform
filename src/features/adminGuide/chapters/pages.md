@@ -32,7 +32,9 @@ Le bouton ajoute `"gauche"` ou `"droite"` à la fin de la photo : vous pouvez 
 2. Insérez la suivante avec **Image**, et ainsi de suite : une photo par ligne, sans ligne vide entre elles.
 3. **Aperçu** montre les photos côte à côte, toutes au même format carré.
 
-Une ligne vide entre deux photos commence une nouvelle rangée. Sur un téléphone, les photos vont deux par deux.
+Une ligne vide entre deux photos commence une nouvelle rangée. Sur un téléphone, les photos vont deux par deux ; au-delà de quatre photos, la rangée passe à la ligne, quatre par quatre.
+
+Sur la boutique, un clic sur une photo de la rangée l’affiche en grand, avec en légende ce qui est écrit entre ses crochets `![…]`. Les flèches passent d’une photo à l’autre de la rangée. Dans l’**Aperçu**, un clic sur une photo ramène à sa ligne, comme ailleurs.
 
 Une photo seule, elle, garde sa forme et ne dépasse pas la hauteur de l’écran.
 

@@ -520,6 +520,13 @@ export const fr = {
   'map.labelUnnamed': 'Carte de l’emplacement',
   'map.openStreetMap': 'Voir sur OpenStreetMap',
   'map.googleMaps': 'Voir sur Google Maps',
+  // A row of photos opened large over its page (ticket #205): features/pages/Lightbox.astro.
+  // `position` is filled in by the browser, from the template as written here.
+  'page.lightbox.label': 'Photo agrandie',
+  'page.lightbox.close': 'Fermer',
+  'page.lightbox.previous': 'Photo précédente',
+  'page.lightbox.next': 'Photo suivante',
+  'page.lightbox.position': 'Photo {position} sur {total}',
 
   'email.contact.subject': 'Contact : {motif} ({nom})',
   'email.contact.heading': 'Nouveau message',

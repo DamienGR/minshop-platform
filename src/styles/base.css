@@ -448,19 +448,151 @@
   gap: 0.75rem;
   margin: 1.5rem 0;
 }
-.markdown-content .markdown-gallery img {
+/* An item of the row is its photo, or on a page the link around it that
+   opens it large (ticket #205; features/pages/Lightbox.astro). */
+.markdown-content .markdown-gallery > :is(img, a) {
   flex: 0 1 calc((100% - 0.75rem) / 2);
   min-width: 0;
+}
+.markdown-content .markdown-gallery img {
   aspect-ratio: 1;
   object-fit: cover;
   margin: 0;
+}
+.markdown-content .markdown-gallery > a {
+  display: block;
+  border-radius: 0.375rem;
+}
+.markdown-content .markdown-gallery > a > img {
+  display: block;
+  width: 100%;
 }
 @media (min-width: 640px) {
   .markdown-content .markdown-gallery {
     flex-wrap: nowrap;
   }
-  .markdown-content .markdown-gallery img {
+  .markdown-content .markdown-gallery > :is(img, a) {
     flex: 1 1 0;
+  }
+  /* Past four photos, four to a line and the last line centred, rather than
+     every photo shrinking to fit one line (ticket #205). */
+  .markdown-content .markdown-gallery:has(> :nth-child(5)) {
+    flex-wrap: wrap;
+  }
+  .markdown-content .markdown-gallery:has(> :nth-child(5)) > :is(img, a) {
+    flex: 0 1 calc((100% - 3 * 0.75rem) / 4);
+  }
+}
+/* A row's photo opened large (ticket #205; features/pages/Lightbox.astro).
+   The dialog covers the screen in the theme's ink, the photo whole in the
+   middle, the words in paper: two tokens every theme declares, contrasting
+   by contract. Only an open dialog takes a display; the closed one stays
+   the browser's to hide. */
+.page-lightbox {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 4rem 1rem;
+  border: 0;
+  /* Opaque: the page's words showing through would sit under the position
+     and the caption. */
+  background: var(--color-ink, #111);
+  color: var(--color-paper, #fff);
+}
+.page-lightbox[open] {
+  display: grid;
+  place-items: center;
+}
+.page-lightbox::backdrop {
+  background: transparent;
+}
+.page-lightbox [hidden] {
+  display: none;
+}
+html:has(.page-lightbox[open]) {
+  overflow: hidden;
+}
+.page-lightbox__figure {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  max-width: 100%;
+  margin: 0;
+}
+.page-lightbox__figure img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 11rem);
+  max-height: calc(100dvh - 11rem);
+  object-fit: contain;
+  border-radius: 0.25rem;
+}
+.page-lightbox__caption {
+  max-width: 48rem;
+  font-size: 0.875rem;
+  text-align: center;
+}
+.page-lightbox__position {
+  position: absolute;
+  top: 1.5rem;
+  left: 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+.page-lightbox__button {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--color-paper, #fff) 16%, transparent);
+  color: inherit;
+}
+.page-lightbox__button:hover {
+  background: color-mix(in srgb, var(--color-paper, #fff) 28%, transparent);
+}
+.page-lightbox__button:focus-visible {
+  outline: 2px solid var(--color-paper, #fff);
+  outline-offset: 2px;
+}
+.page-lightbox__button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.page-lightbox__close {
+  top: 0.75rem;
+  right: 0.75rem;
+}
+/* On a phone the arrows sit below the photo, out of the thumb's way of it;
+   wider, on its sides. */
+.page-lightbox__previous,
+.page-lightbox__next {
+  bottom: 0.75rem;
+}
+.page-lightbox__previous {
+  left: 0.75rem;
+}
+.page-lightbox__next {
+  right: 0.75rem;
+}
+@media (min-width: 640px) {
+  .page-lightbox {
+    padding-inline: 4.5rem;
+  }
+  .page-lightbox__previous,
+  .page-lightbox__next {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
   }
 }
 /* What starts below a photo set beside its text: a heading, a rule, a map,

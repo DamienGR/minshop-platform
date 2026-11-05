@@ -741,6 +741,10 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
     // ![alt](src) span so it can be edited or replaced wholesale.
     preview.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
+      // A link in the preview, a row's photo included (ticket #205), would
+      // leave the editor and what it holds unsaved: a click here is a request
+      // to edit what was clicked, never to follow it.
+      if (target.closest('a')) event.preventDefault();
       const block = target.closest<HTMLElement>('[data-source-line]');
       if (!block) return;
       const line = Number(block.dataset.sourceLine);

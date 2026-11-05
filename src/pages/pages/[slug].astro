@@ -8,7 +8,14 @@ import type { ContactFormModel } from '../../features/storefront/models';
 import { getConfig } from '../../config';
 import { getPublishedPageBySlug } from '../../features/pages/db';
 import { pageImageDimensions } from '../../features/media/db';
-import { renderMarkdown, markdownExcerpt } from '../../features/pages/markdown';
+import {
+  renderMarkdown,
+  markdownExcerpt,
+  usesLightbox,
+  ROW_IMAGE_SIZES,
+} from '../../features/pages/markdown';
+import Lightbox from '../../features/pages/Lightbox.astro';
+import { productImageSources } from '../../features/products/image';
 import { normalizePageLayout, pageLayoutStyle } from '../../features/pages/layouts';
 import { contactSettings, submitContact } from '../../features/contact';
 import { publicOrigin } from '../../features/http/origin';
@@ -79,21 +86,32 @@ const dimensions = await pageImageDimensions(env.DB, page.id);
 // A ```carte block's tiles come from this page's own relay (ADR 0029), which
 // fetches only the tiles a published map of this page draws.
 const tileBase = `/map-tiles/${encodeURIComponent(page.slug)}`;
+const baseUrl = getConfig().images.baseUrl;
+const delivery = settings?.imageDelivery;
 const html = renderMarkdown(page.body_markdown, {
-  baseUrl: getConfig().images.baseUrl,
+  baseUrl,
   dimensions,
   placeMaps: {
     tileUrl: (tile) => `${tileBase}/${tile.z}/${tile.x}/${tile.y}`,
     attribution: getConfig().maps.attribution,
   },
+  // A row of photos opens large (ticket #205), and with on-demand delivery
+  // its squares take the product photos' width ladder rather than originals.
+  lightbox: true,
+  rowImageSources: (key) => {
+    const sources = productImageSources(key, { baseUrl, delivery, sizes: ROW_IMAGE_SIZES });
+    return sources.srcset ? sources : null;
+  },
 });
 const description = markdownExcerpt(page.body_markdown);
 const layout = normalizePageLayout(page.layout);
 const layoutStyle = pageLayoutStyle(layout);
+const lightbox = usesLightbox(html);
 ---
 
 <Layout title={page.title} description={description}>
   <ContentPage model={{ title: page.title, html, layout, layoutStyle }} />
+  {lightbox && <Lightbox />}
   {
     form && (
       <div class="contact-frame" style={layoutStyle}>

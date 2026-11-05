@@ -1,0 +1,139 @@
+---
+import { t } from '../i18n';
+
+/**
+ * A row of photos opened large over its page (ticket #205).
+ *
+ * The renderer links each photo of a row to itself (`lightbox` in
+ * markdown.ts), so without JavaScript a click opens the photo, and Back
+ * returns to the page. With it, the script below opens the same photo in this
+ * dialog instead, with the previous and next ones of its row. The page route
+ * renders the component only where the body has such a row, and its script
+ * comes with it: a page without one ships no lightbox.
+ *
+ * `showModal()` does what a lightbox must and is easy to get wrong by hand:
+ * focus moves into the dialog and stays there, the page behind is inert to
+ * the keyboard and to assistive technology, and Escape closes it. Focus then
+ * goes back to the photo that opened it.
+ *
+ * Every word comes from the catalog, rendered here: the script reads labels
+ * from the markup and never imports `t`. `ink` and `paper` are tokens every
+ * theme declares, and they contrast by contract.
+ */
+---
+
+<dialog
+  data-page-lightbox
+  class="page-lightbox"
+  aria-label={t('page.lightbox.label')}
+  data-position={t('page.lightbox.position')}
+>
+  <button type="button" data-lightbox-close class="page-lightbox__button page-lightbox__close" aria-label={t('page.lightbox.close')}>
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  </button>
+  <figure class="page-lightbox__figure">
+    <img data-lightbox-image alt="" hidden />
+    <figcaption data-lightbox-caption class="page-lightbox__caption"></figcaption>
+  </figure>
+  <p data-lightbox-position class="page-lightbox__position" aria-live="polite"></p>
+  <button type="button" data-lightbox-previous class="page-lightbox__button page-lightbox__previous" aria-label={t('page.lightbox.previous')}>
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  </button>
+  <button type="button" data-lightbox-next class="page-lightbox__button page-lightbox__next" aria-label={t('page.lightbox.next')}>
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path d="M9 5l7 7-7 7" />
+    </svg>
+  </button>
+</dialog>
+
+<script>
+  const dialog = document.querySelector('[data-page-lightbox]');
+  // A browser without `showModal()` keeps the links: they open the photo.
+  if (dialog instanceof HTMLDialogElement && typeof dialog.showModal === 'function') {
+    const image = dialog.querySelector('[data-lightbox-image]');
+    const caption = dialog.querySelector('[data-lightbox-caption]');
+    const position = dialog.querySelector('[data-lightbox-position]');
+    const previous = dialog.querySelector('[data-lightbox-previous]');
+    const next = dialog.querySelector('[data-lightbox-next]');
+    const close = dialog.querySelector('[data-lightbox-close]');
+    const template = dialog.dataset.position ?? '';
+
+    if (
+      image instanceof HTMLImageElement &&
+      caption instanceof HTMLElement &&
+      position instanceof HTMLElement &&
+      previous instanceof HTMLButtonElement &&
+      next instanceof HTMLButtonElement &&
+      close instanceof HTMLButtonElement
+    ) {
+      /** The links of the row being shown, and which one is on screen. */
+      let row: HTMLAnchorElement[] = [];
+      let current = 0;
+      let opener: HTMLAnchorElement | null = null;
+
+      const show = (index: number) => {
+        current = (index + row.length) % row.length;
+        const link = row[current];
+        const thumbnail = link.querySelector('img');
+        const alt = thumbnail?.alt ?? '';
+        // The thumbnail's bitmap may be a smaller copy: the link is the photo.
+        image.src = link.href;
+        image.alt = alt;
+        image.hidden = false;
+        caption.textContent = alt;
+        caption.hidden = alt === '';
+        const alone = row.length < 2;
+        position.hidden = alone;
+        previous.hidden = alone;
+        next.hidden = alone;
+        position.textContent = template
+          .replace('{position}', String(current + 1))
+          .replace('{total}', String(row.length));
+      };
+
+      document.addEventListener('click', (event) => {
+        // A click the page already handled, or one asking for a new tab or
+        // window, keeps what the link does by itself.
+        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const link = event.target instanceof Element ? event.target.closest('a[data-lightbox]') : null;
+        if (!(link instanceof HTMLAnchorElement)) return;
+        const gallery = link.closest('.markdown-gallery');
+        row = gallery ? [...gallery.querySelectorAll<HTMLAnchorElement>('a[data-lightbox]')] : [link];
+        event.preventDefault();
+        opener = link;
+        show(row.indexOf(link));
+        dialog.showModal();
+      });
+
+      previous.addEventListener('click', () => show(current - 1));
+      next.addEventListener('click', () => show(current + 1));
+      close.addEventListener('click', () => dialog.close());
+
+      dialog.addEventListener('keydown', (event) => {
+        if (row.length < 2) return;
+        if (event.key === 'ArrowLeft') show(current - 1);
+        else if (event.key === 'ArrowRight') show(current + 1);
+        else return;
+        event.preventDefault();
+      });
+
+      // The dialog covers the screen: a click beside the photo, on the dialog
+      // itself, closes it like a click on a backdrop would.
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+
+      dialog.addEventListener('close', () => {
+        image.hidden = true;
+        image.removeAttribute('src');
+        opener?.focus();
+        opener = null;
+      });
+    }
+  }
+</script>

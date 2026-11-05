@@ -316,7 +316,8 @@ today's config.
 
 1. **Storefront is near-zero client JS.** Server-render everything; progressive
    enhancement only. A little JS is allowed where it earns it (cart drawer,
-   /pay polling, Turnstile) — never required for the page to work.
+   /pay polling, Turnstile, a page's photo lightbox) — never required for the
+   page to work.
 2. **Orders are paid-only.** The `orders` table holds settled orders. In-flight
    Lightning invoices live in `pending_payments` until settled — never write an
    unpaid order.

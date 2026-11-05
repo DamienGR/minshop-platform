@@ -3512,3 +3512,45 @@ Fait le 2026-11-05, sans migration :
 Tenu par `src/features/pages/markdown.test.ts` et
 `test/browser/page-gallery.spec.mjs`, sur ordinateur et sur téléphone, dans
 chaque thème.
+
+### 13.15 La galerie en lightbox d'une page
+
+Noté le 2026-11-05 (ticket #205, lot 1 de quatre) : sur les pages de
+présentation de la première boutique réelle (« La marque »), une rangée de
+photos doit s'ouvrir en grand au clic, une photo après l'autre. L'étude du
+même jour retient pour les pages des modèles fournis par le thème, avec dans
+chaque zone des blocs nommés et cette lightbox ; ce lot est le premier. Aucun
+des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-05, sans migration :
+
+- le rendu, sur option (`lightbox`), fait de chaque photo d'une rangée (#194)
+  un lien vers la photo elle-même, marqué `data-lightbox` : sans JavaScript,
+  un clic ouvre la photo. Une photo seule, à côté du texte ou dans une phrase
+  n'est pas un lien : elle s'affiche déjà en grand (choix de Damien du
+  2026-11-05). L'option ne vaut que pour
+  les pages et leur aperçu : une rangée dans une description de produit reste
+  une rangée d'images ;
+- la route de la page ne rend `features/pages/Lightbox.astro`, et son script,
+  que si le corps a un tel lien : un `<dialog>` ouvert par `showModal()`, qui
+  piège le focus, rend la page inerte, se ferme par Échap, par le bouton ou par
+  un clic à côté de la photo, et rend le focus à la photo cliquée. Photo
+  précédente et suivante de la même rangée par les boutons ou les flèches du
+  clavier, position annoncée (« Photo 2 sur 3 »), texte alternatif en
+  légende. Les mots viennent du catalogue (`page.lightbox.*`) ;
+- avec la livraison d'images à la demande (Cloudflare), les carrés d'une
+  rangée prennent l'échelle de largeurs des photos produit
+  (`productImageSources`) au lieu des originaux ; le lien garde l'original ;
+- au-delà de quatre photos, la rangée passe à la ligne, quatre par quatre,
+  la dernière ligne centrée, au lieu de rétrécir sur une seule ligne ;
+- dans l'aperçu de l'éditeur, un clic sur un lien ne quitte plus l'éditeur :
+  il ramène à la ligne source, comme ailleurs.
+
+Le lien devient l'élément de la rangée : une règle de thème qui dimensionnait
+`.markdown-gallery img` comme élément flexible vise désormais
+`.markdown-gallery > a` (celle d'Artisagna est à revoir à la montée).
+
+Tenu par `src/features/pages/markdown.test.ts` et
+`test/browser/page-gallery.spec.mjs` (ouverture, navigation au clavier,
+fermeture, retour du focus, rangée de plus de quatre photos), dans chaque
+thème.
