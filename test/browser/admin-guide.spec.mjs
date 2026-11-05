@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.mjs';
 import { REMOTE } from './pages.mjs';
-import { ADMIN_PASSWORD } from './admin.mjs';
+import { signIn } from './admin.mjs';
 
 /**
  * The admin guide (ticket #188) and the footer that opens it (ticket #186).
@@ -17,9 +17,7 @@ test.skip(REMOTE, 'une boutique déployée a son propre mot de passe : ces contr
 const GUIDE = 'Guide de l’administration';
 
 async function login(page, path) {
-  await page.goto('/admin/login');
-  await page.locator('input[name="password"]').fill(ADMIN_PASSWORD);
-  await Promise.all([page.waitForURL((url) => !url.pathname.startsWith('/admin/login')), page.locator('button[type="submit"]').click()]);
+  await signIn(page);
   await page.goto(path);
 }
 

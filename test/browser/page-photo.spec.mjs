@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.mjs';
 import { FIXTURE, REMOTE, settle } from './pages.mjs';
-import { ADMIN_PASSWORD } from './admin.mjs';
+import { signIn } from './admin.mjs';
 
 /**
  * A photo beside its text in a page (ticket #195): `"gauche"` or `"droite"`
@@ -76,12 +76,7 @@ test('la photo se place du côté dit, le texte à côté, l’intertitre dessou
 });
 
 test('les boutons de l’éditeur placent la photo, l’aperçu la montre, un second clic la remet', async ({ page }) => {
-  await page.goto('/admin/login');
-  await page.locator('input[name="password"]').fill(ADMIN_PASSWORD);
-  await Promise.all([
-    page.waitForURL((url) => !url.pathname.startsWith('/admin/login')),
-    page.locator('button[type="submit"]').click(),
-  ]);
+  await signIn(page);
   await page.goto('/admin/pages/page_ph0t0s0000/edit');
 
   const editor = page.locator('[data-editor]');
