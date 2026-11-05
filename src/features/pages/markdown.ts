@@ -10,6 +10,7 @@ import {
 } from '../maps/render.ts';
 import { tileGrid, type Tile } from '../maps/tiles.ts';
 import { mediaSideOf } from './mediaSide.ts';
+import { installBlocks, renderColumnsProblems, type ColumnsProblem } from './blocks.ts';
 
 /**
  * Server-only Markdown renderer, shared by the storefront route and the admin
@@ -30,6 +31,11 @@ const md = new MarkdownIt({
   breaks: false,
   typographer: false,
 });
+// The reader behind the excerpt and the media and map extraction knows the
+// named blocks (blocks.ts), whatever the caller renders: a `::: colonnes` line
+// is never words of a meta description, and a photo in a column is a photo
+// the page uses.
+installBlocks(md);
 
 /** Root-relative media reference the editor inserts: /images/<key>. */
 const LOCAL_IMAGE_PREFIX = '/images/';
@@ -139,6 +145,18 @@ export interface RenderOptions {
    */
   rowImageSources?: (key: string) => RowImageSources | null;
   /**
+   * Read the named `:::` blocks (blocks.ts, ADR 0030): columns. Content pages,
+   * their preview and a page model's zones: a renderer called without it
+   * leaves `::: colonnes` the text it always was.
+   */
+  blocks?: {
+    /**
+     * Admin preview: say what is wrong with a block above it. The storefront
+     * draws the block anyway, as well as it can; nothing is lost.
+     */
+    showErrors?: boolean;
+  };
+  /**
    * The `id` of each heading, from its plain text and level; `undefined`
    * leaves one without. The admin guide's anchors (ticket #188): a page body
    * renders without it, so no merchant heading can claim an id the page's own
@@ -217,6 +235,26 @@ function isGap(token: Token): boolean {
 }
 
 /**
+ * The paragraphs that stand at the top of the body, or at the top of a
+ * column (blocks.ts): a column is a page of its own width, where a photo
+ * moves and a row lines up as they do in the body. A paragraph in a list, a
+ * quote or anything else does not.
+ */
+function topLevelParagraphs(tokens: Token[]): Set<number> {
+  const found = new Set<number>();
+  const open: string[] = [];
+  tokens.forEach((token, idx) => {
+    if (token.type === 'paragraph_open') {
+      const parent = open.at(-1);
+      if (parent === undefined || parent === 'minshop_column_open') found.add(idx);
+    }
+    if (token.nesting === 1) open.push(token.type);
+    else if (token.nesting === -1) open.pop();
+  });
+  return found;
+}
+
+/**
  * A paragraph that holds one image and nothing else is a photo of the page,
  * and says so: `markdown-media`, which base.css starts below a photo set
  * beside its text. When that image's title is a side word (mediaSide.ts,
@@ -238,6 +276,7 @@ function isGap(token: Token): boolean {
  */
 function installMediaRule(instance: MarkdownItInstance): void {
   instance.core.ruler.push('minshop_media', (state) => {
+    const atTop = topLevelParagraphs(state.tokens);
     state.tokens.forEach((token, idx) => {
       if (token.type !== 'inline') return;
       const children = token.children ?? [];
@@ -249,7 +288,7 @@ function installMediaRule(instance: MarkdownItInstance): void {
       });
 
       const open = state.tokens[idx - 1];
-      if (open?.type !== 'paragraph_open' || open.level !== 0 || open.hidden) return;
+      if (open?.type !== 'paragraph_open' || !atTop.has(idx - 1) || open.hidden) return;
       const content = children.filter((child) => !isGap(child));
       if (!content.every((child) => child.type === 'image')) return;
       if (content.length === 1) {
@@ -299,6 +338,21 @@ function installPlaceMapRule(
 }
 
 /**
+ * The named blocks, read and drawn. Their markup is the default renderer's
+ * from tokens blocks.ts wrote: a tag and classes from closed lists, plus the
+ * editor's source lines. The preview adds, above a block it had to draw as
+ * well as it could, what is wrong with it.
+ */
+function installBlocksRendering(instance: MarkdownItInstance, showErrors: boolean): void {
+  installBlocks(instance);
+  if (!showErrors) return;
+  instance.renderer.rules.minshop_columns_open = (tokens, idx, options, _env, self) => {
+    const problems = (tokens[idx].meta?.problems ?? []) as ColumnsProblem[];
+    return renderColumnsProblems(problems) + self.renderToken(tokens, idx, options);
+  };
+}
+
+/**
  * An `id` on each heading the caller names. The text is the heading's plain
  * text (the alt-text rule's), so `**gras**` in a title does not reach the id;
  * renderToken escapes the value like any attribute.
@@ -330,6 +384,7 @@ export function renderMarkdown(markdown: string, options: RenderOptions = {}): s
   installMediaRule(instance);
   if (options.placeMaps) installPlaceMapRule(instance, options.placeMaps, options.sourceMap === true);
   if (options.headingId) installHeadingIdRule(instance, options.headingId);
+  if (options.blocks) installBlocksRendering(instance, options.blocks.showErrors === true);
 
   if (options.sourceMap) {
     // Block tokens carry `map: [startLine, endLine]`. Stamping the start line on

@@ -6,7 +6,7 @@ Les pages de texte de votre boutique : à propos, livraison, conditions géné
 
 1. Cliquez sur **Nouvelle page**.
 2. Donnez-lui un **Titre**, puis cliquez sur **Créer le brouillon**.
-3. Écrivez le texte. Les boutons au-dessus le mettent en forme : « H2 » pour un intertitre, « G » pour du gras, **Lien**, **Liste**, **Image** pour une photo de la médiathèque, **Carte** pour situer un lieu.
+3. Écrivez le texte. Les boutons au-dessus le mettent en forme : « H2 » pour un intertitre, « G » pour du gras, **Lien**, **Liste**, **Image** pour une photo de la médiathèque, **Carte** pour situer un lieu, **Colonnes** pour poser des textes côte à côte.
 4. **Aperçu** montre la page telle que vos clients la verront.
 5. Cochez **Publiée**, puis cliquez sur **Enregistrer**.
 
@@ -37,6 +37,19 @@ Une ligne vide entre deux photos commence une nouvelle rangée. Sur un télépho
 Sur la boutique, un clic sur une photo de la rangée l’affiche en grand, avec en légende ce qui est écrit entre ses crochets `![…]`. Les flèches passent d’une photo à l’autre de la rangée. Dans l’**Aperçu**, un clic sur une photo ramène à sa ligne, comme ailleurs.
 
 Une photo seule, elle, garde sa forme et ne dépasse pas la hauteur de l’écran.
+
+### Mettre du texte en colonnes
+
+1. Placez le curseur là où les colonnes commencent, puis cliquez sur **Colonnes** : deux colonnes s’insèrent, le texte de la première sélectionné.
+2. Tapez le texte de la première colonne : il remplace l’exemple. Une colonne prend tout ce que prend une page : intertitres, listes, photos, une carte.
+3. Remplacez de même le texte de la deuxième, sous la ligne `::: colonne`.
+4. **Aperçu** montre les colonnes côte à côte.
+
+Pour une troisième colonne, ajoutez une ligne `::: colonne` là où elle commence, avant le `:::` qui ferme le bloc. Trois colonnes au plus.
+
+Pour deux colonnes de largeurs différentes, écrivez `::: colonnes 1/2` (une étroite, puis une large deux fois plus grande) ou `::: colonnes 2/1`.
+
+Sur un téléphone, les colonnes passent l’une sous l’autre, dans l’ordre où vous les avez écrites. Si un bloc ne s’affichera pas comme prévu, l’**Aperçu** le dit au-dessus des colonnes, avec sa ligne.
 
 ### Choisir une mise en page
 

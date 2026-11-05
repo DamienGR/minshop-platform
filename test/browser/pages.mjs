@@ -34,6 +34,8 @@ export const FIXTURE = REMOTE
       photoPage: '/pages/atelier',
       // A row of photos and a photo alone (ticket #194); seeded by serve.mjs.
       galleryPage: '/pages/en-images',
+      // Text in columns (ADR 0030); seeded by serve.mjs.
+      columnsPage: '/pages/en-colonnes',
       search: 'sample',
     };
 
@@ -65,6 +67,7 @@ export const ROUTES = [
   { name: 'contact', path: FIXTURE.contact, why: 'le formulaire de contact sous sa page' },
   { name: 'photos à côté du texte', path: FIXTURE.photoPage, why: 'une photo à gauche, une à droite' },
   { name: 'rangée de photos', path: FIXTURE.galleryPage, why: 'une rangée, une photo en hauteur' },
+  { name: 'texte en colonnes', path: FIXTURE.columnsPage, why: 'deux colonnes inégales, trois égales' },
   { name: 'panier', path: '/cart', why: 'le shell hors navigation' },
   { name: 'introuvable', path: '/no-such-page', why: 'la 404' },
 ].filter((route) => route.path);

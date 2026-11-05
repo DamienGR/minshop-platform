@@ -367,6 +367,10 @@ today's config.
     An image titled `"gauche"` or `"droite"` stands beside its text (ticket
     #195): the word becomes a class from a closed list
     (`features/pages/mediaSide.ts`) and is never written out.
+    A named block — `::: colonnes`, its columns split by `::: colonne`,
+    closed by `:::` (ADR 0030) — becomes markup only where the caller passes
+    `blocks` (a page and its preview), and only `features/pages/blocks.ts`
+    writes it: names, proportions and classes are closed lists.
 12. **A log line is written, never forwarded.** Structured events with fields
     you chose; an error from a provider goes through `logSafe()`
     (`features/observability/logSafe.ts`), which masks e-mail addresses and
@@ -408,6 +412,11 @@ today's config.
   Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
   automatically. The footer is a menu (migration 0028): a page reaches it only
   through Admin → Navigation, the four legal pages of migration 0040 included.
+- **A named block in a page** (an encadré, a FAQ…): its word joins the
+  closed list in `features/pages/blocks.ts`, with its rule, its fixed
+  classes in `base.css`, what the preview says about a malformed one, a
+  toolbar button in `admin/pages/[id]/edit.astro` and its section of the
+  admin guide (ADR 0030). Any other `::: mot` stays text.
 - **A page layout preset:** add ONE entry to `PAGE_LAYOUTS` in
   `features/pages/layouts.ts`. The editor dropdown, validation, the storefront,
   and the admin preview all derive from it, and `measure`/`titleAlign` are

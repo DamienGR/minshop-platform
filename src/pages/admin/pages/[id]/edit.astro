@@ -63,9 +63,30 @@ const MAP_BLOCK = [
 ].join('\n');
 const MAP_CARET = MAP_BLOCK.indexOf('position: ') + 'position: '.length;
 
+// The « Colonnes » tool's block: two columns (ADR 0030). `::: colonnes`,
+// `::: colonne` and `:::` are syntax; the sample texts are words, and the
+// first one comes selected, so typing replaces it.
+const COLUMNS_FIRST = t('admin.pages.editor.columnsTemplate.first');
+const COLUMNS_BLOCK = [
+  '::: colonnes',
+  COLUMNS_FIRST,
+  '',
+  '::: colonne',
+  t('admin.pages.editor.columnsTemplate.second'),
+  ':::',
+].join('\n');
+const COLUMNS_CARET = COLUMNS_BLOCK.indexOf(COLUMNS_FIRST);
+
 // Toolbar buttons are declarative: each carries the syntax to wrap or insert,
 // so the script stays one generic selection handler rather than nine.
-const tools: Array<{ action: string; value: string; label: string; title: string; caret?: number }> = [
+const tools: Array<{
+  action: string;
+  value: string;
+  label: string;
+  title: string;
+  caret?: number;
+  caretEnd?: number;
+}> = [
   { action: 'prefix', value: '## ', label: 'H2', title: t('admin.pages.editor.tool.heading') },
   {
     action: 'wrap',
@@ -105,6 +126,14 @@ const tools: Array<{ action: string; value: string; label: string; title: string
     label: t('admin.pages.editor.tool.mapShort'),
     title: t('admin.pages.editor.tool.map'),
     caret: MAP_CARET,
+  },
+  {
+    action: 'block',
+    value: COLUMNS_BLOCK,
+    label: t('admin.pages.editor.tool.columnsShort'),
+    title: t('admin.pages.editor.tool.columns'),
+    caret: COLUMNS_CARET,
+    caretEnd: COLUMNS_CARET + COLUMNS_FIRST.length,
   },
 ];
 
@@ -267,6 +296,7 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
                   data-tool={tool.action}
                   data-value={tool.value}
                   data-caret={tool.caret}
+                  data-caret-end={tool.caretEnd}
                   title={tool.title}
                   class="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
                 >
@@ -430,7 +460,9 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
         const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
         const block = `${lead}${value}\n`;
         const caret = lead.length + Number(button.dataset.caret ?? value.length);
-        replaceSelection(block, caret, caret);
+        // A block may select its sample text, so typing replaces it.
+        const caretEnd = button.dataset.caretEnd ? lead.length + Number(button.dataset.caretEnd) : caret;
+        replaceSelection(block, caret, caretEnd);
       } else if (kind === 'side' && (value === 'gauche' || value === 'droite')) {
         // The image on the caret's line, whatever is selected: the button
         // places a photo, it does not wrap text.
