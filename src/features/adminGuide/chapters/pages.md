@@ -12,6 +12,8 @@ Les pages de texte de votre boutique : à propos, livraison, conditions géné
 
 Les boutons ajoutent des signes autour du texte, comme des étoiles : c’est normal, l’aperçu montre le résultat.
 
+Sur une longue page, les boutons restent en haut de l’écran pendant que vous descendez dans le texte : inutile de remonter pour les atteindre.
+
 Une page publiée n’est encore dans aucun menu : ajoutez-la dans [Navigation](#guide-navigation) pour que vos clients la trouvent.
 
 ### Mettre une photo à côté du texte

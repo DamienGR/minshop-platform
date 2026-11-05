@@ -203,9 +203,11 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
       </label>
     </div>
 
-    {/* overflow-hidden so pane edges and inner scrollbars are clipped by the
-        radius instead of painting over the border corners. */}
-    <div class="mt-6 overflow-hidden rounded-md border border-line">
+    {/* Clipped so pane edges and inner scrollbars follow the radius instead of
+        painting over the border corners. overflow-clip, never overflow-hidden:
+        hidden makes this box a scroll container, and the toolbar's sticky
+        would then stick inside a box that never scrolls (ticket #203). */}
+    <div class="mt-6 overflow-clip rounded-md border border-line">
       {/* Markdown / Côte à côte / Aperçu. Rendered hidden and revealed by the script,
           because without JavaScript there is nothing to switch between — the
           textarea is the whole editor and the preview never populates. */}
@@ -249,9 +251,14 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
         {/* flex column so the textarea can fill the leftover height rather than
             claiming 100% of a parent that also contains the toolbar. */}
         <div data-pane="write" class="flex min-w-0 flex-col">
+          {/* Sticky (ticket #203): the field grows with the text and the page
+              scrolls, so on a long page the tools would otherwise be a scroll
+              back up away. It sticks within this pane, so it leaves with the
+              editor. Opaque, or the text would run through it; z-10 keeps it
+              under the admin's footer (z-30) and the guide panel (z-40). */}
           <div
             data-toolbar
-            class="flex min-h-11 flex-wrap items-center gap-1 border-b border-line px-2 py-1"
+            class="sticky top-0 z-10 flex min-h-11 flex-wrap items-center gap-1 border-b border-line bg-paper px-2 py-1"
           >
             {
               tools.map((tool) => (
@@ -395,7 +402,8 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
 
     const selected = () => editor.value.slice(editor.selectionStart, editor.selectionEnd);
 
-    form.querySelector('[data-toolbar]')?.addEventListener('click', (event) => {
+    const toolbar = form.querySelector<HTMLElement>('[data-toolbar]');
+    toolbar?.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>('[data-tool]');
       if (!button) return;
       const kind = button.dataset.tool;
@@ -547,8 +555,15 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
     const autosize = () => {
       // A hidden textarea reports scrollHeight 0; skip so it isn't collapsed.
       if (!editor.offsetParent) return;
+      // Collapsing the field to measure it shortens the page for an instant,
+      // and the browser answers by clamping the scroll or by moving it to keep
+      // an anchor in place: on a phone, down a long text, a click on a tool
+      // threw the page thousands of pixels away. With the toolbar in reach
+      // there (ticket #203), that click is the common case: put the page back.
+      const { scrollX, scrollY } = window;
       editor.style.minHeight = '0px';
       editor.style.minHeight = `${Math.max(editor.scrollHeight, minRowsHeight())}px`;
+      if (window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
     };
 
     /** Trailing debounce: render once typing pauses, not on every keystroke. */
@@ -628,8 +643,11 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
       const viewTop = window.scrollY;
       const viewBottom = viewTop + window.innerHeight;
       // Leave it alone when it is already comfortably on screen — scrolling on
-      // every click would yank the page around for no reason.
-      if (caretTop > viewTop + lineHeight * 2 && caretTop < viewBottom - lineHeight * 3) return;
+      // every click would yank the page around for no reason. The top of the
+      // window is the toolbar's once it sticks (ticket #203): a caret under it
+      // is not on screen.
+      const covered = toolbar?.offsetHeight ?? 0;
+      if (caretTop > viewTop + covered + lineHeight && caretTop < viewBottom - lineHeight * 3) return;
       window.scrollTo({
         top: Math.max(0, caretTop - window.innerHeight / 3),
         behavior: 'smooth',
