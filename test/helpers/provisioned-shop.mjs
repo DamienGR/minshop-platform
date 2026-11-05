@@ -12,12 +12,12 @@
  * them, and the shape of a generated tree is already pinned by jalon 2's suite.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { stripAnsi } from '../../shopctl/src/cloudflare.mjs';
 import { OPERATOR_ENV } from './operator-env.mjs';
+import { scratchDir } from './scratch.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -69,7 +69,7 @@ export function shop({
   account: sharedState = null,
   forgeAccount: sharedForge = null,
 } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'shopctl-provision-'));
+  const root = scratchDir('shopctl-provision-');
   const core = JSON.parse(readFileSync(resolve(CORE, 'package.json'), 'utf8'));
   if (manifestYaml) slug = manifestYaml.match(/^\s{2}slug:\s*(\S+)/m)?.[1] ?? slug;
   // A build reads the selected theme's directory; a provisioned shop never
@@ -171,7 +171,7 @@ export function shop({
     writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node\nimport('${GH_DOUBLE}');\n`);
     chmodSync(join(bin, 'gh'), 0o755);
 
-    remote = mkdtempSync(join(tmpdir(), 'shopctl-remote-'));
+    remote = scratchDir('shopctl-remote-');
     const git = (args, cwd = root) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_ENV } });
     git(['init', '--quiet', '--initial-branch=main']);
     git(['config', 'user.name', 'Minshop Tests']);

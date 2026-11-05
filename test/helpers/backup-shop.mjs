@@ -19,12 +19,12 @@
  *  - a settings row, because it is the table an operator notices when a restore
  *    silently drops one.
  */
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { names, shop } from './provisioned-shop.mjs';
+import { scratchDir } from './scratch.mjs';
 
 /** The image's bytes. Not a real JPEG: what is under test is that the exact
  *  bytes come back, and any byte sequence proves that. */
@@ -62,7 +62,7 @@ export function seededShop({ env = 'staging', slug = 'atelier-test', seed = SEED
   if (seed.length > 0) target.sql(seed);
 
   if (object) {
-    const file = join(mkdtempSync(join(tmpdir(), 'shopctl-seed-')), 'image');
+    const file = join(scratchDir('shopctl-seed-'), 'image');
     writeFileSync(file, IMAGE_BYTES);
     const put = target.wrangler([
       'r2', 'object', 'put', `${names(slug, env).images}/${IMAGE_KEY}`,

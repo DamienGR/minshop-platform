@@ -7,10 +7,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
 import { canonical } from '../../shopctl/src/backup/dump.mjs';
 import { classifyTables, objectInventory, orderTables, references, seededTables } from '../../shopctl/src/backup/schema.mjs';
-import { planPrune } from '../../shopctl/src/backup/archive.mjs';
+import { nextBackupId, planPrune } from '../../shopctl/src/backup/archive.mjs';
 import { nextIndex, reusable, reuseWindow } from '../../shopctl/src/backup/pool.mjs';
 import { parseLifecycleRules } from '../../shopctl/src/cloudflare.mjs';
 import { HOSTILE, IMAGE_KEY, names, seededShop, takeBackup } from '../helpers/backup-shop.mjs';
+import { scratchDir } from '../helpers/scratch.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 
@@ -193,6 +194,55 @@ describe('the backup pipeline', () => {
     it('drops an incomplete directory', () => {
       const plan = planPrune([...entries, { id: 'interrompue', path: '/tmp/x', broken: 'manifeste absent', manifest: null }], { keep: 30, keepDays: 365, now });
       expect(plan.remove.map((entry) => entry.reason)).toEqual(['incomplète']);
+    });
+  });
+
+  /**
+   * Ticket #196: two backups in one second shared an id, and the second wrote
+   * into the first one's directory. The id keeps its format; a taken second
+   * waits for the next one.
+   */
+  describe('the archive id', () => {
+    const clock = (...instants) => {
+      const queue = instants.map((iso) => new Date(iso));
+      return () => (queue.length > 1 ? queue.shift() : queue[0]);
+    };
+
+    it('takes the instant’s second when nothing has it', () => {
+      const repository = scratchDir('backup-ids-');
+      const pause = vi.fn();
+      expect(nextBackupId(repository, 'atelier', 'staging', { now: clock('2026-11-05T14:45:42.731Z'), pause })).toBe('atelier-staging-20261105T144542Z');
+      expect(pause).not.toHaveBeenCalled();
+    });
+
+    it('waits for the next second when an archive already has this one', () => {
+      const repository = scratchDir('backup-ids-');
+      mkdirSync(join(repository, 'atelier-staging-20261105T144542Z'));
+      const pause = vi.fn();
+      const id = nextBackupId(repository, 'atelier', 'staging', { now: clock('2026-11-05T14:45:42.731Z', '2026-11-05T14:45:43.002Z'), pause });
+      expect(id).toBe('atelier-staging-20261105T144543Z');
+      // Exactly what is left of the taken second, not a fixed second more.
+      expect(pause).toHaveBeenCalledWith(269);
+    });
+
+    it('stops with a precondition when the clock never leaves a taken second', () => {
+      const repository = scratchDir('backup-ids-');
+      mkdirSync(join(repository, 'atelier-staging-20261105T144542Z'));
+      let error = null;
+      try {
+        nextBackupId(repository, 'atelier', 'staging', { now: clock('2026-11-05T14:45:42.500Z'), pause: () => {} });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error?.code).toBe(EXIT_CODES.precondition);
+      expect(error?.message).toContain('atelier-staging-20261105T144542Z');
+    });
+
+    // Another environment of the same shop, or another shop, is another id.
+    it('ignores the archives of another environment', () => {
+      const repository = scratchDir('backup-ids-');
+      mkdirSync(join(repository, 'atelier-production-20261105T144542Z'));
+      expect(nextBackupId(repository, 'atelier', 'staging', { now: clock('2026-11-05T14:45:42.100Z'), pause: () => {} })).toBe('atelier-staging-20261105T144542Z');
     });
   });
 

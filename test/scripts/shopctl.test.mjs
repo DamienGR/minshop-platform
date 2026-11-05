@@ -31,6 +31,7 @@ import { WITNESS_CLIENTS_DIR, discoverManifests } from '../../scripts/manifest.m
 import { CORE_TAG, CORE_VERSION, GIT_ENV, createCoreRepository, git, nextMinor, publishVersion } from '../helpers/core-repository.mjs';
 import { DEPENDABOT_FILE, renderDependabot } from '../../scripts/dependabot.mjs';
 import { ACCOUNT, OTHER_ACCOUNT, shop } from '../helpers/provisioned-shop.mjs';
+import { scratchDir } from '../helpers/scratch.mjs';
 
 const CORE = new URL('../../', import.meta.url).pathname;
 const BIN = resolve(CORE, 'shopctl/bin/shopctl.mjs');
@@ -72,7 +73,7 @@ function core() {
 }
 
 function workspace() {
-  return mkdtempSync(join(tmpdir(), 'shopctl-work-'));
+  return scratchDir('shopctl-work-');
 }
 
 /** The witnesses' slugs, read from their own manifests. Not clientSlugs():
@@ -330,7 +331,7 @@ describe('running from an extracted tarball', () => {
   });
 
   it('creates a shop with no --from and no remote to ask', () => {
-    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-'));
+    const root = scratchDir('shopctl-npx-');
     const source = createCoreRepository(root);
     const work = join(root, 'work');
     mkdirSync(work);
@@ -362,7 +363,7 @@ describe('running from an extracted tarball', () => {
    * must never drive another's).
    */
   it('names its next steps as they must be typed, not as a bare shopctl', () => {
-    const root = mkdtempSync(join(tmpdir(), 'shopctl-steps-'));
+    const root = scratchDir('shopctl-steps-');
     const source = createCoreRepository(root);
     const work = join(root, 'work');
     mkdirSync(work);
@@ -384,7 +385,7 @@ describe('running from an extracted tarball', () => {
   // The fallback is a fallback: a fork, a mirror or a local path handed to
   // --from is the core the operator is standing in, and it keeps winning.
   it('still lets --from override what package.json declares', () => {
-    const root = mkdtempSync(join(tmpdir(), 'shopctl-npx-from-'));
+    const root = scratchDir('shopctl-npx-from-');
     const source = createCoreRepository(root);
     const work = join(root, 'work');
     mkdirSync(work);
@@ -405,7 +406,7 @@ describe('shopctl new', () => {
   // a directory to clean up.
   it('refuses --create-repo without gh before touching the disk', () => {
     const work = workspace();
-    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    const withoutGh = scratchDir('shopctl-nogh-');
     symlinkSync(process.execPath, join(withoutGh, 'node'));
 
     const result = spawnSync('node', [BIN, 'new', 'atelier-x', '--from', core(), '--core', CORE_TAG, '--create-repo'], {
@@ -430,7 +431,7 @@ describe('shopctl new', () => {
    */
   it('keeps the shop when only the forge step fails', () => {
     const work = workspace();
-    const withoutGh = mkdtempSync(join(tmpdir(), 'shopctl-nogh-'));
+    const withoutGh = scratchDir('shopctl-nogh-');
     symlinkSync(process.execPath, join(withoutGh, 'node'));
     symlinkSync(execFileSync('which', ['git'], { encoding: 'utf8' }).trim(), join(withoutGh, 'git'));
 
@@ -614,7 +615,7 @@ describe('shopctl new', () => {
   // check happens before the clone, and it asks git rather than guessing.
   it('refuses to clone when git has no identity to commit as', () => {
     const work = workspace();
-    const home = mkdtempSync(join(tmpdir(), 'shopctl-home-'));
+    const home = scratchDir('shopctl-home-');
     const result = spawnSync('node', [BIN, 'new', 'boutique-du-port', '--from', core(), '--core', CORE_TAG, '--no-install'], {
       cwd: work,
       encoding: 'utf8',
@@ -773,7 +774,7 @@ theme:
   // .github/README.md as its own would refuse a shop's name in it, and the
   // shop would fail its first gate for a file `new` chose to write.
   it('writes no home page for a core tag that keeps .github/README.md', () => {
-    const older = createCoreRepository(mkdtempSync(join(tmpdir(), 'shopctl-core-older-')));
+    const older = createCoreRepository(scratchDir('shopctl-core-older-'));
     const rules = join(older, 'scripts/path-ownership.mjs');
     const text = readFileSync(rules, 'utf8');
     const start = text.indexOf("  {\n    // Before `.github/**`");
