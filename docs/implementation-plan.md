@@ -3409,8 +3409,10 @@ Fait le 2026-11-04, sans migration, en version mineure (v0.6.0) :
 
 - un pied de page collé au bas de chaque écran de l'administration : la
   version du socle, « Guide de l'administration » et « Vous rencontrez un
-  problème ou une difficulté ? », un e-mail prérempli vers l'adresse que la
-  boutique déclare dans `store.config.ts` (`admin.supportEmail`), jamais dans
+  problème ou une difficulté ? », un e-mail prérempli vers l'adresse du
+  support (`admin.supportEmail`) : celle de l'agence par défaut, dans
+  `src/config.ts`, commune à toute la flotte (choix de Damien le 2026-11-05),
+  ou celle qu'une boutique déclare dans `store.config.ts`, jamais dans
   Réglages ;
 - un guide en Markdown, un chapitre par section du menu plus « Premiers pas »,
   dans `src/features/adminGuide/chapters/` ; ceux d'une boutique vont dans
@@ -3426,4 +3428,4 @@ Fait le 2026-11-04, sans migration, en version mineure (v0.6.0) :
 Tenu par `src/features/adminGuide/guide.test.ts`, qui échoue sur un écran sans
 chapitre, un libellé en gras qu'aucun écran n'affiche plus, un lien mort ou une
 typographie fausse, et par `test/browser/admin-guide.spec.mjs`. Reste à faire :
-l'adresse du support et un chapitre propre à la première boutique réelle.
+un chapitre propre à la première boutique réelle.

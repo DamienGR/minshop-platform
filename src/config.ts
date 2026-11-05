@@ -236,9 +236,10 @@ export interface SiteConfig {
   /**
    * The Admin's footer (ticket #186). `supportEmail` is where its « Vous
    * rencontrez un problème ou une difficulté ? » writes: whoever supports the
-   * shop, the agency for a shop it runs. Set in the shop's code, never in
-   * Admin → Réglages: a merchant asking for help does not get to choose who
-   * answers. '' = no link.
+   * shop. The default is the agency's, so every shop of the fleet gets it with
+   * the core; a shop someone else supports sets its own in store.config.ts.
+   * Never in Admin → Réglages: a merchant asking for help does not get to
+   * choose who answers. '' = no link.
    */
   admin: {
     supportEmail: string;
@@ -361,7 +362,8 @@ function defaultConfig(): SiteConfig {
       },
     },
     admin: {
-      supportEmail: '', // the footer's help link — set yours in store.config.ts ('' = none)
+      // The agency's, for the whole fleet; a shop someone else supports sets its own.
+      supportEmail: 'support@studiomaestro.fr',
     },
   };
 }

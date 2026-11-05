@@ -55,8 +55,9 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   // },
   //
   // The Admin's footer offers « Vous rencontrez un problème ou une difficulté ? »,
-  // an e-mail to whoever supports the shop. Set here, not in Admin: the merchant
-  // asks for help, the shop's code says who answers. Empty, the link is not shown.
+  // an e-mail to whoever supports the shop: the agency's address by default, the
+  // same for the whole fleet (src/config.ts). Set one here only for a shop that
+  // someone else supports, never in Admin; an empty one hides the link.
   //
   // admin: { supportEmail: 'support@agence.example' },
   //
