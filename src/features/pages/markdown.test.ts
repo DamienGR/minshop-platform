@@ -6,6 +6,7 @@ import {
   placeMapBlocks,
   placeMapProblems,
   placeMapsDrawTile,
+  usesLightbox,
 } from './markdown';
 
 describe('renderMarkdown — structure', () => {
@@ -266,6 +267,74 @@ describe('renderMarkdown — a row of photos (ticket #194)', () => {
     const html = renderMarkdown(`${img('a')}\n${img('b')}`, { dimensions });
     expect(html).toContain('width="1200" height="1600"');
     expect(html).toContain('width="1600" height="1200"');
+  });
+});
+
+describe('renderMarkdown — the lightbox of a row (ticket #205)', () => {
+  const img = (name: string) => `![Photo ${name}](/images/media/${name}.webp)`;
+  const row = [img('a'), img('b'), img('c')].join('\n');
+
+  it('links nothing without the option: a product description keeps its pictures', () => {
+    const html = renderMarkdown(row);
+    expect(html).not.toContain('<a ');
+    expect(usesLightbox(html)).toBe(false);
+  });
+
+  it('links each photo of a row to itself', () => {
+    const html = renderMarkdown(row, { lightbox: true });
+    expect(html).toMatch(
+      /^<p class="markdown-gallery"><a href="\/images\/media\/a\.webp" data-lightbox><img src="\/images\/media\/a\.webp" alt="Photo a"/,
+    );
+    expect(html.match(/<a href="[^"]+" data-lightbox><img /g)).toHaveLength(3);
+    expect(html.match(/<\/a>/g)).toHaveLength(3);
+    expect(usesLightbox(html)).toBe(true);
+  });
+
+  it('links a photo alone, a photo beside its text or in a sentence to nothing', () => {
+    const html = renderMarkdown(
+      [img('a'), '', '![Photo b](/images/media/b.webp "gauche")', '', `Avant ${img('c')} et ${img('d')}.`].join('\n'),
+      { lightbox: true },
+    );
+    expect(html).not.toContain('<a ');
+    expect(usesLightbox(html)).toBe(false);
+  });
+
+  it('links to the image origin a shop serves its photos from', () => {
+    const html = renderMarkdown(row, { lightbox: true, baseUrl: 'https://images.exemple.test' });
+    expect(html).toContain('<a href="https://images.exemple.test/media/a.webp" data-lightbox>');
+  });
+
+  it('links an image from elsewhere to its own address, escaped', () => {
+    const html = renderMarkdown(`${img('a')}\n![Ailleurs](https://exemple.test/x.png?a=1&b=2)`, {
+      lightbox: true,
+    });
+    expect(html).toContain('<a href="https://exemple.test/x.png?a=1&amp;b=2" data-lightbox>');
+  });
+
+  it('gives the photos of a row their lighter sources, and the link the original', () => {
+    const rowImageSources = (key: string) => ({
+      src: `/cdn-cgi/image/width=384/${key}`,
+      srcset: `/cdn-cgi/image/width=384/${key} 384w, /cdn-cgi/image/width=768/${key} 768w`,
+      sizes: '(min-width: 640px) 30rem, 50vw',
+    });
+    const html = renderMarkdown(`${row}\n\n${img('d')}`, { lightbox: true, rowImageSources });
+    expect(html).toContain(
+      '<a href="/images/media/a.webp" data-lightbox><img src="/cdn-cgi/image/width=384/media/a.webp"',
+    );
+    expect(html).toContain('srcset="/cdn-cgi/image/width=384/media/a.webp 384w, /cdn-cgi/image/width=768/media/a.webp 768w"');
+    expect(html).toContain('sizes="(min-width: 640px) 30rem, 50vw"');
+    // A photo alone keeps its original: it is shown large already.
+    expect(html).toContain('<p class="markdown-media"><img src="/images/media/d.webp"');
+  });
+
+  it('keeps the original where no lighter source exists', () => {
+    const html = renderMarkdown(row, { lightbox: true, rowImageSources: () => null });
+    expect(html).toContain('<img src="/images/media/a.webp"');
+    expect(html).not.toContain('srcset');
+  });
+
+  it('is not fooled by a merchant writing the attribute as text', () => {
+    expect(usesLightbox(renderMarkdown('Un mot : data-lightbox> en texte.', { lightbox: true }))).toBe(false);
   });
 });
 

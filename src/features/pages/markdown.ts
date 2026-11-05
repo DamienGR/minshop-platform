@@ -66,6 +66,33 @@ function inlineTextOf(tokens: Token[]): string {
     .join('');
 }
 
+/**
+ * How wide a photo of a row is drawn (base.css): half the measure on a
+ * phone; past it, a share of a measure of 48 to 72rem, two to four to a line.
+ * 30rem covers a row of two in the wide layout without fetching a desktop
+ * original for a row of four.
+ */
+export const ROW_IMAGE_SIZES = '(min-width: 640px) 30rem, 50vw';
+
+/** The `src`, and the ladder with its sizes, of one photo of a row. */
+export interface RowImageSources {
+  src: string;
+  srcset?: string;
+  sizes?: string;
+}
+
+/**
+ * The attribute the renderer puts on a row's links, and only there: a
+ * merchant's text cannot write it, since `html: false` escapes the `>` after
+ * it. The page route loads the lightbox only where it finds one.
+ */
+const LIGHTBOX_LINK = ' data-lightbox>';
+
+/** Whether rendered HTML holds a photo the lightbox opens. */
+export function usesLightbox(html: string): boolean {
+  return html.includes(LIGHTBOX_LINK);
+}
+
 export interface RenderOptions {
   /** config.images.baseUrl — lets page images use a custom image origin. */
   baseUrl?: string;
@@ -98,6 +125,20 @@ export interface RenderOptions {
     showErrors?: boolean;
   };
   /**
+   * Make each photo of a row a link to the photo itself (ticket #205), which
+   * the page's lightbox (`Lightbox.astro`) opens over the page; without
+   * JavaScript, the link opens the photo. Content pages and their preview
+   * only: a row in a product description stays a row of pictures.
+   */
+  lightbox?: boolean;
+  /**
+   * Lighter sources for the photos of a row (ticket #205): a square a
+   * quarter of the measure wide needs no original from a phone. Null, or no
+   * function, keeps the original, which is what a shop without on-demand
+   * image delivery serves. The lightbox's link keeps the original either way.
+   */
+  rowImageSources?: (key: string) => RowImageSources | null;
+  /**
    * The `id` of each heading, from its plain text and level; `undefined`
    * leaves one without. The admin guide's anchors (ticket #188): a page body
    * renders without it, so no merchant heading can claim an id the page's own
@@ -115,14 +156,25 @@ export interface RenderOptions {
 function installImageRule(
   instance: MarkdownItInstance,
   baseUrl: string,
-  dimensions?: RenderOptions['dimensions'],
+  options: Pick<RenderOptions, 'dimensions' | 'lightbox' | 'rowImageSources'>,
 ): void {
-  instance.renderer.rules.image = (tokens, idx, options, _env, self) => {
+  const { dimensions } = options;
+  instance.renderer.rules.image = (tokens, idx, renderOptions, _env, self) => {
     const token = tokens[idx];
     // attrGet is typed string | number since markdown-it 15; src is always a string.
     const src = String(token.attrGet('src') ?? '');
     const key = localKeyFromSrc(src, baseUrl);
     if (key) token.attrSet('src', mediaUrl(key, baseUrl));
+    // The photo itself, before a row's lighter sources replace it: what the
+    // lightbox shows, and what its link opens without JavaScript.
+    const original = String(token.attrGet('src') ?? '');
+    const inRow = token.meta?.row === true;
+    const sources = inRow && key ? options.rowImageSources?.(key) : null;
+    if (sources) {
+      token.attrSet('src', sources.src);
+      if (sources.srcset) token.attrSet('srcset', sources.srcset);
+      if (sources.sizes) token.attrSet('sizes', sources.sizes);
+    }
     // markdown-it's DEFAULT image rule fills `alt` from the token's inline
     // children; overriding the rule means doing it here too. Without this every
     // image renders alt="" — the alt text an author typed is silently dropped.
@@ -140,7 +192,11 @@ function installImageRule(
     }
     // renderToken escapes attribute values, and alt text goes through the
     // default renderer, so neither can break out into markup.
-    return self.renderToken(tokens, idx, options);
+    const image = self.renderToken(tokens, idx, renderOptions);
+    if (!inRow || !options.lightbox) return image;
+    // The href is the source markdown-it already checked against its scheme
+    // blocklist, escaped like any attribute.
+    return `<a href="${instance.utils.escapeHtml(original)}"${LIGHTBOX_LINK}${image}</a>`;
   };
 }
 
@@ -172,7 +228,8 @@ function isGap(token: Token): boolean {
  * as a row. CSS alone cannot tell it from a sentence that holds two images
  * (`p:has(> img + img)` takes both), hence the class. A line break that ends
  * in two spaces or a backslash would be a `<br>` among the photos: in a row
- * it is the line break any other one is.
+ * it is the line break any other one is. Each photo of a row is marked for
+ * the image rule, which can link it to itself for the lightbox (ticket #205).
  *
  * The word itself never reaches the page, wherever the image stands: in
  * `title` it would be a tooltip reading « gauche ». Only a photo at the top
@@ -201,6 +258,9 @@ function installMediaRule(instance: MarkdownItInstance): void {
         return;
       }
       open.attrJoin('class', 'markdown-gallery');
+      // For the image rule: a row's photo may take lighter sources and a link
+      // to itself (ticket #205); a photo anywhere else takes neither.
+      for (const image of content) image.meta = { ...image.meta, row: true };
       token.children = children.map((child) =>
         child.type === 'hardbreak' ? new state.Token('softbreak', 'br', 0) : child,
       );
@@ -266,7 +326,7 @@ export function renderMarkdown(markdown: string, options: RenderOptions = {}): s
     breaks: false,
     typographer: false,
   });
-  installImageRule(instance, baseUrl, options.dimensions);
+  installImageRule(instance, baseUrl, options);
   installMediaRule(instance);
   if (options.placeMaps) installPlaceMapRule(instance, options.placeMaps, options.sourceMap === true);
   if (options.headingId) installHeadingIdRule(instance, options.headingId);

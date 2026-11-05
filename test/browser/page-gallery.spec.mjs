@@ -7,7 +7,8 @@ import { signIn } from './admin.mjs';
  * prove the renderer marks the row; only a browser applies the stylesheet, so
  * only a browser can say the photos stand side by side, share one shape, go
  * two to a line on a phone, and that a portrait alone stops short of the
- * screen's height without being squashed.
+ * screen's height without being squashed. And the lightbox that opens a
+ * row's photo large (ticket #205) is a script and a dialog.
  *
  * The page is serve.mjs's, so these run on the fixture store only.
  */
@@ -120,4 +121,114 @@ test('l’aperçu de l’éditeur montre la rangée', async ({ page }) => {
   const { images } = await rowOf(row);
   expect(Math.abs(images[0].top - images[1].top)).toBeLessThanOrEqual(1);
   expect(Math.abs(images[0].width - images[0].height)).toBeLessThanOrEqual(1);
+});
+
+/** The lightbox, its photo and the position it announces. */
+const lightboxOf = (page) => {
+  const dialog = page.locator('[data-page-lightbox]');
+  return { dialog, image: dialog.locator('img'), position: dialog.locator('[data-lightbox-position]') };
+};
+
+test('un clic sur une photo de la rangée l’ouvre en grand, et le clavier y circule', async ({ page }) => {
+  await page.goto(FIXTURE.galleryPage);
+  await settle(page);
+  const links = page.locator('.markdown-content .markdown-gallery a[data-lightbox]');
+  await expect(links).toHaveCount(3);
+  const { dialog, image, position } = lightboxOf(page);
+  await expect(dialog).toBeHidden();
+
+  await links.nth(1).click();
+  await expect(dialog).toBeVisible();
+  await expect(image).toHaveAttribute('src', /\/media\/tee-back\.jpg$/);
+  await expect(image).toHaveAttribute('alt', 'Le dos');
+  await expect(dialog.locator('figcaption')).toHaveText('Le dos');
+  await expect(position).toHaveText('Photo 2 sur 3');
+  // Modal: the focus is in the dialog, and the photo is whole on the screen.
+  expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+  await expect.poll(() => image.evaluate((img) => img.complete && img.naturalHeight > 0)).toBe(true);
+  const box = await image.evaluate((img) => {
+    const { top, left, bottom, right } = img.getBoundingClientRect();
+    return { top, left, bottom, right, width: window.innerWidth, height: window.innerHeight };
+  });
+  expect(box.top).toBeGreaterThanOrEqual(0);
+  expect(box.left).toBeGreaterThanOrEqual(0);
+  expect(box.bottom).toBeLessThanOrEqual(box.height);
+  expect(box.right).toBeLessThanOrEqual(box.width);
+
+  await page.keyboard.press('ArrowRight');
+  await expect(image).toHaveAttribute('src', /\/media\/tee-side\.jpg$/);
+  await expect(position).toHaveText('Photo 3 sur 3');
+  // Past the last photo, the first: the row goes round.
+  await page.keyboard.press('ArrowRight');
+  await expect(image).toHaveAttribute('src', /\/media\/tee-front\.jpg$/);
+  await dialog.getByRole('button', { name: 'Photo précédente' }).click();
+  await expect(image).toHaveAttribute('src', /\/media\/tee-side\.jpg$/);
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  // Back to the photo that opened it, not to the top of the page.
+  await expect(links.nth(1)).toBeFocused();
+});
+
+test('la photo agrandie se ferme par son bouton ou par un clic à côté', async ({ page }) => {
+  await page.goto(FIXTURE.galleryPage);
+  await settle(page);
+  const link = page.locator('.markdown-content .markdown-gallery a[data-lightbox]').first();
+  const { dialog } = lightboxOf(page);
+
+  await link.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Fermer' }).click();
+  await expect(dialog).toBeHidden();
+
+  await link.click();
+  await expect(dialog).toBeVisible();
+  // The top of the dialog, above the photo, is the dialog itself.
+  const width = page.viewportSize()?.width ?? 0;
+  await page.mouse.click(width / 2, 8);
+  await expect(dialog).toBeHidden();
+});
+
+test('une page sans rangée ne charge pas la lightbox', async ({ page }) => {
+  await page.goto(FIXTURE.photoPage);
+  await settle(page);
+  await expect(page.locator('.markdown-content img').first()).toBeVisible();
+  await expect(page.locator('[data-page-lightbox]')).toHaveCount(0);
+  await expect(page.locator('.markdown-content a[data-lightbox]')).toHaveCount(0);
+});
+
+test.describe('sans JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('un clic sur une photo de la rangée ouvre la photo', async ({ page }) => {
+    await page.goto(FIXTURE.galleryPage);
+    await page.locator('.markdown-content .markdown-gallery a[data-lightbox]').nth(1).click();
+    await expect(page).toHaveURL(/\/images\/media\/tee-back\.jpg$/);
+  });
+});
+
+test('dans l’aperçu, plus de quatre photos passent à la ligne, et un clic reste dans l’éditeur', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/admin/pages/page_ga11ery000/edit');
+
+  const preview = page.locator('[data-preview]');
+  test.skip(!(await preview.isVisible()), 'aperçu replié à cette largeur');
+  const editor = page.locator('[data-editor]');
+  const keys = ['tee-front.jpg', 'tee-back.jpg', 'tee-side.jpg', 'portrait.png', 'tee-front.jpg'];
+  await editor.fill(keys.map((key) => `![Photo](/images/media/${key})`).join('\n'));
+  const row = preview.locator('.markdown-gallery');
+  await expect(row.locator('img')).toHaveCount(5);
+  await photosLoaded(row);
+  const { images } = await rowOf(row);
+  if (wide(page)) {
+    // Four to a line, the fifth below, centred.
+    for (const image of images.slice(1, 4)) expect(Math.abs(image.top - images[0].top)).toBeLessThanOrEqual(1);
+    expect(images[4].top).toBeGreaterThan(images[0].bottom);
+  }
+
+  const url = page.url();
+  await row.locator('img').nth(1).click();
+  // The click selects the photo's line; it does not follow its link.
+  expect(page.url()).toBe(url);
+  await expect(page.locator('[data-page-lightbox]')).toHaveCount(0);
 });

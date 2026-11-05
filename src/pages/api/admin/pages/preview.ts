@@ -37,6 +37,9 @@ export const POST: APIRoute = async ({ request }) => {
       attribution: getConfig().maps.attribution,
       showErrors: true,
     },
+    // A row's photos are links, as on the page (ticket #205); the editor
+    // keeps a click on one for itself.
+    lightbox: true,
   });
   // Wrap in the same article element the storefront uses, so the preview shows
   // the chosen layout rather than always rendering at the default measure.
