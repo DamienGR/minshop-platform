@@ -89,6 +89,38 @@ wrangler([
   `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('L’atelier', 'atelier', '${PHOTO_PAGE}', 1, 'page_ph0t0s0000')`,
 ]);
 
+// Text in columns (ADR 0030), for page-columns.spec.mjs: two columns, the
+// second twice as wide, then three equal ones.
+const COLUMNS_PAGE = [
+  'Deux colonnes, la seconde plus large :',
+  '',
+  '::: colonnes 1/2',
+  '## L’atelier',
+  '',
+  'Chaque pièce naît sur l’établi, coupée, assemblée et finie à la main.',
+  '',
+  '::: colonne',
+  '## Les matières',
+  '',
+  'Du lin lavé, tissé en France, choisi pour sa tenue et sa douceur, et un coton épais pour l’hiver.',
+  ':::',
+  '',
+  'Puis trois colonnes égales :',
+  '',
+  '::: colonnes',
+  '### Coupe',
+  '::: colonne',
+  '### Assemblage',
+  '::: colonne',
+  '### Finitions',
+  ':::',
+].join('\n');
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('En colonnes', 'en-colonnes', '${COLUMNS_PAGE}', 1, 'page_c0nnes0000')`,
+]);
+
 // A row of photos and a photo alone (ticket #194), for page-gallery.spec.mjs:
 // three images one under the other, then a portrait taller than the screen.
 // Measured, like an image the media library took in: the width attribute is

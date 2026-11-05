@@ -483,6 +483,44 @@
     flex: 0 1 calc((100% - 3 * 0.75rem) / 4);
   }
 }
+/* Text in columns (a `::: colonnes` block, ADR 0030; features/pages/blocks.ts).
+   One under the other on a phone, in the order they were written; past its
+   width, side by side, equal or one narrow and one wide. A column is a page
+   of its own width: it holds its floats, and its first and last blocks lose
+   the margins the grid's gap already gives. A fourth column, which the
+   preview flags, wraps to a new line rather than squeezing the others. */
+.markdown-content .markdown-columns {
+  display: grid;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.markdown-content .markdown-column {
+  display: flow-root;
+  min-width: 0;
+}
+.markdown-content .markdown-column > :first-child {
+  margin-top: 0;
+}
+.markdown-content .markdown-column > :last-child {
+  margin-bottom: 0;
+}
+@media (min-width: 640px) {
+  .markdown-content .markdown-columns {
+    column-gap: 2rem;
+  }
+  .markdown-content .markdown-columns--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .markdown-content .markdown-columns--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .markdown-content .markdown-columns--narrow-wide {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+  .markdown-content .markdown-columns--wide-narrow {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
 /* A row's photo opened large (ticket #205; features/pages/Lightbox.astro).
    The dialog covers the screen in the theme's ink, the photo whole in the
    middle, the words in paper: two tokens every theme declares, contrasting
@@ -599,7 +637,21 @@ html:has(.page-lightbox[open]) {
    another photo, a row of them. Without a float above, `clear` changes
    nothing. */
 .markdown-content
-  :is(h1, h2, h3, h4, h5, h6, hr, .markdown-media, .markdown-gallery, .place-map, .place-map-error) {
+  :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    hr,
+    .markdown-media,
+    .markdown-gallery,
+    .markdown-columns,
+    .place-map,
+    .place-map-error,
+    .markdown-block-error
+  ) {
   clear: both;
 }
 /* A photo with too little text beside it still ends inside the page, before
@@ -705,9 +757,10 @@ html:has(.page-lightbox[open]) {
   gap: 0.25rem 1.25rem;
   font-size: 0.875rem;
 }
-/* The admin preview's account of a block it cannot draw. The storefront never
-   renders it: there, such a block draws nothing. */
-.place-map-error {
+/* What the preview says above a block it cannot draw, or draws as well as it
+   can: a map (ADR 0029), a block of columns (ADR 0030). Admin only. */
+.place-map-error,
+.markdown-block-error {
   margin: 1.5rem 0;
   padding: 0.75rem 1rem;
   border: 1px solid #f59e0b;
@@ -717,7 +770,7 @@ html:has(.page-lightbox[open]) {
   font-size: 0.875rem;
   line-height: 1.5;
 }
-.markdown-content .place-map-error p,
-.markdown-content .place-map-error ul {
+.markdown-content :is(.place-map-error, .markdown-block-error) p,
+.markdown-content :is(.place-map-error, .markdown-block-error) ul {
   margin-bottom: 0.25rem;
 }

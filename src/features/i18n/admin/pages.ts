@@ -82,6 +82,21 @@ export const pages = {
   'admin.pages.editor.tool.mapShort': 'Carte',
   'admin.pages.editor.mapTemplate.name': 'Nom du lieu',
   'admin.pages.editor.mapTemplate.address': 'Rue, code postal et ville',
+  // The « Colonnes » tool inserts a block of two columns (features/pages/blocks.ts,
+  // ADR 0030); `::: colonnes` and `::: colonne` are syntax, these are the sample texts.
+  'admin.pages.editor.tool.columns': 'Texte en colonnes',
+  'admin.pages.editor.tool.columnsShort': 'Colonnes',
+  'admin.pages.editor.columnsTemplate.first': 'Le texte de la première colonne.',
+  'admin.pages.editor.columnsTemplate.second': 'Le texte de la deuxième colonne.',
+  'admin.pages.columns.error.heading': 'Ces colonnes ne s’afficheront pas comme prévu :',
+  'admin.pages.columns.error.single':
+    'ligne {ligne} : une seule colonne. Ajoutez une ligne « ::: colonne » là où commence la suivante.',
+  'admin.pages.columns.error.tooMany':
+    'ligne {ligne} : {nombre} colonnes, {max} au plus. Les suivantes passent à la ligne.',
+  'admin.pages.columns.error.ratio':
+    'ligne {ligne} : « {proportions} » n’est pas une proportion connue (1/2 ou 2/1). Les colonnes restent égales.',
+  'admin.pages.columns.error.ratioNeedsTwo':
+    'ligne {ligne} : les proportions « {proportions} » ne valent que pour deux colonnes. Elles restent égales.',
 
   // ─── Mises en page (features/pages/layouts.ts) ─────────────────────────────────
   'admin.pages.layout.standard.label': 'Standard',

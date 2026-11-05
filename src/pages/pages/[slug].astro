@@ -98,6 +98,8 @@ const html = renderMarkdown(page.body_markdown, {
   // A row of photos opens large (ticket #205), and with on-demand delivery
   // its squares take the product photos' width ladder rather than originals.
   lightbox: true,
+  // Named blocks: text in columns (ADR 0030).
+  blocks: {},
   rowImageSources: (key) => {
     const sources = productImageSources(key, { baseUrl, delivery, sizes: ROW_IMAGE_SIZES });
     return sources.srcset ? sources : null;

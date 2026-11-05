@@ -3554,3 +3554,38 @@ Tenu par `src/features/pages/markdown.test.ts` et
 `test/browser/page-gallery.spec.mjs` (ouverture, navigation au clavier,
 fermeture, retour du focus, rangée de plus de quatre photos), dans chaque
 thème.
+
+### 13.16 Le texte en colonnes dans une page
+
+Noté le 2026-11-05 (ticket #205, lot 2 de quatre) : poser deux ou trois
+textes côte à côte dans une page, chacun avec ses titres, ses listes et ses
+photos. Syntaxe choisie par Damien le même jour : `::: colonnes` ouvre le
+bloc, `::: colonne` sépare deux colonnes, `:::` le ferme. ADR 0030. Aucun des
+jalons 0 à 10 n'avance.
+
+Fait le 2026-11-05, sans migration :
+
+- une règle de bloc de markdown-it (`src/features/pages/blocks.ts`) lit les
+  blocs nommés, sur option (`blocks`) : la page publiée et son aperçu. Les
+  noms forment une liste fermée, dont `colonnes` est le seul ; tout autre
+  `::: mot` reste du texte. Le balisage est celui du module, des classes de
+  listes fermées : jamais le texte du marchand ;
+- deux ou trois colonnes, égales ou, à deux, en proportions `1/2` ou `2/1`.
+  Elles se suivent sur téléphone et se tiennent côte à côte à partir de
+  640 pixels, en grille CSS, sans script ;
+- une colonne est une page de sa largeur : photo à côté du texte, rangée de
+  photos et sa lightbox, carte. Un bloc dans une colonne reste du texte, un
+  bloc de code garde ses lignes `:::`, un bloc non fermé court jusqu'à la fin ;
+- un bloc mal formé se dessine quand même et ne retient pas la page en
+  brouillon ; l'aperçu dit au-dessus ce qui ne va pas, avec sa ligne (une
+  seule colonne, plus de trois, proportions inconnues) ;
+- le bouton « Colonnes » de l'éditeur insère un bloc de deux colonnes, le
+  premier texte d'exemple sélectionné ;
+- la description de la page, les images qu'elle utilise et ses cartes lisent
+  les blocs : les lignes `:::` ne vont pas dans la méta-description, une photo
+  d'une colonne compte comme photo de la page ;
+- le guide de l'administration a sa section « Mettre du texte en colonnes ».
+
+Tenu par `src/features/pages/blocks.test.ts` et
+`test/browser/page-columns.spec.mjs` (disposition au bureau et sur téléphone,
+bouton, aperçu), dans chaque thème.

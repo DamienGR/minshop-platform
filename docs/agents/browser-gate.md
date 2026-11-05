@@ -78,8 +78,22 @@ What it asserts, and why each one is here rather than in vitest:
   the whole row on one line past a phone's width, two to a line on a phone
   with an odd last one centred; a portrait alone stops short of the screen's
   height without being squashed, its width attribute still reserving its
-  room; the editor's preview shows the row. `serve.mjs` seeds the page and
-  measures its photos, and draws the portrait. Skipped against `BASE_URL`.
+  room; the editor's preview shows the row, wrapping four to a line past four
+  photos, and a click on one stays in the editor. A row's photo opens large
+  (ticket #205, lot 1): the dialog shows the original, previous and next by
+  button or arrow key with the position spoken, closes on Escape, on its
+  button or a click beside the photo, and hands focus back to the photo
+  clicked; a page without a row loads no lightbox, and without a script the
+  link opens the photo itself. `serve.mjs` seeds the page and measures its
+  photos, and draws the portrait. Skipped against `BASE_URL`.
+- **text in columns** (`page-columns.spec.mjs`) — a `::: colonnes` block
+  (ADR 0030): past a phone's width its columns stand side by side, equal or
+  one narrow and one twice as wide; on a phone they follow one another in the
+  order written, each the text's width. The editor's « Colonnes » inserts a
+  block of two with the first sample selected, and the preview says what is
+  wrong with a block of one. The unit tests prove the markup; only a browser
+  applies the grid. `serve.mjs` seeds the page, which the axe and reflow
+  routes walk too. Skipped against `BASE_URL`.
 - **product gallery** (`product-gallery.spec.mjs`) — the product page opens
   on the merchant's first photo even when the variant checked by default is
   linked to another (ticket #185); a variant the shopper picks brings its

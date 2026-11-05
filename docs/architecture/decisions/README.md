@@ -50,3 +50,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0027](0027-textes-du-theme.md) | Les textes du thème, déclarés par le thème et écrits par le marchand | Accepté |
 | [0028](0028-commentaire-de-commande.md) | Un commentaire de l'acheteur sur sa commande | Accepté |
 | [0029](0029-carte-d-un-lieu.md) | La carte d'un lieu dans une page, tuiles relayées par la boutique | Accepté |
+| [0030](0030-blocs-nommes-colonnes.md) | Des blocs nommés dans les pages : le texte en colonnes | Proposé |

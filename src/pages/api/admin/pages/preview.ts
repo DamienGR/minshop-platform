@@ -40,6 +40,8 @@ export const POST: APIRoute = async ({ request }) => {
     // A row's photos are links, as on the page (ticket #205); the editor
     // keeps a click on one for itself.
     lightbox: true,
+    // Columns, with what is wrong with a block above it (ADR 0030).
+    blocks: { showErrors: true },
   });
   // Wrap in the same article element the storefront uses, so the preview shows
   // the chosen layout rather than always rendering at the default measure.
