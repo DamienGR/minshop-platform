@@ -21,6 +21,13 @@ export const shell = {
   'admin.shell.viewStore': 'Voir la boutique',
   'admin.shell.logout': 'Se déconnecter',
 
+  // ─── Pied de page (ticket #186) ────────────────────────────────────────────────
+  'admin.shell.footer.label': 'Version et aide',
+  'admin.shell.footer.version': 'Socle minshop v{version}',
+  'admin.shell.footer.guide': 'Guide de l’administration',
+  'admin.shell.footer.support': 'Vous rencontrez un problème ou une difficulté ?',
+  'admin.shell.footer.supportSubject': '{boutique} : une difficulté dans l’administration (socle v{version})',
+
   // ─── Bandeaux ──────────────────────────────────────────────────────────────────
   'admin.shell.setupNudge.title': 'Terminez la configuration de votre boutique',
   'admin.shell.setupNudge.detail': 'nom de la boutique, état des paiements, etc.',

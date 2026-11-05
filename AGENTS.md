@@ -86,7 +86,9 @@ Use the narrowest customization surface that fits the change:
 2. **`src/store.config.ts`** for versioned, build-time settings: currency,
    shipping zones and rates, image dimensions, and template-only features.
    (`orderNumber` numbers only orders older than the `ord_` references: a new
-   order shows its reference, whatever it says.) Override only changed keys; never customize
+   order shows its reference, whatever it says.) The address the admin's footer
+   offers for help is here too (`admin.supportEmail`): whoever supports the
+   shop is the code's to say. Override only changed keys; never customize
    `src/config.ts` defaults directly.
 3. **`src/themes/<theme>/tokens.css`** for brand colors, fonts, surfaces, and
    corner radii — each theme owns its `@theme` block. `src/styles/overrides.css`
@@ -226,6 +228,9 @@ src/
     maps/      place (the ```carte block, pure) · tiles (Web Mercator, pure) · render (its HTML)
                relay (to the tile server) · serve (edge cache + relay; ADR 0029)
     themeTexts/  slots (a theme's declared texts: rules, form, resolution; pure) · active (the theme's texts.ts) · db
+    adminGuide/  guide (chapters → HTML, anchors, order; pure) · content (the build's chapters) · GuidePanel
+               chapters/<section>.md (the core's; a shop's own in client/guide/*.md)
+    adminShell/  footer (core version, support link)
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/
@@ -437,7 +442,16 @@ today's config.
 - **An admin page:** `src/pages/admin/<x>.astro` using `AdminLayout` (add a nav
   entry there). Mutations go through `/api/admin/*` (covered by the auth gate).
   Its strings are `t('admin.<x>.…')` keys in `src/features/i18n/admin/<x>.ts`
-  (a new fragment is added to `admin/index.ts`), never literals.
+  (a new fragment is added to `admin/index.ts`), never literals. A new
+  `Section` of `AdminLayout` takes its chapter of the admin guide,
+  `src/features/adminGuide/chapters/<section>.md`, and a place in
+  `CORE_CHAPTERS` (ticket #188).
+- **A change to an admin screen:** its chapter of the guide follows in the same
+  commit. Written for the merchant, in French: tasks, numbered steps, the
+  screen's labels in bold. `guide.test.ts` fails on a bold label no admin
+  string carries any more, a dead link or a straight apostrophe, and each
+  version's notes say what changed in the guide (« ## Guide administrateur »,
+  required by `check-release`).
 - **A storefront feature behind a flag:** `config.features.<x>` toggle; gate the
   nav link in `Layout.astro` and the route.
 - **Customer auth:** `features/auth/customer.ts` is the magic-link adapter (no

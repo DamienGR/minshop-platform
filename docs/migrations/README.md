@@ -15,6 +15,11 @@ Une version sans note ne se publie pas : `npm run check:release` refuse le tag
 (ADR 0003, ADR 0016). `node scripts/check-release.mjs --set <version>` écrit la
 version partout où elle est déclarée et dépose le squelette de la note.
 
+La note dit aussi ce que la version change au guide de l'administration
+(ticket #188), dans sa section « ## Guide administrateur » : les chapitres de
+`src/features/adminGuide/chapters/` mis à jour, ou « inchangé ».
+`check-release` refuse une note qui n'en dit rien.
+
 Les migrations D1 restent additives et rétrocompatibles (ADR 0006) : une note
 n'autorise jamais une suppression, elle décrit ce que le commerçant ou
 l'exploitant doit faire en plus de la fusion.

@@ -3397,3 +3397,33 @@ et un script le révèle.
 
 Tenu par la section 3a de `test/integration/security.mjs` et par
 `test/browser/admin-edit-link.spec.mjs`.
+
+### 13.12 Le pied de page et le guide de l'administration
+
+Noté le 2026-11-04 (tickets #186 et #188) : le commerçant doit voir quel socle
+tourne, savoir à qui écrire quand il bute sur quelque chose, et trouver l'aide
+sans quitter l'écran où il travaille. Damien valide les deux tickets le jour
+même. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-04, sans migration, en version mineure (v0.6.0) :
+
+- un pied de page collé au bas de chaque écran de l'administration : la
+  version du socle, « Guide de l'administration » et « Vous rencontrez un
+  problème ou une difficulté ? », un e-mail prérempli vers l'adresse que la
+  boutique déclare dans `store.config.ts` (`admin.supportEmail`), jamais dans
+  Réglages ;
+- un guide en Markdown, un chapitre par section du menu plus « Premiers pas »,
+  dans `src/features/adminGuide/chapters/` ; ceux d'une boutique vont dans
+  `client/guide/` et suivent ceux du socle ;
+- le lien ouvre le guide dans un panneau à côté de l'écran, sur le chapitre de
+  l'écran courant, et le panneau reste ouvert d'un écran à l'autre ; sans
+  script, le lien mène à `/admin/guide`. Pas d'iframe, que les en-têtes de
+  sécurité interdisent : le panneau charge une page partielle,
+  `/admin/guide/panneau`, derrière la porte de l'administration ;
+- la note de chaque version dit ce qui change au guide (« ## Guide
+  administrateur »), et `check-release` la réclame.
+
+Tenu par `src/features/adminGuide/guide.test.ts`, qui échoue sur un écran sans
+chapitre, un libellé en gras qu'aucun écran n'affiche plus, un lien mort ou une
+typographie fausse, et par `test/browser/admin-guide.spec.mjs`. Reste à faire :
+l'adresse du support et un chapitre propre à la première boutique réelle.

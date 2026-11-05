@@ -233,6 +233,16 @@ export interface SiteConfig {
     tileUrl: string;
     attribution: { text: string; href: string };
   };
+  /**
+   * The Admin's footer (ticket #186). `supportEmail` is where its « Vous
+   * rencontrez un problème ou une difficulté ? » writes: whoever supports the
+   * shop, the agency for a shop it runs. Set in the shop's code, never in
+   * Admin → Réglages: a merchant asking for help does not get to choose who
+   * answers. '' = no link.
+   */
+  admin: {
+    supportEmail: string;
+  };
 }
 
 /**
@@ -349,6 +359,9 @@ function defaultConfig(): SiteConfig {
         text: 'les contributeurs d’OpenStreetMap',
         href: 'https://www.openstreetmap.org/copyright',
       },
+    },
+    admin: {
+      supportEmail: '', // the footer's help link — set yours in store.config.ts ('' = none)
     },
   };
 }

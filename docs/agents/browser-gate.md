@@ -55,6 +55,14 @@ What it asserts, and why each one is here rather than in vitest:
   outlived the session. Only a browser runs the script that joins the hint to
   the probe; the security gate checks each half on its own. Skipped against
   `BASE_URL`.
+- **admin guide** (`admin-guide.spec.mjs`) — the admin footer's « Guide de
+  l'administration » (tickets #186 and #188): it opens the guide beside the
+  screen, on that screen's chapter, keeps it open and in place on the next
+  screen, and closes on Escape with focus back on the link; the guide's
+  contents scroll the panel, never the screen or its URL. Without a script, the
+  same link leads to `/admin/guide`. The panel is a script that fetches the
+  guide and remembers its state per tab, none of which a container render or a
+  form post can see. Skipped against `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

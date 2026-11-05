@@ -96,6 +96,13 @@ export interface RenderOptions {
      */
     showErrors?: boolean;
   };
+  /**
+   * The `id` of each heading, from its plain text and level; `undefined`
+   * leaves one without. The admin guide's anchors (ticket #188): a page body
+   * renders without it, so no merchant heading can claim an id the page's own
+   * markup uses.
+   */
+  headingId?: (text: string, level: number) => string | undefined;
 }
 
 /**
@@ -166,6 +173,26 @@ function installPlaceMapRule(
   };
 }
 
+/**
+ * An `id` on each heading the caller names. The text is the heading's plain
+ * text (the alt-text rule's), so `**gras**` in a title does not reach the id;
+ * renderToken escapes the value like any attribute.
+ */
+function installHeadingIdRule(
+  instance: MarkdownItInstance,
+  headingId: NonNullable<RenderOptions['headingId']>,
+): void {
+  const open = instance.renderer.rules.heading_open;
+  instance.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const inline = tokens[idx + 1];
+    const text = inline?.type === 'inline' ? inlineTextOf(inline.children ?? []) : '';
+    const id = headingId(text, Number(token.tag.slice(1)));
+    if (id) token.attrSet('id', id);
+    return open ? open(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+  };
+}
+
 export function renderMarkdown(markdown: string, options: RenderOptions = {}): string {
   const baseUrl = options.baseUrl ?? '';
   const instance = new MarkdownIt({
@@ -176,6 +203,7 @@ export function renderMarkdown(markdown: string, options: RenderOptions = {}): s
   });
   installImageRule(instance, baseUrl, options.dimensions);
   if (options.placeMaps) installPlaceMapRule(instance, options.placeMaps, options.sourceMap === true);
+  if (options.headingId) installHeadingIdRule(instance, options.headingId);
 
   if (options.sourceMap) {
     // Block tokens carry `map: [startLine, endLine]`. Stamping the start line on

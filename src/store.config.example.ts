@@ -54,6 +54,12 @@ export const storeOverrides: DeepPartial<SiteConfig> = {
   //   attribution: { text: 'Example Maps', href: 'https://example.org/copyright' },
   // },
   //
+  // The Admin's footer offers « Vous rencontrez un problème ou une difficulté ? »,
+  // an e-mail to whoever supports the shop. Set here, not in Admin: the merchant
+  // asks for help, the shop's code says who answers. Empty, the link is not shown.
+  //
+  // admin: { supportEmail: 'support@agence.example' },
+  //
   // Shipping (zones, rates, weight bands, free-over thresholds) is managed in
   // Admin → Livraison. The block that used to live here is only the default for a
   // brand-new store; editing it after the first Admin save has no effect.

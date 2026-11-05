@@ -8,7 +8,16 @@ import { join } from 'node:path';
 
 import { spawnSync } from 'node:child_process';
 
-import { destructiveStatements, notesTemplate, releaseFindings, setVersion, tagIsTaken, versionLocations } from '../../scripts/release.mjs';
+import {
+  GUIDE_DIR,
+  destructiveStatements,
+  noteSection,
+  notesTemplate,
+  releaseFindings,
+  setVersion,
+  tagIsTaken,
+  versionLocations,
+} from '../../scripts/release.mjs';
 
 /** A tree with the three places a core version is written, and nothing else.
  *  The gate reads files; it does not need five hundred of them. */
@@ -82,6 +91,47 @@ describe('the release gate', () => {
   it('fails a version that is not a semver', () => {
     const report = releaseFindings(tree({ version: 'next' }));
     expect(check(report, 'version').ok).toBe(false);
+  });
+
+  // Ticket #188: the admin guide describes the screens, and the version that
+  // changes a screen is the one that knows whether its chapter still holds.
+  it('asks a tree that carries the admin guide what its version does to it', () => {
+    const root = tree();
+    mkdirSync(join(root, GUIDE_DIR), { recursive: true });
+    const notes = join(root, 'docs/migrations/v0.1.0.md');
+
+    const silent = releaseFindings(root);
+    expect(silent.ok).toBe(false);
+    expect(check(silent, 'guide administrateur').message).toContain('## Guide administrateur');
+
+    writeFileSync(notes, '# Socle v0.1.0\n\n## Guide administrateur\n\n<!-- à remplir -->\n\n## Compatibilité\n\n- rien\n');
+    expect(check(releaseFindings(root), 'guide administrateur').ok).toBe(false);
+
+    writeFileSync(notes, '# Socle v0.1.0\n\n## Guide administrateur\n\n- inchangé\n\n## Compatibilité\n\n- rien\n');
+    expect(releaseFindings(root).ok).toBe(true);
+  });
+
+  it('puts the question in every new note, and asks it only of a tree with a guide', () => {
+    const root = tree();
+    mkdirSync(join(root, GUIDE_DIR), { recursive: true });
+    setVersion('0.2.0', root);
+    expect(check(releaseFindings(root), 'guide administrateur').ok).toBe(true);
+
+    expect(check(releaseFindings(tree()), 'guide administrateur')).toBeUndefined();
+  });
+});
+
+describe('a section of the notes', () => {
+  const note = '# Socle v1.0.0\n\n## Ce qui change\n\n- tout\n\n## Guide administrateur\n\n<!-- question -->\n\n## Compatibilité\n\n- oui\n';
+
+  it('is what lies under its heading, up to the next one', () => {
+    expect(noteSection(note, 'Ce qui change')).toBe('- tout');
+    expect(noteSection(note, 'Compatibilité')).toBe('- oui');
+  });
+
+  it('says nothing when it is missing, or holds only a comment', () => {
+    expect(noteSection(note, 'Migrations')).toBeNull();
+    expect(noteSection(note, 'Guide administrateur')).toBeNull();
   });
 });
 

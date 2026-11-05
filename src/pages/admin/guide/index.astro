@@ -1,0 +1,22 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import GuideContents from '../../../features/adminGuide/GuideContents.astro';
+import { adminGuide } from '../../../features/adminGuide/content';
+import { CORE_VERSION } from '../../../features/adminShell/footer';
+import { t } from '../../../features/i18n';
+
+// The whole guide on a page of its own (ticket #188): where the footer link
+// leads without a script, and what the side panel's « Pleine page » opens.
+const chapters = adminGuide();
+---
+
+<AdminLayout title={t('admin.guide.title')}>
+  <div class="mx-auto max-w-3xl">
+    <div class="mb-8">
+      <h1 class="font-serif text-3xl tracking-tight">{t('admin.guide.title')}</h1>
+      <p class="mt-2 text-sm text-gray-600">{t('admin.guide.intro')}</p>
+      <p class="mt-1 text-xs text-gray-600">{t('admin.guide.version', { version: CORE_VERSION })}</p>
+    </div>
+    <GuideContents chapters={chapters} />
+  </div>
+</AdminLayout>
