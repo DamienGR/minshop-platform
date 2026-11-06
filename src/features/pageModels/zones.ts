@@ -85,9 +85,12 @@ export function modelMarkdownTexts(model: ThemePageModel | null, zones: StoredZo
   return texts;
 }
 
+/** Where the editor's model of a new entry (a <template>) holds the entry's
+ *  number, which its script writes in when it adds the entry to the page. */
+export const ZONE_ENTRY_TOKEN = '__entree__';
 /** The form field of a text zone, or of one field of a list's entry. Keys
  *  hold letters and digits only (declaration.ts), so the dots separate. */
-export const zoneFieldName = (zone: string, entry?: number, field?: string) =>
+export const zoneFieldName = (zone: string, entry?: number | typeof ZONE_ENTRY_TOKEN, field?: string) =>
   entry === undefined ? `zone.${zone}` : `zone.${zone}.${entry}.${field}`;
 /** The entry's « Retirer » box. */
 export const zoneRemoveName = (zone: string, entry: number) => `zone.${zone}.${entry}._remove`;
@@ -100,6 +103,23 @@ export const zoneMoveValue = (zone: string, entry: number, direction: 'up' | 'do
 function formValue(form: FormData, name: string, format: ThemePageField['format']): string | null {
   const raw = form.get(name);
   return typeof raw === 'string' ? normalizeThemeText(format, raw) : null;
+}
+
+/**
+ * The numbers of a list's entries the form sent, in order. They may skip: the
+ * editor's script numbers each entry it adds (« Ajouter », without saving) and
+ * drops one the merchant takes back, so reading up to the first missing number
+ * would lose every entry after it.
+ */
+function entryNumbers(form: FormData, zone: string): number[] {
+  const prefix = `zone.${zone}.`;
+  const numbers = new Set<number>();
+  for (const name of form.keys()) {
+    if (!name.startsWith(prefix)) continue;
+    const match = /^(\d+)\./.exec(name.slice(prefix.length));
+    if (match) numbers.add(Number(match[1]));
+  }
+  return [...numbers].sort((a, b) => a - b);
 }
 
 /** An entry's fields as the form sent them, or null when the form sent none. */
@@ -129,8 +149,9 @@ function moveOf(form: FormData, zone: string): { from: number; to: number } | nu
  *
  * Only the zones of the chosen model are read; the others are kept as they
  * are. A zone the form did not send is left alone. An empty text, a list
- * left without entries, is removed. A list's entries come in the form's
- * order, one moved if a « Monter » or « Descendre » was pressed; an entry
+ * left without entries, is removed. A list's entries come in the order of
+ * their numbers, gaps skipped, one moved if a « Monter » or « Descendre » was
+ * pressed; an entry
  * whose « Retirer » is ticked, or whose fields are all empty (the blank one
  * the editor offers for a new entry, untouched), is dropped.
  */
@@ -155,9 +176,9 @@ export function parsePageZonesForm(
     }
 
     const sent: Array<{ entry: StoredEntry; removed: boolean }> = [];
-    for (let index = 0; ; index++) {
+    for (const index of entryNumbers(form, zone.key)) {
       const entry = formEntry(form, zone.key, index, zone.fields);
-      if (!entry) break;
+      if (!entry) continue;
       sent.push({ entry, removed: form.get(zoneRemoveName(zone.key, index)) !== null });
     }
     if (sent.length === 0) continue;

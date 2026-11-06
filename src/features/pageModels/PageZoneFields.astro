@@ -11,6 +11,14 @@
  * open while the list is empty; « Retirer » is a box, so a removal waits for
  * the save like any other change.
  *
+ * With JavaScript, « Ajouter » adds entries without saving: the blank entry
+ * gives way to a button that copies a model of an entry (a <template>) as
+ * often as the list has room, each numbered after the stored ones, its
+ * Markdown editors and image pickers mounted like the page's own
+ * (`admin:mount`). An added entry is taken back at once by its own
+ * « Retirer ». The server reads the numbers the form sends, gaps included
+ * (zones.ts), so one save keeps every added entry that holds something.
+ *
  * Every stored entry is shown, even past a bound the theme lowered since: the
  * save then refuses and says so, rather than drop an entry the merchant
  * never saw go.
@@ -18,8 +26,11 @@
 import ZoneField from './ZoneField.astro';
 import type { ThemePageModel } from '../storefront/models';
 import { isListZone } from './declaration';
-import { ZONE_MOVE, zoneFieldName, zoneMoveValue, zoneRemoveName, type StoredZones } from './zones';
+import { ZONE_ENTRY_TOKEN, ZONE_MOVE, zoneFieldName, zoneMoveValue, zoneRemoveName, type StoredZones } from './zones';
 import { formatNumber, t } from '../i18n';
+
+/** Where the legend of an added entry takes its number, written by the script. */
+const NUMBER_TOKEN = '__numero__';
 
 interface Props {
   model: ThemePageModel;
@@ -113,22 +124,110 @@ const buttonClass =
         {entries.length >= zone.maxItems ? (
           <p class="mt-4 text-xs text-gray-500">{t('admin.pages.zones.list.full')}</p>
         ) : (
-          <details class="mt-4" open={entries.length === 0}>
-            <summary class="cursor-pointer text-sm text-accent">
+          <div
+            data-zone-list
+            data-stored={entries.length}
+            data-room={zone.maxItems - entries.length}
+            data-legend={t('admin.pages.zones.list.entry', { element: zone.itemLabel, numero: NUMBER_TOKEN })}
+            data-entry-token={ZONE_ENTRY_TOKEN}
+            data-number-token={NUMBER_TOKEN}
+          >
+            <details class="mt-4" open={entries.length === 0} data-zone-blank>
+              <summary class="cursor-pointer text-sm text-accent">
+                {t('admin.pages.zones.list.add', { element: zone.itemLabel })}
+              </summary>
+              <p class="mt-2 text-xs text-gray-500">{t('admin.pages.zones.list.addHint')}</p>
+              {zone.fields.map((field) => (
+                <ZoneField
+                  field={field}
+                  name={zoneFieldName(zone.key, blank, field.key)}
+                  id={`zone-${zone.key}-${blank}-${field.key}`}
+                  value=""
+                />
+              ))}
+            </details>
+            <template data-zone-entry>
+              <fieldset data-zone-new class="mt-4 rounded-md border border-line px-4 pb-4">
+                <legend class="px-1 text-sm text-gray-700" />
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-xs text-gray-500">{t('admin.pages.zones.list.newEntry')}</p>
+                  <button type="button" data-zone-discard class={`ml-auto ${buttonClass}`}>
+                    {t('admin.pages.zones.list.discard')}
+                  </button>
+                </div>
+                {zone.fields.map((field) => (
+                  <ZoneField
+                    field={field}
+                    name={zoneFieldName(zone.key, ZONE_ENTRY_TOKEN, field.key)}
+                    id={`zone-${zone.key}-${ZONE_ENTRY_TOKEN}-${field.key}`}
+                    value=""
+                  />
+                ))}
+              </fieldset>
+            </template>
+            <button type="button" data-zone-add hidden class={`mt-4 ${buttonClass}`}>
               {t('admin.pages.zones.list.add', { element: zone.itemLabel })}
-            </summary>
-            <p class="mt-2 text-xs text-gray-500">{t('admin.pages.zones.list.addHint')}</p>
-            {zone.fields.map((field) => (
-              <ZoneField
-                field={field}
-                name={zoneFieldName(zone.key, blank, field.key)}
-                id={`zone-${zone.key}-${blank}-${field.key}`}
-                value=""
-              />
-            ))}
-          </details>
+            </button>
+            <p data-zone-full hidden class="mt-4 text-xs text-gray-500">{t('admin.pages.zones.list.full')}</p>
+          </div>
         )}
       </fieldset>
     );
   })
 }
+
+<script>
+  /**
+   * « Ajouter » without saving (see the header). Numbers keep growing as
+   * entries are added, so one taken back never hands its number to the next:
+   * two fields of the form never share a name. The legends say the place on
+   * screen, after the stored entries, and follow a removal. The two tokens
+   * ride on data attributes: importing zones.ts here would ship the catalog
+   * it reads its errors from.
+   */
+  document.querySelectorAll<HTMLElement>('[data-zone-list]').forEach((list) => {
+    const template = list.querySelector<HTMLTemplateElement>('template[data-zone-entry]');
+    const add = list.querySelector<HTMLButtonElement>('[data-zone-add]');
+    const full = list.querySelector<HTMLElement>('[data-zone-full]');
+    if (!template || !add || !full) return;
+    const stored = Number(list.dataset.stored);
+    const room = Number(list.dataset.room);
+    const legend = list.dataset.legend ?? '';
+    const entryToken = list.dataset.entryToken ?? '';
+    const numberToken = list.dataset.numberToken ?? '';
+    let next = stored;
+
+    const added = () => list.querySelectorAll<HTMLElement>('[data-zone-new]');
+    const refresh = () => {
+      added().forEach((entry, place) => {
+        const title = entry.querySelector('legend');
+        if (title) title.textContent = legend.replace(numberToken, String(stored + place + 1));
+      });
+      const left = added().length < room;
+      add.hidden = !left;
+      full.hidden = left;
+    };
+    const addEntry = () => {
+      const holder = document.createElement('div');
+      holder.innerHTML = template.innerHTML.replaceAll(entryToken, String(next++));
+      const entry = holder.firstElementChild as HTMLElement;
+      // insertBefore, not before(): the Workers types give Element the
+      // HTMLRewriter's before(), which takes text.
+      list.insertBefore(entry, add);
+      entry.dispatchEvent(new CustomEvent('admin:mount', { bubbles: true }));
+      entry.querySelector('[data-zone-discard]')?.addEventListener('click', () => {
+        entry.remove();
+        refresh();
+        add.focus();
+      });
+      refresh();
+      return entry;
+    };
+
+    // The blank entry is the page without JavaScript; the button replaces it.
+    list.querySelector('[data-zone-blank]')?.remove();
+    add.addEventListener('click', () => addEntry().querySelector<HTMLElement>('input, textarea')?.focus());
+    if (stored === 0) addEntry();
+    refresh();
+  });
+</script>
