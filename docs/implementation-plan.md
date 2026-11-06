@@ -3638,7 +3638,8 @@ questions fréquentes et le bouton. Un nom de plus dans la liste fermée des
 blocs, comme l'ADR 0030 le prévoyait, sans ADR à lui. Aucun des jalons 0 à 10
 n'avance.
 
-Fait le 2026-11-06, sans migration :
+Fait le 2026-11-06, sans migration (PR #212, fusionnée par Damien le jour
+même ; livré, avec les lots 1 à 3, dans le socle v0.7.0) :
 
 - `::: encadré` (ou `encadre`, sans accent) ouvre le bloc, `:::` le ferme ;
   ce qu'il tient est du Markdown comme la page : intertitres, listes, liens,
