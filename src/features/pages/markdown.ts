@@ -10,7 +10,13 @@ import {
 } from '../maps/render.ts';
 import { tileGrid, type Tile } from '../maps/tiles.ts';
 import { mediaSideOf } from './mediaSide.ts';
-import { installBlocks, renderColumnsProblems, type ColumnsProblem } from './blocks.ts';
+import {
+  installBlocks,
+  renderBoxProblems,
+  renderColumnsProblems,
+  type BoxProblem,
+  type ColumnsProblem,
+} from './blocks.ts';
 
 /**
  * Server-only Markdown renderer, shared by the storefront route and the admin
@@ -236,7 +242,7 @@ function isGap(token: Token): boolean {
 
 /**
  * The paragraphs that stand at the top of the body, or at the top of a
- * column (blocks.ts): a column is a page of its own width, where a photo
+ * column or a box (blocks.ts): each is a page of its own width, where a photo
  * moves and a row lines up as they do in the body. A paragraph in a list, a
  * quote or anything else does not.
  */
@@ -246,7 +252,7 @@ function topLevelParagraphs(tokens: Token[]): Set<number> {
   tokens.forEach((token, idx) => {
     if (token.type === 'paragraph_open') {
       const parent = open.at(-1);
-      if (parent === undefined || parent === 'minshop_column_open') found.add(idx);
+      if (parent === undefined || parent === 'minshop_column_open' || parent === 'minshop_box_open') found.add(idx);
     }
     if (token.nesting === 1) open.push(token.type);
     else if (token.nesting === -1) open.pop();
@@ -349,6 +355,10 @@ function installBlocksRendering(instance: MarkdownItInstance, showErrors: boolea
   instance.renderer.rules.minshop_columns_open = (tokens, idx, options, _env, self) => {
     const problems = (tokens[idx].meta?.problems ?? []) as ColumnsProblem[];
     return renderColumnsProblems(problems) + self.renderToken(tokens, idx, options);
+  };
+  instance.renderer.rules.minshop_box_open = (tokens, idx, options, _env, self) => {
+    const problems = (tokens[idx].meta?.problems ?? []) as BoxProblem[];
+    return renderBoxProblems(problems) + self.renderToken(tokens, idx, options);
   };
 }
 

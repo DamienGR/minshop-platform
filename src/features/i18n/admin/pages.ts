@@ -97,6 +97,18 @@ export const pages = {
     'ligne {ligne} : « {proportions} » n’est pas une proportion connue (1/2 ou 2/1). Les colonnes restent égales.',
   'admin.pages.columns.error.ratioNeedsTwo':
     'ligne {ligne} : les proportions « {proportions} » ne valent que pour deux colonnes. Elles restent égales.',
+  // The « Encadré » tool sets a text apart (features/pages/blocks.ts, ticket #205,
+  // lot 4): around the selected lines, or around this sample, selected to type over.
+  'admin.pages.editor.tool.box': 'Mettre un texte en avant dans un encadré',
+  'admin.pages.editor.tool.boxShort': 'Encadré',
+  'admin.pages.editor.boxTemplate': 'Le texte à mettre en avant.',
+  'admin.pages.box.error.heading': 'Cet encadré ne s’affichera pas comme prévu :',
+  'admin.pages.box.error.extra':
+    'ligne {ligne} : « {texte} » ne s’affiche pas, rien ne suit « ::: encadré » sur sa ligne. Écrivez ce texte en dessous, dans l’encadré.',
+  'admin.pages.box.error.empty':
+    'ligne {ligne} : l’encadré est vide. Écrivez son texte entre la ligne « ::: encadré » et la ligne « ::: ».',
+  'admin.pages.box.error.unclosed':
+    'ligne {ligne} : l’encadré n’est pas fermé et court jusqu’à la fin de la page. Ajoutez une ligne « ::: » là où il s’arrête.',
 
   // ─── Mises en page (features/pages/layouts.ts) ─────────────────────────────────
   'admin.pages.layout.standard.label': 'Standard',

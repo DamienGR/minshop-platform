@@ -3629,3 +3629,40 @@ Tenu par les tests des modules (`features/pageModels`, `features/pages`),
 `test/storefront/pageModels.test.ts` (chaque thème, chaque gabarit),
 `test/integration/page-models.mjs` (D1 réel) et
 `test/browser/page-models.spec.mjs` (en `atelier`).
+
+### 13.18 L'encadré dans une page
+
+Noté le 2026-11-05 (ticket #205, lot 4 de quatre, « blocs suivants, à la
+demande ») : Damien choisit le 2026-11-06 l'encadré en premier, avant les
+questions fréquentes et le bouton. Un nom de plus dans la liste fermée des
+blocs, comme l'ADR 0030 le prévoyait, sans ADR à lui. Aucun des jalons 0 à 10
+n'avance.
+
+Fait le 2026-11-06, sans migration :
+
+- `::: encadré` (ou `encadre`, sans accent) ouvre le bloc, `:::` le ferme ;
+  ce qu'il tient est du Markdown comme la page : intertitres, listes, liens,
+  photos à côté du texte et rangées, cartes, colonnes. Le module
+  (`src/features/pages/blocks.ts`) écrit `<div class="markdown-box"
+  role="note">`, une note et non une région, et rien du texte du marchand ;
+- l'encadré prend le fond surélevé du thème (`surface`), son filet (`line`)
+  et l'accent sur son bord de départ : des jetons que chaque thème déclare,
+  dont le texte et les liens tiennent déjà leur contraste sur `surface`. Un
+  code y prend le fond de la page ;
+- un encadré se place dans une colonne, et son `:::` le ferme, lui, pas la
+  colonne ; un encadré dans un encadré reste du texte ;
+- rien ne suit le mot sur sa ligne : un texte écrit là ne s'affiche pas.
+  L'aperçu le dit, comme un encadré vide ou non fermé, au-dessus du bloc et
+  avec sa ligne ; la vitrine dessine l'encadré sans un mot ;
+- le bouton « Encadré » de l'éditeur entoure les lignes sélectionnées, prises
+  entières, ou insère un texte d'exemple sélectionné ;
+- le guide de l'administration a sa section « Mettre un texte en avant dans
+  un encadré ».
+
+Un ton (information, attention) s'ajouterait après le mot, en liste fermée,
+si une boutique en demande un : une page écrite avant ne changerait pas.
+
+Tenu par `src/features/pages/blocks.test.ts` et
+`test/browser/page-box.spec.mjs` (rendu dans le thème, encadré dans une
+colonne, bouton, aperçu), dans chaque thème ; `a11y.spec.mjs` passe sur la
+page à encadré du jeu d'essai.

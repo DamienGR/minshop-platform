@@ -521,6 +521,34 @@
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   }
 }
+/* A box (a `::: encadré` block, ticket #205; features/pages/blocks.ts): a
+   text set apart on the theme's raised surface, inside its hairline, the
+   accent on its starting edge. Tokens every theme declares, so a box takes
+   its theme's look, and its text the contrast `ink` and `accent` already
+   clear on `surface`. Like a column, it is a page of its own width: it holds
+   its floats, and its first and last blocks lose their margins to its
+   padding. Code, whose chip is the surface itself, takes the paper there. */
+.markdown-content .markdown-box {
+  display: flow-root;
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-line, #e7e2d9);
+  border-inline-start: 3px solid var(--color-accent, currentColor);
+  border-radius: var(--radius-lg, 0.5rem);
+  background: var(--color-surface, #ffffff);
+}
+.markdown-content .markdown-box > :first-child {
+  margin-top: 0;
+}
+.markdown-content .markdown-box > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content .markdown-box :is(code, pre) {
+  background: var(--color-paper, #faf8f4);
+}
+.markdown-content .markdown-box pre code {
+  background: none;
+}
 /* A row's photo opened large (ticket #205; features/pages/Lightbox.astro).
    The dialog covers the screen in the theme's ink, the photo whole in the
    middle, the words in paper: two tokens every theme declares, contrasting
@@ -648,6 +676,7 @@ html:has(.page-lightbox[open]) {
     .markdown-media,
     .markdown-gallery,
     .markdown-columns,
+    .markdown-box,
     .place-map,
     .place-map-error,
     .markdown-block-error
@@ -758,7 +787,7 @@ html:has(.page-lightbox[open]) {
   font-size: 0.875rem;
 }
 /* What the preview says above a block it cannot draw, or draws as well as it
-   can: a map (ADR 0029), a block of columns (ADR 0030). Admin only. */
+   can: a map (ADR 0029), a block of columns (ADR 0030), a box. Admin only. */
 .place-map-error,
 .markdown-block-error {
   margin: 1.5rem 0;

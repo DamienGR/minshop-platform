@@ -36,6 +36,8 @@ export const FIXTURE = REMOTE
       galleryPage: '/pages/en-images',
       // Text in columns (ADR 0030); seeded by serve.mjs.
       columnsPage: '/pages/en-colonnes',
+      // A box, in the body and in a column (ticket #205); seeded by serve.mjs.
+      boxPage: '/pages/bon-a-savoir',
       // Pages drawn by the theme's models (ADR 0031); seeded by serve.mjs.
       brandPage: '/pages/notre-marque',
       pointsPage: '/pages/ou-nous-trouver',
@@ -71,6 +73,7 @@ export const ROUTES = [
   { name: 'photos à côté du texte', path: FIXTURE.photoPage, why: 'une photo à gauche, une à droite' },
   { name: 'rangée de photos', path: FIXTURE.galleryPage, why: 'une rangée, une photo en hauteur' },
   { name: 'texte en colonnes', path: FIXTURE.columnsPage, why: 'deux colonnes inégales, trois égales' },
+  { name: 'encadré', path: FIXTURE.boxPage, why: 'un encadré, un autre dans une colonne' },
   { name: 'modèle « La marque »', path: FIXTURE.brandPage, why: 'une accroche, un encart' },
   { name: 'modèle « Où nous trouver »', path: FIXTURE.pointsPage, why: 'une zone répétable' },
   { name: 'panier', path: '/cart', why: 'le shell hors navigation' },

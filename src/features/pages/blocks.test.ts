@@ -79,7 +79,7 @@ describe('named blocks — columns (ADR 0030)', () => {
   });
 
   it('knows only its own words: any other block stays text', () => {
-    expect(render(lines('::: encadre', 'a', ':::'))).toBe('<p>::: encadre\na\n:::</p>\n');
+    expect(render(lines('::: questions', 'a', ':::'))).toBe('<p>::: questions\na\n:::</p>\n');
     expect(render(lines('::: colonne', 'a', ':::'))).not.toContain('markdown-column');
   });
 
@@ -119,6 +119,119 @@ describe('named blocks — columns (ADR 0030)', () => {
   });
 });
 
+const BOX = lines('::: encadré', '### Bon à savoir', 'La livraison est offerte.', ':::');
+
+describe('named blocks — box (ticket #205, lot 4)', () => {
+  it('draws a box, a note holding Markdown like the page', () => {
+    expect(render(BOX)).toBe(
+      lines(
+        '<div class="markdown-box" role="note">',
+        '<h3>Bon à savoir</h3>',
+        '<p>La livraison est offerte.</p>',
+        '</div>',
+        '',
+      ),
+    );
+  });
+
+  it('leaves the lines the text they were where the caller asks for no blocks', () => {
+    const html = renderMarkdown(BOX);
+    expect(html).toContain('<p>::: encadré');
+    expect(html).not.toContain('markdown-box');
+  });
+
+  it('reads the word without its accent, in capitals, or with its accent apart', () => {
+    for (const word of ['encadre', 'ENCADRÉ', 'Encadre', 'encadré']) {
+      expect(render(lines(`::: ${word}`, 'a', ':::'))).toContain('<div class="markdown-box" role="note">');
+    }
+  });
+
+  it('runs on until the line after a sentence and the blank lines it holds', () => {
+    const html = render(lines('Avant.', '::: encadré', 'Un.', '', 'Deux.', ':::', 'Après.'));
+    expect(html).toBe(
+      lines(
+        '<p>Avant.</p>',
+        '<div class="markdown-box" role="note">',
+        '<p>Un.</p>',
+        '<p>Deux.</p>',
+        '</div>',
+        '<p>Après.</p>',
+        '',
+      ),
+    );
+  });
+
+  it('stands in a column, its own ::: closing it and not the column', () => {
+    const html = render(lines('::: colonnes', 'a', '::: encadré', 'boîte', ':::', 'encore a', '::: colonne', 'b', ':::'));
+    expect(html).toBe(
+      lines(
+        '<div class="markdown-columns markdown-columns--2">',
+        '<div class="markdown-column">',
+        '<p>a</p>',
+        '<div class="markdown-box" role="note">',
+        '<p>boîte</p>',
+        '</div>',
+        '<p>encore a</p>',
+        '</div>',
+        '<div class="markdown-column">',
+        '<p>b</p>',
+        '</div>',
+        '</div>',
+        '',
+      ),
+    );
+  });
+
+  it('holds columns, whose separator stays theirs', () => {
+    const html = render(lines('::: encadré', '::: colonnes', 'a', '::: colonne', 'b', ':::', ':::', 'Après.'));
+    expect(html).toMatch(/^<div class="markdown-box" role="note">\n<div class="markdown-columns markdown-columns--2">/);
+    expect(html).toMatch(/<\/div>\n<\/div>\n<\/div>\n<p>Après\.<\/p>\n$/);
+  });
+
+  it('leaves a box inside a box the text it was, without closing the outer one', () => {
+    const html = render(lines('::: encadré', 'a', '::: encadré', 'x', ':::', '', 'b', ':::', '', 'Après.'));
+    expect(html.match(/class="markdown-box"/g)).toHaveLength(1);
+    // Its line does not interrupt the sentence above, as a word of text would not.
+    expect(html).toContain('<p>a\n::: encadré\nx\n:::</p>');
+    expect(html).toMatch(/<p>b<\/p>\n<\/div>\n<p>Après\.<\/p>/);
+  });
+
+  it('keeps a fenced block whole, and runs an unclosed box to the end of the body', () => {
+    const fenced = render(lines('::: encadré', '```', ':::', '```', ':::'));
+    expect(fenced).toContain('<pre><code>:::\n</code></pre>\n</div>');
+    expect(render(lines('::: encadré', 'a', '', 'b'))).toMatch(/<p>b<\/p>\n<\/div>\n$/);
+  });
+
+  it('writes nothing of what follows the word on its line', () => {
+    const html = render(lines('::: encadré <b onclick="x">Titre</b>', 'a', ':::'));
+    expect(html).toBe(lines('<div class="markdown-box" role="note">', '<p>a</p>', '</div>', ''));
+  });
+
+  it('moves a photo and lines up a row in a box as in the body', () => {
+    const html = renderMarkdown(
+      lines(
+        '::: encadré',
+        '![Atelier](/images/media/a.webp "droite")',
+        '',
+        'Texte.',
+        '',
+        '![Un](/images/media/b.webp)',
+        '![Deux](/images/media/c.webp)',
+        ':::',
+      ),
+      { blocks: {}, lightbox: true },
+    );
+    expect(html).toContain('<p class="markdown-media markdown-media--right">');
+    expect(html).toContain('<p class="markdown-gallery"><a href="/images/media/b.webp" data-lightbox>');
+  });
+
+  it('marks the box with its source lines for the editor', () => {
+    const html = renderMarkdown(lines('Intro.', '', BOX), { blocks: {}, sourceMap: true });
+    expect(html).toContain('<div class="markdown-box" role="note" data-source-line="3" data-source-end="7">');
+    expect(html).toContain('<h3 data-source-line="4" data-source-end="5">');
+  });
+});
+
 describe('named blocks — what the preview says', () => {
   it('says nothing about a block that is right', () => {
     expect(render(TWO, true)).not.toContain('markdown-block-error');
@@ -144,6 +257,31 @@ describe('named blocks — what the preview says', () => {
     const html = render(lines('::: colonnes <b>1/3</b>', 'a', '::: colonne', 'b', ':::'), true);
     expect(html).toContain('« &lt;b&gt;1/3&lt;/b&gt; » n’est pas une proportion connue');
     expect(html).not.toContain('<b>');
+  });
+
+  it('says nothing about a box that is right', () => {
+    expect(render(BOX, true)).not.toContain('markdown-block-error');
+  });
+
+  it('says what follows the word on its line is not drawn, escaped', () => {
+    const html = render(lines('Intro.', '', '::: encadré <b>Bon à savoir</b>', 'a', ':::'), true);
+    expect(html).toContain('<p>Cet encadré ne s’affichera pas comme prévu');
+    expect(html).toContain('ligne 3 : « &lt;b&gt;Bon à savoir&lt;/b&gt; » ne s’affiche pas');
+    expect(html).not.toContain('<b>');
+    // The storefront draws the box without a word.
+    expect(render(lines('::: encadré Bon à savoir', 'a', ':::'))).not.toContain('markdown-block-error');
+  });
+
+  it('says a box is empty, and one that is not closed', () => {
+    expect(render(lines('::: encadré', '', ':::'), true)).toContain('ligne 1 : l’encadré est vide');
+    const open = render(lines('::: encadré', 'a', '', 'b'), true);
+    expect(open).toContain('ligne 1 : l’encadré n’est pas fermé');
+    expect(open).not.toContain('est vide');
+  });
+
+  it('says what is wrong with a box inside a column, above it', () => {
+    const html = render(lines('::: colonnes', 'a', '::: colonne', '::: encadré', ':::', ':::'), true);
+    expect(html).toMatch(/<div class="markdown-column">\n<div class="markdown-block-error">.*ligne 4 : l’encadré est vide/s);
   });
 
   it('says proportions are for two columns', () => {
@@ -177,5 +315,12 @@ describe('named blocks — what the body is read for', () => {
 
   it('keeps the block lines out of the description', () => {
     expect(markdownExcerpt(TWO)).toBe('Un Texte un. Deux Texte deux.');
+  });
+
+  it('counts a photo in a box, finds its map, and keeps its lines out of the description', () => {
+    const boxed = lines('::: encadré', '![Un](/images/media/a.webp)', '', '```carte', 'lieu: Atelier', 'position: 48.8566, 2.3522', '```', ':::');
+    expect(extractMediaKeys(boxed)).toEqual(['media/a.webp']);
+    expect(placeMapBlocks(boxed)[0].fenceLine).toBe(4);
+    expect(markdownExcerpt(BOX)).toBe('Bon à savoir La livraison est offerte.');
   });
 });

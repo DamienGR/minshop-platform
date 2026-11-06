@@ -94,6 +94,14 @@ What it asserts, and why each one is here rather than in vitest:
   wrong with a block of one. The unit tests prove the markup; only a browser
   applies the grid. `serve.mjs` seeds the page, which the axe and reflow
   routes walk too. Skipped against `BASE_URL`.
+- **a box** (`page-box.spec.mjs`) — a `::: encadré` block (ticket #205): it
+  stands apart from the page on the theme's surface, the accent on its
+  starting edge, and the one in a column keeps inside it. The editor's
+  « Encadré » goes around the selected lines, taken whole, or inserts a
+  sample selected to type over; the preview says a box is not closed.
+  `serve.mjs` seeds the page, which the axe and reflow routes walk too, so
+  the box's text is held to its contrast in every theme. Skipped against
+  `BASE_URL`.
 - **page models** (`page-models.spec.mjs`) — pages drawn by a theme's model
   (ADR 0031), on a theme that declares the `atelier` witnesses and skipped on
   any other: « La marque » and « Où nous trouver » in the storefront, the
