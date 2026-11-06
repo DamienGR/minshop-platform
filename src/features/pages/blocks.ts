@@ -6,8 +6,7 @@ import { t } from '../i18n/index.ts';
  * its own opens one, `:::` alone closes it, and what stands between is
  * Markdown like the rest of the page — headings, lists, photos, a map.
  *
- * The one block today is `colonnes`, whose columns a `::: colonne` line
- * separates:
+ * Two blocks today. `colonnes`, whose columns a `::: colonne` line separates:
  *
  *     ::: colonnes
  *     ## L’atelier
@@ -16,6 +15,13 @@ import { t } from '../i18n/index.ts';
  *     ::: colonne
  *     ## Les matières
  *     …
+ *     :::
+ *
+ * and `encadré`, a text set apart on the theme's raised surface (ticket #205,
+ * lot 4):
+ *
+ *     ::: encadré
+ *     **Bon à savoir** : la livraison est offerte dès 60 €.
  *     :::
  *
  * The names are a closed list, in French like the rest of the admin: any
@@ -28,6 +34,10 @@ import { t } from '../i18n/index.ts';
 /** The opening word of a block of columns, and the line between two columns. */
 export const COLUMNS_WORD = 'colonnes';
 export const COLUMN_WORD = 'colonne';
+
+/** The opening word of a box, and the same word as typed without its accent. */
+export const BOX_WORD = 'encadré';
+const BOX_WORDS = new Set([BOX_WORD, 'encadre']);
 
 /** Three columns at most: a fourth would be 11rem wide in the standard measure. */
 export const MAX_COLUMNS = 3;
@@ -45,10 +55,20 @@ export type ColumnsProblem =
   | { kind: 'ratio'; line: number; ratio: string }
   | { kind: 'ratioNeedsTwo'; line: number; ratio: string };
 
-/** The block's opening line, read: its word and what follows it. */
+/** What is wrong with a box, for the editor's preview. */
+export type BoxProblem =
+  | { kind: 'extra'; line: number; text: string }
+  | { kind: 'empty'; line: number }
+  | { kind: 'unclosed'; line: number };
+
+/**
+ * The block's opening line, read: its word and what follows it. The word is
+ * composed (NFC) before it is compared: an « é » pasted from some systems
+ * arrives as an « e » and its accent, two characters.
+ */
 function opening(text: string): { word: string; rest: string } | null {
   const match = /^:{3}[ \t]*(\S+)[ \t]*(.*?)[ \t]*$/.exec(text);
-  return match ? { word: match[1].toLowerCase(), rest: match[2] } : null;
+  return match ? { word: match[1].normalize('NFC').toLowerCase(), rest: match[2] } : null;
 }
 
 /** A closing line: the marker and nothing else. */
@@ -58,30 +78,32 @@ const isClosing = (text: string) => /^:{3}[ \t]*$/.test(text);
 const fenceOf = (text: string) => /^(`{3,}|~{3,})/.exec(text)?.[1] ?? null;
 
 /** The block names this module reads. A word on this list nests and closes. */
-const NAMES = new Set([COLUMNS_WORD]);
+const NAMES = new Set([COLUMNS_WORD, ...BOX_WORDS]);
 
 interface Env {
   /** How deep in a block of columns the parser stands: columns never nest. */
   minshopColumns?: number;
+  /** How deep in a box: boxes never nest either. */
+  minshopBoxes?: number;
 }
 
-/**
- * The block rule. Finds the block's end by walking its lines: a fence hides
- * what it holds, a nested block's own `:::` closes it and not this one, and
- * only a `::: colonne` at this block's own depth starts a column. Without a
- * closing line, the block runs to the end of the body, as an unclosed fence
- * does.
- */
-function columnsRule(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
-  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
-  const lineText = (line: number) => state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
-  const open = opening(lineText(startLine));
-  if (!open || open.word !== COLUMNS_WORD) return false;
-  const env = state.env as Env;
-  // A block of columns inside a column stays text: the page says so.
-  if ((env.minshopColumns ?? 0) > 0) return false;
-  if (silent) return true;
+/** A line of the body, past its indentation. */
+const lineText = (state: StateBlock, line: number) =>
+  state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
 
+/**
+ * Where a block ends, found by walking its lines: a fence hides what it
+ * holds, a nested block's own `:::` closes it and not this one, and only a
+ * `separator` line at this block's own depth splits it. Without a closing
+ * line (`close` is then -1), the block runs to the end of the body, as an
+ * unclosed fence does: `end` is the first line past it.
+ */
+function blockExtent(
+  state: StateBlock,
+  startLine: number,
+  endLine: number,
+  separator: string | null,
+): { separators: number[]; close: number; end: number } {
   const separators: number[] = [];
   let close = -1;
   let depth = 0;
@@ -93,7 +115,7 @@ function columnsRule(state: StateBlock, startLine: number, endLine: number, sile
     // A line indented less than the block, in a list, ends it.
     if (!empty && state.sCount[line] < state.blkIndent) break;
     if (state.sCount[line] - state.blkIndent >= 4) continue;
-    const text = lineText(line);
+    const text = lineText(state, line);
     const marker = fenceOf(text);
     if (fence) {
       if (marker && marker[0] === fence[0] && marker.length >= fence.length && text.slice(marker.length).trim() === '') fence = null;
@@ -113,10 +135,23 @@ function columnsRule(state: StateBlock, startLine: number, endLine: number, sile
     }
     const nested = opening(text);
     if (!nested) continue;
-    if (nested.word === COLUMN_WORD && depth === 0) separators.push(line);
+    if (separator !== null && nested.word === separator && depth === 0) separators.push(line);
     else if (NAMES.has(nested.word)) depth += 1;
   }
-  const end = close === -1 ? line : close;
+  return { separators, close, end: close === -1 ? line : close };
+}
+
+/** The rule of a block of columns. */
+function columnsRule(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+  const open = opening(lineText(state, startLine));
+  if (!open || open.word !== COLUMNS_WORD) return false;
+  const env = state.env as Env;
+  // A block of columns inside a column stays text: the page says so.
+  if ((env.minshopColumns ?? 0) > 0) return false;
+  if (silent) return true;
+
+  const { separators, close, end } = blockExtent(state, startLine, endLine, COLUMN_WORD);
 
   const bounds = [startLine, ...separators, end];
   const count = bounds.length - 1;
@@ -163,14 +198,60 @@ function columnsRule(state: StateBlock, startLine: number, endLine: number, sile
 }
 
 /**
- * Teach an instance the blocks. The rule runs before the paragraph's, and
+ * The rule of a box. What it holds is Markdown like the page, columns
+ * included; a box inside a box stays text, as columns inside a column do.
+ * Nothing follows the word on its line: a text written there is not drawn,
+ * and the preview says so.
+ */
+function boxRule(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+  const open = opening(lineText(state, startLine));
+  if (!open || !BOX_WORDS.has(open.word)) return false;
+  const env = state.env as Env;
+  if ((env.minshopBoxes ?? 0) > 0) return false;
+  if (silent) return true;
+
+  const { close, end } = blockExtent(state, startLine, endLine, null);
+  const problems: BoxProblem[] = [];
+  const at = startLine + 1;
+  if (open.rest) problems.push({ kind: 'extra', line: at, text: open.rest });
+  let empty = true;
+  for (let line = startLine + 1; line < end && empty; line++) {
+    if (state.bMarks[line] + state.tShift[line] < state.eMarks[line]) empty = false;
+  }
+  if (empty) problems.push({ kind: 'empty', line: at });
+  if (close === -1) problems.push({ kind: 'unclosed', line: at });
+
+  const oldLineMax = state.lineMax;
+  const box = state.push('minshop_box_open', 'div', 1);
+  box.block = true;
+  box.map = [startLine, close === -1 ? end : end + 1];
+  box.attrJoin('class', 'markdown-box');
+  // A note, not a landmark: an <aside> inside the page's article would be
+  // one more stop in a screen reader's list of regions.
+  box.attrSet('role', 'note');
+  box.meta = { problems };
+
+  env.minshopBoxes = (env.minshopBoxes ?? 0) + 1;
+  state.lineMax = end;
+  state.md.block.tokenize(state, startLine + 1, end);
+  state.lineMax = oldLineMax;
+  env.minshopBoxes -= 1;
+
+  state.push('minshop_box_close', 'div', -1).block = true;
+  state.line = close === -1 ? end : end + 1;
+  return true;
+}
+
+/**
+ * Teach an instance the blocks. The rules run before the paragraph's, and
  * like a fence may interrupt one: a `::: colonnes` line right under a
  * sentence opens the block rather than joining the sentence.
  */
 export function installBlocks(instance: MarkdownItInstance): void {
-  instance.block.ruler.before('fence', 'minshop_columns', columnsRule, {
-    alt: ['paragraph', 'reference', 'blockquote', 'list'],
-  });
+  const alt = ['paragraph', 'reference', 'blockquote', 'list'];
+  instance.block.ruler.before('fence', 'minshop_columns', columnsRule, { alt });
+  instance.block.ruler.before('fence', 'minshop_box', boxRule, { alt });
 }
 
 /** Every block of columns' problems, in the order the body holds them. */
@@ -196,16 +277,38 @@ export function columnsProblemMessage(problem: ColumnsProblem): string {
   }
 }
 
+/** One problem of a box, as the preview says it, in French. */
+export function boxProblemMessage(problem: BoxProblem): string {
+  switch (problem.kind) {
+    case 'extra':
+      return t('admin.pages.box.error.extra', { ligne: problem.line, texte: problem.text });
+    case 'empty':
+      return t('admin.pages.box.error.empty', { ligne: problem.line });
+    case 'unclosed':
+      return t('admin.pages.box.error.unclosed', { ligne: problem.line });
+  }
+}
+
 const escape = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
- * The preview's note above a block of columns it drew as well as it could.
- * The proportions come from the merchant's line, hence the escaping. Empty
- * when nothing is wrong.
+ * The preview's note above a block it drew as well as it could. A message
+ * may quote the merchant's line, hence the escaping. Empty when nothing is
+ * wrong.
  */
+function renderProblems(heading: string, messages: string[]): string {
+  if (messages.length === 0) return '';
+  const items = messages.map((message) => `<li>${escape(message)}</li>`).join('');
+  return `<div class="markdown-block-error"><p>${escape(heading)}</p><ul>${items}</ul></div>\n`;
+}
+
+/** Above a block of columns. */
 export function renderColumnsProblems(problems: ColumnsProblem[]): string {
-  if (problems.length === 0) return '';
-  const items = problems.map((problem) => `<li>${escape(columnsProblemMessage(problem))}</li>`).join('');
-  return `<div class="markdown-block-error"><p>${escape(t('admin.pages.columns.error.heading'))}</p><ul>${items}</ul></div>\n`;
+  return renderProblems(t('admin.pages.columns.error.heading'), problems.map(columnsProblemMessage));
+}
+
+/** Above a box. */
+export function renderBoxProblems(problems: BoxProblem[]): string {
+  return renderProblems(t('admin.pages.box.error.heading'), problems.map(boxProblemMessage));
 }

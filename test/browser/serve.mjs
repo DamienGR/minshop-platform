@@ -121,6 +121,39 @@ wrangler([
   `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('En colonnes', 'en-colonnes', '${COLUMNS_PAGE}', 1, 'page_c0nnes0000')`,
 ]);
 
+// A box (a `::: encadré` block, ticket #205), for page-box.spec.mjs: one in
+// the body, holding a heading, a link and a list, and one in a column.
+const BOX_PAGE = [
+  'Nos engagements, en bref.',
+  '',
+  '::: encadré',
+  '### Bon à savoir',
+  '',
+  'La livraison est **offerte** dès 60 €, et le retour reste gratuit trente jours. Les [conditions](/pages/about) disent le reste.',
+  '',
+  '- Expédition sous 48 heures',
+  '- Emballage sans plastique',
+  ':::',
+  '',
+  '::: colonnes',
+  '## L’atelier',
+  '',
+  'Chaque pièce naît sur l’établi, coupée, assemblée et finie à la main.',
+  '',
+  '::: colonne',
+  '## Les visites',
+  '',
+  '::: encadré',
+  'Sur rendez-vous, le samedi matin.',
+  ':::',
+  ':::',
+].join('\n');
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('Bon à savoir', 'bon-a-savoir', '${BOX_PAGE}', 1, 'page_encadre000')`,
+]);
+
 // Pages drawn by a theme's model (ADR 0031), for page-models.spec.mjs: the
 // witnesses of the atelier theme, « La marque » and « Où nous trouver », and
 // a page the editor spec reorders. A theme that declares neither model draws

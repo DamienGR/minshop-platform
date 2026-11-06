@@ -6,7 +6,7 @@ Les pages de texte de votre boutique : à propos, livraison, conditions géné
 
 1. Cliquez sur **Nouvelle page**.
 2. Donnez-lui un **Titre**, puis cliquez sur **Créer le brouillon**.
-3. Écrivez le texte. Les boutons au-dessus le mettent en forme : « H2 » pour un intertitre, « G » pour du gras, **Lien**, **Liste**, **Image** pour une photo de la médiathèque, **Carte** pour situer un lieu, **Colonnes** pour poser des textes côte à côte.
+3. Écrivez le texte. Les boutons au-dessus le mettent en forme : « H2 » pour un intertitre, « G » pour du gras, **Lien**, **Liste**, **Image** pour une photo de la médiathèque, **Carte** pour situer un lieu, **Colonnes** pour poser des textes côte à côte, **Encadré** pour mettre un texte en avant.
 4. **Aperçu** montre la page telle que vos clients la verront.
 5. Cochez **Publiée**, puis cliquez sur **Enregistrer**.
 
@@ -50,6 +50,16 @@ Pour une troisième colonne, ajoutez une ligne `::: colonne` là où elle commen
 Pour deux colonnes de largeurs différentes, écrivez `::: colonnes 1/2` (une étroite, puis une large deux fois plus grande) ou `::: colonnes 2/1`.
 
 Sur un téléphone, les colonnes passent l’une sous l’autre, dans l’ordre où vous les avez écrites. Si un bloc ne s’affichera pas comme prévu, l’**Aperçu** le dit au-dessus des colonnes, avec sa ligne.
+
+### Mettre un texte en avant dans un encadré
+
+1. Sélectionnez les lignes à mettre en avant, puis cliquez sur **Encadré** : elles passent entre une ligne `::: encadré` et une ligne `:::`.
+2. Sans rien sélectionner, **Encadré** insère un encadré dont le texte d’exemple est sélectionné : tapez le vôtre, il le remplace.
+3. **Aperçu** montre l’encadré sur le fond et dans les couleurs de votre thème.
+
+Un encadré prend tout ce que prend une page : intertitres, gras, listes, liens, photos. Il se place aussi dans une colonne. Un encadré dans un autre encadré reste du texte.
+
+Rien ne s’écrit après `::: encadré` sur sa ligne : le texte commence à la ligne suivante. Si un encadré ne s’affichera pas comme prévu, vide ou pas fermé par sa ligne `:::`, l’**Aperçu** le dit au-dessus, avec sa ligne.
 
 ### Choisir un modèle de page
 

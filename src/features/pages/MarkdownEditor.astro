@@ -85,6 +85,11 @@ const COLUMNS_BLOCK = [
 ].join('\n');
 const COLUMNS_CARET = COLUMNS_BLOCK.indexOf(COLUMNS_FIRST);
 
+// The « Encadré » tool's opening line (ticket #205, lot 4). It goes around the
+// selected lines, or around a sample text, selected so typing replaces it;
+// `:::` closes it.
+const BOX_OPENING = '::: encadré';
+
 // Toolbar buttons are declarative: each carries the syntax to wrap or insert,
 // so the script stays one generic selection handler rather than nine.
 const tools: Array<{
@@ -94,6 +99,8 @@ const tools: Array<{
   title: string;
   caret?: number;
   caretEnd?: number;
+  /** What an `enclose` tool holds when nothing is selected. */
+  sample?: string;
 }> = [
   { action: 'prefix', value: '## ', label: 'H2', title: t('admin.pages.editor.tool.heading') },
   {
@@ -142,6 +149,13 @@ const tools: Array<{
     title: t('admin.pages.editor.tool.columns'),
     caret: COLUMNS_CARET,
     caretEnd: COLUMNS_CARET + COLUMNS_FIRST.length,
+  },
+  {
+    action: 'enclose',
+    value: BOX_OPENING,
+    label: t('admin.pages.editor.tool.boxShort'),
+    title: t('admin.pages.editor.tool.box'),
+    sample: t('admin.pages.editor.boxTemplate'),
   },
 ];
 
@@ -252,6 +266,7 @@ const helpId = `${id}-help`;
                 data-value={tool.value}
                 data-caret={tool.caret}
                 data-caret-end={tool.caretEnd}
+                data-sample={tool.sample}
                 title={tool.title}
                 class="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-brand"
               >
@@ -382,6 +397,27 @@ const helpId = `${id}-help`;
         // A block may select its sample text, so typing replaces it.
         const caretEnd = button.dataset.caretEnd ? lead.length + Number(button.dataset.caretEnd) : caret;
         replaceSelection(block, caret, caretEnd);
+      } else if (kind === 'enclose') {
+        // Around the selected lines, taken whole: the markers stand on lines
+        // of their own, after a blank one unless the block opens the body.
+        // With nothing selected, around a sample text, selected to type over.
+        const body = editor.value;
+        let { selectionStart: start, selectionEnd: end } = editor;
+        if (end > start) {
+          start = start === 0 ? 0 : body.lastIndexOf('\n', start - 1) + 1;
+          if (body[end - 1] === '\n') end -= 1;
+          const next = body.indexOf('\n', end);
+          end = next === -1 ? body.length : next;
+          editor.setSelectionRange(start, end);
+        }
+        const before = body.slice(0, start);
+        const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+        const lines = body.slice(start, end);
+        const inner = lines || (button.dataset.sample ?? '');
+        const opening = `${lead}${value}\n`;
+        // A new block ends its line, as « Colonnes » does; around lines, the
+        // line break that followed them still does.
+        replaceSelection(`${opening}${inner}\n:::${lines ? '' : '\n'}`, opening.length, opening.length + inner.length);
       } else if (kind === 'side' && (value === 'gauche' || value === 'droite')) {
         // The image on the caret's line, whatever is selected: the button
         // places a photo, it does not wrap text.
