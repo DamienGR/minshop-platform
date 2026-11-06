@@ -107,6 +107,45 @@ test.describe('la zone répétable', () => {
     expect(await shown(page, '/pages/nos-marches')).toEqual(['Marché A', 'Marché B']);
   });
 
+  test('« Ajouter » ajoute plusieurs entrées, gardées au même enregistrement', async ({ page }) => {
+    await signIn(page);
+    await page.goto(EDITED);
+    const list = page.locator('#zone-points');
+    const add = list.getByRole('button', { name: 'Ajouter : Point de vente', exact: true });
+    const added = list.locator('[data-zone-new]');
+
+    // Three entries on the page, none saved yet, numbered after the two stored.
+    await add.click();
+    await add.click();
+    await add.click();
+    await expect(added.locator('legend')).toHaveText([/^Point de vente 3/, /^Point de vente 4/, /^Point de vente 5/]);
+
+    // One taken back before the save: the others renumber on screen.
+    await added.nth(1).getByRole('button', { name: 'Retirer', exact: true }).click();
+    await expect(added.locator('legend')).toHaveText([/^Point de vente 3/, /^Point de vente 4/]);
+    await added.nth(0).locator('input[name$=".nom"]').fill('Marché C');
+    await added.nth(1).locator('input[name$=".nom"]').fill('Marché E');
+
+    // An added entry's Markdown field is a whole editor: its toolbar works.
+    const horaires = added.nth(1).locator('[data-markdown-editor]').filter({ has: page.locator('textarea[name$=".horaires"]') });
+    await horaires.locator('[data-editor]').fill('Samedi');
+    await horaires.locator('[data-editor]').selectText();
+    await horaires.locator('[data-tool="wrap"][data-value="**"]').click();
+    await expect(horaires.locator('[data-editor]')).toHaveValue('**Samedi**');
+
+    await Promise.all([page.waitForURL(/[?&]saved=1/), save(page).click()]);
+    await expect(entries(page)).toHaveCount(4);
+    expect(await shown(page, '/pages/nos-marches')).toEqual(['Marché A', 'Marché B', 'Marché C', 'Marché E']);
+
+    // Back to the seed.
+    await page.goto(EDITED);
+    for (const index of [2, 3]) {
+      await page.locator('#zone-points > fieldset').nth(index).getByLabel('Retirer à l’enregistrement').check();
+    }
+    await Promise.all([page.waitForURL(/[?&]saved=1/), save(page).click()]);
+    expect(await shown(page, '/pages/nos-marches')).toEqual(['Marché A', 'Marché B']);
+  });
+
   test('passer en « Basique » et revenir ne perd rien', async ({ page }) => {
     await signIn(page);
     await page.goto(EDITED);

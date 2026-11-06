@@ -840,6 +840,11 @@ const helpId = `${id}-help`;
   };
 
   document.querySelectorAll<HTMLElement>('[data-markdown-editor]').forEach(mount);
+  // An editor the page adds after loading (an entry of a page model's list,
+  // features/pageModels/PageZoneFields.astro) is mounted when its host says so.
+  document.addEventListener('admin:mount', (event) => {
+    if (event.target instanceof Element) event.target.querySelectorAll<HTMLElement>('[data-markdown-editor]').forEach(mount);
+  });
 </script>
 
 <style is:global>

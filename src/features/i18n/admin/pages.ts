@@ -139,6 +139,8 @@ export const pages = {
   'admin.pages.zones.list.addHint':
     'Remplissez ces champs puis enregistrez. Une nouvelle entrée vide apparaît alors pour la suivante.',
   'admin.pages.zones.list.remove': 'Retirer à l’enregistrement',
+  'admin.pages.zones.list.discard': 'Retirer',
+  'admin.pages.zones.list.newEntry': 'Nouvelle entrée, gardée à l’enregistrement de la page.',
   'admin.pages.zones.list.up': 'Monter',
   'admin.pages.zones.list.down': 'Descendre',
   'admin.pages.zones.list.moveHint': 'Monter et Descendre enregistrent la page.',

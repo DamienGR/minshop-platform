@@ -149,7 +149,7 @@ const {
     offset: number;
   }
 
-  document.querySelectorAll<HTMLElement>('[data-media-picker]').forEach((root) => {
+  const mount = (root: HTMLElement) => {
     const dialog = root.querySelector<HTMLDialogElement>('[data-picker-dialog]')!;
     const grid = root.querySelector<HTMLElement>('[data-picker-grid]')!;
     const errorEl = root.querySelector<HTMLElement>('[data-picker-error]')!;
@@ -272,5 +272,12 @@ const {
         uploadBtn.disabled = false;
       }
     });
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-media-picker]').forEach(mount);
+  // A picker the page adds after loading (an entry of a page model's list,
+  // features/pageModels/PageZoneFields.astro) is mounted when its host says so.
+  document.addEventListener('admin:mount', (event) => {
+    if (event.target instanceof Element) event.target.querySelectorAll<HTMLElement>('[data-media-picker]').forEach(mount);
   });
 </script>

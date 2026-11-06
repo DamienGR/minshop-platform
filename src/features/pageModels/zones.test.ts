@@ -122,6 +122,13 @@ describe('the editor’s form, read', () => {
     expect(parsed(parsePageZonesForm(form({ ...entry(0, '', '') }), MODEL, { points: [{ nom: 'A' }] }))).toEqual({});
   });
 
+  it('reads the entries past a gap, in the order of their numbers', () => {
+    // The editor's script numbers each entry it adds, and drops one the
+    // merchant takes back before saving: the numbers the form sends may skip.
+    const zones = parsed(parsePageZonesForm(form({ ...entry(0, 'A'), ...entry(4, 'E'), ...entry(2, 'C') }), MODEL, {}));
+    expect(zones.points).toEqual([{ nom: 'A' }, { nom: 'C' }, { nom: 'E' }]);
+  });
+
   it('moves an entry up or down when its button was pressed', () => {
     const three = { ...entry(0, 'A'), ...entry(1, 'B'), ...entry(2, 'C') };
     const order = (move: string) =>

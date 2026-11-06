@@ -76,7 +76,7 @@ Le modèle fixe sa mise en page : le choix de la mise en page disparaît. Reve
 
 Une zone peut être une liste : des points de vente, chacun avec son nom, son adresse, ses horaires, sa carte.
 
-- Pour ajouter une entrée, ouvrez « Ajouter » sous la liste, remplissez-la, puis enregistrez. Une nouvelle entrée vide attend la suivante.
+- Pour ajouter des entrées, cliquez sur « Ajouter » sous la liste autant de fois qu’il le faut, remplissez les entrées, puis enregistrez une seule fois : toutes sont gardées. Une entrée pas encore enregistrée se retire tout de suite par son bouton **Retirer**.
 - **Monter** et **Descendre** changent l’ordre et enregistrent la page.
 - Pour retirer une entrée, cochez **Retirer à l’enregistrement**, puis enregistrez.
 
