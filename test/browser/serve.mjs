@@ -121,6 +121,32 @@ wrangler([
   `INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id) VALUES ('En colonnes', 'en-colonnes', '${COLUMNS_PAGE}', 1, 'page_c0nnes0000')`,
 ]);
 
+// Pages drawn by a theme's model (ADR 0031), for page-models.spec.mjs: the
+// witnesses of the atelier theme, « La marque » and « Où nous trouver », and
+// a page the editor spec reorders. A theme that declares neither model draws
+// them as « Basique », their body alone. No map: a tile would go out to the
+// tile server, which the suite never reaches.
+const zonesSql = (zones) => JSON.stringify(zones).replaceAll("'", "''");
+const BRAND_ZONES = zonesSql({
+  accroche: 'Né à l’atelier, cousu main.',
+  engagements: '- Du lin **tissé en France**\n- Des pièces réparées à vie',
+});
+const POINTS_ZONES = zonesSql({
+  points: [
+    { nom: 'Halles de Vannes', adresse: 'Place du Poids public, 56000 Vannes', horaires: '**Samedi** de 8 h à 13 h' },
+    { nom: 'L’atelier', adresse: '12 rue des Tanneurs, 56000 Vannes', horaires: 'Sur rendez-vous' },
+  ],
+});
+const EDITED_ZONES = zonesSql({ points: [{ nom: 'Marché A' }, { nom: 'Marché B' }] });
+wrangler([
+  'd1', 'execute', 'DB', '--local', '--persist-to', state,
+  '--command',
+  'INSERT OR IGNORE INTO pages (title, slug, body_markdown, published, public_id, model, zones) VALUES ' +
+    `('Notre marque', 'notre-marque', 'Tout a commencé sur un établi, avec une toile de lin et une aiguille.', 1, 'page_marq000000', 'marque', '${BRAND_ZONES}'), ` +
+    `('Où nous trouver', 'ou-nous-trouver', 'Retrouvez-nous sur les marchés de la côte.', 1, 'page_pvente0000', 'points-de-vente', '${POINTS_ZONES}'), ` +
+    `('Nos marchés', 'nos-marches', 'Les marchés de la semaine.', 1, 'page_ed1t000000', 'points-de-vente', '${EDITED_ZONES}')`,
+]);
+
 // A row of photos and a photo alone (ticket #194), for page-gallery.spec.mjs:
 // three images one under the other, then a portrait taller than the screen.
 // Measured, like an image the media library took in: the width attribute is

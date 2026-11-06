@@ -94,6 +94,16 @@ What it asserts, and why each one is here rather than in vitest:
   wrong with a block of one. The unit tests prove the markup; only a browser
   applies the grid. `serve.mjs` seeds the page, which the axe and reflow
   routes walk too. Skipped against `BASE_URL`.
+- **page models** (`page-models.spec.mjs`) — pages drawn by a theme's model
+  (ADR 0031), on a theme that declares the `atelier` witnesses and skipped on
+  any other: « La marque » and « Où nous trouver » in the storefront, the
+  points of sale in the merchant's order; a Markdown zone's own preview, apart
+  from the body's; on desktop only, since it edits the store, a list moved,
+  extended and pruned by the form's own buttons and left as it was found, a
+  switch to « Basique » and back that loses nothing, and « Aperçu de la page »
+  showing the unsaved draft in the theme in a new tab. `serve.mjs` seeds the
+  three pages; the axe and reflow routes walk the two witnesses. Skipped
+  against `BASE_URL`.
 - **product gallery** (`product-gallery.spec.mjs`) — the product page opens
   on the merchant's first photo even when the variant checked by default is
   linked to another (ticket #185); a variant the shopper picks brings its

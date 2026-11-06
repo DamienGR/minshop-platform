@@ -109,10 +109,40 @@ export const pages = {
   'admin.pages.layout.wide.hint':
     'Pleine largeur, titre aligné à gauche. Idéal pour les guides des tailles, les tableaux et les rangées de photos.',
 
+  // ─── Modèles de page du thème (features/pageModels, ADR 0031) ──────────────────
+  'admin.pages.field.model': 'Modèle',
+  'admin.pages.model.basic.label': 'Basique',
+  'admin.pages.model.basic.hint':
+    'La page telle qu’elle a toujours été : son titre, puis votre texte, dans la mise en page choisie plus bas.',
+  'admin.pages.model.switchHint':
+    'Changez de modèle puis enregistrez : la page montre alors les zones du nouveau modèle. Le texte des zones de l’ancien est gardé, au cas où vous y reviendriez.',
+  'admin.pages.model.switchPending': 'Enregistrez pour passer à ce modèle et afficher ses zones.',
+  'admin.pages.model.unknown':
+    'Le thème ne propose plus le modèle « {modele} » : la page s’affiche en « Basique ». Ses zones sont gardées.',
+  'admin.pages.zones.max': '{max} caractères au plus',
+  'admin.pages.zones.list.count': '{nombre} sur {max} au plus',
+  'admin.pages.zones.list.full': 'La liste est complète : retirez une entrée pour en ajouter une autre.',
+  'admin.pages.zones.list.entry': '{element} {numero}',
+  'admin.pages.zones.list.add': 'Ajouter : {element}',
+  'admin.pages.zones.list.addHint':
+    'Remplissez ces champs puis enregistrez. Une nouvelle entrée vide apparaît alors pour la suivante.',
+  'admin.pages.zones.list.remove': 'Retirer à l’enregistrement',
+  'admin.pages.zones.list.up': 'Monter',
+  'admin.pages.zones.list.down': 'Descendre',
+  'admin.pages.zones.list.moveHint': 'Monter et Descendre enregistrent la page.',
+  'admin.pages.zones.error.tooLong':
+    '« {libelle} » est trop long : {longueur} caractères pour {max} au plus. Rien n’a été enregistré.',
+  'admin.pages.zones.error.tooMany': '« {libelle} » : {max} entrées au plus. Rien n’a été enregistré.',
+  'admin.pages.preview.page': 'Aperçu de la page',
+  'admin.pages.preview.pageHint':
+    'Ouvre la page dans un nouvel onglet, telle que la boutique l’affichera, sans l’enregistrer.',
+  'admin.pages.preview.banner': 'Aperçu : cette page n’est pas enregistrée.',
+
   // ─── Validation et messages d’enregistrement ───────────────────────────────────
   'admin.pages.form.titleRequired': 'Le titre est obligatoire.',
   'admin.pages.form.titleTooLong': 'Le titre ne doit pas dépasser {max} caractères.',
   'admin.pages.form.bodyTooLong': 'Le contenu de la page ne doit pas dépasser {max} caractères.',
+  'admin.pages.form.zonesTooLong': 'Les zones de la page ne doivent pas dépasser {max} caractères en tout.',
   'admin.pages.save.publishRefused.one':
     'Modifications enregistrées, mais la page n’a pas été publiée : {count} image est introuvable dans la médiathèque.',
   'admin.pages.save.publishRefused.other':

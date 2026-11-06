@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { getConfig } from '../../../../../config';
 import { getPublishedPageBySlug } from '../../../../../features/pages/db';
-import { placeMapsDrawTile } from '../../../../../features/pages/markdown';
+import { pageDrawsTile } from '../../../../../features/pages/view';
+import { activePageModels } from '../../../../../features/pageModels/active';
 import { serveTile } from '../../../../../features/maps/serve';
 import { parseTile } from '../../../../../features/maps/tiles';
 import { publicOrigin } from '../../../../../features/http/origin';
@@ -14,7 +15,8 @@ export const prerender = false;
  * (ADR 0029), relayed from the tile server and kept in the edge cache.
  *
  * The page in the path is what bounds the relay: on a cache miss the tile is
- * fetched only if a ```carte block of that PUBLISHED page draws it. Any other
+ * fetched only if a ```carte block of that PUBLISHED page draws it, in its
+ * body or in a zone of its theme's model (ADR 0031). Any other
  * tile, a draft's, or a malformed path is a 404 that costs one indexed read and
  * no request to the tile server — the same as a missing page.
  */
@@ -33,7 +35,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     tileUrl: getConfig().maps.tileUrl,
     allowed: async () => {
       const page = await getPublishedPageBySlug(env.DB, slug);
-      return page !== null && placeMapsDrawTile(page.body_markdown, tile);
+      return page !== null && pageDrawsTile(page, activePageModels, tile);
     },
     waitUntil: locals.cfContext ? (promise) => locals.cfContext.waitUntil(promise) : undefined,
   });

@@ -36,6 +36,9 @@ export const FIXTURE = REMOTE
       galleryPage: '/pages/en-images',
       // Text in columns (ADR 0030); seeded by serve.mjs.
       columnsPage: '/pages/en-colonnes',
+      // Pages drawn by the theme's models (ADR 0031); seeded by serve.mjs.
+      brandPage: '/pages/notre-marque',
+      pointsPage: '/pages/ou-nous-trouver',
       search: 'sample',
     };
 
@@ -68,6 +71,8 @@ export const ROUTES = [
   { name: 'photos à côté du texte', path: FIXTURE.photoPage, why: 'une photo à gauche, une à droite' },
   { name: 'rangée de photos', path: FIXTURE.galleryPage, why: 'une rangée, une photo en hauteur' },
   { name: 'texte en colonnes', path: FIXTURE.columnsPage, why: 'deux colonnes inégales, trois égales' },
+  { name: 'modèle « La marque »', path: FIXTURE.brandPage, why: 'une accroche, un encart' },
+  { name: 'modèle « Où nous trouver »', path: FIXTURE.pointsPage, why: 'une zone répétable' },
   { name: 'panier', path: '/cart', why: 'le shell hors navigation' },
   { name: 'introuvable', path: '/no-such-page', why: 'la 404' },
 ].filter((route) => route.path);

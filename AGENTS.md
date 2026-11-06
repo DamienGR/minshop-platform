@@ -231,6 +231,8 @@ src/
     maps/      place (the ```carte block, pure) · tiles (Web Mercator, pure) · render (its HTML)
                relay (to the tile server) · serve (edge cache + relay; ADR 0029)
     themeTexts/  slots (a theme's declared texts: rules, form, resolution; pure) · active (the theme's texts.ts) · db
+    pageModels/  declaration (a theme's page models: rules; pure) · zones (stored, form, resolution; pure)
+               active (the theme's pageModels.ts + pages/*.astro) · PageZoneFields (the editor's zones)
     adminGuide/  guide (chapters → HTML, anchors, order; pure) · content (the build's chapters) · GuidePanel
                chapters/<section>.md (the core's; a shop's own in client/guide/*.md)
     adminShell/  footer (core version, support link)
@@ -355,6 +357,8 @@ today's config.
     refuses while anything still references the row. Deletion and every
     association write are guarded in a single SQL statement so the two cannot
     race; never re-introduce a check-then-write.
+    A page's zones (ADR 0031) are part of the page: the photos of every zone it
+    keeps are claimed with the body's, the model in use or not.
 11. **Page bodies are Markdown with `html: false`.** Raw HTML is escaped, not
     parsed, so a page body can never inject script — including from a
     compromised admin session. The storefront and the admin preview call the
@@ -371,6 +375,9 @@ today's config.
     closed by `:::` (ADR 0030) — becomes markup only where the caller passes
     `blocks` (a page and its preview), and only `features/pages/blocks.ts`
     writes it: names, proportions and classes are closed lists.
+    A theme's page model (ADR 0031) holds Markdown zones beside the body:
+    each is rendered by the same `renderMarkdown()` with the body's options
+    (`features/pages/view.ts`), never by its template.
 12. **A log line is written, never forwarded.** Structured events with fields
     you chose; an error from a provider goes through `logSafe()`
     (`features/observability/logSafe.ts`), which masks e-mail addresses and
@@ -408,6 +415,12 @@ today's config.
   `CUSTOMIZING.md`), Admin → Textes du thème shows it, and `Catalog.astro`
   reads `model.texts[key]`. A wording that belongs to every shop is a
   catalog key instead (`messages.ts`).
+- **A page model** (a page whose layout the theme imposes): nothing in the
+  core — the theme declares it in its own `src/themes/<id>/pageModels.ts` and
+  draws it in `pages/<key>.astro` (ADR 0031, `CUSTOMIZING.md`); the page
+  editor offers it beside « Basique ». `test/storefront/pageModels.test.ts`
+  holds every theme's declarations and templates to the contract; the
+  `atelier` theme carries the two witnesses.
 - **A content page:** nothing to add — merchants create them at `/admin/pages`.
   Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
   automatically. The footer is a menu (migration 0028): a page reaches it only

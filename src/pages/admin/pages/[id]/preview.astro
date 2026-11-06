@@ -1,0 +1,95 @@
+---
+import { env } from 'cloudflare:workers';
+import Layout from '../../../../layouts/Layout.astro';
+import ContentPage from '#theme/ContentPage.astro';
+import { getConfig } from '../../../../config';
+import { getPageByPublicId } from '../../../../features/pages/db';
+import { parsePageForm } from '../../../../features/pages/form';
+import { pageImageDimensions } from '../../../../features/media/db';
+import { ROW_IMAGE_SIZES } from '../../../../features/pages/markdown';
+import { buildPageView } from '../../../../features/pages/view';
+import Lightbox from '../../../../features/pages/Lightbox.astro';
+import { productImageSources } from '../../../../features/products/image';
+import { activePageModels, pageModelTemplate } from '../../../../features/pageModels/active';
+import { readStoredZones } from '../../../../features/pageModels/zones';
+import { getMenus } from '../../../../features/navigation/db';
+import { publicOrigin } from '../../../../features/http/origin';
+import { parsePublicId } from '../../../../features/ids/publicId';
+import { t } from '../../../../features/i18n';
+
+/**
+ * POST /admin/pages/:id/preview — the page as the editor's form holds it,
+ * drawn by the theme as /pages/<slug> would draw it, and saved nowhere
+ * (ticket #205, ADR 0031). The editor's « Aperçu de la page » posts its form
+ * here, in a new tab: the whole page, header, footer and the model's
+ * template, where each zone's Aperçu shows only its own text.
+ *
+ * Read as the save reads it (parsePageForm), so what it shows is what the
+ * save would store, or the refusal the save would give. The maps come through
+ * the admin's relay, like the editor's: the page's own relay serves only what
+ * a PUBLISHED page draws.
+ */
+
+const publicId = parsePublicId(Astro.params.id, 'page');
+const page = publicId ? await getPageByPublicId(env.DB, publicId) : null;
+if (!page) return new Response(t('admin.pages.notFound'), { status: 404 });
+// The draft arrives as a form: without one there is nothing to show but the
+// editor, which has the button. `t` reads as unused to astro check after a
+// top-level return; it is used.
+if (Astro.request.method !== 'POST') return Astro.redirect(`/admin/pages/${page.public_id}/edit`, 303);
+
+const parsed = parsePageForm(await Astro.request.formData(), {
+  models: activePageModels,
+  stored: { model: page.model, zones: readStoredZones(page.zones) },
+});
+if ('error' in parsed) {
+  return new Response(parsed.error, {
+    status: 400,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+const draft = parsed.data;
+
+// Admin documents load no menus (middleware.ts): this one is the storefront's
+// page, so it reads them, header and footer as a shopper sees them.
+Astro.locals.menus = await getMenus(env.DB, Astro.locals.settings?.homePage);
+Astro.response.headers.set('x-robots-tag', 'noindex');
+
+const baseUrl = getConfig().images.baseUrl;
+const delivery = Astro.locals.settings?.imageDelivery;
+// The options of pages/[slug].astro, the tiles aside.
+const { pageModel, view, lightbox, description } = buildPageView(draft, activePageModels, {
+  baseUrl,
+  dimensions: await pageImageDimensions(env.DB, page.id),
+  placeMaps: {
+    tileUrl: (tile) => `/api/admin/map-tiles/${tile.z}/${tile.x}/${tile.y}`,
+    attribution: getConfig().maps.attribution,
+  },
+  lightbox: true,
+  blocks: {},
+  rowImageSources: (key) => {
+    const sources = productImageSources(key, { baseUrl, delivery, sizes: ROW_IMAGE_SIZES });
+    return sources.srcset ? sources : null;
+  },
+});
+const Template = (pageModel ? pageModelTemplate(pageModel.key) : null) as typeof ContentPage | null;
+// The page's address as it stands: a slug changed in the form is the save's to settle.
+const pagePath = `/pages/${encodeURIComponent(page.slug)}`;
+---
+
+<Layout
+  title={draft.title}
+  description={description}
+  canonical={new URL(pagePath, publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN)).href}
+>
+  {/* Fixed and plain, outside the theme's frame: no reading of the page may
+      take it for the live one. */}
+  <p
+    role="status"
+    class="sticky top-0 z-50 bg-amber-100 px-4 py-2 text-center text-sm text-amber-900"
+  >
+    {t('admin.pages.preview.banner')}
+  </p>
+  {Template ? <Template model={view} /> : <ContentPage model={view} />}
+  {lightbox && <Lightbox />}
+</Layout>

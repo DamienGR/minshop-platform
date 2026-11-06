@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { parsePageForm } from './form';
+import { MAX_ZONES, parsePageForm } from './form';
 import { NARROW_NBSP } from '../i18n';
 import { pageSlugify } from './slug';
+import { zoneFieldName } from '../pageModels/zones';
+import type { ThemePageModel } from '../storefront/models';
+
+const MARQUE: ThemePageModel = {
+  key: 'marque',
+  label: 'La marque',
+  body: { label: 'L’histoire' },
+  zones: [{ key: 'accroche', label: 'Accroche', format: 'text', maxLength: 160 }],
+};
 
 const form = (fields: Record<string, string>) => {
   const fd = new FormData();
@@ -19,6 +28,8 @@ describe('parsePageForm', () => {
         body_markdown: '',
         published: 0,
         layout: 'standard',
+        model: '',
+        zones: {},
       },
     });
   });
@@ -71,6 +82,43 @@ describe('parsePageForm', () => {
   it('preserves body whitespace, which is meaningful in Markdown', () => {
     const parsed = parsePageForm(form({ title: 'A', body_markdown: '  indented\n\n- list' }));
     expect(parsed).toHaveProperty('data.body_markdown', '  indented\n\n- list');
+  });
+
+  it('takes a model the theme declares, and reads « Basique » for any other (ADR 0031)', () => {
+    const context = { models: [MARQUE] };
+    expect(parsePageForm(form({ title: 'A', model: 'marque' }), context)).toHaveProperty('data.model', 'marque');
+    expect(parsePageForm(form({ title: 'A', model: 'gone' }), context)).toHaveProperty('data.model', '');
+    expect(parsePageForm(form({ title: 'A', model: '' }), context)).toHaveProperty('data.model', '');
+  });
+
+  it('keeps the stored model when the form sends none, the theme having lost its models', () => {
+    const stored = { model: 'marque', zones: { accroche: 'Gardée' } };
+    expect(parsePageForm(form({ title: 'A' }), { stored })).toMatchObject({
+      data: { model: 'marque', zones: { accroche: 'Gardée' } },
+    });
+  });
+
+  it('reads the zones of the model the page had, the one the editor drew', () => {
+    const fields = { title: 'A', model: '', [zoneFieldName('accroche')]: 'Nouvelle' };
+    const switched = parsePageForm(form(fields), { models: [MARQUE], stored: { model: 'marque', zones: {} } });
+    // Leaving the model keeps what its zones held, for a return to it.
+    expect(switched).toMatchObject({ data: { model: '', zones: { accroche: 'Nouvelle' } } });
+    const basic = parsePageForm(form(fields), { models: [MARQUE], stored: { model: '', zones: {} } });
+    expect(basic).toMatchObject({ data: { zones: {} } });
+  });
+
+  it('refuses zones too long, one by one or together', () => {
+    const one = parsePageForm(form({ title: 'A', [zoneFieldName('accroche')]: 'x'.repeat(161) }), {
+      models: [MARQUE],
+      stored: { model: 'marque', zones: {} },
+    });
+    expect(one).toHaveProperty('error');
+    const together = parsePageForm(form({ title: 'A' }), {
+      stored: { model: '', zones: { old: 'x'.repeat(MAX_ZONES) } },
+    });
+    expect(together).toEqual({
+      error: `Les zones de la page ne doivent pas dépasser 200${NARROW_NBSP}000 caractères en tout.`,
+    });
   });
 });
 

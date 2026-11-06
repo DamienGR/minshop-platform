@@ -3591,3 +3591,39 @@ même, qui accepte l'ADR 0030) :
 Tenu par `src/features/pages/blocks.test.ts` et
 `test/browser/page-columns.spec.mjs` (disposition au bureau et sur téléphone,
 bouton, aperçu), dans chaque thème.
+
+### 13.17 Des modèles de page déclarés par le thème
+
+Noté le 2026-11-05 (ticket #205, lot 3 de quatre) : des pages de présentation
+à la mise en page imposée, « La marque » et « Où nous trouver » pour la
+première boutique réelle. Choix de Damien le même jour : les points de vente
+sont une zone répétable (une entrée par point, ajoutée, retirée, rangée), et
+l'éditeur montre l'aperçu de chaque zone et celui de la page entière. ADR
+0031. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-05, migration 0056 :
+
+- un thème déclare ses modèles dans `pageModels.ts` et dessine chacun dans
+  `pages/<clé>.astro` ; un modèle sans gabarit n'est pas proposé. « Basique »,
+  la page telle qu'elle était, reste le modèle de toute page ;
+- une page garde son modèle (`pages.model`) et ses zones (`pages.zones`, en
+  JSON) dans la même ligne que son corps, écrits dans le même `UPDATE` ; les
+  photos de toutes ses zones sont comptées avec celles du corps, dans le même
+  lot (invariant 10), même celles d'un modèle qu'elle a quitté ;
+- chaque zone Markdown est rendue comme le corps (rangées et lightbox,
+  colonnes, cartes) ; les cartes et marques des zones du modèle en usage
+  retiennent un brouillon comme celles du corps, et le relais des tuiles sert
+  les cartes de ces zones ;
+- l'éditeur, extrait en composant (`MarkdownEditor.astro`), sert le corps et
+  chaque zone Markdown, avec son propre aperçu ; une liste se range, s'allonge
+  et se raccourcit par les boutons du formulaire, sans script ; « Aperçu de la
+  page » ouvre la page entière dans le thème, dans un nouvel onglet, sans
+  l'enregistrer (`/admin/pages/<id>/preview`) ;
+- le thème `atelier` porte les deux modèles témoins ;
+- le guide de l'administration a ses sections « Choisir un modèle de page »
+  et « Remplir une liste ».
+
+Tenu par les tests des modules (`features/pageModels`, `features/pages`),
+`test/storefront/pageModels.test.ts` (chaque thème, chaque gabarit),
+`test/integration/page-models.mjs` (D1 réel) et
+`test/browser/page-models.spec.mjs` (en `atelier`).

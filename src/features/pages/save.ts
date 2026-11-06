@@ -4,6 +4,14 @@ import { findMediaByKeys, pageMediaClaimStatements } from '../media/db.ts';
 import { isIncomplete } from './completeness.ts';
 import { extractMediaKeys, placeMapProblems } from './markdown.ts';
 import { type Page } from './db.ts';
+import type { ThemePageModel } from '../storefront/models.ts';
+import {
+  modelMarkdownTexts,
+  readStoredZones,
+  serializeZones,
+  storedZoneTexts,
+  type StoredZones,
+} from '../pageModels/zones.ts';
 
 export interface SaveResult {
   /** Keys the body references that are not in the media library. */
@@ -42,6 +50,11 @@ export interface SaveResult {
  * A ```carte block the renderer cannot draw (ADR 0029) is a third such reason,
  * in every environment: the storefront would show nothing where the map was
  * meant to be.
+ *
+ * A page drawn by a theme's model (ADR 0031) is all of its zones as well as
+ * its body: the photos of every zone it keeps are claimed, the model in use or
+ * not, so none can be deleted while a switch back would show it; the maps and
+ * the markers of the zones the model draws are judged like the body's.
  */
 export async function savePageBody(
   db: D1Database,
@@ -52,16 +65,38 @@ export async function savePageBody(
     body_markdown: string;
     published: number;
     layout: string;
+    /** The page's model, '' for « Basique »; left as stored when absent. */
+    model?: string;
+    /** Every zone the page keeps; left as stored when absent. */
+    zones?: StoredZones;
   },
-  options: { baseUrl?: string; refuseIncomplete?: boolean } = {},
+  options: {
+    baseUrl?: string;
+    refuseIncomplete?: boolean;
+    /** The model the page is saved with, as the active theme declares it. */
+    pageModel?: ThemePageModel | null;
+  } = {},
 ): Promise<SaveResult> {
-  const referenced = extractMediaKeys(fields.body_markdown, { baseUrl: options.baseUrl });
+  const model = fields.model ?? existing.model ?? '';
+  const zones = fields.zones ?? readStoredZones(existing.zones);
+  const zoneTexts = storedZoneTexts(zones);
+  const drawn = modelMarkdownTexts(options.pageModel ?? null, zones);
+
+  const referenced = [
+    ...new Set([fields.body_markdown, ...zoneTexts].flatMap((text) => extractMediaKeys(text, { baseUrl: options.baseUrl }))),
+  ];
   const resolved = await findMediaByKeys(db, referenced);
   const resolvedKeys = new Set(resolved.map((m) => m.image_key));
   const unresolved = referenced.filter((key) => !resolvedKeys.has(key));
 
-  const incomplete = options.refuseIncomplete === true && isIncomplete(fields.body_markdown);
-  const mapProblems = placeMapProblems(fields.body_markdown);
+  const incomplete =
+    options.refuseIncomplete === true &&
+    (isIncomplete(fields.body_markdown) || drawn.some((zone) => isIncomplete(zone.text)));
+  // A zone's problem names its zone: its lines are the zone's, not the body's.
+  const mapProblems = [
+    ...placeMapProblems(fields.body_markdown),
+    ...drawn.flatMap((zone) => placeMapProblems(zone.text).map((problem) => `${zone.label} — ${problem}`)),
+  ];
 
   // Publishing is refused when media is missing, markers are left or a map
   // cannot be drawn, but an explicit unpublish is always honoured and a live
@@ -86,6 +121,8 @@ export async function savePageBody(
                 slug = ?3,
                 body_markdown = ?4,
                 layout = ?5,
+                model = ?9,
+                zones = ?10,
                 published = CASE
                   WHEN (SELECT COUNT(*) FROM page_media WHERE page_id = ?1) = ?6
                   THEN ?7 ELSE ?8 END,
@@ -101,6 +138,8 @@ export async function savePageBody(
         resolved.length,
         okValue,
         blockedValue,
+        model,
+        serializeZones(zones),
       ),
   ]);
 

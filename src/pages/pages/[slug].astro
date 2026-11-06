@@ -8,15 +8,11 @@ import type { ContactFormModel } from '../../features/storefront/models';
 import { getConfig } from '../../config';
 import { getPublishedPageBySlug } from '../../features/pages/db';
 import { pageImageDimensions } from '../../features/media/db';
-import {
-  renderMarkdown,
-  markdownExcerpt,
-  usesLightbox,
-  ROW_IMAGE_SIZES,
-} from '../../features/pages/markdown';
+import { ROW_IMAGE_SIZES } from '../../features/pages/markdown';
+import { buildPageView } from '../../features/pages/view';
 import Lightbox from '../../features/pages/Lightbox.astro';
 import { productImageSources } from '../../features/products/image';
-import { normalizePageLayout, pageLayoutStyle } from '../../features/pages/layouts';
+import { activePageModels, pageModelTemplate } from '../../features/pageModels/active';
 import { contactSettings, submitContact } from '../../features/contact';
 import { publicOrigin } from '../../features/http/origin';
 import { vaultReady } from '../../features/secrets/store';
@@ -88,7 +84,9 @@ const dimensions = await pageImageDimensions(env.DB, page.id);
 const tileBase = `/map-tiles/${encodeURIComponent(page.slug)}`;
 const baseUrl = getConfig().images.baseUrl;
 const delivery = settings?.imageDelivery;
-const html = renderMarkdown(page.body_markdown, {
+// The body, and the zones of the theme's model when the page has one (ADR
+// 0031), each rendered with the same options.
+const { pageModel, view, lightbox, description } = buildPageView(page, activePageModels, {
   baseUrl,
   dimensions,
   placeMaps: {
@@ -105,14 +103,14 @@ const html = renderMarkdown(page.body_markdown, {
     return sources.srcset ? sources : null;
   },
 });
-const description = markdownExcerpt(page.body_markdown);
-const layout = normalizePageLayout(page.layout);
-const layoutStyle = pageLayoutStyle(layout);
-const lightbox = usesLightbox(html);
+// A model's template is the theme's `pages/<key>.astro`; « Basique » is its
+// ContentPage, as every page was before.
+const Template = (pageModel ? pageModelTemplate(pageModel.key) : null) as typeof ContentPage | null;
+const layoutStyle = view.layoutStyle;
 ---
 
 <Layout title={page.title} description={description}>
-  <ContentPage model={{ title: page.title, html, layout, layoutStyle }} />
+  {Template ? <Template model={view} /> : <ContentPage model={view} />}
   {lightbox && <Lightbox />}
   {
     form && (
