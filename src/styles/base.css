@@ -563,8 +563,7 @@
   margin: 0;
   padding: 4rem 1rem;
   border: 0;
-  /* Opaque: the page's words showing through would sit under the position
-     and the caption. */
+  /* Opaque: the page's words showing through would sit under the position. */
   background: var(--color-ink, #111);
   color: var(--color-paper, #fff);
 }
@@ -592,15 +591,12 @@ html:has(.page-lightbox[open]) {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: calc(100vh - 11rem);
-  max-height: calc(100dvh - 11rem);
+  /* The dialog's padding (4rem above and below): no caption takes a line
+     under the photo since v0.7.2. */
+  max-height: calc(100vh - 8rem);
+  max-height: calc(100dvh - 8rem);
   object-fit: contain;
   border-radius: 0.25rem;
-}
-.page-lightbox__caption {
-  max-width: 48rem;
-  font-size: 0.875rem;
-  text-align: center;
 }
 .page-lightbox__position {
   position: absolute;
