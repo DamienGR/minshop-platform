@@ -1,6 +1,6 @@
 # ADR 0031 — Des modèles de page déclarés par le thème
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #209 par Damien, le 2026-11-06)
 - **Date** : 2026-11-05
 - **Jalon** : après le pilote (plan §13.17, ticket #205, lot 3) ; aucun des
   jalons 0 à 10
@@ -113,7 +113,8 @@ une boutique qui les veut les copie dans son thème. `atelier` est le thème
 thèmes réservés (`default`, `studio`, `market`) ne dessinent rien de ce qu'un
 modèle de données offre de nouveau. Les deux témoins sont des fichiers
 nouveaux, qui ne modifient aucun fichier existant du thème. Une page
-« Basique » d'`atelier` ne change pas, ni sa signature.
+« Basique » d'`atelier` ne change pas, ni sa signature. Damien a retenu
+`atelier` pour les témoins le 2026-11-06.
 
 ## Conséquences
 

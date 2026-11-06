@@ -3601,7 +3601,8 @@ sont une zone répétable (une entrée par point, ajoutée, retirée, rangée), 
 l'éditeur montre l'aperçu de chaque zone et celui de la page entière. ADR
 0031. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-05, migration 0056 :
+Fait le 2026-11-05, migration 0056 (PR #209, fusionnée par Damien le
+2026-11-06, qui accepte l'ADR 0031) :
 
 - un thème déclare ses modèles dans `pageModels.ts` et dessine chacun dans
   `pages/<clé>.astro` ; un modèle sans gabarit n'est pas proposé. « Basique »,
@@ -3619,7 +3620,8 @@ Fait le 2026-11-05, migration 0056 :
   et se raccourcit par les boutons du formulaire, sans script ; « Aperçu de la
   page » ouvre la page entière dans le thème, dans un nouvel onglet, sans
   l'enregistrer (`/admin/pages/<id>/preview`) ;
-- le thème `atelier` porte les deux modèles témoins ;
+- le thème `atelier` porte les deux modèles témoins (choix de Damien le
+  2026-11-06) ;
 - le guide de l'administration a ses sections « Choisir un modèle de page »
   et « Remplir une liste ».
 
