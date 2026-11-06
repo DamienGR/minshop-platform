@@ -16,6 +16,11 @@ import { t } from '../i18n';
  * the keyboard and to assistive technology, and Escape closes it. Focus then
  * goes back to the photo that opened it.
  *
+ * The photo keeps its alternative text, for whoever cannot see it, and shows
+ * no caption: that text is written to be heard (« Le pic du Midi d’Ossau
+ * au-dessus des nuages, vu du refuge de Pombie »), and under the photo it
+ * read as a caption nobody wrote (v0.7.2).
+ *
  * Every word comes from the catalog, rendered here: the script reads labels
  * from the markup and never imports `t`. `ink` and `paper` are tokens every
  * theme declares, and they contrast by contract.
@@ -35,7 +40,6 @@ import { t } from '../i18n';
   </button>
   <figure class="page-lightbox__figure">
     <img data-lightbox-image alt="" hidden />
-    <figcaption data-lightbox-caption class="page-lightbox__caption"></figcaption>
   </figure>
   <p data-lightbox-position class="page-lightbox__position" aria-live="polite"></p>
   <button type="button" data-lightbox-previous class="page-lightbox__button page-lightbox__previous" aria-label={t('page.lightbox.previous')}>
@@ -55,7 +59,6 @@ import { t } from '../i18n';
   // A browser without `showModal()` keeps the links: they open the photo.
   if (dialog instanceof HTMLDialogElement && typeof dialog.showModal === 'function') {
     const image = dialog.querySelector('[data-lightbox-image]');
-    const caption = dialog.querySelector('[data-lightbox-caption]');
     const position = dialog.querySelector('[data-lightbox-position]');
     const previous = dialog.querySelector('[data-lightbox-previous]');
     const next = dialog.querySelector('[data-lightbox-next]');
@@ -64,7 +67,6 @@ import { t } from '../i18n';
 
     if (
       image instanceof HTMLImageElement &&
-      caption instanceof HTMLElement &&
       position instanceof HTMLElement &&
       previous instanceof HTMLButtonElement &&
       next instanceof HTMLButtonElement &&
@@ -79,13 +81,10 @@ import { t } from '../i18n';
         current = (index + row.length) % row.length;
         const link = row[current];
         const thumbnail = link.querySelector('img');
-        const alt = thumbnail?.alt ?? '';
         // The thumbnail's bitmap may be a smaller copy: the link is the photo.
         image.src = link.href;
-        image.alt = alt;
+        image.alt = thumbnail?.alt ?? '';
         image.hidden = false;
-        caption.textContent = alt;
-        caption.hidden = alt === '';
         const alone = row.length < 2;
         position.hidden = alone;
         previous.hidden = alone;

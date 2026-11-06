@@ -140,8 +140,12 @@ test('un clic sur une photo de la rangée l’ouvre en grand, et le clavier y ci
   await links.nth(1).click();
   await expect(dialog).toBeVisible();
   await expect(image).toHaveAttribute('src', /\/media\/tee-back\.jpg$/);
+  // The alternative text stays the photo's, for whoever cannot see it; it is
+  // not written under the photo, where a description meant to be heard reads
+  // as a caption nobody wrote.
   await expect(image).toHaveAttribute('alt', 'Le dos');
-  await expect(dialog.locator('figcaption')).toHaveText('Le dos');
+  await expect(dialog).not.toContainText('Le dos');
+  await expect(dialog.locator('figcaption')).toHaveCount(0);
   await expect(position).toHaveText('Photo 2 sur 3');
   // Modal: the focus is in the dialog, and the photo is whole on the screen.
   expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);

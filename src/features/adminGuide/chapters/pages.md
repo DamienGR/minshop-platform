@@ -34,7 +34,7 @@ Le bouton ajoute `"gauche"` ou `"droite"` à la fin de la photo : vous pouvez 
 
 Une ligne vide entre deux photos commence une nouvelle rangée. Sur un téléphone, les photos vont deux par deux ; au-delà de quatre photos, la rangée passe à la ligne, quatre par quatre.
 
-Sur la boutique, un clic sur une photo de la rangée l’affiche en grand, avec en légende ce qui est écrit entre ses crochets `![…]`. Les flèches passent d’une photo à l’autre de la rangée. Dans l’**Aperçu**, un clic sur une photo ramène à sa ligne, comme ailleurs.
+Sur la boutique, un clic sur une photo de la rangée l’affiche en grand, sans légende : ce qui est écrit entre ses crochets `![…]` reste la description que lit un lecteur d’écran. Les flèches passent d’une photo à l’autre de la rangée. Dans l’**Aperçu**, un clic sur une photo ramène à sa ligne, comme ailleurs.
 
 Une photo seule, elle, garde sa forme et ne dépasse pas la hauteur de l’écran.
 
