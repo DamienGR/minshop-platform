@@ -135,6 +135,11 @@ export function normalizeTags(values) {
  *  is held to this many characters, the title only guided. */
 export const SEO_DESCRIPTION_MAX = 160;
 
+/** `\s` less the no-break spaces (U+00A0, U+2007, U+202F): a file typed the
+ *  French way keeps its space before « : » and inside « » (ticket #218). The
+ *  twin of `oneLine()` in `src/features/i18n/spaces.ts`. */
+const BREAKING_SPACES = /[^\S\u00a0\u2007\u202f]+/g;
+
 /**
  * One line of plain text for a search engine, or null when nothing is left.
  *
@@ -146,7 +151,7 @@ export const SEO_DESCRIPTION_MAX = 160;
  * @returns {string|null}
  */
 export function seoText(value) {
-  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const text = String(value ?? '').replace(BREAKING_SPACES, ' ').trim();
   return text || null;
 }
 

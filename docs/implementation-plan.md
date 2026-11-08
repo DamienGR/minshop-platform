@@ -3705,3 +3705,10 @@ Tenu par `src/features/seo/fields.test.ts`, les tests du chargeur de la fiche,
 `test/scripts/catalog.test.mjs` (colonnes absentes, vides, trop longues, contre
 les migrations réelles) et `test/integration/d1-integration.sh` (les six
 balises d'une page et d'une catégorie, contre le Worker construit).
+
+Corrigé le 2026-11-08 (ticket #218), livré dans le socle v0.8.1 : le titre et
+la description pour Google, la description d'une catégorie et leur import
+perdaient leurs espaces insécables, que `\s` reconnaît. Ils prennent la règle
+des textes du thème (#175), désormais partagée par
+`src/features/i18n/spaces.ts`, et le corpus commun de
+`test/scripts/catalog.test.mjs` a ses entrées avec U+00A0 et U+202F.
