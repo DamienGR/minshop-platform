@@ -3675,7 +3675,8 @@ boutique réelle : aucun écran ne permettait d'écrire ce que Google affiche
 d'une page, que `Layout.astro` déduisait du nom et du début du texte. Aucun des
 jalons 0 à 10 n'avance.
 
-Fait le 2026-11-08, avec une migration additive (0057) :
+Fait le 2026-11-08, avec une migration additive (0057), livré dans le socle
+v0.8.0 :
 
 - `seo_title` et `seo_description`, nuls par défaut, sur `products`,
   `categories` et `pages` ; l'accueil prend deux réglages,
