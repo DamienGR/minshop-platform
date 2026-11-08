@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.ts';
+import { oneLine } from '../i18n/spaces.ts';
 
 /**
  * What a search engine shows of a page, as the merchant writes it (ticket #216,
@@ -28,10 +29,11 @@ export interface SeoFields {
   seo_description: string | null;
 }
 
-/** One line of plain text: runs of whitespace fold to a space, null when
- *  nothing is left. A results page prints both on one line. */
+/** One line of plain text: runs of breaking whitespace fold to a space, the
+ *  no-break spaces of French typography stay (ticket #218), null when nothing
+ *  is left. A results page prints both on one line. */
 export function seoText(value: unknown): string | null {
-  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const text = oneLine(String(value ?? ''));
   return text || null;
 }
 

@@ -87,11 +87,14 @@ const inputClass =
 </fieldset>
 
 <script>
+  import { oneLine } from '../i18n/spaces.ts';
+
   // The counters follow the typing. Delegated from the document: the settings
   // screen swaps a section's markup after a background save, and a listener
   // bound to the old fields would count nothing. The server renders the
-  // first count, so without a script the figure is the saved one.
-  const fold = (value: string) => [...value.replace(/\s+/g, ' ').trim()].length;
+  // first count, so without a script the figure is the saved one. The fold is
+  // the server's own, from a leaf module: none of the catalog comes with it.
+  const fold = (value: string) => [...oneLine(value)].length;
   document.addEventListener('input', (event) => {
     const field = event.target;
     if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;

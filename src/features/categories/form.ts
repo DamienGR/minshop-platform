@@ -1,5 +1,6 @@
 import { parsePublicId } from '../ids/publicId';
 import { t } from '../i18n/index.ts';
+import { oneLine } from '../i18n/spaces.ts';
 import { parseSeoFields, type SeoFields } from '../seo/fields.ts';
 
 /** A category's description is a sentence or two under its name on a home
@@ -37,8 +38,9 @@ export function parseCategoryForm(
 
   // Refused, not truncated: a sentence cut mid-word on the home page is worse
   // than a message asking for a shorter one. Line breaks fold to spaces — the
-  // themes print it as one paragraph.
-  const description = String(form.get('description') ?? '').replace(/\s+/g, ' ').trim();
+  // themes print it as one paragraph — and the no-break spaces stay, or the
+  // category's page could wrap before « : » (ticket #218).
+  const description = oneLine(String(form.get('description') ?? ''));
   if ([...description].length > CATEGORY_DESCRIPTION_MAX) {
     return { error: t('admin.categories.error.descriptionTooLong', { max: CATEGORY_DESCRIPTION_MAX }) };
   }

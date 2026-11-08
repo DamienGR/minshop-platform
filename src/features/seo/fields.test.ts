@@ -40,7 +40,19 @@ describe('the title and description for search engines (ticket #216)', () => {
 
   it('folds whitespace the way the catalogue import does', () => {
     expect(seoText(null)).toBeNull();
-    expect(seoText(' a   b ')).toBe('a b');
+    expect(seoText(' a  \t\n b ')).toBe('a b');
+  });
+
+  // Ticket #218: `\s` matched the no-break spaces too, and a text typed the
+  // French way was stored without them.
+  it('keeps the no-break spaces of French typography', () => {
+    const title = 'Cabas «\u00a0Lin\u00a0» brodé';
+    const text = 'Une question\u202f? Écrivez-moi\u00a0: réponse sous 48\u00a0h.';
+    expect(parseSeoFields(form({ seo_title: ` ${title}\n`, seo_description: text }))).toEqual({
+      data: { seo_title: title, seo_description: text },
+    });
+    expect(seoText(' a \u00a0 b ')).toBe('a \u00a0 b');
+    expect(seoLength('Oui\u202f!')).toBe(5);
   });
 });
 

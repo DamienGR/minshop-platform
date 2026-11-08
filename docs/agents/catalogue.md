@@ -38,7 +38,9 @@ empty. `tags` (ticket #159, ADR 0026), `seo_title` and `seo_description`
 column leaves the store's value as the admin set it (the plan neither compares
 nor writes it), a file with the column is the truth, and an empty cell clears
 it. A `seo_description` past 160 characters is refused, as the admin refuses
-it; `seo_title` has no limit.
+it; `seo_title` has no limit. Both fold to one line the way the admin does,
+keeping the no-break spaces (U+00A0, U+2007, U+202F) a French file types
+before `:` and inside « » (ticket #218).
 
 Four pure rules exist twice on purpose — `slugify()`, `normalizeTags()`,
 `seoText()` and the image-header dimension reader — because one copy lives in

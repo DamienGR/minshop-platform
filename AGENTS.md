@@ -220,6 +220,7 @@ src/
     email/     provider (port) · resend · cloudflare · index (factory) · orderConfirmation
     search/    provider (port) · fts · vector · index (factory) · query
     i18n/      locale (leaf constants) · messages (fr catalog) · index (t/tn) · format
+               spaces (one-line fold that keeps the no-break spaces; leaf)
     legal/     terms (consent gate) · vat (TTC split)
     auth/      access (CF Access JWT) · session (admin login cookie) · turnstile · Turnstile.astro
     settings/  db (runtime settings) · availability · home · timeZone

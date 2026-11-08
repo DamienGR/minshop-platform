@@ -705,8 +705,21 @@ describe('les règles partagées avec le cœur ne dérivent pas', () => {
   // A title written in the admin and the same title imported must be one
   // string, or every re-import of the file reports a change (#216).
   it('le texte pour Google est plié de la même façon des deux côtés', () => {
-    const texts = [...CORPUS, '', 'a\n\nb', '\t Titre  \r\n long ', 'a\u00a0b', 'é'.repeat(161)];
+    const texts = [
+      ...CORPUS, '', 'a\n\nb', '\t Titre  \r\n long ', 'a\u00a0b', 'é'.repeat(161),
+      'Une question\u202f? Écrivez-moi', '«\u00a0Lin lavé\u00a0»', 'Prix\u2007: 12\u00a0€',
+      ' \u00a0Titre\u202f:\r\n\tlong\u00a0', 'a \u00a0 b',
+    ];
     for (const input of texts) expect([input, seoText(input)]).toEqual([input, storeSeoText(input)]);
+  });
+
+  // Two copies that agree can still be wrong together: before #218 both folded
+  // the no-break spaces into ordinary ones, and a file typed the French way was
+  // imported without them.
+  it('le texte pour Google garde ses espaces insécables', () => {
+    const typed = 'Cabas «\u00a0Lin\u00a0»\u202f: cousu main\u00a0!';
+    expect(seoText(`  ${typed}\r\n`)).toBe(typed);
+    expect(seoText('Prix\u2007: 12\u00a0€')).toBe('Prix\u2007: 12\u00a0€');
   });
 });
 
