@@ -343,6 +343,39 @@ if [[ "$page_body" != *"We ship worldwide."* ]]; then
   echo "D1 integration failed: published page did not render its Markdown" >&2
   exit 1
 fi
+# Nothing written for search engines: the title the layout always derived.
+if [[ "$page_body" != *"<title>Shipping Info — "* ]]; then
+  echo "D1 integration failed: a page without its own title and description no longer derives them" >&2
+  exit 1
+fi
+
+# What a search engine shows, written by the merchant (ticket #216, migration
+# 0057): every tag carries it as written, the title without the store's name.
+# Rows never fetched before, so no cached copy answers in their place.
+npx wrangler d1 execute DB --local --persist-to "$state_dir" \
+  --command "INSERT INTO pages (title, slug, body_markdown, published, seo_title, seo_description) VALUES ('Returns', 'returns', 'Thirty days.', 1, 'Returns & refunds, 30 days', 'Send it back within thirty days.'); INSERT INTO categories (name, slug, description, seo_title, seo_description, public_id) VALUES ('Bags', 'bags', 'Sewn by hand in the workshop.', 'Handmade bags', 'Tote bags sewn by hand.', 'cat_' || lower(substr(hex(randomblob(10)),1,10)));" >/dev/null
+seo_page="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/pages/returns")"
+for expected in '<title>Returns &amp; refunds, 30 days</title>' \
+  '<meta name="description" content="Send it back within thirty days.">' \
+  '<meta property="og:title" content="Returns &amp; refunds, 30 days">' \
+  '<meta property="og:description" content="Send it back within thirty days.">' \
+  '<meta name="twitter:title" content="Returns &amp; refunds, 30 days">' \
+  '<meta name="twitter:description" content="Send it back within thirty days.">'; do
+  if [[ "$seo_page" != *"$expected"* ]]; then
+    echo "D1 integration failed: /pages/returns does not carry $expected" >&2
+    exit 1
+  fi
+done
+seo_category="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/categories/bags")"
+if [[ "$seo_category" != *"<title>Handmade bags</title>"* || "$seo_category" != *'<meta name="description" content="Tote bags sewn by hand.">'* ]]; then
+  echo "D1 integration failed: /categories/bags does not carry its own title and description" >&2
+  exit 1
+fi
+# The category's own sentence, under its heading.
+if [[ "$seo_category" != *">Sewn by hand in the workshop.</p>"* ]]; then
+  echo "D1 integration failed: /categories/bags does not show its description" >&2
+  exit 1
+fi
 
 # miniflare renders a connection it lost itself as a plain-text 500 from its own
 # entry worker, so curl reports a completed exchange and a transport retry never

@@ -1,12 +1,13 @@
 import { parsePublicId } from '../ids/publicId';
 import { t } from '../i18n/index.ts';
+import { parseSeoFields, type SeoFields } from '../seo/fields.ts';
 
 /** A category's description is a sentence or two under its name on a home
  *  page, not a page body: past this it belongs in a content page. */
 export const CATEGORY_DESCRIPTION_MAX = 300;
 
 /** Parsed category form fields (slug + parent resolved by the endpoint). */
-export interface ParsedCategoryForm {
+export interface ParsedCategoryForm extends SeoFields {
   name: string;
   slugInput: string;
   /** cat_ public ID from the parent selector; resolved to a row id at the boundary. */
@@ -44,6 +45,9 @@ export function parseCategoryForm(
 
   const imageKey = String(form.get('image_key') ?? '').trim();
 
+  const seo = parseSeoFields(form);
+  if ('error' in seo) return seo;
+
   return {
     data: {
       name,
@@ -51,6 +55,7 @@ export function parseCategoryForm(
       parentPublicId,
       description: description || null,
       imageKey: imageKey || null,
+      ...seo.data,
     },
   };
 }

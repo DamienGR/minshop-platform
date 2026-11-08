@@ -120,6 +120,9 @@ try {
        -- migrations/0056_page_models.sql: the page's model and its zones.
        model TEXT NOT NULL DEFAULT '',
        zones TEXT NOT NULL DEFAULT '{}',
+       -- migrations/0057_seo_fields.sql: what a search engine shows.
+       seo_title TEXT,
+       seo_description TEXT,
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
        updated_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     `CREATE TABLE page_media (

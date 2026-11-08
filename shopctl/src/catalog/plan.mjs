@@ -30,7 +30,10 @@
 import { integer, integerOrNull, newPublicId, productIdBySku, text, textOrNull } from './sql.mjs';
 
 /** Fields compared to decide whether a product row needs an UPDATE at all. */
-const PRODUCT_FIELDS = ['name', 'slug', 'description', 'price_cents', 'stock', 'active', 'variant_label', 'weight_grams', 'requires_shipping', 'tags'];
+const PRODUCT_FIELDS = ['name', 'slug', 'description', 'price_cents', 'stock', 'active', 'variant_label', 'weight_grams', 'requires_shipping', 'tags', 'seo_title', 'seo_description'];
+/** The fields a catalogue may leave out (contract.mjs): absent, a product
+ *  carries them as undefined, and the plan neither compares nor writes them. */
+const OPTIONAL_PRODUCT_FIELDS = ['tags', 'seo_title', 'seo_description'];
 const VARIANT_FIELDS = ['label', 'price_cents', 'stock', 'weight_grams', 'position', 'active'];
 
 function refusal(subject, message, hint = null) {
@@ -235,18 +238,22 @@ export function planImport(desired, store, options) {
       summary.productsCreated += 1;
       productChanges.push({ kind: 'product.create', subject: product.sku, detail: product.name });
       productStatements.push(
-        `INSERT INTO products (name, slug, sku, description, price_cents, currency, stock, active, variant_label, weight_grams, requires_shipping, tags, public_id)\n` +
+        `INSERT INTO products (name, slug, sku, description, price_cents, currency, stock, active, variant_label, weight_grams, requires_shipping, tags, seo_title, seo_description, public_id)\n` +
           `  VALUES (${text(product.name)}, ${text(product.slug)}, ${text(product.sku)}, ${textOrNull(product.description)}, ` +
           `${integer(product.price_cents)}, ${text(currency.toLowerCase())}, ${integer(product.stock)}, ${integer(product.active)}, ` +
           `${textOrNull(product.variant_label)}, ${integerOrNull(product.weight_grams)}, ${integer(product.requires_shipping)}, ` +
-          `${textOrNull(product.tags ?? null)}, ${newPublicId('prod')});`,
+          `${textOrNull(product.tags ?? null)}, ${textOrNull(product.seo_title ?? null)}, ${textOrNull(product.seo_description ?? null)}, ` +
+          `${newPublicId('prod')});`,
       );
     } else {
-      // A catalogue without a `tags` column says nothing about tags (contract.mjs):
-      // they are neither compared nor written, so the admin's stay.
-      const differing = PRODUCT_FIELDS.filter(
-        (field) => !(field === 'tags' && product.tags === undefined) && !sameValue(existing[field], product[field]),
-      );
+      // A catalogue without a `tags` column says nothing about tags, nor one
+      // without `seo_title` about that title (contract.mjs): they are neither
+      // compared nor written, so the admin's stay.
+      const said = (field) => !(OPTIONAL_PRODUCT_FIELDS.includes(field) && product[field] === undefined);
+      const differing = PRODUCT_FIELDS.filter((field) => said(field) && !sameValue(existing[field], product[field]));
+      const optionalSets = OPTIONAL_PRODUCT_FIELDS.filter(said)
+        .map((field) => `, ${field} = ${textOrNull(product[field])}`)
+        .join('');
       // An adopted row has no reference yet, so it needs the UPDATE even when
       // every other field already matches.
       if (differing.length > 0 || existing.sku !== product.sku) {
@@ -257,7 +264,7 @@ export function planImport(desired, store, options) {
             `description = ${textOrNull(product.description)}, price_cents = ${integer(product.price_cents)}, ` +
             `stock = ${integer(product.stock)}, active = ${integer(product.active)}, variant_label = ${textOrNull(product.variant_label)}, ` +
             `weight_grams = ${integerOrNull(product.weight_grams)}, requires_shipping = ${integer(product.requires_shipping)}` +
-            `${product.tags === undefined ? '' : `, tags = ${textOrNull(product.tags)}`}\n` +
+            `${optionalSets}\n` +
             ` WHERE id = ${integer(existing.id)};`,
         );
       }

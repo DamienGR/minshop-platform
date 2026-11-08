@@ -12,8 +12,11 @@ import { resolveHomePath } from '../features/settings/home';
 // through to the catalog: a 404 homepage would be edge-cached for everyone.
 const homePath = await resolveHomePath(env.DB, Astro.locals.settings?.homePage);
 if (homePath) return Astro.rewrite(homePath);
+// The catalog's own title and description for search engines (ticket #216),
+// set in Admin → Réglages → Général. A rewritten home carries its target's.
+const settings = Astro.locals.settings;
 ---
 
-<Layout>
+<Layout seoTitle={settings?.homeSeoTitle} description={settings?.homeSeoDescription ?? undefined}>
   <ProductList />
 </Layout>

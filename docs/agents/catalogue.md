@@ -33,13 +33,15 @@ Four properties hold, and each one is a test:
   gate writes `'); DROP TABLE products;--` into a store and reads it back.
 
 An optional column says nothing when it is ABSENT, which is not the same as
-empty. `tags` (ticket #159, ADR 0026) is the one where the difference is a
-write: a file without the column leaves the store's tags as the admin set them
-(the plan neither compares nor writes them), a file with the column is the
-truth, and an empty cell clears them.
+empty. `tags` (ticket #159, ADR 0026), `seo_title` and `seo_description`
+(ticket #216) are the ones where the difference is a write: a file without the
+column leaves the store's value as the admin set it (the plan neither compares
+nor writes it), a file with the column is the truth, and an empty cell clears
+it. A `seo_description` past 160 characters is refused, as the admin refuses
+it; `seo_title` has no limit.
 
-Three pure rules exist twice on purpose — `slugify()`, `normalizeTags()` and the
-image-header dimension reader — because one copy lives in the Worker bundle and
-the other in a CLI with no build step. Each pair is pinned against a shared
+Four pure rules exist twice on purpose — `slugify()`, `normalizeTags()`,
+`seoText()` and the image-header dimension reader — because one copy lives in
+the Worker bundle and the other in a CLI with no build step. Each pair is pinned against a shared
 corpus in `test/scripts/catalog.test.mjs`; keep them that way rather than
 "fixing" the duplication.

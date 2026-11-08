@@ -13,6 +13,10 @@ export interface Page {
   model: string;
   /** What the model's zones hold, as JSON (features/pageModels/zones.ts). */
   zones: string;
+  /** What a search engine shows of the page (migration 0057,
+   *  features/seo/fields.ts); null = derived from the title and the text. */
+  seo_title: string | null;
+  seo_description: string | null;
   public_id: string | null;
   created_at: string;
   updated_at: string;

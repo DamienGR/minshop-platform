@@ -192,8 +192,12 @@ export async function loadProductDetail(
       storedRelated === null ? () => storeRelatedIds(product.id, RELATED_TARGET) : null,
     seo: {
       title: product.name,
-      // Meta/og description: plain text, truncated on a word boundary.
-      description: product.description ? markdownExcerpt(product.description, 160) : null,
+      seoTitle: product.seo_title,
+      // Meta/og description: the merchant's (ticket #216), else plain text
+      // from the description, truncated on a word boundary. The JSON-LD above
+      // keeps the product's own name and description.
+      description:
+        product.seo_description ?? (product.description ? markdownExcerpt(product.description, 160) : null),
       imagePath,
       // Escape "<" so a product name can't break out of the <script> tag.
       jsonLd: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),

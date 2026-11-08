@@ -28,6 +28,8 @@ const rows = {
     requires_shipping: 1,
     related_ids: null,
     tags: null,
+    seo_title: null,
+    seo_description: null,
     created_at: '2026-01-01T00:00:00Z',
   } as Record<string, unknown>,
   variants: [] as Array<Record<string, unknown>>,
@@ -148,6 +150,29 @@ describe('loadProductDetail public-ID policy', () => {
     if (loaded.status !== 'ok') return;
     expect(loaded.model.tags).toEqual(['non-cousu', 'nouveau']);
     rows.product = { ...rows.product, tags: null };
+  });
+
+  it('carries the title and description written for search engines (ticket #216)', async () => {
+    const derived = await load();
+    expect(derived.status).toBe('ok');
+    if (derived.status !== 'ok') return;
+    // Empty: the name, for the layout to suffix, and the description's first words.
+    expect(derived.seo).toMatchObject({ title: 'Sample Tee', seoTitle: null, description: 'A shirt.' });
+
+    rows.product = {
+      ...rows.product,
+      seo_title: 'Sac à dos enfant brodé au prénom',
+      seo_description: 'Brodé à la main dans notre atelier.',
+    };
+    const written = await load();
+    expect(written.status).toBe('ok');
+    if (written.status !== 'ok') return;
+    expect(written.seo.seoTitle).toBe('Sac à dos enfant brodé au prénom');
+    expect(written.seo.description).toBe('Brodé à la main dans notre atelier.');
+    // The page itself, and its structured data, keep the product's own.
+    expect(written.model.name).toBe('Sample Tee');
+    expect(JSON.parse(written.seo.jsonLd)).toMatchObject({ name: 'Sample Tee', description: 'A shirt.' });
+    rows.product = { ...rows.product, seo_title: null, seo_description: null };
   });
 
   it('refuses a product without a public ID', async () => {

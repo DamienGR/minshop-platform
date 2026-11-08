@@ -1,0 +1,107 @@
+---
+/**
+ * The « Référencement » box of an admin form (ticket #216): a title and a
+ * description for search engines, each optional, each with its counter.
+ *
+ * Empty, a field shows in grey what the storefront prints in its place, from
+ * the same rule the layout applies (features/seo/meta.ts): the caller passes
+ * it, since only the caller knows the name, the text or the page it derives
+ * from. The fields post as `seo_title` and `seo_description`, which
+ * parseSeoFields() reads.
+ */
+import { SEO_DESCRIPTION_MAX, SEO_TITLE_GUIDE, seoLength } from './fields';
+import { t } from '../i18n';
+
+interface Props {
+  title: string | null;
+  description: string | null;
+  /** What the storefront shows while the title is empty. */
+  fallbackTitle: string;
+  /** What it shows while the description is empty ('' = nothing). */
+  fallbackDescription: string;
+  /** A sentence under the legend, in place of the general one. */
+  intro?: string;
+}
+
+const { title, description, fallbackTitle, fallbackDescription, intro } = Astro.props;
+const titleCount = seoLength(title ?? '');
+const descriptionCount = seoLength(description ?? '');
+const inputClass =
+  'mt-1 w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none';
+---
+
+<fieldset class="rounded-md border border-line p-4">
+  <legend class="px-1 text-sm font-medium">{t('admin.seo.legend')}</legend>
+  <p class="text-xs text-muted">{intro ?? t('admin.seo.intro')}</p>
+
+  <div class="mt-3">
+    <label class="block text-sm font-medium" for="seo_title">
+      {t('admin.seo.title')} <span class="text-faint">{t('admin.seo.optional')}</span>
+    </label>
+    <input
+      id="seo_title"
+      name="seo_title"
+      type="text"
+      value={title ?? ''}
+      placeholder={fallbackTitle}
+      aria-describedby="seo_title-help"
+      data-seo-input="seo_title-count"
+      data-seo-guide={SEO_TITLE_GUIDE}
+      class={inputClass}
+    />
+    <p id="seo_title-help" class="mt-1 flex justify-between gap-3 text-xs text-muted">
+      <span>{t('admin.seo.titleHelp', { max: SEO_TITLE_GUIDE })}</span>
+      <span
+        id="seo_title-count"
+        class:list={['shrink-0 tabular-nums', titleCount > SEO_TITLE_GUIDE && 'text-amber-700']}
+      >
+        {titleCount} / {SEO_TITLE_GUIDE}
+      </span>
+    </p>
+  </div>
+
+  <div class="mt-3">
+    <label class="block text-sm font-medium" for="seo_description">
+      {t('admin.seo.description')} <span class="text-faint">{t('admin.seo.descriptionHint', { max: SEO_DESCRIPTION_MAX })}</span>
+    </label>
+    {/* maxlength stops the typing; parseSeoFields() is the rule, for a paste
+        the browser let through or a form posted without this page. */}
+    <textarea
+      id="seo_description"
+      name="seo_description"
+      rows="3"
+      maxlength={SEO_DESCRIPTION_MAX}
+      placeholder={fallbackDescription}
+      aria-describedby="seo_description-help"
+      data-seo-input="seo_description-count"
+      data-seo-guide={SEO_DESCRIPTION_MAX}
+      class={inputClass}
+    >{description ?? ''}</textarea>
+    <p id="seo_description-help" class="mt-1 flex justify-between gap-3 text-xs text-muted">
+      <span>{t('admin.seo.descriptionHelp')}</span>
+      <span id="seo_description-count" class="shrink-0 tabular-nums">
+        {descriptionCount} / {SEO_DESCRIPTION_MAX}
+      </span>
+    </p>
+  </div>
+</fieldset>
+
+<script>
+  // The counters follow the typing. Delegated from the document: the settings
+  // screen swaps a section's markup after a background save, and a listener
+  // bound to the old fields would count nothing. The server renders the
+  // first count, so without a script the figure is the saved one.
+  const fold = (value: string) => [...value.replace(/\s+/g, ' ').trim()].length;
+  document.addEventListener('input', (event) => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    const counterId = field.dataset.seoInput;
+    if (!counterId) return;
+    const counter = document.getElementById(counterId);
+    if (!counter) return;
+    const guide = Number(field.dataset.seoGuide || '0');
+    const count = fold(field.value);
+    counter.textContent = `${count} / ${guide}`;
+    counter.classList.toggle('text-amber-700', count > guide);
+  });
+</script>

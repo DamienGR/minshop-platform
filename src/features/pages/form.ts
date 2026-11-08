@@ -3,6 +3,7 @@ import { normalizePageLayout, type PageLayout } from './layouts.ts';
 import type { ThemePageModel } from '../storefront/models.ts';
 import { pageModelOf } from '../pageModels/declaration.ts';
 import { parsePageZonesForm, serializeZones, type StoredZones } from '../pageModels/zones.ts';
+import { parseSeoFields, type SeoFields } from '../seo/fields.ts';
 
 const MAX_TITLE = 120;
 const MAX_BODY = 100_000;
@@ -11,7 +12,7 @@ const MAX_BODY = 100_000;
  *  far more. */
 export const MAX_ZONES = 200_000;
 
-export interface PageFields {
+export interface PageFields extends SeoFields {
   title: string;
   /** Raw slug as typed; '' means "derive it from the title". */
   slug: string;
@@ -66,6 +67,9 @@ export function parsePageForm(
     return { error: t('admin.pages.form.zonesTooLong', { max: formatNumber(MAX_ZONES) }) };
   }
 
+  const seo = parseSeoFields(form);
+  if ('error' in seo) return seo;
+
   return {
     data: {
       title,
@@ -76,6 +80,7 @@ export function parsePageForm(
       layout: normalizePageLayout(form.get('layout')),
       model,
       zones: zones.zones,
+      ...seo.data,
     },
   };
 }

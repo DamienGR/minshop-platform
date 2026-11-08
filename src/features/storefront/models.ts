@@ -303,6 +303,10 @@ export interface ProductPurchaseModel {
  *  correctness are not presentation decisions. */
 export interface ProductSeoModel {
   title: string;
+  /** The merchant's title for search engines (ticket #216), used as it stands;
+   *  null = derived from `title`. */
+  seoTitle: string | null;
+  /** The merchant's description, else the description's first words. */
   description: string | null;
   /** Root-relative image path for the social card. */
   imagePath: string;

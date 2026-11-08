@@ -5,6 +5,9 @@ import { getConfig, toMajorUnits, currencyDecimals } from '../../config';
 import { formatWeightValue, type WeightUnit } from '../shipping/weight';
 import { attachmentActive } from '../digitalDelivery/rollout.ts';
 import { readTags } from './tags';
+import SeoFields from '../seo/SeoFields.astro';
+import { documentTitle } from '../seo/meta';
+import { markdownExcerpt } from '../pages/markdown';
 import { t, formatNumber } from '../i18n';
 
 interface Props {
@@ -51,6 +54,13 @@ const price = product
 const priceStep = priceDecimals > 0 ? (10 ** -priceDecimals).toFixed(priceDecimals) : '1';
 const inputClass =
   'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
+// What the product page carries while « Référencement » is empty: the same
+// derivation as features/storefront/productDetail.ts and Layout.astro.
+const storeName = Astro.locals.settings?.storeName ?? getConfig().storeName;
+const seoFallbackTitle = documentTitle({ title: product?.name || t('admin.seo.newProduct'), storeName });
+const seoFallbackDescription =
+  (product?.description ? markdownExcerpt(product.description, 160) : '') ||
+  t('shell.meta.description', { boutique: storeName });
 ---
 
 <form
@@ -229,6 +239,13 @@ const inputClass =
       </fieldset>
     )
   }
+
+  <SeoFields
+    title={product?.seo_title ?? null}
+    description={product?.seo_description ?? null}
+    fallbackTitle={seoFallbackTitle}
+    fallbackDescription={seoFallbackDescription}
+  />
 
   <label class="flex items-center gap-2 text-sm">
     <input name="active" type="checkbox" checked={product ? product.active === 1 : true} class="h-4 w-4" />

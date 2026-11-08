@@ -9,12 +9,17 @@ import { buildShellModel } from '../features/storefront/shell';
 import { storefrontIndexable } from '../features/storefront/indexable';
 import { vaultReady } from '../features/secrets/store';
 import { LANG, LOCALE, t } from '../features/i18n';
+import { documentTitle, META_DESCRIPTION_MAX } from '../features/seo/meta';
 import StoreHeader from '#theme/Header.astro';
 import StoreFooter from '#theme/Footer.astro';
 import '../styles/global.css';
 
 interface Props {
   title?: string;
+  /** The title the merchant wrote for search engines (ticket #216). Used as it
+   *  stands, without the « — {boutique} » suffix `title` takes; null or empty
+   *  leaves the title derived from `title`. */
+  seoTitle?: string | null;
   description?: string;
   /** Root-relative or absolute image for social cards (made absolute below). */
   image?: string;
@@ -23,7 +28,7 @@ interface Props {
   canonical?: string;
 }
 
-const { title, description, image, canonical: canonicalOverride } = Astro.props;
+const { title, seoTitle, description, image, canonical: canonicalOverride } = Astro.props;
 const config = getConfig();
 const { features } = config;
 // Runtime override (set by the setup wizard) wins over the build-time default.
@@ -59,13 +64,19 @@ const accountsOn =
 // escapes both values on render, so admin-entered text can't inject markup.
 const announcement = Astro.locals.settings?.announcement ?? '';
 const announcementHref = Astro.locals.settings?.announcementHref ?? '';
-const pageTitle = title ? `${title} — ${storeName}` : storeName;
+const pageTitle = documentTitle({ seoTitle, title, storeName });
 const query =
   Astro.url.pathname === '/search'
     ? normalizeSearchQuery(Astro.url.searchParams.get('q') ?? '')
     : '';
 
-const desc = (description ?? t('shell.meta.description', { boutique: storeName })).slice(0, 160);
+// A description the merchant wrote arrives here as `description`, already
+// held to the same 160 characters by its form (features/seo/fields.ts). Cut
+// by characters, not UTF-16 units: an emoji counted twice would cost the
+// written description its last letter.
+const desc = [...(description ?? t('shell.meta.description', { boutique: storeName }))]
+  .slice(0, META_DESCRIPTION_MAX)
+  .join('');
 const origin = publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN);
 const canonical = canonicalOverride ?? new URL(Astro.url.pathname, origin).href;
 const ogImage = image ? new URL(image, origin).href : undefined;

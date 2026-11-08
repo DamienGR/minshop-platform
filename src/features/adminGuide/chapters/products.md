@@ -47,6 +47,13 @@ Un champ que l’acheteur remplit sur la fiche du produit, par exemple un préno
 
 Des mots-clés que votre thème peut utiliser, par exemple pour afficher un badge. Séparez-les par des virgules.
 
+### Référencement
+
+Ce que Google affiche de la fiche dans ses résultats. Laissés vides, les deux champs reprennent le texte grisé : le nom du produit suivi de celui de la boutique, puis le début de la description.
+
+- **Titre pour Google** : affiché tel quel, sans le nom de la boutique à la suite. Mettez-y ce qu’un client chercherait, par exemple « Sac à dos enfant brodé au prénom », en une soixantaine de caractères ; le nom du produit, lui, reste court sur la fiche, le panier et les commandes.
+- **Description pour Google** : une ou deux phrases qui donnent envie de cliquer, 160 caractères au plus. Le compteur sous le champ les compte.
+
 ### Retirer un produit de la vente
 
 Décochez **Actif** et enregistrez : le produit disparaît de la boutique, mais reste ici. **Supprimer**, dans la liste, l’efface pour de bon.

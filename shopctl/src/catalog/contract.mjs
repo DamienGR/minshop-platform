@@ -60,6 +60,8 @@ export const COLUMNS = [
   { name: 'active', scope: 'product', required: false, description: 'oui/non. Défaut oui.' },
   { name: 'categories', scope: 'product', required: false, description: 'Slugs de catégories séparés par « | ».' },
   { name: 'tags', scope: 'product', required: false, description: 'Étiquettes que le thème lit (« non-cousu », « nouveau »), séparées par « | ». Colonne absente : les étiquettes de la boutique restent ; colonne vide : elles sont retirées.' },
+  { name: 'seo_title', scope: 'product', required: false, description: 'Titre pour Google, affiché tel quel sans le nom de la boutique ; une soixantaine de caractères. Colonne absente : le titre saisi dans la boutique reste ; colonne vide : il est retiré, et le nom du produit reprend sa place.' },
+  { name: 'seo_description', scope: 'product', required: false, description: 'Description pour Google, 160 caractères au plus. Colonne absente : celle saisie dans la boutique reste ; colonne vide : elle est retirée, et le début de la description reprend sa place.' },
   { name: 'images', scope: 'product', required: false, description: 'Chemins d\'images relatifs au CSV, séparés par « | ». La première est la principale.' },
 ];
 
@@ -127,6 +129,25 @@ export function normalizeTags(values) {
   }
   if (tags.length > TAGS_MAX) return { error: `${tags.length} étiquettes ; ${TAGS_MAX} au plus.` };
   return { tags };
+}
+
+/** What a search engine shows of a product (ticket #216): the description
+ *  is held to this many characters, the title only guided. */
+export const SEO_DESCRIPTION_MAX = 160;
+
+/**
+ * One line of plain text for a search engine, or null when nothing is left.
+ *
+ * The twin of `seoText()` in `src/features/seo/fields.ts`, pinned to it over a
+ * shared corpus in test/scripts/catalog.test.mjs: the same text typed in the
+ * admin and imported must be one string, or every re-import reports a change.
+ *
+ * @param {string} value
+ * @returns {string|null}
+ */
+export function seoText(value) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return text || null;
 }
 
 /** One refusal, addressed to a place in the file. */
@@ -413,6 +434,23 @@ export function buildCatalogue(parsed, { currency }) {
       else tags = normalised.tags;
     }
 
+    // The same absent-or-empty rule as `tags`: a file written before the
+    // columns existed cannot wipe the titles and descriptions the merchant
+    // wrote in the admin, and a present column is the truth, an empty cell
+    // clearing the field so the store derives it again.
+    const seo = {};
+    for (const field of ['seo_title', 'seo_description']) {
+      if (parsed.columns.includes(field)) seo[field] = seoText(value(field));
+    }
+    if (seo.seo_description && [...seo.seo_description].length > SEO_DESCRIPTION_MAX) {
+      issues.push(issue(
+        at('seo_description'),
+        'seo_description',
+        `« ${group.key} » a une description pour Google de ${[...seo.seo_description].length} caractères ; ${SEO_DESCRIPTION_MAX} au plus.`,
+        'Refusée plutôt que coupée : un résumé arrêté au milieu d\'un mot se lit plus mal qu\'un résumé resserré.',
+      ));
+    }
+
     const images = splitList(value('images')).map((path) => ({ path, line: at('images') }));
     if (new Set(images.map((image) => image.path)).size !== images.length) {
       issues.push(issue(at('images'), 'images', `« ${group.key} » répète une image.`));
@@ -441,6 +479,7 @@ export function buildCatalogue(parsed, { currency }) {
       requires_shipping: shipping.value ?? 1,
       categories,
       ...(tags !== undefined ? { tags: tags.length > 0 ? tags.join(',') : null } : {}),
+      ...seo,
       images,
       // With variants the product row is not the sellable unit: its price is
       // what a card shows ("from"), so it is the cheapest variant, and its stock

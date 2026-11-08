@@ -45,6 +45,8 @@ export type SettingKey =
   | 'email_provider' // 'resend' | 'cloudflare'; absent = resend
   | 'logo_image_key' // media image_key shown instead of the text store name; absent = text
   | 'home_page' // what / renders: 'page:<id>' | 'product:<id>'; absent = the catalog list
+  | 'home_seo_title' // the catalog home's title for search engines (ticket #216); absent = the store name
+  | 'home_seo_description' // its description; absent = the shell's default sentence
   | 'featured_product' // id of the product the catalog model puts forward (ticket #164); absent = the newest in stock
   | 'announcement' // storefront announcement bar text; absent/empty = bar hidden
   | 'announcement_href' // optional link for the announcement bar
@@ -110,6 +112,11 @@ export interface StoreSettings {
   /** What `/` renders: 'page:<id>', 'product:<id>', or null for the catalog
    *  list. Stored as an id so renaming the target cannot break it. */
   homePage: string | null;
+  /** What a search engine shows of `/` while it renders the catalog list
+   *  (ticket #216), or null for the derived title and description. A page or
+   *  product chosen as home page carries its own. */
+  homeSeoTitle: string | null;
+  homeSeoDescription: string | null;
   /** The product the merchant puts forward on the catalog (ticket #164), or
    *  null for the automatic choice. An id, like the home page: a renamed
    *  product keeps it. Resolved at read time — an inactive or deleted one
@@ -237,6 +244,8 @@ export function parseStoreSettings(
     emailProvider: map.get('email_provider') === 'cloudflare' ? 'cloudflare' : 'resend',
     logoImageKey: map.get('logo_image_key') ?? null,
     homePage: map.get('home_page') ?? null,
+    homeSeoTitle: map.get('home_seo_title') ?? null,
+    homeSeoDescription: map.get('home_seo_description') ?? null,
     featuredProductId: positiveId(map.get('featured_product')),
     announcement: map.get('announcement') ?? null,
     announcementHref: map.get('announcement_href') ?? null,

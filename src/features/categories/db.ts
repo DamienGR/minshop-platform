@@ -14,6 +14,10 @@ export interface Category {
   image_key: string | null;
   /** A short plain-text presentation, at most 300 characters. NULL = none. */
   description: string | null;
+  /** What a search engine shows of the category page (migration 0057,
+   *  features/seo/fields.ts); null = derived. */
+  seo_title: string | null;
+  seo_description: string | null;
   created_at: string;
 }
 
@@ -36,6 +40,8 @@ export interface CategoryFields {
   slug: string;
   parent_id: number | null;
   description: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
 }
 
 /**
@@ -89,9 +95,10 @@ export async function createCategory(db: D1Database, c: CategoryFields): Promise
   return withPublicId('category', async (publicId) => {
     const row = await db
       .prepare(
-        'INSERT INTO categories (name, slug, parent_id, description, public_id) VALUES (?, ?, ?, ?, ?) RETURNING id',
+        `INSERT INTO categories (name, slug, parent_id, description, seo_title, seo_description, public_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .bind(c.name, c.slug, c.parent_id, c.description, publicId)
+      .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -99,8 +106,11 @@ export async function createCategory(db: D1Database, c: CategoryFields): Promise
 
 export async function updateCategory(db: D1Database, id: number, c: CategoryFields): Promise<void> {
   await db
-    .prepare('UPDATE categories SET name = ?, slug = ?, parent_id = ?, description = ? WHERE id = ?')
-    .bind(c.name, c.slug, c.parent_id, c.description, id)
+    .prepare(
+      `UPDATE categories SET name = ?, slug = ?, parent_id = ?, description = ?, seo_title = ?, seo_description = ?
+        WHERE id = ?`,
+    )
+    .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, id)
     .run();
 }
 

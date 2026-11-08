@@ -81,7 +81,11 @@ const hrefFor = (p: number) =>
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
 ---
 
-<Layout title={category.name}>
+<Layout
+  title={category.name}
+  seoTitle={category.seo_title}
+  description={category.seo_description ?? undefined}
+>
   <nav class="mb-4 flex flex-wrap gap-x-2 text-xs uppercase tracking-widest text-faint">
     <a href={shopHref} class="hover:text-accent">{t('shell.nav.store')}</a>
     {
@@ -96,7 +100,10 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
     }
   </nav>
 
-  <h1 class="mb-8 font-serif text-4xl tracking-tight sm:text-5xl">{category.name}</h1>
+  <h1 class={`${category.description ? 'mb-4' : 'mb-8'} font-serif text-4xl tracking-tight sm:text-5xl`}>{category.name}</h1>
+  {/* The category's own sentence (Admin → Catégories, ticket #216): plain
+      text, escaped like every value Astro prints. */}
+  {category.description && <p class="mb-8 max-w-2xl text-muted">{category.description}</p>}
 
   {
     subcats.length > 0 && (
