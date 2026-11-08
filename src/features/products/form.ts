@@ -3,6 +3,7 @@ import { toMinorUnits } from '../../money';
 import { toGrams, type WeightUnit } from '../shipping/weight';
 import { t } from '../i18n';
 import { parseTagsInput, storeTags } from './tags';
+import { parseSeoFields } from '../seo/fields';
 
 export interface ProductFormOptions {
   /** Admin's display unit. Storage is always grams. */
@@ -70,6 +71,9 @@ export function parseProductForm(
   const tags = parseTagsInput(String(form.get('tags') ?? ''));
   if ('error' in tags) return { error: tags.error };
 
+  const seo = parseSeoFields(form);
+  if ('error' in seo) return seo;
+
   return {
     data: {
       name,
@@ -82,6 +86,7 @@ export function parseProductForm(
       weight_grams,
       requires_shipping,
       tags: storeTags(tags.tags),
+      ...seo.data,
     },
   };
 }

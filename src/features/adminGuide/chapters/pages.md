@@ -90,6 +90,10 @@ Une zone peut être une liste : des points de vente, chacun avec son nom, son 
 
 Les pages légales préparées pour vous contiennent des « [À COMPLÉTER] ». Tant qu’il en reste un, la page ne peut pas être publiée : remplacez chacun par le bon texte.
 
+### Référencement
+
+L’encadré **Référencement**, sous le texte, dit ce que Google affiche de la page : un **Titre pour Google** et une **Description pour Google**. Laissés vides, ils reprennent le texte grisé, le titre de la page suivi du nom de la boutique, puis le début du texte. Le détail est au chapitre [Produits](#guide-products-referencement).
+
 ### Retirer une page
 
 Décochez **Publiée** et enregistrez : la page n’est plus visible sur la boutique, mais vous la gardez. **Supprimer**, dans la liste, l’efface pour de bon.

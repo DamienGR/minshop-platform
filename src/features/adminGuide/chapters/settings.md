@@ -6,6 +6,7 @@ Les réglages de la boutique, par sections. Chaque bloc a son bouton **Enregistr
 
 - **Nom de la boutique** et **Logo** : ce qui s’affiche en haut de la boutique.
 - **Page d’accueil** : ce que montre l’accueil, la liste des produits, une page ou un produit.
+- **Référencement de l’accueil** : ce que Google affiche de l’accueil quand il montre la liste des produits. Dites-y votre métier et votre lieu, par exemple « Maroquinerie artisanale à Lyon ». Quand l’accueil montre une page ou un produit, ce sont les champs **Référencement** de cette page ou de ce produit qui comptent.
 - **Produit mis en avant** : celui que votre thème présente en vedette, s’il le fait.
 - **Bandeau d’annonce** : un message en haut de toutes les pages, par exemple « Livraison offerte dès 50 € ». Videz-le pour le retirer.
 - Les interrupteurs allument ou éteignent des fonctions de la boutique : **Achat immédiat**, **Commentaire de commande**, **Codes de remise**…

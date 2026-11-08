@@ -35,6 +35,8 @@ const product = (overrides: Partial<ListedProduct> = {}): ListedProduct => ({
   requires_shipping: 1,
   related_ids: null,
   tags: null,
+  seo_title: null,
+  seo_description: null,
   created_at: '2026-01-01T00:00:00Z',
   card_variants: null,
   ...overrides,

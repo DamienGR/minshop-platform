@@ -9,6 +9,7 @@ import { navigation } from './navigation.ts';
 import { orders } from './orders.ts';
 import { pages } from './pages.ts';
 import { products } from './products.ts';
+import { seo } from './seo.ts';
 import { settings } from './settings.ts';
 import { shell } from './shell.ts';
 import { shipping } from './shipping.ts';
@@ -41,6 +42,7 @@ export const ADMIN_FRAGMENTS = {
   navigation,
   shipping,
   themeTexts,
+  seo,
   settings,
   guide,
 } as const;
@@ -59,6 +61,7 @@ export const frAdmin = {
   ...navigation,
   ...shipping,
   ...themeTexts,
+  ...seo,
   ...settings,
   ...guide,
 };

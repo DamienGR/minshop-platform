@@ -394,9 +394,9 @@ today's config.
 14. **Some things look wrong on purpose.** Do not "fix" them:
     - the security gate DERIVES the admin routes from `src/pages/admin` and
       `src/pages/api/admin` — never replace that with a list;
-    - `slugify()`, `normalizeTags()` and the image-header dimension reader
-      exist twice (the Worker bundle and the build-less CLI), pinned against a
-      shared corpus in `test/scripts/catalog.test.mjs`;
+    - `slugify()`, `normalizeTags()`, `seoText()` and the image-header
+      dimension reader exist twice (the Worker bundle and the build-less CLI),
+      pinned against a shared corpus in `test/scripts/catalog.test.mjs`;
     - an RGPD erasure is an ANONYMISATION, never a delete: a paid order is an
       accounting record kept for ten years (`docs/agents/privacy.md`);
     - `provision` KEEPS an existing secret, never rotates it — a new

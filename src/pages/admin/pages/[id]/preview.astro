@@ -79,7 +79,8 @@ const pagePath = `/pages/${encodeURIComponent(page.slug)}`;
 
 <Layout
   title={draft.title}
-  description={description}
+  seoTitle={draft.seo_title}
+  description={draft.seo_description ?? description}
   canonical={new URL(pagePath, publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN)).href}
 >
   {/* Fixed and plain, outside the theme's frame: no reading of the page may

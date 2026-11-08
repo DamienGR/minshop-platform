@@ -9,7 +9,7 @@ import { deflateSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 
 import { CsvError, parseCsv, parseCsvRecords, sniffDelimiter } from '../../shopctl/src/catalog/csv.mjs';
-import { COLUMNS, buildCatalogue, normalizeTags, parseCount, parsePrice, slugify, templateHeader } from '../../shopctl/src/catalog/contract.mjs';
+import { COLUMNS, buildCatalogue, normalizeTags, parseCount, parsePrice, seoText, slugify, templateHeader } from '../../shopctl/src/catalog/contract.mjs';
 import { MAX_BYTES, readCatalogImage, resolveCatalogueImages, sniffType } from '../../shopctl/src/catalog/media.mjs';
 import { planImport } from '../../shopctl/src/catalog/plan.mjs';
 import { integer, text } from '../../shopctl/src/catalog/sql.mjs';
@@ -17,6 +17,7 @@ import { assertWranglerNamesShop, extractJson, imagesBucket } from '../../shopct
 import { importsReadme } from '../../shopctl/src/commands/new.mjs';
 import { slugify as storeSlugify } from '../../src/features/products/slug.ts';
 import { normalizeTags as storeNormalizeTags } from '../../src/features/products/tags.ts';
+import { seoText as storeSeoText } from '../../src/features/seo/fields.ts';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const WITNESS = resolve(ROOT, 'test/fixtures/clients/pilot-fr/catalogue/catalog.csv');
@@ -589,6 +590,85 @@ describe('les étiquettes que le thème lit (ticket #159)', () => {
   });
 });
 
+describe('le titre et la description pour Google (ticket #216)', () => {
+  /** row()'s row in a file without these columns: a catalogue written before them. */
+  function withoutSeo(overrides = {}) {
+    const kept = COLUMNS.filter((column) => !column.name.startsWith('seo_'));
+    const cells = { ...Object.fromEntries(COLUMNS.map((column) => [column.name, ''])), sku: 'TOTE-01', name: 'Cabas', price: '19,90', stock: '3', weight_grams: '240', ...overrides };
+    const line = kept.map((column) => {
+      const value = cells[column.name] ?? '';
+      return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+    });
+    return `${kept.map((column) => column.name).join(',')}\n${line.join(',')}\n`;
+  }
+
+  it('lit les deux colonnes sur une ligne, les vide, et refuse une description trop longue', () => {
+    const written = catalogue([row({ seo_title: ' Cabas en lin\n lavé ', seo_description: 'Un cabas, cousu main.' })]);
+    expect(read(written.file).products[0]).toMatchObject({ seo_title: 'Cabas en lin lavé', seo_description: 'Un cabas, cousu main.' });
+    written.cleanup();
+
+    const empty = catalogue([row({ seo_title: '', seo_description: '' })]);
+    expect(read(empty.file).products[0]).toMatchObject({ seo_title: null, seo_description: null });
+    empty.cleanup();
+
+    // Counted as characters, like the admin: 160 accented letters pass.
+    const atLimit = catalogue([row({ seo_description: 'é'.repeat(160) })]);
+    expect(read(atLimit.file).issues).toEqual([]);
+    atLimit.cleanup();
+
+    const long = catalogue([row({ seo_description: 'é'.repeat(161) })]);
+    const { issues } = read(long.file);
+    expect(issues.map((found) => found.column)).toEqual(['seo_description']);
+    expect(messages(issues)).toMatch(/161 caractères ; 160 au plus/);
+    long.cleanup();
+  });
+
+  it('des colonnes absentes ne disent rien', () => {
+    const { file, cleanup } = catalogue(withoutSeo());
+    const { products, issues } = read(file);
+    expect(issues).toEqual([]);
+    expect(products[0]).not.toHaveProperty('seo_title');
+    expect(products[0]).not.toHaveProperty('seo_description');
+    cleanup();
+  });
+
+  it('un fichier sans elles garde les valeurs saisies, un fichier qui les vide les retire', () => {
+    const written = catalogue([row({ seo_title: 'Cabas en lin lavé', seo_description: 'Un cabas.' })]);
+    const silent = catalogue(withoutSeo());
+    const cleared = catalogue([row({ seo_title: '', seo_description: '' })]);
+    try {
+      const result = scenario({
+        imports: [{ csv: written.file }, { csv: written.file }, { csv: silent.file }, { csv: cleared.file }],
+      });
+      expect(result.runs[0].summary.productsCreated).toBe(1);
+      // Idempotent once written; without the columns, nothing to compare.
+      expect(result.runs[1].statements).toBe(0);
+      expect(result.runs[2].statements).toBe(0);
+      expect(result.runs[3].summary.productsUpdated).toBe(1);
+      expect(result.catalogue[0]).toMatchObject({ seo_title: null, seo_description: null });
+
+      // Written in the admin, then a file that predates the columns.
+      const admin = scenario({
+        seed: [
+          `INSERT INTO products (name, slug, sku, price_cents, currency, stock, active, requires_shipping, seo_title, seo_description, public_id)
+             VALUES ('Cabas', 'cabas', 'TOTE-01', 990, 'eur', 1, 1, 1, 'Écrit dans l''admin', 'Saisie à la main.', 'prod_k7m2qx8vn6')`,
+        ],
+        imports: [{ csv: silent.file }],
+      });
+      expect(admin.runs[0].summary.productsUpdated).toBe(1);
+      expect(admin.catalogue[0]).toMatchObject({
+        price_cents: 1990,
+        seo_title: 'Écrit dans l\'admin',
+        seo_description: 'Saisie à la main.',
+      });
+    } finally {
+      written.cleanup();
+      silent.cleanup();
+      cleared.cleanup();
+    }
+  });
+});
+
 describe('les règles partagées avec le cœur ne dérivent pas', () => {
   // Two copies of one pure rule exist on purpose (a Worker bundle and a
   // build-free CLI). Pinning them against a shared corpus is what turns a
@@ -620,6 +700,13 @@ describe('les règles partagées avec le cœur ne dérivent pas', () => {
     for (const list of lists) {
       expect([list, shape(normalizeTags(list))]).toEqual([list, shape(storeNormalizeTags(list))]);
     }
+  });
+
+  // A title written in the admin and the same title imported must be one
+  // string, or every re-import of the file reports a change (#216).
+  it('le texte pour Google est plié de la même façon des deux côtés', () => {
+    const texts = [...CORPUS, '', 'a\n\nb', '\t Titre  \r\n long ', 'a\u00a0b', 'é'.repeat(161)];
+    for (const input of texts) expect([input, seoText(input)]).toEqual([input, storeSeoText(input)]);
   });
 });
 

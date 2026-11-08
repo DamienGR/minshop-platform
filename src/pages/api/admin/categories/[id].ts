@@ -60,6 +60,8 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     slug,
     parent_id: parentId,
     description: parsed.data.description,
+    seo_title: parsed.data.seo_title,
+    seo_description: parsed.data.seo_description,
   });
   // Unchanged keys are written again: the statement is the same guarded one
   // either way, and it is what refuses a file deleted since the form loaded.

@@ -109,7 +109,7 @@ const Template = (pageModel ? pageModelTemplate(pageModel.key) : null) as typeof
 const layoutStyle = view.layoutStyle;
 ---
 
-<Layout title={page.title} description={description}>
+<Layout title={page.title} seoTitle={page.seo_title} description={page.seo_description ?? description}>
   {Template ? <Template model={view} /> : <ContentPage model={view} />}
   {lightbox && <Lightbox />}
   {

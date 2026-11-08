@@ -69,6 +69,9 @@ export async function savePageBody(
     model?: string;
     /** Every zone the page keeps; left as stored when absent. */
     zones?: StoredZones;
+    /** What a search engine shows (ticket #216); left as stored when absent. */
+    seo_title?: string | null;
+    seo_description?: string | null;
   },
   options: {
     baseUrl?: string;
@@ -79,6 +82,9 @@ export async function savePageBody(
 ): Promise<SaveResult> {
   const model = fields.model ?? existing.model ?? '';
   const zones = fields.zones ?? readStoredZones(existing.zones);
+  const seoTitle = fields.seo_title !== undefined ? fields.seo_title : (existing.seo_title ?? null);
+  const seoDescription =
+    fields.seo_description !== undefined ? fields.seo_description : (existing.seo_description ?? null);
   const zoneTexts = storedZoneTexts(zones);
   const drawn = modelMarkdownTexts(options.pageModel ?? null, zones);
 
@@ -123,6 +129,8 @@ export async function savePageBody(
                 layout = ?5,
                 model = ?9,
                 zones = ?10,
+                seo_title = ?11,
+                seo_description = ?12,
                 published = CASE
                   WHEN (SELECT COUNT(*) FROM page_media WHERE page_id = ?1) = ?6
                   THEN ?7 ELSE ?8 END,
@@ -140,6 +148,8 @@ export async function savePageBody(
         blockedValue,
         model,
         serializeZones(zones),
+        seoTitle,
+        seoDescription,
       ),
   ]);
 

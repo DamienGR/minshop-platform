@@ -40,7 +40,7 @@ const MIGRATIONS = resolve(ROOT, 'migrations');
 
 /** The same reads store.mjs performs, against the same column list. */
 const READS = {
-  products: 'SELECT id, sku, slug, name, description, price_cents, currency, stock, active, variant_label, weight_grams, requires_shipping, tags, image_key FROM products',
+  products: 'SELECT id, sku, slug, name, description, price_cents, currency, stock, active, variant_label, weight_grams, requires_shipping, tags, seo_title, seo_description, image_key FROM products',
   variants: 'SELECT id, product_id, sku, label, price_cents, stock, weight_grams, position, active, image_id FROM product_variants',
   categories: 'SELECT id, slug, name FROM categories',
   productCategories: 'SELECT product_id, category_id FROM product_categories',

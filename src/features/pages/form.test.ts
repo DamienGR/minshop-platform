@@ -30,7 +30,18 @@ describe('parsePageForm', () => {
         layout: 'standard',
         model: '',
         zones: {},
+        seo_title: null,
+        seo_description: null,
       },
+    });
+  });
+
+  it('reads the title and description for search engines (ticket #216)', () => {
+    expect(
+      parsePageForm(form({ title: 'Où nous trouver', seo_title: 'Nos points de vente à Lyon', seo_description: ' Trois boutiques. ' })),
+    ).toMatchObject({ data: { seo_title: 'Nos points de vente à Lyon', seo_description: 'Trois boutiques.' } });
+    expect(parsePageForm(form({ title: 'A', seo_description: 'x'.repeat(161) }))).toEqual({
+      error: 'La description pour Google ne doit pas dépasser 160 caractères.',
     });
   });
 

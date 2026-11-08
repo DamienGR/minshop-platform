@@ -3667,3 +3667,40 @@ Tenu par `src/features/pages/blocks.test.ts` et
 `test/browser/page-box.spec.mjs` (rendu dans le thème, encadré dans une
 colonne, bouton, aperçu), dans chaque thème ; `a11y.spec.mjs` passe sur la
 page à encadré du jeu d'essai.
+
+### 13.19 Le titre et la description pour les moteurs de recherche
+
+Noté le 2026-11-08 (ticket #216), en préparant le référencement de la première
+boutique réelle : aucun écran ne permettait d'écrire ce que Google affiche
+d'une page, que `Layout.astro` déduisait du nom et du début du texte. Aucun des
+jalons 0 à 10 n'avance.
+
+Fait le 2026-11-08, avec une migration additive (0057) :
+
+- `seo_title` et `seo_description`, nuls par défaut, sur `products`,
+  `categories` et `pages` ; l'accueil prend deux réglages,
+  `home_seo_title` et `home_seo_description` ;
+- un encadré « Référencement » dans l'éditeur du produit, de la catégorie et
+  de la page, et « Référencement de l'accueil » dans Réglages → Général
+  (`src/features/seo/SeoFields.astro`) : deux champs facultatifs, chacun avec
+  son compteur (repère à 60 caractères pour le titre, 160 au plus pour la
+  description, refusée au-delà), et, vides, ce que la vitrine affiche à leur
+  place ;
+- le titre saisi est écrit tel quel dans `<title>`, `og:title` et
+  `twitter:title`, sans le suffixe « — {boutique} » ; la description dans la
+  meta description, `og:description` et `twitter:description`. Vides, rien ne
+  change. Le JSON-LD du produit garde son nom et sa description ;
+- les réglages de l'accueil valent quand `/` affiche le catalogue ; un accueil
+  qui pointe vers une page ou un produit prend les champs de sa cible ;
+- la page d'une catégorie affiche sa description sous son titre ;
+- `shopctl catalog` lit deux colonnes facultatives, `seo_title` et
+  `seo_description`, avec la règle de `tags` : absente, la colonne ne dit
+  rien ; présente et vide, elle efface. `seoText()` existe deux fois, épinglé
+  sur un corpus commun comme `slugify()` ;
+- les chapitres Produits, Catégories, Pages et Réglages du guide ont leur
+  « Référencement ».
+
+Tenu par `src/features/seo/fields.test.ts`, les tests du chargeur de la fiche,
+`test/scripts/catalog.test.mjs` (colonnes absentes, vides, trop longues, contre
+les migrations réelles) et `test/integration/d1-integration.sh` (les six
+balises d'une page et d'une catégorie, contre le Worker construit).

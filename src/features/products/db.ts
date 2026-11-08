@@ -32,6 +32,10 @@ export interface Product {
   /** Tags the theme reads, comma-joined slugs (migration 0053, features/
    *  products/tags.ts); null = none. */
   tags: string | null;
+  /** What a search engine shows of the product page (migration 0057,
+   *  features/seo/fields.ts); null = derived from the name and description. */
+  seo_title: string | null;
+  seo_description: string | null;
   created_at: string;
 }
 
@@ -48,6 +52,9 @@ export interface ProductFields {
   requires_shipping: number;
   /** Already normalised and joined (storeTags). */
   tags: string | null;
+  /** Plain text, one line; the description at most 160 characters. */
+  seo_title: string | null;
+  seo_description: string | null;
 }
 
 /** Full input for create/update — form fields plus resolved image key + slug. */
@@ -436,11 +443,11 @@ export async function createProduct(db: D1Database, p: ProductInput): Promise<nu
   return withPublicId('product', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO products (name, slug, sku, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, tags, public_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO products (name, slug, sku, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, tags, seo_title, seo_description, public_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
       )
-      .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, publicId)
+      .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, p.seo_title, p.seo_description, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -451,10 +458,10 @@ export async function updateProduct(db: D1Database, id: number, p: ProductInput)
     .prepare(
       `UPDATE products
          SET name = ?, slug = ?, sku = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
-             weight_grams = ?, requires_shipping = ?, tags = ?
+             weight_grams = ?, requires_shipping = ?, tags = ?, seo_title = ?, seo_description = ?
        WHERE id = ?`,
     )
-    .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, id)
+    .bind(p.name, p.slug, p.sku, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, p.tags, p.seo_title, p.seo_description, id)
     .run();
 }
 

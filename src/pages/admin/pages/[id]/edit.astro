@@ -11,6 +11,10 @@ import {
 import { activePageModels } from '../../../../features/pageModels/active';
 import { isListZone, pageModelOf } from '../../../../features/pageModels/declaration';
 import { readStoredZones } from '../../../../features/pageModels/zones';
+import { buildPageView } from '../../../../features/pages/view';
+import SeoFields from '../../../../features/seo/SeoFields.astro';
+import { documentTitle } from '../../../../features/seo/meta';
+import { getConfig } from '../../../../config';
 import { parsePublicId } from '../../../../features/ids/publicId';
 import { t } from '../../../../features/i18n';
 
@@ -36,6 +40,11 @@ const modelHint = pageModel ? (pageModel.help ?? '') : t('admin.pages.model.basi
 // Enter in a line of text submits with the form's first submit button: with a
 // list on the page, that would be a « Monter » or « Descendre ».
 const hasLists = !!pageModel?.zones.some(isListZone);
+// What /pages/<slug> carries while « Référencement » is empty (ticket #216):
+// the page's own view, as the storefront builds it, for its description.
+const storeName = Astro.locals.settings?.storeName ?? getConfig().storeName;
+const seoFallbackTitle = documentTitle({ title: page.title, storeName });
+const seoFallbackDescription = buildPageView(page, models, { baseUrl: getConfig().images.baseUrl }).description;
 ---
 
 <AdminLayout title={t('admin.pages.edit.documentTitle', { titre: page.title })} active="pages">
@@ -191,6 +200,15 @@ const hasLists = !!pageModel?.zones.some(isListZone);
         </label>
       )
     }
+
+    <div class="mt-6 max-w-2xl">
+      <SeoFields
+        title={page.seo_title}
+        description={page.seo_description}
+        fallbackTitle={seoFallbackTitle}
+        fallbackDescription={seoFallbackDescription}
+      />
+    </div>
 
     <div class="mt-6 flex flex-wrap items-center gap-4">
       <label class="flex items-center gap-2 text-sm text-gray-700">

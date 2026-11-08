@@ -441,6 +441,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           requires_shipping: 1,
           // Tags are the merchant's, read by the theme (ADR 0026); set in Admin.
           tags: null,
+          // Empty: the storefront derives the title and description (ticket #216).
+          seo_title: null,
+          seo_description: null,
         };
         const rowId = await createProduct(db, input);
         const created = await getProduct(db, rowId);
@@ -483,6 +486,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           weight_grams: cur.weight_grams,
           requires_shipping: cur.requires_shipping,
           tags: cur.tags,
+          seo_title: cur.seo_title,
+          seo_description: cur.seo_description,
         };
         await updateProduct(db, cur.id, input);
         return result({ id: requirePublicId(cur.public_id, cur.id, 'product'), slug: cur.slug });

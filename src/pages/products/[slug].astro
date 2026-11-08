@@ -35,7 +35,7 @@ if (loaded.backfillRelated) {
 }
 ---
 
-<Layout title={seo.title} description={seo.description ?? undefined} image={seo.imagePath}>
+<Layout title={seo.title} seoTitle={seo.seoTitle} description={seo.description ?? undefined} image={seo.imagePath}>
   <ProductDetail model={model} purchase={purchase} />
   {/* The admin's way back to this product's screen (ticket #178): hidden from
       everyone else, and the same bytes for everyone, so the edge cache stays
