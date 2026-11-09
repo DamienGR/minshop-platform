@@ -28,6 +28,7 @@ import { encryptSecret } from '../../src/features/secrets/crypto.ts';
 import { hashPassword } from '../../src/features/auth/password.ts';
 import { saveRuntimeShippingConfig } from '../../src/features/shipping/settings.ts';
 import { t } from '../../src/features/i18n/index.ts';
+import { formatMoney } from '../../src/money.ts';
 
 const ORIGIN = 'https://store.test';
 const SECRETS_KEK = 'checkout-relay-suite-key-encryption-key';
@@ -455,6 +456,91 @@ try {
     assert.ok(relayRows[0].includes(chosen.name));
     // The card order too, at its own point.
     assert.equal(rows.filter((row) => row.includes(`,relay,${MONDIAL_CODES[2]},`)).length, 1);
+  });
+
+  console.log('Relais offert dès un montant (tickets #220, #221)');
+
+  // The same zones, the relay now offered from a threshold: 60 € first, above
+  // the teapot, then 30 €, below it.
+  const offerRelayFrom = async (revision, freeOverCents) => {
+    const zones = saved.config.zones.map((zone) =>
+      zone.name !== 'France'
+        ? zone
+        : {
+            ...zone,
+            rates: zone.rates.map((rate) => (rate.label === 'Mondial Relay' ? { ...rate, freeOverCents } : rate)),
+          },
+    );
+    const offered = await saveRuntimeShippingConfig(db, revision, { enabled: true, packageWeightGrams: 0, zones });
+    assert.equal(offered.ok, true, 'the shipping document was refused');
+    assert.equal(offered.config.schema, 5);
+  };
+  /** The price a rate step shows beside each rate, by its label. */
+  const ratePrices = (html) =>
+    Object.fromEntries(
+      [...html.matchAll(/name="shipping_label" value="([^"]+)"[\s\S]*?<\/label>/g)].map((m) => [
+        m[1],
+        /Offerte/.test(m[0]) ? 'Offerte' : (m[0].match(/(\d+,\d{2})/)?.[1] ?? null),
+      ]),
+    );
+  const added = await fetch('/api/cart', {
+    method: 'POST',
+    headers: { origin: ORIGIN, 'content-type': FORM },
+    body: new URLSearchParams({ _action: 'add', product_id: PRODUCT }).toString(),
+  });
+  const shopper = { headers: { cookie: (added.headers.get('set-cookie') ?? '').split(';')[0] } };
+  /** The cart's lines for France's zone, the second: the selector reveals them. */
+  const franceLines = (html) => html.match(/data-ship-estimate="1"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+
+  await offerRelayFrom(1, 6000);
+
+  await check('below the threshold, the cart says what is missing for the relay offered', async () => {
+    const html = await (await fetch('/cart', shopper)).text();
+    assert.match(html, /<option value="FR"[^>]*data-ship-zone="1"/);
+    const lines = franceLines(html);
+    assert.ok(lines.includes(t('cart.shipping.from', { montant: formatMoney(390, 'eur') })), lines);
+    assert.ok(
+      lines.includes(t('cart.shipping.remainingRelay', { montant: formatMoney(6000 - 3900, 'eur') })),
+      lines,
+    );
+    // Belgium has no threshold: its zone says its price, nothing more.
+    assert.match(html, /data-ship-estimate="0"/);
+  });
+
+  await check('below the threshold, the relay keeps its price', async () => {
+    const html = await (await post(card)).text();
+    assert.deepEqual(ratePrices(html), { 'Colissimo à domicile': '6,90', 'Mondial Relay': '3,90' });
+  });
+
+  await offerRelayFrom(2, 3000);
+
+  await check('past it, the cart says the relay is offered', async () => {
+    const lines = franceLines(await (await fetch('/cart', shopper)).text());
+    assert.ok(lines.includes(t('cart.shipping.freeRelay')), lines);
+    assert.ok(!lines.includes(t('cart.shipping.from', { montant: formatMoney(690, 'eur') })), lines);
+  });
+
+  await check('past it, the relay is offered and home delivery keeps its price', async () => {
+    const html = await (await post(card)).text();
+    assert.deepEqual(ratePrices(html), { 'Colissimo à domicile': '6,90', 'Mondial Relay': 'Offerte' });
+    assert.ok(!html.includes(`value="${t('checkout.shippingFreeOption')}"`), 'a free home option was synthesized');
+  });
+
+  await check('the relay offered is paid by card like a paid one: its point, then Stripe at 0 €', async () => {
+    assert.deepEqual(pointCodes(await (await post({ ...card, shipping_label: 'Mondial Relay' })).text()), MONDIAL_CODES);
+    const placed = await post({ ...card, shipping_label: 'Mondial Relay', relay_point: MONDIAL_CODES[0] });
+    assert.equal(placed.status, 303, `the card order was not handed to Stripe: ${placed.status}`);
+    assert.match(placed.headers.get('location'), /^https:\/\/checkout\.stripe\.com\//);
+    const session = stripeSessions.at(-1);
+    assert.equal(rateField(session, '[display_name]'), 'Mondial Relay');
+    assert.equal(rateField(session, '[fixed_amount][amount]'), '0');
+    assert.equal(rateField(session, '[metadata][delivery]'), 'relay');
+    assert.equal(session.get('shipping_options[1][shipping_rate_data][display_name]'), null, 'another rate was offered');
+    const reservation = await db
+      .prepare('SELECT relay_point FROM checkout_reservations WHERE public_id = ?')
+      .bind(session.get('metadata[reservation_id]'))
+      .first();
+    assert.equal(JSON.parse(reservation.relay_point).code, MONDIAL_CODES[0]);
   });
 } finally {
   await worker.dispose();

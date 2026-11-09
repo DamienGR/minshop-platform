@@ -1,0 +1,29 @@
+---
+/**
+ * The shipping lines under a cart's subtotal (ticket #221): « Livraison dès … »,
+ * what is missing for the free delivery, the pickup. Server-rendered from
+ * `estimate.ts`; `zone` names the block the destination selector reveals
+ * (base.css), absent when the cart has one destination only.
+ */
+import { formatPrice } from '../../config';
+import { estimateLines, type ShippingEstimate } from './estimate';
+
+interface Props {
+  estimate: ShippingEstimate;
+  zone?: number;
+  class?: string;
+}
+
+const { estimate, zone, class: className = '' } = Astro.props;
+const lines = estimateLines(estimate, (cents) => formatPrice(cents));
+---
+
+{
+  lines.length > 0 && (
+    <div data-ship-lines data-ship-estimate={zone} class={`space-y-0.5 text-xs ${className}`}>
+      {lines.map((line) => (
+        <p class={line.strong ? 'font-medium text-ink' : 'text-muted'}>{line.text}</p>
+      ))}
+    </div>
+  )
+}

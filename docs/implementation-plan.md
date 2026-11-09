@@ -3712,3 +3712,41 @@ perdaient leurs espaces insécables, que `\s` reconnaît. Ils prennent la règle
 des textes du thème (#175), désormais partagée par
 `src/features/i18n/spaces.ts`, et le corpus commun de
 `test/scripts/catalog.test.mjs` a ses entrées avec U+00A0 et U+202F.
+
+### 13.20 La livraison offerte en point relais, annoncée dans le panier
+
+Noté le 2026-11-09 (tickets #220 et #221), en revoyant l'analyse du site actuel
+de la première boutique réelle : une livraison offerte dès un montant, mais en
+point relais seulement, et des frais de port que l'acheteur ne découvrait
+qu'après avoir cliqué pour payer. Damien choisit le 2026-11-09 un seuil par
+tarif, le tarif offert gardant son nom. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-09, sans migration, livré dans le socle v0.8.2 (avec le
+sous-menu de Réglages qui passe à la ligne, ticket #222) :
+
+- un tarif, à domicile ou en relais, prend « Offert dès » : à partir de ce
+  sous-total, il coûte 0 € et garde son nom, son offre relais et son mode de
+  livraison. Le prix est d'abord calculé, puis remis à zéro : un tarif offert ne
+  contourne ni le poids maximal d'un transporteur ni un poids inconnu. Le seuil
+  de zone reste lu tel quel, et ajoute toujours « Livraison offerte », à
+  domicile. Un retrait sur place n'en prend pas ;
+- le relais offert passe par `/checkout` et le choix du point comme un relais
+  payant, puis par Stripe à 0 €, avec `delivery: relay` ;
+- le document d'expédition passe en version 5 quand un tarif a un seuil, et
+  reste en version 4 sinon : un retour arrière ne ferme la livraison qu'aux
+  boutiques qui offrent un tarif, celles dont il facturerait le tarif offert ;
+- le panier et son tiroir annoncent sous le sous-total « Livraison dès … », le
+  moins cher hors retrait, et « Plus que … pour la livraison offerte », « en
+  point relais » quand seul le relais le devient, ou « Livraison offerte ».
+  Le même devis que l'étape suivante (`src/features/shipping/estimate.ts`),
+  pour la même destination ; rien quand le poids inconnu cache un tarif, que la
+  destination n'est pas servie ou que rien n'est à expédier. Avec le sélecteur
+  de pays du panier, une ligne par zone, celle du pays choisi révélée par
+  `:has()`, sans script ;
+- le chapitre Livraison du guide explique les deux seuils.
+
+Tenu par `src/features/shipping/calculator.test.ts`, `settings.test.ts`,
+`estimate.test.ts`, `test/storefront/ship-estimate-source.test.mjs` (une règle
+`:has()` par zone), `test/integration/shipping.mjs` (versions 4 et 5),
+`test/integration/checkout-relay.mjs` (panier, étape des tarifs, Stripe à 0 €)
+et `test/browser/cart.spec.mjs` (panier sans script, tiroir).

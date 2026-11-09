@@ -47,7 +47,8 @@ export const shipping = {
   'admin.shipping.zone.restOfWorld': 'Reste du monde',
   'admin.shipping.zone.unknownCode': 'Code inconnu : {code}',
   'admin.shipping.zone.freeOver': 'Livraison offerte dès ({devise})',
-  'admin.shipping.zone.freeOverHint': 'Laisser vide pour désactiver.',
+  'admin.shipping.zone.freeOverHint':
+    'Ajoute une option « Livraison offerte », à domicile. Laisser vide pour désactiver.',
 
   // ─── Tarifs et tranches de poids ───────────────────────────────────────────────
   'admin.shipping.rate.label': 'Libellé du tarif',
@@ -62,9 +63,10 @@ export const shipping = {
   'admin.shipping.rate.relayPricing': 'Prix du relais',
   'admin.shipping.rate.relayPricing.flat': 'Forfaitaire',
   'admin.shipping.rate.relayPricing.weight': 'Selon le poids',
-  'admin.shipping.rate.relayHint': 'L’acheteur choisit son point parmi ceux de cette offre, et l’étiquette s’achète chez Boxtal sur la même offre. Le prix reste le vôtre ; la livraison offerte ne s’applique qu’aux tarifs à domicile.',
+  'admin.shipping.rate.relayHint': 'L’acheteur choisit son point parmi ceux de cette offre, et l’étiquette s’achète chez Boxtal sur la même offre. Le prix reste le vôtre ; pour offrir le relais, remplissez « Offert dès » sur ce tarif.',
   'admin.shipping.rate.relayNoKeys': 'Les clés Boxtal ne sont pas enregistrées dans Réglages : ce tarif n’est pas proposé à la commande tant qu’elles manquent.',
   'admin.shipping.rate.price': 'Prix',
+  'admin.shipping.rate.freeOver': 'Offert dès ({devise})',
   'admin.shipping.rate.remove': 'Retirer le tarif',
   'admin.shipping.rate.add': 'Ajouter un tarif',
   'admin.shipping.band.heading': 'Tranches de poids',
@@ -102,6 +104,8 @@ export const shipping = {
     '« {libelle} » est réservé tant qu’un seuil de livraison offerte est défini.',
   'admin.shipping.error.pricingMode': 'Choisissez un mode de tarification.',
   'admin.shipping.error.relayOffer': 'Choisissez une offre de point relais.',
+  'admin.shipping.error.pickupFreeOver':
+    'Un retrait sur place ne s’offre pas dès un montant : indiquez ses frais, 0 pour gratuit.',
   'admin.shipping.error.priceRequired': 'Indiquez un prix.',
   'admin.shipping.error.bandRequired': 'Ajoutez au moins une tranche de poids.',
   'admin.shipping.error.bandsMax': 'Au maximum {max} tranches par tarif.',

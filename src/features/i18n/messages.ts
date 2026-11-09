@@ -107,6 +107,14 @@ export const fr = {
   'cart.unavailable': 'La commande est momentanément indisponible.',
   'cart.error.full': 'Votre panier est plein : commandez ce qu’il contient ou retirez un article avant d’en ajouter un autre.',
   'cart.shipTo': 'Livrer en',
+  // Sous le sous-total (ticket #221) : le devis de l’étape suivante, annoncé.
+  'cart.shipping.from': 'Livraison dès {montant}',
+  'cart.shipping.free': 'Livraison offerte',
+  'cart.shipping.freeRelay': 'Livraison offerte en point relais',
+  'cart.shipping.remaining': 'Plus que {montant} pour la livraison offerte',
+  'cart.shipping.remainingRelay': 'Plus que {montant} pour la livraison offerte en point relais',
+  'cart.shipping.pickupFree': 'Retrait gratuit',
+  'cart.shipping.pickup': 'Retrait sur place : {montant}',
 
   // ─── Moyens de paiement ────────────────────────────────────────────────────────
   'payment.stripe.label': 'Payer par carte',

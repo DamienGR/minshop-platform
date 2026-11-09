@@ -771,9 +771,12 @@ const sections = [
 <AdminLayout title={t('admin.settings.title')} active="settings">
   <h1 class="mb-4 font-serif text-3xl tracking-tight">{t('admin.settings.title')}</h1>
 
-  {/* Sticky jump sub-nav — scales the single page without splitting into routes. */}
+  {/* Sticky jump sub-nav — scales the single page without splitting into routes.
+      Its entries wrap: scrolled sideways with the scrollbar hidden, those past
+      the width could not be reached with a mouse (ticket #222). */}
   <nav
-    class="no-scrollbar sticky top-0 z-10 -mx-6 mb-6 flex gap-1 overflow-x-auto border-b border-line bg-paper/90 px-6 py-2 text-xs uppercase tracking-widest backdrop-blur sm:mx-0 sm:px-0"
+    data-settings-nav
+    class="sticky top-0 z-10 -mx-6 mb-6 flex flex-wrap gap-1 border-b border-line bg-paper/90 px-6 py-2 text-xs uppercase tracking-widest backdrop-blur sm:mx-0 sm:px-0"
   >
     {
       sections.map((s) => (

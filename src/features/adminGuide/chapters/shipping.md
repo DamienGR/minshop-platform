@@ -21,7 +21,20 @@ Où vous livrez, et combien coûte la livraison.
 
 ### Offrir la livraison
 
-Remplissez **Livraison offerte dès** : au-delà de ce montant d’achat, la livraison est gratuite dans cette zone. Laissez vide pour ne jamais l’offrir.
+Deux réglages, qui peuvent se cumuler :
+
+- **Livraison offerte dès**, sur la zone : à partir de ce montant d’achat, une option « Livraison offerte », à domicile, s’ajoute aux tarifs de la zone. Laissez vide pour ne jamais l’offrir.
+- **Offert dès**, sur un tarif : à partir de ce montant, ce tarif devient gratuit et garde son nom. Laissez vide pour qu’il reste toujours payant.
+
+Pour offrir le point relais seulement, la livraison à domicile restant payante :
+
+1. Sur le tarif **Point relais (Boxtal)**, remplissez **Offert dès** (60, par exemple).
+2. Laissez **Livraison offerte dès** vide sur la zone.
+3. Cliquez sur **Enregistrer la livraison**.
+
+Un tarif offert garde ses limites : une commande trop lourde pour lui ne le voit pas, offert ou non. Un **Retrait sur place** n’a pas de seuil : ses frais sont ceux que vous indiquez.
+
+Le panier annonce ce que l’acheteur paiera : la livraison la moins chère, et ce qu’il lui manque pour la livraison offerte (« Plus que 12,50 € pour la livraison offerte en point relais »).
 
 ### Le poids de l’emballage
 

@@ -55,6 +55,23 @@ test('avec JavaScript, la quantité saisie dans le tiroir part avec la commande'
   await expect(page.locator('main input[type="number"]').first()).toHaveValue('2');
 });
 
+/**
+ * The shipping the next step will charge, said before it (ticket #221): under
+ * the subtotal of the cart and of its drawer. The fixture store ships to
+ * France at a flat rate with a free-delivery threshold, so a line is due; its
+ * figures are the calculator's, held by features/shipping/estimate.test.ts.
+ */
+test('le tiroir annonce la livraison sous le sous-total', async ({ page }) => {
+  test.skip(!FIXTURE.simple || REMOTE, 'catalogue local avec un produit simple en stock');
+  await page.goto(`/products/${FIXTURE.simple.slug}`);
+  await settle(page);
+  await page.getByRole('button', { name: /panier/i }).first().click();
+
+  const drawer = page.locator('[data-cart-drawer]');
+  await expect(drawer).not.toHaveClass(/invisible/);
+  await expect(drawer.locator('[data-ship-lines]')).toHaveText(/^Livraison (dès|offerte)/);
+});
+
 test.describe('sans JavaScript', () => {
   test.use({ javaScriptEnabled: false });
 
@@ -114,6 +131,21 @@ test.describe('sans JavaScript', () => {
 
     await page.goto('/cart');
     await expect(page.locator('main input[type="number"]').first()).toHaveValue('2');
+  });
+
+  test('le panier annonce la livraison avant le paiement', async ({ page }) => {
+    test.skip(!FIXTURE.simple || REMOTE, 'catalogue local avec un produit simple en stock');
+    await page.goto(`/products/${FIXTURE.simple.slug}`);
+    await settle(page);
+    await Promise.all([
+      page.waitForURL('**/cart'),
+      page.locator('form[action="/api/cart"]').getByRole('button', { name: /panier/i }).first().click(),
+    ]);
+
+    // Visible without a script: a line hidden until one runs would say nothing.
+    const lines = page.locator('main [data-ship-lines]');
+    await expect(lines).toBeVisible();
+    await expect(lines).toHaveText(/^Livraison (dès|offerte)/);
   });
 
   // Both forms of the hero: a gallery, and a single image — the form most

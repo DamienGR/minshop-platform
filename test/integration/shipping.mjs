@@ -136,7 +136,8 @@ await check('first save creates revision 1', async () => {
   const result = await saveRuntimeShippingConfig(db, 0, document());
   assert.equal(result.ok, true);
   assert.equal(result.config.revision, 1);
-  assert.equal(result.config.schema, SHIPPING_SCHEMA_VERSION);
+  // The lowest version that holds it: nothing in it needs 5 (ticket #220).
+  assert.equal(result.config.schema, 4);
 });
 
 await check('an edit at the current revision succeeds and increments it', async () => {
@@ -169,6 +170,38 @@ await check('a relay rate saves as schema 4 and reads back whole', async () => {
   const parsed = parseRuntimeShippingConfig(raw);
   assert.equal(parsed.status, 'valid');
   assert.deepEqual(parsed.config.zones[0].rates[1].pricing, relay.rates[1].pricing);
+});
+
+await check('a rate offered from a threshold saves as schema 5, and a rollback cannot read it', async () => {
+  // Ticket #220. A core that knows 4 at most would read the relay at its price
+  // and charge for what the merchant offered: it fails closed instead.
+  const db = await freshDb();
+  const relay = {
+    ...zone(),
+    countries: ['FR'],
+    rates: [
+      { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+      {
+        label: 'Mondial Relay',
+        pricing: { type: 'relay', offer: 'MONR-CpourToi', price: { type: 'flat', amountCents: 390 } },
+        freeOverCents: 6000,
+      },
+    ],
+  };
+  const saved = await saveRuntimeShippingConfig(db, 0, document({ zones: [relay] }));
+  assert.equal(saved.ok, true);
+  const raw = await readRaw(db);
+  assert.equal(JSON.parse(raw).schema, SHIPPING_SCHEMA_VERSION);
+  assert.equal(SHIPPING_SCHEMA_VERSION, 5);
+  const parsed = parseRuntimeShippingConfig(raw);
+  assert.equal(parsed.status, 'valid');
+  assert.equal(parsed.config.zones[0].rates[1].freeOverCents, 6000);
+  // The home rate carries nothing it does not use.
+  assert.equal('freeOverCents' in JSON.parse(raw).zones[0].rates[0], false);
+  // Taking the threshold off writes a document v0.8.1 reads again.
+  const back = await saveRuntimeShippingConfig(db, 1, document({ zones: [{ ...relay, rates: [relay.rates[0], { ...relay.rates[1], freeOverCents: null }] }] }));
+  assert.equal(back.ok, true);
+  assert.equal(JSON.parse(await readRaw(db)).schema, 4);
 });
 
 await check('two writes from the same revision: exactly one wins', async () => {

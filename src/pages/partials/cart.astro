@@ -4,7 +4,12 @@ import { formatPrice } from '../../config';
 import { readCart, resolveCart, cartCount } from '../../features/cart/cart';
 import { customizationText } from '../../features/products/customization';
 import ProductImage from '../../features/products/ProductImage.astro';
-import { getSetting } from '../../features/settings/db';
+import { getStoreSettings } from '../../features/settings/db';
+import { shippingFor } from '../../features/shipping/effective';
+import { shipmentWeightFor } from '../../features/shipping/lines';
+import { stripeDestination } from '../../features/shipping/destination';
+import { cartShipping } from '../../features/shipping/cartEstimate';
+import ShippingEstimate from '../../features/shipping/ShippingEstimate.astro';
 import { t } from '../../features/i18n';
 
 // Astro partial: renders ONLY this fragment (no surrounding document), so the
@@ -14,16 +19,34 @@ export const partial = true;
 export const prerender = false;
 
 const cart = readCart(Astro.cookies);
-const [{ lines, subtotalCents }, imageDeliverySetting] = await Promise.all([
+// The middleware reads no settings for a partial, so the drawer reads them in
+// its one query: the image delivery, and the shipping document the cart's
+// lines are priced from (one row before ticket #221, the same round trip now).
+const [{ lines, subtotalCents }, settings] = await Promise.all([
   resolveCart(env.DB, cart),
-  getSetting(env.DB, 'image_delivery'),
+  getStoreSettings(env.DB),
 ]);
-const imageDelivery = imageDeliverySetting === 'cloudflare' ? 'cloudflare' : 'original';
+const imageDelivery = settings.imageDelivery;
 const count = cartCount(cart);
 // As on the cart page: one form owns every quantity field, and "Commander"
 // submits it (data-fullpage, so the drawer script lets it navigate), so the
 // quantities typed here reach /express instead of the cookie's.
 const linesForm = 'drawer-lines';
+// The cart page's shipping lines (ticket #221), for the destination it shows
+// first: the drawer has no selector, so the default one.
+const effectiveShipping = shippingFor(settings).config;
+const shipment = shipmentWeightFor(lines);
+const geoCountry = Astro.request.headers.get('cf-ipcountry');
+const shippingLines = cartShipping({
+  settings,
+  shipping: effectiveShipping,
+  shipment,
+  subtotalCents,
+  destination: stripeDestination(settings, effectiveShipping, shipment.shippingRequired, geoCountry),
+  geoCountry,
+});
+const estimate =
+  shippingLines.shownZone == null ? undefined : shippingLines.estimates.get(shippingLines.shownZone);
 ---
 
 <div data-cart-count={count}>
@@ -105,6 +128,7 @@ const linesForm = 'drawer-lines';
             <span class="text-xs uppercase tracking-widest text-muted">{t('cart.subtotal')}</span>
             <span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span>
           </div>
+          {estimate && <ShippingEstimate estimate={estimate} class="mt-2" />}
           <form id={linesForm} method="POST" action="/api/cart">
             <input type="hidden" name="_action" value="update_all" />
             <button

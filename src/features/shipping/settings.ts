@@ -29,10 +29,22 @@ import { t } from '../i18n/index.ts';
 export const SHIPPING_CONFIG_KEY = 'shipping_config';
 
 /** 1 = flat rates only. 2 adds pricing modes and the package-weight allowance.
- *  3 adds the pickup pricing mode. 4 adds the relay mode (ADR 0020). Bumped so
- *  a rollback fails CLOSED on a document it cannot fully understand instead of
- *  silently dropping rates. */
-export const SHIPPING_SCHEMA_VERSION = 4;
+ *  3 adds the pickup pricing mode. 4 adds the relay mode (ADR 0020). 5 adds a
+ *  rate's own free-over threshold (ticket #220). Bumped so a rollback fails
+ *  CLOSED on a document it cannot fully understand instead of silently dropping
+ *  rates — or charging for one the merchant offered. The newest this core reads. */
+export const SHIPPING_SCHEMA_VERSION = 5;
+
+/**
+ * The version a save writes: the lowest that holds the document, from 4 up.
+ * A document with no rate threshold reads the same under v4, so a core that
+ * stops at v4 (socle v0.8.1 and before) keeps reading it after a rollback; only
+ * a document that offers a rate is closed to it, which is the point of 5.
+ */
+export function shippingSchemaFor(config: Pick<RuntimeShippingConfig, 'zones'>): number {
+  const offersARate = config.zones.some((zone) => zone.rates.some((rate) => rate.freeOverCents != null));
+  return offersARate ? 5 : 4;
+}
 
 /** A provider offer code as a relay rate stores it: `<operator>-<service>`.
  *  The shape only — whether this core can still serve the offer is decided at
@@ -55,6 +67,8 @@ export const SHIPPING_LIMITS = {
 export interface RuntimeShippingRate {
   label: string;
   pricing: RatePricing;
+  /** Offered once the subtotal reaches this (schema 5). Written only when set. */
+  freeOverCents?: number | null;
 }
 
 export interface RuntimeShippingZone {
@@ -335,6 +349,26 @@ export function validateShippingDocument(doc: RuntimeShippingConfig): ShippingVa
         labels.add(label.toLowerCase());
       }
 
+      const rateFreeOver = rate?.freeOverCents;
+      if (rateFreeOver != null) {
+        if (rate?.pricing?.type === 'pickup') {
+          // Nothing to deliver, so nothing to offer: a pickup's fee is its own.
+          errors.push({
+            zoneIndex,
+            rateIndex,
+            field: 'freeOver',
+            message: t('admin.shipping.error.pickupFreeOver'),
+          });
+        } else if (!isAmount(rateFreeOver) || rateFreeOver <= 0) {
+          errors.push({
+            zoneIndex,
+            rateIndex,
+            field: 'freeOver',
+            message: t('admin.shipping.error.amountAboveZero'),
+          });
+        }
+      }
+
       let pricing: RatePricing | undefined = rate?.pricing;
       if (pricing?.type === 'relay') {
         if (typeof pricing.offer !== 'string' || !RELAY_OFFER_CODE.test(pricing.offer)) {
@@ -442,6 +476,12 @@ export function parseRuntimeShippingConfig(
         if (typeof rate?.label !== 'string' || rate?.pricing == null) {
           return { status: 'invalid', raw, error: t('admin.shipping.stored.rate') };
         }
+        // A rate threshold is version 5's: an older document claiming one was
+        // not written by a core, and one that is not a number is not an amount.
+        const freeOver = (rate as RuntimeShippingRate).freeOverCents;
+        if (freeOver != null && (doc.schema < 5 || typeof freeOver !== 'number')) {
+          return { status: 'invalid', raw, error: t('admin.shipping.stored.rate') };
+        }
       }
     }
   } else if (typeof doc.enabled !== 'boolean') {
@@ -466,6 +506,9 @@ export function parseRuntimeShippingConfig(
           pricing:
             rate?.pricing ??
             ({ type: 'flat', amountCents: legacy.amountCents ?? NaN } as RatePricing),
+          // Schema 1 is migrated, never trusted: only a version 5 rate has one.
+          ...((doc.schema as number) >= 5 &&
+            typeof rate?.freeOverCents === 'number' && { freeOverCents: rate.freeOverCents }),
         };
       }),
       freeOverCents: typeof zone?.freeOverCents === 'number' ? zone.freeOverCents : null,
@@ -510,7 +553,11 @@ export function validateBuildTimeShipping(cfg: ShippingConfig): string | null {
       countries: zone.countries,
       rates: zone.rates.map((rate) =>
         'pricing' in rate
-          ? { label: rate.label, pricing: rate.pricing }
+          ? {
+              label: rate.label,
+              pricing: rate.pricing,
+              ...(rate.freeOverCents != null && { freeOverCents: rate.freeOverCents }),
+            }
           : { label: rate.label, pricing: { type: 'flat' as const, amountCents: rate.amountCents } },
       ),
       freeOverCents: zone.freeOverCents,
@@ -625,7 +672,7 @@ export async function saveRuntimeShippingConfig(
   config: Omit<RuntimeShippingConfig, 'schema' | 'revision'>,
 ): Promise<ShippingSaveResult> {
   const next: RuntimeShippingConfig = {
-    schema: SHIPPING_SCHEMA_VERSION,
+    schema: shippingSchemaFor(config),
     revision: expectedRevision + 1,
     ...config,
   };
@@ -676,7 +723,7 @@ export async function replaceInvalidShippingConfig(
     return { ok: false, reason: 'conflict' };
   }
 
-  const next: RuntimeShippingConfig = { schema: SHIPPING_SCHEMA_VERSION, revision: 1, ...config };
+  const next: RuntimeShippingConfig = { schema: shippingSchemaFor(config), revision: 1, ...config };
   const errors = validateShippingDocument(next);
   if (errors.length > 0) return { ok: false, reason: 'invalid', errors };
 
@@ -720,6 +767,8 @@ export interface ShippingFormRate {
   relayPricing: 'flat' | 'weight';
   amountValue: string;
   bands: ShippingFormBand[];
+  /** « Offert dès » (ticket #220); blank = never. Not on a pickup rate. */
+  freeOverValue: string;
 }
 
 /** Whether a form rate is priced by weight bands, a relay rate's own included. */
@@ -779,6 +828,7 @@ function rateToForm(
     relayOffer: relay?.offer ?? '',
     relayPricing: relay?.price.type ?? 'flat',
     amountValue: price.type !== 'weight' ? amountToValue(price.amountCents, currency) : '',
+    freeOverValue: rate.freeOverCents == null ? '' : amountToValue(rate.freeOverCents, currency),
     bands:
       price.type === 'weight'
         ? price.bands.map((band) => ({
@@ -935,6 +985,22 @@ export function parseShippingForm(
       const relayPricing = str(form, `${ratePrefix}[relay_pricing]`) === 'weight' ? 'weight' : 'flat';
       const amountValue = str(form, `${ratePrefix}[amount]`);
       const byWeight = rateUsesBands({ mode, relayPricing });
+      // A pickup rate shows no « Offert dès »: a value left from another mode goes.
+      const freeOverValue = mode === 'pickup' ? '' : str(form, `${ratePrefix}[free_over]`);
+      let rateFreeOverCents: number | null = null;
+      if (freeOverValue !== '') {
+        const freeMajor = Number(freeOverValue);
+        if (!Number.isFinite(freeMajor) || freeMajor < 0) {
+          errors.push({
+            zoneIndex,
+            rateIndex,
+            field: 'freeOver',
+            message: t('admin.shipping.error.amountAboveZero'),
+          });
+        } else {
+          rateFreeOverCents = toMinorUnits(freeMajor, currency);
+        }
+      }
 
       // Saved through the editor, a relay rate names an offer this core can buy.
       // A stored one is only shape-checked (by the validator, which reports a
@@ -993,7 +1059,7 @@ export function parseShippingForm(
           ? toMinorUnits(major, currency)
           : Number.NaN;
 
-      rates.push({ token: rateToken, label, mode, relayOffer, relayPricing, amountValue, bands });
+      rates.push({ token: rateToken, label, mode, relayOffer, relayPricing, amountValue, bands, freeOverValue });
       const price = byWeight
         ? ({ type: 'weight', bands: documentBands } as const)
         : ({ type: 'flat', amountCents: flatCents } as const);
@@ -1005,6 +1071,7 @@ export function parseShippingForm(
             : mode === 'pickup'
               ? { type: 'pickup', amountCents: flatCents }
               : price,
+        ...(rateFreeOverCents != null && { freeOverCents: rateFreeOverCents }),
       });
     });
 

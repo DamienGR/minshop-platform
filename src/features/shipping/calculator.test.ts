@@ -381,6 +381,164 @@ describe('relay points', () => {
   });
 });
 
+describe('a rate offered from a threshold (ticket #220)', () => {
+  // The case of the ticket: home delivery paid, the relay offered from 60 €.
+  const offered: ShippingConfig = {
+    enabled: true,
+    zones: [
+      {
+        countries: ['FR'],
+        rates: [
+          { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+          {
+            label: 'Mondial Relay',
+            pricing: { type: 'relay', offer: 'MONR-CpourToi', price: { type: 'flat', amountCents: 390 } },
+            freeOverCents: 6000,
+          },
+        ],
+        freeOverCents: null,
+      },
+    ],
+  };
+  const options = (config: ShippingConfig, subtotalCents: number, itemWeightGrams: number | null = 500) =>
+    quoteShipping(config, {
+      subtotalCents,
+      country: 'FR',
+      itemWeightGrams,
+      relayOffers: ['MONR-CpourToi', 'CHRP-ChronoRelais'],
+    }).options;
+
+  it('costs nothing from the threshold on, the home rate keeping its price', () => {
+    expect(options(offered, 6000)).toEqual([
+      { label: 'Colissimo', amountCents: 690 },
+      { label: 'Mondial Relay', amountCents: 0, relayOffer: 'MONR-CpourToi' },
+    ]);
+    expect(options(offered, 9000)[1]).toEqual({ label: 'Mondial Relay', amountCents: 0, relayOffer: 'MONR-CpourToi' });
+  });
+
+  it('keeps every price below it', () => {
+    expect(options(offered, 5999)).toEqual([
+      { label: 'Colissimo', amountCents: 690 },
+      { label: 'Mondial Relay', amountCents: 390, relayOffer: 'MONR-CpourToi' },
+    ]);
+  });
+
+  it('adds no option and synthesizes no free home delivery', () => {
+    expect(options(offered, 9000).map((o) => o.label)).toEqual(['Colissimo', 'Mondial Relay']);
+  });
+
+  it('is not quoted where a point cannot be picked, offered or not', () => {
+    expect(
+      quoteShipping(offered, { subtotalCents: 9000, country: 'FR', itemWeightGrams: 500 }).options,
+    ).toEqual([{ label: 'Colissimo', amountCents: 690 }]);
+  });
+
+  it('works on a home rate too, flat or by weight', () => {
+    const home: ShippingConfig = {
+      enabled: true,
+      zones: [
+        {
+          countries: ['FR'],
+          rates: [
+            { label: 'Lettre suivie', pricing: { type: 'flat', amountCents: 490 }, freeOverCents: 3000 },
+            { label: 'Colissimo', pricing: { type: 'weight', bands: BANDS }, freeOverCents: 8000 },
+          ],
+          freeOverCents: null,
+        },
+      ],
+    };
+    expect(
+      quoteShipping(home, { subtotalCents: 2999, country: 'FR', itemWeightGrams: 700 }).options.map((o) => [
+        o.label,
+        o.amountCents,
+      ]),
+    ).toEqual([
+      ['Lettre suivie', 490],
+      ['Colissimo', 800],
+    ]);
+    expect(
+      quoteShipping(home, { subtotalCents: 3000, country: 'FR', itemWeightGrams: 700 }).options.map((o) => [
+        o.label,
+        o.amountCents,
+      ]),
+    ).toEqual([
+      ['Lettre suivie', 0],
+      ['Colissimo', 800],
+    ]);
+    expect(
+      quoteShipping(home, { subtotalCents: 8000, country: 'FR', itemWeightGrams: 700 }).options.map((o) => [
+        o.label,
+        o.amountCents,
+      ]),
+    ).toEqual([
+      ['Lettre suivie', 0],
+      ['Colissimo', 0],
+    ]);
+  });
+
+  it('never bypasses a carrier maximum or an unknown weight', () => {
+    const byWeight: ShippingConfig = {
+      enabled: true,
+      zones: [
+        {
+          countries: ['FR'],
+          rates: [
+            {
+              label: 'Chrono Relais',
+              pricing: {
+                type: 'relay',
+                offer: 'CHRP-ChronoRelais',
+                price: { type: 'weight', bands: [{ upToGrams: 1000, amountCents: 590 }] },
+              },
+              freeOverCents: 3000,
+            },
+          ],
+          freeOverCents: null,
+        },
+      ],
+    };
+    const heavy = quoteShipping(byWeight, {
+      subtotalCents: 9000,
+      country: 'FR',
+      itemWeightGrams: 2000,
+      relayOffers: ['CHRP-ChronoRelais'],
+    });
+    expect(heavy.options).toEqual([]);
+    expect(heavy.omitted).toEqual([{ label: 'Chrono Relais', reason: 'overweight' }]);
+    const unknown = quoteShipping(byWeight, {
+      subtotalCents: 9000,
+      country: 'FR',
+      itemWeightGrams: null,
+      relayOffers: ['CHRP-ChronoRelais'],
+    });
+    expect(unknown.options).toEqual([]);
+    expect(unknown.omitted).toEqual([{ label: 'Chrono Relais', reason: 'missing_weight' }]);
+  });
+
+  it('stands beside the zone threshold, which is read as before', () => {
+    const both: ShippingConfig = {
+      enabled: true,
+      zones: [{ ...offered.zones[0]!, freeOverCents: 10000 }],
+    };
+    expect(options(both, 6000).map((o) => [o.label, o.amountCents])).toEqual([
+      ['Colissimo', 690],
+      ['Mondial Relay', 0],
+    ]);
+    expect(
+      quoteShipping(both, {
+        subtotalCents: 10000,
+        country: 'FR',
+        itemWeightGrams: 500,
+        relayOffers: ['MONR-CpourToi'],
+      }).options.map((o) => [o.label, o.amountCents]),
+    ).toEqual([
+      [FREE_SHIPPING_LABEL, 0],
+      ['Colissimo', 690],
+      ['Mondial Relay', 0],
+    ]);
+  });
+});
+
 describe('unknown weight', () => {
   it('omits only the weight-priced services', () => {
     const mixed: ShippingConfig = {

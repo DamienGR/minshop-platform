@@ -12,6 +12,7 @@ import { vaultReady } from '../../features/secrets/store';
 import { t, tn } from '../../features/i18n';
 import {
   SHIPPING_LIMITS,
+  SHIPPING_SCHEMA_VERSION,
   documentToForm,
   errorsFor,
   fingerprintRawConfig,
@@ -52,7 +53,16 @@ let conflict = false;
 let saved = Astro.url.searchParams.get('saved') === '1';
 
 function blankRate(token: string): ShippingFormRate {
-  return { token, label: '', mode: 'flat', relayOffer: '', relayPricing: 'flat', amountValue: '', bands: [] };
+  return {
+    token,
+    label: '',
+    mode: 'flat',
+    relayOffer: '',
+    relayPricing: 'flat',
+    amountValue: '',
+    bands: [],
+    freeOverValue: '',
+  };
 }
 function blankZone(token: string) {
   return {
@@ -203,7 +213,7 @@ if (Astro.request.method === 'POST') {
 
 function parseModelForPreview(m: ShippingFormModel): ShippingValidationError[] {
   return validateShippingDocument({
-    schema: 2,
+    schema: SHIPPING_SCHEMA_VERSION,
     revision: m.revision + 1,
     enabled: m.enabled,
     packageWeightGrams: 0,
@@ -211,7 +221,12 @@ function parseModelForPreview(m: ShippingFormModel): ShippingValidationError[] {
       name: z.name,
       countries: z.countries,
       freeOverCents: z.freeOverValue === '' ? null : Math.round(Number(z.freeOverValue) * 100),
-      rates: z.rates.map((r) => ({ label: r.label, pricing: previewPricing(r) })),
+      rates: z.rates.map((r) => ({
+        label: r.label,
+        pricing: previewPricing(r),
+        freeOverCents:
+          r.mode === 'pickup' || r.freeOverValue === '' ? null : Math.round(Number(r.freeOverValue) * 100),
+      })),
     })),
   });
 }
@@ -441,6 +456,20 @@ const label = (path: string) => `text-xs uppercase tracking-widest text-gray-500
                       type="text"
                       name={`zone[${zone.token}][rate][${rate.token}][amount]`}
                       value={rate.amountValue}
+                      inputmode="decimal"
+                      class="mt-1 w-28 rounded border border-line px-2 py-1 text-sm"
+                    />
+                  </label>
+                )}
+                {/* Ticket #220: past this, the rate itself costs nothing — the
+                    way to offer a relay. A pickup has nothing to deliver. */}
+                {rate.mode !== 'pickup' && (
+                  <label class="block">
+                    <span class={label('')}>{t('admin.shipping.rate.freeOver', { devise: currency.toUpperCase() })}</span>
+                    <input
+                      type="text"
+                      name={`zone[${zone.token}][rate][${rate.token}][free_over]`}
+                      value={rate.freeOverValue}
                       inputmode="decimal"
                       class="mt-1 w-28 rounded border border-line px-2 py-1 text-sm"
                     />
