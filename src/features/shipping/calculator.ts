@@ -94,6 +94,10 @@ export type RatePricing = FlatRatePricing | WeightRatePricing | PickupRatePricin
 export interface ShippingRate {
   label: string;
   pricing: RatePricing;
+  /** Offered — priced 0, its label, relay offer and delivery mode kept — once
+   *  the subtotal reaches this (ticket #220). Absent or null: never. A delivery
+   *  rate's alone: a pickup rate never carries one. */
+  freeOverCents?: number | null;
 }
 
 /** What a zone may hold. The legacy `{ label, amountCents }` shape predates weight
@@ -107,7 +111,8 @@ export interface ShippingZone {
   /** ISO 3166-1 alpha-2 codes this zone serves, or ['*'] as a catch-all. */
   countries: string[];
   rates: ConfiguredRate[];
-  /** Add a 0-cost free-shipping option once the subtotal reaches this (null = never). */
+  /** Add a 0-cost free-shipping option once the subtotal reaches this (null = never).
+   *  A home delivery: a rate's own threshold is how a relay rate is offered. */
   freeOverCents: number | null;
 }
 
@@ -202,6 +207,10 @@ export function quoteShipping(cfg: ShippingConfig, input: ShippingQuoteInput): S
   const rates = zone.rates.map(normalizeRate);
   const options: ShippingOption[] = [];
   const omitted: OmittedRate[] = [];
+  // A rate's own threshold prices it 0 once reached, AFTER its price resolved:
+  // offering a rate never bypasses a carrier maximum or an unknown weight.
+  const priced = (rate: ShippingRate, amountCents: number) =>
+    rate.freeOverCents != null && input.subtotalCents >= rate.freeOverCents ? 0 : amountCents;
 
   // Whether some HOME delivery service resolved. Pickup never counts: it is not
   // a way to send the parcel, so it must not unlock free *delivery*. Nor does a
@@ -220,7 +229,7 @@ export function quoteShipping(cfg: ShippingConfig, input: ShippingQuoteInput): S
     const tag = relayOffer !== undefined ? { relayOffer } : {};
     if (price.type === 'flat') {
       // Flat rates do not care about weight, so an unknown weight must not hide them.
-      options.push({ label: rate.label, amountCents: price.amountCents, ...tag });
+      options.push({ label: rate.label, amountCents: priced(rate, price.amountCents), ...tag });
       if (relayOffer === undefined) deliveryResolved = true;
       continue;
     }
@@ -233,7 +242,7 @@ export function quoteShipping(cfg: ShippingConfig, input: ShippingQuoteInput): S
       omitted.push({ label: rate.label, reason: 'overweight' });
       continue;
     }
-    options.push({ label: rate.label, amountCents: band.amountCents, ...tag });
+    options.push({ label: rate.label, amountCents: priced(rate, band.amountCents), ...tag });
     if (relayOffer === undefined) deliveryResolved = true;
   }
 

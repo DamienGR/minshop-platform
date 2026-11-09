@@ -203,6 +203,38 @@
   display: flex;
 }
 
+/* The cart's shipping lines (ticket #221). With a destination selector, one
+   block per zone it reaches, and the checked country's shown: :has() and
+   option:checked again, so the lines follow the choice without a script, and a
+   browser without :has() shows none rather than another zone's prices. One rule
+   per zone index, as many as a configuration may hold (SHIPPING_LIMITS.zones,
+   held by test/storefront/ship-estimate-source.test.mjs). */
+[data-ship-estimates] [data-ship-estimate] {
+  display: none;
+}
+[data-ship-estimates]:has(option[data-ship-zone='0']:checked) [data-ship-estimate='0'],
+[data-ship-estimates]:has(option[data-ship-zone='1']:checked) [data-ship-estimate='1'],
+[data-ship-estimates]:has(option[data-ship-zone='2']:checked) [data-ship-estimate='2'],
+[data-ship-estimates]:has(option[data-ship-zone='3']:checked) [data-ship-estimate='3'],
+[data-ship-estimates]:has(option[data-ship-zone='4']:checked) [data-ship-estimate='4'],
+[data-ship-estimates]:has(option[data-ship-zone='5']:checked) [data-ship-estimate='5'],
+[data-ship-estimates]:has(option[data-ship-zone='6']:checked) [data-ship-estimate='6'],
+[data-ship-estimates]:has(option[data-ship-zone='7']:checked) [data-ship-estimate='7'],
+[data-ship-estimates]:has(option[data-ship-zone='8']:checked) [data-ship-estimate='8'],
+[data-ship-estimates]:has(option[data-ship-zone='9']:checked) [data-ship-estimate='9'],
+[data-ship-estimates]:has(option[data-ship-zone='10']:checked) [data-ship-estimate='10'],
+[data-ship-estimates]:has(option[data-ship-zone='11']:checked) [data-ship-estimate='11'],
+[data-ship-estimates]:has(option[data-ship-zone='12']:checked) [data-ship-estimate='12'],
+[data-ship-estimates]:has(option[data-ship-zone='13']:checked) [data-ship-estimate='13'],
+[data-ship-estimates]:has(option[data-ship-zone='14']:checked) [data-ship-estimate='14'],
+[data-ship-estimates]:has(option[data-ship-zone='15']:checked) [data-ship-estimate='15'],
+[data-ship-estimates]:has(option[data-ship-zone='16']:checked) [data-ship-estimate='16'],
+[data-ship-estimates]:has(option[data-ship-zone='17']:checked) [data-ship-estimate='17'],
+[data-ship-estimates]:has(option[data-ship-zone='18']:checked) [data-ship-estimate='18'],
+[data-ship-estimates]:has(option[data-ship-zone='19']:checked) [data-ship-estimate='19'] {
+  display: block;
+}
+
 /* Dragged row in the Navigation menus — same treatment as the product gallery,
    so the two reorderable lists in admin behave and look alike. */
 [data-menu-list] > li.dragging {

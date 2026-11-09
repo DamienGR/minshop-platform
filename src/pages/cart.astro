@@ -8,6 +8,8 @@ import { customizationText } from '../features/products/customization';
 import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { stripeDestination } from '../features/shipping/destination';
+import { cartShipping } from '../features/shipping/cartEstimate';
+import ShippingEstimate from '../features/shipping/ShippingEstimate.astro';
 import ProductImage from '../features/products/ProductImage.astro';
 import OrderCommentField from '../features/orders/OrderCommentField.astro';
 import { enabledMethods, isMethodAvailable } from '../features/payments';
@@ -47,12 +49,27 @@ const error = Astro.url.searchParams.get('error');
 // the zones and the on/off switch. An all-digital cart never needs a destination,
 // so the selector is also gated on some line actually requiring shipping.
 const effectiveShipping = shippingFor(settings).config;
+const shipment = shipmentWeightFor(lines);
+const geoCountry = Astro.request.headers.get('cf-ipcountry');
 const destination = stripeDestination(
   settings,
   effectiveShipping,
-  shipmentWeightFor(lines).shippingRequired,
-  Astro.request.headers.get('cf-ipcountry'),
+  shipment.shippingRequired,
+  geoCountry,
 );
+// What the next step will charge, announced under the subtotal (ticket #221):
+// the same quote, for the destination the payment buttons would send. With a
+// selector, one block per zone, revealed by the country checked (base.css).
+const shippingLines = cartShipping({
+  settings,
+  shipping: effectiveShipping,
+  shipment,
+  subtotalCents,
+  destination,
+  geoCountry,
+});
+const shownEstimate =
+  shippingLines.shownZone == null ? undefined : shippingLines.estimates.get(shippingLines.shownZone);
 // The catalog is at / until the home page is pointed elsewhere.
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
 // Same predicate the server enforces (features/legal/terms.ts): the box appears
@@ -176,11 +193,16 @@ const linesForm = 'cart-lines';
         {/* Checkout panel — full-width on mobile, right-aligned card on desktop.
             Subtotal on top, payment methods stacked beneath it. */}
         <div class="mt-10 flex justify-end">
-          <div class="w-full sm:max-w-sm">
+          <div class="w-full sm:max-w-sm" data-ship-estimates={destination.showSelect || undefined}>
             <div class="flex items-center justify-between">
               <span class="text-xs uppercase tracking-widest text-muted">{t('cart.subtotal')}</span>
               <span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span>
             </div>
+            {destination.showSelect
+              ? [...shippingLines.estimates].map(([zone, estimate]) => (
+                  <ShippingEstimate estimate={estimate} zone={zone} class="mt-2" />
+                ))
+              : shownEstimate && <ShippingEstimate estimate={shownEstimate} class="mt-2" />}
 
             {methods.length === 0 ? (
               <Fragment>
@@ -201,7 +223,11 @@ const linesForm = 'cart-lines';
                     class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink"
                   >
                     {destination.countries.map((c) => (
-                      <option value={c} selected={c === destination.defaultCountry}>
+                      <option
+                        value={c}
+                        selected={c === destination.defaultCountry}
+                        data-ship-zone={shippingLines.zoneOf(c) ?? undefined}
+                      >
                         {destination.label(c)}
                       </option>
                     ))}

@@ -11,6 +11,7 @@ import {
   parseRuntimeShippingConfig,
   parseShippingForm,
   serializeRuntimeShippingConfig,
+  shippingSchemaFor,
   validateBuildTimeShipping,
   validateShippingDocument,
   type RuntimeShippingConfig,
@@ -374,8 +375,9 @@ describe('validateShippingDocument', () => {
   });
   it('reads a document an older core saved, and refuses one from a newer core', () => {
     expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 3 }))).status).toBe('valid');
-    expect(SHIPPING_SCHEMA_VERSION).toBe(4);
-    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 5 }))).status).toBe('invalid');
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 4 }))).status).toBe('valid');
+    expect(SHIPPING_SCHEMA_VERSION).toBe(5);
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 6 }))).status).toBe('invalid');
   });
   it('requires at least one band on a weight rate', () => {
     const empty = doc({
@@ -387,6 +389,144 @@ describe('validateShippingDocument', () => {
       ],
     });
     expect(messages(empty)).toContain('Ajoutez au moins une tranche de poids.');
+  });
+});
+
+describe('a rate offered from a threshold (ticket #220)', () => {
+  const offered = (freeOverCents: unknown, pricing: RuntimeShippingConfig['zones'][number]['rates'][number]['pricing'] = {
+    type: 'relay',
+    offer: 'MONR-CpourToi',
+    price: { type: 'flat', amountCents: 390 },
+  }) =>
+    doc({
+      zones: [
+        {
+          name: 'France',
+          countries: ['FR'],
+          rates: [
+            { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+            { label: 'Mondial Relay', pricing, freeOverCents: freeOverCents as number },
+          ],
+          freeOverCents: null,
+        },
+      ],
+    });
+  const messages = (d: RuntimeShippingConfig) => validateShippingDocument(d).map((e) => e.message);
+
+  it('is written as version 5, and only then', () => {
+    expect(shippingSchemaFor(offered(6000))).toBe(5);
+    // Without one, the document reads the same under v4: a rollback keeps it.
+    expect(shippingSchemaFor(offered(null))).toBe(4);
+    expect(shippingSchemaFor(doc())).toBe(4);
+  });
+
+  it('reads back whole from a version 5 document', () => {
+    const parsed = parseRuntimeShippingConfig(serializeRuntimeShippingConfig(offered(6000)));
+    expect(parsed.status).toBe('valid');
+    if (parsed.status === 'valid') expect(parsed.config.zones[0]!.rates[1]!.freeOverCents).toBe(6000);
+  });
+
+  it('is refused in an older document, which a rollback would read without it', () => {
+    const parsed = parseRuntimeShippingConfig(serializeRuntimeShippingConfig({ ...offered(6000), schema: 4 }));
+    expect(parsed.status).toBe('invalid');
+    if (parsed.status === 'invalid') expect(parsed.error).toBe('La configuration de livraison contient un tarif mal formé.');
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(offered('60'))).status).toBe('invalid');
+  });
+
+  it('must be an amount above zero', () => {
+    expect(messages(offered(6000))).toEqual([]);
+    expect(messages(offered(0))).toContain('Indiquez un montant supérieur à zéro.');
+    expect(messages(offered(-100))).toContain('Indiquez un montant supérieur à zéro.');
+    expect(messages(offered(12.5))).toContain('Indiquez un montant supérieur à zéro.');
+  });
+
+  it('never stands on a pickup rate', () => {
+    expect(messages(offered(6000, { type: 'pickup', amountCents: 200 }))).toEqual([
+      'Un retrait sur place ne s’offre pas dès un montant\u202f: indiquez ses frais, 0 pour gratuit.',
+    ]);
+  });
+
+  it('adds no option to the five a zone may resolve', () => {
+    const five = doc({
+      zones: [
+        {
+          name: 'France',
+          countries: ['FR'],
+          rates: ['A', 'B', 'C', 'D', 'E'].map((label) => ({
+            label,
+            pricing: { type: 'flat' as const, amountCents: 500 },
+            freeOverCents: 3000,
+          })),
+          freeOverCents: null,
+        },
+      ],
+    });
+    expect(messages(five)).toEqual([]);
+  });
+
+  it('is checked in build-time configuration like in a saved one', () => {
+    const buildTimeOffer: ShippingConfig = {
+      enabled: true,
+      zones: [
+        {
+          countries: ['FR'],
+          rates: [{ label: 'Retrait', pricing: { type: 'pickup', amountCents: 0 }, freeOverCents: 3000 }],
+          freeOverCents: null,
+        },
+      ],
+    };
+    expect(validateBuildTimeShipping(buildTimeOffer)).toBe(
+      'Un retrait sur place ne s’offre pas dès un montant\u202f: indiquez ses frais, 0 pour gratuit.',
+    );
+  });
+
+  it('round-trips through the editor', () => {
+    const [, rate] = documentToForm(offered(6000), 'eur', 'g', formatWeightValue).zones[0]!.rates;
+    expect(rate).toMatchObject({ mode: 'relay', amountValue: '3.9', freeOverValue: '60' });
+    const [home] = documentToForm(offered(6000), 'eur', 'g', formatWeightValue).zones[0]!.rates;
+    expect(home!.freeOverValue).toBe('');
+  });
+
+  it('is parsed from « Offert dès » on a delivery rate, and dropped from a pickup', () => {
+    const form = (mode: string, freeOver: string) =>
+      new TestForm()
+        .set('enabled', '1')
+        .set('revision', '1')
+        .set('zone_order', 'z_a')
+        .set('zone[z_a][name]', 'France')
+        .set('zone[z_a][countries][]', 'FR')
+        .set('zone[z_a][rate_order]', 'r_1')
+        .set('zone[z_a][rate][r_1][label]', 'Mondial Relay')
+        .set('zone[z_a][rate][r_1][mode]', mode)
+        .set('zone[z_a][rate][r_1][relay_offer]', 'MONR-CpourToi')
+        .set('zone[z_a][rate][r_1][relay_pricing]', 'flat')
+        .set('zone[z_a][rate][r_1][amount]', '3.90')
+        .set('zone[z_a][rate][r_1][free_over]', freeOver);
+    const options = { currency: 'eur', unit: 'g' as const, relayOffers: ['MONR-CpourToi'] };
+
+    const relay = parseShippingForm(form('relay', '60'), options);
+    expect(relay.errors).toEqual([]);
+    expect(relay.document.zones[0]!.rates[0]).toEqual({
+      label: 'Mondial Relay',
+      pricing: { type: 'relay', offer: 'MONR-CpourToi', price: { type: 'flat', amountCents: 390 } },
+      freeOverCents: 6000,
+    });
+    expect(relay.model.zones[0]!.rates[0]!.freeOverValue).toBe('60');
+
+    // Blank: never offered, and nothing written — the document stays a v4 one.
+    const blank = parseShippingForm(form('relay', ''), options);
+    expect(blank.document.zones[0]!.rates[0]).not.toHaveProperty('freeOverCents');
+
+    const pickup = parseShippingForm(form('pickup', '60'), options);
+    expect(pickup.errors).toEqual([]);
+    expect(pickup.document.zones[0]!.rates[0]).not.toHaveProperty('freeOverCents');
+
+    for (const typed of ['0', '-5', 'beaucoup']) {
+      const refused = parseShippingForm(form('flat', typed), options);
+      expect(refused.errors.filter((e) => e.field === 'freeOver').map((e) => [e.rateIndex, e.message])).toEqual([
+        [0, 'Indiquez un montant supérieur à zéro.'],
+      ]);
+    }
   });
 });
 

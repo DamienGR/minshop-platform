@@ -132,7 +132,8 @@ export interface SiteConfig {
    * features/shipping/calculator) — the same engine feeds Stripe Checkout's
    * options AND the own-checkout total used by Lightning, so every rail charges
    * the same shipping. A zone matches by country ('*' = catch-all); `freeOverCents`
-   * adds a $0 option once the subtotal qualifies. Note: Stripe Checkout shows a
+   * adds a $0 option once the subtotal qualifies, and a rate's own `freeOverCents`
+   * prices that rate 0 from then on (ticket #220). Note: Stripe Checkout shows a
    * STATIC option list (no address yet), so it uses the first zone's rates;
    * zone-accurate shipping applies on the own-checkout (Lightning) path.
    */

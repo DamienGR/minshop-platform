@@ -51,3 +51,26 @@ test('un échec qui n’est pas un refus garde le message générique', async ({
   await expect(form.getByRole('alert')).toHaveCount(0);
   await expect(page.getByText('Cross-site POST')).toHaveCount(0);
 });
+
+/**
+ * Every entry of the sub-menu within reach (ticket #222). It scrolled sideways
+ * with its scrollbar hidden, so past the width an entry could not be reached
+ * with a mouse; it wraps now. Measured at both projects' widths and at a
+ * narrow desktop window.
+ */
+test('le sous-menu de Réglages passe à la ligne, chaque entrée à portée', async ({ page }) => {
+  await signIn(page);
+  for (const width of [page.viewportSize().width, 640]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/admin/settings');
+    const nav = page.locator('[data-settings-nav]');
+    const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth, `à ${width} px, le sous-menu défile de côté`).toBeLessThanOrEqual(clientWidth);
+    const links = await nav.getByRole('link').all();
+    expect(links.length).toBeGreaterThan(5);
+    for (const link of links) await expect(link).toBeInViewport({ ratio: 1 });
+  }
+});
