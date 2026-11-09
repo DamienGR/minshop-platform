@@ -3721,7 +3721,8 @@ point relais seulement, et des frais de port que l'acheteur ne découvrait
 qu'après avoir cliqué pour payer. Damien choisit le 2026-11-09 un seuil par
 tarif, le tarif offert gardant son nom. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-09, sans migration :
+Fait le 2026-11-09, sans migration, livré dans le socle v0.8.2 (avec le
+sous-menu de Réglages qui passe à la ligne, ticket #222) :
 
 - un tarif, à domicile ou en relais, prend « Offert dès » : à partir de ce
   sous-total, il coûte 0 € et garde son nom, son offre relais et son mode de
