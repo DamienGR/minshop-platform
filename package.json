@@ -1,7 +1,7 @@
 {
   "name": "minshop",
   "type": "module",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "private": true,
   "repository": {
     "type": "git",

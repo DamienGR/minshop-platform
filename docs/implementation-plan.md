@@ -3760,7 +3760,8 @@ carte » quand le virement est proposé, et « frais de port en sus » sans
 montant. Les textes du thème (§13.8, ADR 0027) n'étaient exposés qu'à
 l'accueil. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-10, sans migration, extension de l'ADR 0027 :
+Fait le 2026-11-10, sans migration, extension de l'ADR 0027, livré dans le
+socle v0.8.3 :
 
 - `texts` sur `StorefrontShellModel` (`Header.astro`, `Footer.astro`, chaque
   page que la coque entoure, `/checkout` et `/pay` compris) et sur
