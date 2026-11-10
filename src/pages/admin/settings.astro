@@ -38,6 +38,8 @@ import {
   stripeKeyRefusal,
 } from '../../features/payments/stripeMode';
 import { adminCredential } from '../../features/auth/admin';
+import { lastAdminTokenUse } from '../../features/auth/adminToken';
+import { formatDateTime } from '../../features/i18n/format';
 import {
   emailConfigured,
   featureAvailability,
@@ -584,6 +586,9 @@ const effectiveShipping = shippingFor(settings).config;
 const announcement = settings.announcement ?? '';
 const announcementHref = settings.announcementHref ?? '';
 const timeZones = allTimeZones();
+// The last time a one-time token opened the admin (ticket #227, ADR 0032): the
+// merchant sees when the agency came in, never who else could.
+const lastAgencyAccess = await lastAdminTokenUse(env.DB);
 
 // Search backend: runtime overlay (toggle below) over the build-time default.
 // Semantic search needs the AI + VECTORIZE bindings; without them the toggle is
@@ -764,6 +769,7 @@ const sections = [
   { id: 'contact', label: t('admin.settings.section.contact') },
   { id: 'turnstile', label: t('admin.settings.section.turnstile') },
   { id: 'search', label: t('admin.settings.section.search') },
+  { id: 'agency-access', label: t('admin.settings.section.agencyAccess') },
   { id: 'build-time', label: t('admin.settings.section.buildTime') },
 ];
 ---
@@ -1838,6 +1844,21 @@ const sections = [
         )
       }
     </div>
+  </section>
+
+  {/* ── Agency access: one-time tokens (ticket #227, ADR 0032) ─────────────── */}
+  <section id="agency-access" class="mt-10 scroll-mt-16">
+    <h2 class="mb-2 text-lg font-bold">{t('admin.settings.section.agencyAccess')}</h2>
+    <p class="mb-4 text-sm text-gray-500">{t('admin.settings.agencyAccess.intro')}</p>
+    <p class="mb-10 rounded-lg border border-gray-200 bg-white px-4 py-4 text-sm" data-agency-access>
+      {
+        lastAgencyAccess === null
+          ? t('admin.settings.agencyAccess.never')
+          : t('admin.settings.agencyAccess.last', {
+              date: formatDateTime(new Date(lastAgencyAccess * 1000), { dateStyle: 'long', timeStyle: 'short' }, timeZone),
+            })
+      }
+    </p>
   </section>
 
   {/* ── Build-time config (needs a redeploy) ─────────────────────────────── */}

@@ -43,6 +43,7 @@ Usage: shopctl <commande> [options]
   provision           Créer ou confirmer les ressources Cloudflare d'un environnement
   deploy              Vérifier, migrer, construire, téléverser et tester la boutique
   admin password      Poser le mot de passe de l'administration, sans assistant ouvert
+  admin token         Créer un jeton d'accès à usage unique, sans connaître le mot de passe
   backup              Sauvegarder, lister, contrôler et faire expirer les archives
   restore             Restaurer une sauvegarde dans un environnement
   privacy             Exporter ou anonymiser les données d'une personne

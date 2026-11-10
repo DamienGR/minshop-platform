@@ -20,6 +20,7 @@ export const settings = {
   'admin.settings.section.search': 'Recherche',
   'admin.settings.section.buildTime': 'Fixé au déploiement',
   'admin.settings.section.contact': 'Formulaire de contact',
+  'admin.settings.section.agencyAccess': 'Accès de l’agence',
   'admin.settings.flash.updated': 'Réglages enregistrés.',
   'admin.settings.inlineSave.saved': 'Enregistré ✓',
   'admin.settings.inlineSave.failed': 'Échec de l’enregistrement — réessayez',
@@ -27,6 +28,11 @@ export const settings = {
   'admin.settings.toggle.enable': 'Activer : {nom}',
   'admin.settings.toggle.disable': 'Désactiver : {nom}',
   'admin.settings.purgeNote': 'L’enregistrement purge les pages concernées de la vitrine ; si la purge échoue ponctuellement, le cache expire de lui-même au bout de 10 minutes.',
+
+  // ─── Accès de l’agence (ticket #227) ────────────────────────────────────────────
+  'admin.settings.agencyAccess.intro': 'La personne qui s’occupe de votre boutique peut ouvrir une session de 8 heures avec un jeton à usage unique, que seul le compte d’hébergement de la boutique permet de créer. Votre mot de passe ne change pas, et vos sessions restent ouvertes.',
+  'admin.settings.agencyAccess.last': 'Dernier accès de l’agence : le {date}.',
+  'admin.settings.agencyAccess.never': 'Aucun accès de l’agence par jeton pour l’instant.',
 
   // ─── Erreurs de validation ─────────────────────────────────────────────────────
   'admin.settings.error.unknownPaymentMethod': 'Moyen de paiement inconnu.',

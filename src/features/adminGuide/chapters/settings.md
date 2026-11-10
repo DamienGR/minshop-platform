@@ -19,6 +19,12 @@ Choisissez la **Page du formulaire** et le **Destinataire** des messages. Puis a
 
 Le **Destinataire des alertes de commande** reçoit un e-mail à chaque nouvelle commande. **Envoyer le test** vérifie que les e-mails partent bien.
 
+### Accès de l’agence
+
+La personne qui s’occupe de votre boutique peut entrer dans l’administration sans connaître votre mot de passe : avec un jeton à usage unique, valable un quart d’heure, que seul le compte d’hébergement de la boutique permet de créer. Il ouvre une session de 8 heures. Votre mot de passe ne change pas, et vous restez connecté.
+
+La section **Accès de l’agence** affiche la date de son dernier passage. Si vous changez votre mot de passe, sa session se ferme comme les vôtres.
+
 ### Les réglages techniques
 
 Les **Paiements**, l’envoi des e-mails, les étiquettes Boxtal, les **Images**, la **Protection anti-robots** et la **Recherche** demandent des comptes et des clés chez des prestataires. Ils sont faits à l’ouverture de la boutique. Pour les changer, écrivez à la personne qui s’occupe de votre boutique, avec le lien en bas de l’écran.

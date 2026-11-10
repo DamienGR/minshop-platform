@@ -1,0 +1,133 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import Layout from '../../layouts/Layout.astro';
+import { verifyConfiguredTurnstile, TURNSTILE_FIELD } from '../../features/auth/turnstile';
+import { signSession, verifySession } from '../../features/auth/session';
+import { adminCredential } from '../../features/auth/admin';
+import {
+  ADMIN_TOKEN_SESSION_SECONDS,
+  consumeAdminToken,
+  normalizeAdminToken,
+} from '../../features/auth/adminToken';
+import { clearLoginAttempts, countLoginAttempt, loginThrottleKey } from '../../features/auth/loginThrottle';
+import { getSecret } from '../../features/secrets/store';
+import Turnstile from '../../features/auth/Turnstile.astro';
+import Rich from '../../features/i18n/Rich.astro';
+import { t } from '../../features/i18n';
+
+// The one-time token door (ticket #227, ADR 0032): the second admin page that
+// answers anonymously, beside /admin/login. A token is written by `shopctl admin
+// token`, which only the shop's Cloudflare account can run, and opens an
+// ordinary session — signed like the login's, bound to the current password,
+// eight hours long — without touching the password.
+const cred = await adminCredential(env.DB);
+// No password, no password gate: the token has nothing to open. Same answer as
+// the login page.
+if (!cred.enabled) return Astro.redirect('/admin/setup', 303);
+
+const signingKey = env.AUTH_SECRET || cred.tagSource;
+const now = Date.now() / 1000;
+if (
+  await verifySession(Astro.cookies.get('admin_session')?.value ?? null, signingKey, cred.tagSource, now)
+) {
+  return Astro.redirect('/admin', 303);
+}
+
+let error = '';
+
+const form = Astro.request.method === 'POST' ? await Astro.request.formData() : null;
+const token = form ? normalizeAdminToken(form.get('token')?.toString()) : null;
+
+// The login's counter, and the login's key: a guesser gets one budget across
+// both doors, not one each. Counted before the token is looked up — but only
+// for a value that could be one. A malformed value guesses nothing and reaches
+// neither the database nor Turnstile, so it spends nobody's budget: not the
+// operator's, and not the remote gate's, which posts an empty form here.
+const throttleKey = token
+  ? await loginThrottleKey(signingKey, Astro.request.headers.get('CF-Connecting-IP'))
+  : null;
+const attempt = throttleKey ? await countLoginAttempt(env.DB, throttleKey, Math.floor(now)) : null;
+
+if (form && !token) {
+  error = t('admin.token.error.invalid');
+} else if (attempt && !attempt.allowed) {
+  Astro.response.status = 429;
+  Astro.response.headers.set('retry-after', String(attempt.retryAfter));
+  Astro.response.headers.set('cache-control', 'no-store');
+  error = t('admin.login.error.throttled', { minutes: Math.ceil(attempt.retryAfter / 60) });
+} else if (form && token && throttleKey) {
+  const turnstileEnabled = Astro.locals.settings?.turnstileEnabled === true;
+  const tsSecret = turnstileEnabled ? await getSecret(env.DB, 'turnstile_secret_key') : null;
+  const tsOk = await verifyConfiguredTurnstile(
+    turnstileEnabled,
+    form.get(TURNSTILE_FIELD)?.toString(),
+    tsSecret,
+    Astro.request.headers.get('CF-Connecting-IP'),
+  );
+
+  // The challenge first: a failed one must not spend the token.
+  if (!tsOk) {
+    error = t('admin.login.error.verification');
+  } else if (!(await consumeAdminToken(env.DB, token, Math.floor(now)))) {
+    // Unknown, used or expired: one answer for the three, and for a malformed one.
+    error = t('admin.token.error.invalid');
+  } else {
+    await clearLoginAttempts(env.DB, throttleKey);
+    const session = await signSession(signingKey, cred.tagSource, ADMIN_TOKEN_SESSION_SECONDS, now);
+    Astro.cookies.set('admin_session', session, {
+      httpOnly: true,
+      secure: Astro.url.protocol === 'https:',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: ADMIN_TOKEN_SESSION_SECONDS,
+    });
+    // A field chosen here, never the token: what an operator reading the logs
+    // needs is that the door was used, not with what.
+    console.log(JSON.stringify({ event: 'admin_token_used' }));
+    return Astro.redirect('/admin', 303);
+  }
+}
+---
+
+<Layout title={t('admin.token.title')}>
+  <div class="mx-auto max-w-sm py-10">
+    <h1 class="mb-2 text-2xl font-bold">{t('admin.token.title')}</h1>
+    <p class="mb-6 text-sm text-gray-500"><Rich message="admin.token.intro" /></p>
+
+    {
+      error && (
+        <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )
+    }
+
+    <form method="POST" action="/admin/token" class="space-y-4">
+      <label class="block text-sm">
+        <span class="mb-1 block font-medium">{t('admin.token.field')}</span>
+        <input
+          type="text"
+          name="token"
+          required
+          autofocus
+          autocomplete="one-time-code"
+          autocapitalize="off"
+          spellcheck="false"
+          class="w-full rounded-md border border-gray-200 px-3 py-2 font-mono"
+        />
+      </label>
+
+      <div class="flex justify-center">
+        <Turnstile />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-white hover:bg-brand-hover"
+      >
+        {t('admin.token.submit')}
+      </button>
+    </form>
+  </div>
+</Layout>

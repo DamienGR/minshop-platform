@@ -17,6 +17,7 @@ certification).
 | Un secret a fuité | [fuite-de-secret](runbooks/fuite-de-secret.md) |
 | Des données personnelles ont été exposées | [violation-de-donnees](runbooks/violation-de-donnees.md) |
 | Le mot de passe d'administration est perdu | [mot-de-passe-admin](runbooks/mot-de-passe-admin.md) |
+| L'agence doit entrer dans l'administration sans le mot de passe du commerçant | [mot-de-passe-admin](runbooks/mot-de-passe-admin.md#lagence-doit-entrer-sans-le-mot-de-passe) |
 | Un achat d'étiquette Boxtal est incertain, ou en double | [etiquette-incertaine](runbooks/etiquette-incertaine.md) |
 | Un point relais fait défaut : tarif relais absent, point refusé, colis non retiré ou revenu | [point-relais](runbooks/point-relais.md) |
 

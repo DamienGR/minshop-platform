@@ -3,6 +3,10 @@
 **Déclencheur** : le commerçant ne peut plus se connecter à `/admin` et n'a
 pas d'autre accès (pas d'application Access devant l'admin).
 
+Si c'est l'agence qui doit entrer, et que le commerçant a son mot de passe, ce
+n'est pas ce runbook : un jeton à usage unique ouvre une session sans rien
+changer ([plus bas](#lagence-doit-entrer-sans-le-mot-de-passe)).
+
 Il n'y a pas de « mot de passe oublié » public, et il n'y en aura pas : un lien
 de réinitialisation est une porte de plus sur l'admin (invariant 5). La
 réinitialisation passe par l'accès au compte Cloudflare, que seul le
@@ -50,9 +54,9 @@ certification, 2026-10-20).
 1. Convenir avec le commerçant du canal par lequel il recevra le nouveau mot de
    passe : un autre que celui de la demande (un appel s'il a écrit, un SMS
    s'il a appelé). L'opérateur le connaît, ce qui ne lui donne rien de plus que
-   ce que le compte Cloudflare lui donne déjà ; l'admin n'a pas encore d'écran
-   pour en changer, et un second passage de cette commande, à la demande du
-   commerçant, est la seule façon de le remplacer.
+   ce que le compte Cloudflare lui donne déjà. Le commerçant le remplace
+   ensuite par le sien : une fois connecté, `/admin/setup` propose un nouveau
+   mot de passe. Aucun lien du menu n'y mène : lui donner l'adresse.
 2. Depuis l'arbre de la boutique, avec le compte de l'environnement :
 
    ```sh
@@ -87,3 +91,39 @@ contrôle, pas un ticket de support.
 `wrangler.jsonc` est resté rendu pour l'environnement visé, avec ses vrais
 identifiants : `git restore wrangler.jsonc` remet le rendu versionné, sans
 compte, avant tout commit (étape 8 de la certification).
+
+## L'agence doit entrer sans le mot de passe
+
+**Déclencheur** : l'agence doit intervenir dans l'administration (support,
+maintenance, recette), et le mot de passe est celui du commerçant, qui a pu le
+changer.
+
+Ne pas le réinitialiser : le commerçant perdrait ses sessions et devrait en
+recevoir un nouveau. Un jeton à usage unique ouvre une session de 8 heures sans
+connaître le mot de passe ni le changer (ADR 0032) :
+
+```sh
+npm run shopctl -- admin token --env production
+```
+
+La commande vérifie le compte comme les autres et refuse une boutique dont la
+base n'a pas encore la migration 0058 (déployer d'abord). Elle affiche le jeton
+une seule fois, valable 15 minutes, et l'adresse où le coller :
+`https://<domaine>/admin/token`. La base n'en garde que l'empreinte.
+
+- Le coller tel quel : les espaces et le retour à la ligne d'une copie depuis
+  le terminal sont acceptés. Un jeton refusé (« n'est pas valable ») est
+  inconnu, déjà servi ou échu : en créer un autre.
+- La page partage le compteur d'échecs de la connexion : cinq refus par
+  quart d'heure et par réseau, puis plus rien n'ouvre, ni mot de passe ni
+  jeton, jusqu'à la fin du quart d'heure. Un jeton mal recopié (tronqué) n'est
+  pas compté.
+- La session tombe au bout de 8 heures, à la déconnexion, ou dès que le
+  commerçant change son mot de passe.
+
+Le commerçant voit la date du dernier passage dans Réglages → **Accès de
+l'agence** ; le contrat le prévoit ([responsabilités](../responsabilites.md)).
+Une intervention qu'il n'a pas demandée lui est signalée, avec sa raison.
+
+`wrangler.jsonc` est resté rendu pour l'environnement visé : `git restore
+wrangler.jsonc` avant tout commit, comme plus haut.

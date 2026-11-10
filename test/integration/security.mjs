@@ -26,6 +26,12 @@ import { adminRoutes } from '../helpers/admin-routes.mjs';
 import { startBuiltWorker } from '../helpers/built-worker.mjs';
 import { LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_SECONDS } from '../../src/features/auth/loginThrottle.ts';
 import { hashPassword } from '../../src/features/auth/password.ts';
+import {
+  ADMIN_TOKEN_SESSION_SECONDS,
+  ADMIN_TOKEN_TTL_SECONDS,
+  adminTokenDigest,
+  generateAdminToken,
+} from '../../src/features/auth/adminToken.ts';
 import { signSession } from '../../src/features/auth/session.ts';
 import { generateAccessToken } from '../../src/features/ids/token.ts';
 import { generatePublicId } from '../../src/features/ids/publicId.ts';
@@ -200,6 +206,11 @@ try {
     assert.equal(new URL(admin.headers.get('location'), ORIGIN).pathname, '/admin/setup');
     const api = await fetch('/api/admin/products');
     assert.equal(api.status, 401, 'the admin API is closed even during bootstrap');
+    // No password, nothing for a token to open: the token page sends to the
+    // wizard like everything else.
+    const token = await fetch('/admin/token');
+    assert.equal(token.status, 303);
+    assert.equal(new URL(token.headers.get('location'), ORIGIN).pathname, '/admin/setup');
     ok('bootstrap opens the wizard and nothing else');
   }
 
@@ -221,10 +232,11 @@ try {
           headers: verb === 'GET' ? {} : { origin: ORIGIN, 'content-type': FORM },
           ...(verb === 'GET' ? {} : { body: '' }),
         });
-        // /admin/login is the one page that must answer anonymously — it is
-        // where the answer to every other redirect points.
+        // /admin/login is a page that must answer anonymously — it is where
+        // the answer to every other redirect points — and /admin/token, its
+        // one-time twin (ADR 0032), is the only other one.
         const expected =
-          route.path === '/admin/login'
+          route.path === '/admin/login' || route.path === '/admin/token'
             ? [200, 403]
             : route.path.startsWith('/api/')
               ? [401]
@@ -281,7 +293,7 @@ try {
 
   section('Origine des formulaires (CSRF)');
   {
-    const targets = ['/admin/login', '/account/login', '/api/cart', '/cart'];
+    const targets = ['/admin/login', '/admin/token', '/account/login', '/api/cart', '/cart'];
     for (const path of targets) {
       const foreign = await fetch(path, {
         method: 'POST',
@@ -515,6 +527,120 @@ try {
         "DELETE FROM settings WHERE key IN ('enc:resend_api_key', 'email_from', 'email_enabled', 'email_provider', 'email_from_name', 'email_notify_to')",
       )
       .run();
+  }
+
+  /* ================================== 3c. one-time admin tokens (#227) */
+
+  section('Jeton à usage unique (ticket #227)');
+  {
+    // What `shopctl admin token` writes: the digest, never the token.
+    const issue = async (expiresIn = ADMIN_TOKEN_TTL_SECONDS) => {
+      const token = generateAdminToken();
+      await db
+        .prepare('INSERT INTO admin_access_tokens (digest, created_at, expires_at) VALUES (?, unixepoch(), unixepoch() + ?)')
+        .bind(await adminTokenDigest(token), expiresIn)
+        .run();
+      return token;
+    };
+    // Each client its own address, so the counter of one case never answers
+    // for the next, and the edge limiter never answers first.
+    const use = (token, ip) =>
+      fetch('/admin/token', {
+        method: 'POST',
+        headers: { origin: ORIGIN, 'content-type': FORM, 'cf-connecting-ip': ip },
+        body: new URLSearchParams({ token }).toString(),
+      });
+    const passwordHash = async () =>
+      (await db.prepare("SELECT value FROM settings WHERE key = 'admin_password_hash'").first()).value;
+    const hash = await passwordHash();
+    const merchant = `admin_session=${await signSession(AUTH_SECRET, hash, 3600, Date.now() / 1000)}`;
+    const agencyLine = async () => {
+      const html = await (await fetch('/admin/settings', { headers: { cookie: merchant } })).text();
+      return html.match(/data-agency-access[^>]*>([^<]*)</)?.[1].trim();
+    };
+    assert.match(await agencyLine(), /^Aucun accès de l’agence/);
+
+    worker.clearLogs();
+    const token = await issue();
+    const opened = await use(`  ${token}\n`, '198.51.100.40');
+    assert.equal(opened.status, 303, 'a fresh token did not open the admin');
+    assert.equal(new URL(opened.headers.get('location'), ORIGIN).pathname, '/admin');
+    const setCookie = opened.headers.get('set-cookie');
+    assert.match(setCookie, /^admin_session=v1\./);
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Lax/);
+    assert.match(setCookie, /Secure/);
+    assert.match(setCookie, new RegExp(`Max-Age=${ADMIN_TOKEN_SESSION_SECONDS}(;|$)`), 'the session is not eight hours long');
+    const cookie = setCookie.split(';')[0];
+    assert.equal((await fetch('/admin', { headers: { cookie } })).status, 200, 'the session does not open the admin');
+    ok('a token, pasted with the line break of a terminal, opens an eight-hour session');
+
+    assert.equal(await passwordHash(), hash, 'the token changed the password');
+    assert.equal((await fetch('/admin', { headers: { cookie: merchant } })).status, 200, "the merchant's session closed");
+    ok("the password and the merchant's own sessions are left as they were");
+
+    const logs = worker.logs();
+    assert.match(logs, /"event":"admin_token_used"/, 'the door was used without a trace');
+    assert.ok(!logs.includes(token), 'the token reached the logs');
+    const rows = (await db.prepare('SELECT digest, used_at FROM admin_access_tokens').all()).results;
+    assert.ok(rows.every((row) => /^[0-9a-f]{64}$/.test(row.digest) && row.digest !== token), 'the database holds a token');
+    assert.equal(rows.filter((row) => row.used_at !== null).length, 1);
+    assert.match(await agencyLine(), /^Dernier accès de l’agence/, 'Réglages does not say the agency came in');
+    ok('the database keeps the digest and when it was used, Réglages says so, the logs keep the event and not the token');
+
+    const cases = [
+      ['the same token a second time', token],
+      ['an expired token', await issue(-1)],
+      ['an unknown token', generateAdminToken()],
+      ['a malformed token', 'pas-un-jeton'],
+      ['no token', ''],
+    ];
+    for (const [index, [name, value]] of cases.entries()) {
+      const response = await use(value, `198.51.100.${41 + index}`);
+      assert.equal(response.status, 200, `${name} → ${response.status}`);
+      assert.equal(response.headers.get('set-cookie'), null, `${name} opened a session`);
+      assert.match(await response.text(), /n’est pas valable/, `${name} was not refused`);
+    }
+    ok(`${cases.length} tokens refused with one answer: used, expired, unknown, malformed, missing`);
+
+    // A value that cannot be a token guesses nothing, and spends no budget —
+    // the remote gate posts an empty form here on every run.
+    for (let attempt = 0; attempt <= LOGIN_ATTEMPT_LIMIT; attempt++) {
+      assert.equal((await use('', '198.51.100.55')).status, 200, 'an empty form was counted as a guess');
+    }
+    assert.equal((await use(await issue(), '198.51.100.55')).status, 303, 'malformed values spent the budget');
+    ok('a malformed token is refused without being counted');
+
+    // Used once, in one statement: two posts racing each other open one session.
+    const raced = await issue();
+    const both = await Promise.all([use(raced, '198.51.100.50'), use(raced, '198.51.100.51')]);
+    assert.deepEqual(both.map((response) => response.status).sort(), [200, 303], 'a token opened two sessions');
+    ok('two posts of one token at once open exactly one session');
+
+    // One budget for both doors: failures at one are counted at the other, and
+    // past it even a valid token, like the right password, is refused.
+    for (let attempt = 0; attempt < LOGIN_ATTEMPT_LIMIT; attempt++) {
+      assert.equal((await use(generateAdminToken(), '198.51.100.60')).status, 200);
+    }
+    const login = await fetch('/admin/login', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': FORM, 'cf-connecting-ip': '198.51.100.60' },
+      body: new URLSearchParams({ password: PASSWORD }).toString(),
+    });
+    assert.equal(login.status, 429, 'failed tokens bought the login a new budget');
+    const valid = await use(await issue(), '198.51.100.60');
+    assert.equal(valid.status, 429, 'a valid token went past the budget');
+    assert.equal(valid.headers.get('set-cookie'), null);
+    ok('the token page and the login share one attempt budget, and past it neither opens');
+
+    // The session a token opens is bound to the password like any other.
+    await db
+      .prepare("UPDATE settings SET value = ? WHERE key = 'admin_password_hash'")
+      .bind(await hashPassword('the merchant changed it'))
+      .run();
+    assert.equal((await fetch('/admin', { headers: { cookie } })).status, 303, 'a token session survived a password change');
+    await db.prepare("UPDATE settings SET value = ? WHERE key = 'admin_password_hash'").bind(hash).run();
+    ok('changing the password closes the session a token opened');
   }
 
   /* =========================================== 4. Turnstile */

@@ -42,6 +42,15 @@ statement. The brute-force section proves it with a parallel burst, each
 client given its own `cf-connecting-ip` so the edge limiter never answers
 first — every 429 there carries the counter's Retry-After, never the edge's 60.
 
+**Two admin pages answer anonymously, not one.** `/admin/login`, and
+`/admin/token`, where a one-time token written by `shopctl admin token` opens
+an eight-hour session (ADR 0032). The route walk and the remote gate expect
+both to answer 200 and every other route to refuse. The token page shares the
+login's edge bucket and its exact counter, with the same key — but counts only
+a value shaped like a token, so the remote gate's empty post spends nothing.
+Section 3c of the suite proves the shared budget, the single use under a race,
+and that a password change closes a token's session too.
+
 **One admin signal reaches the storefront, and it is not an authority.** A
 product page shows the admin a « Modifier ce produit » shortcut (ticket #178),
 on a page shared at the edge, so the HTML cannot know who asks. The middleware
