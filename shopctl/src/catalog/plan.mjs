@@ -153,9 +153,14 @@ export function planImport(desired, store, options) {
     plannedCategories.add(slug);
     summary.categoriesCreated += 1;
     changes.push({ kind: 'category.create', subject: slug });
+    // A created category is top-level, and joins that family by the rule of
+    // the admin (nextPositionSql() in src/features/categories/db.ts, ticket
+    // #228): last if the merchant has ranged it, at its alphabetical place (0)
+    // if not. Several land in the order the file first names them.
     statements.push(
-      `INSERT INTO categories (name, slug, public_id)\n` +
-        `  SELECT ${text(titleFromSlug(slug))}, ${text(slug)}, ${newPublicId('cat')}\n` +
+      `INSERT INTO categories (name, slug, public_id, position)\n` +
+        `  SELECT ${text(titleFromSlug(slug))}, ${text(slug)}, ${newPublicId('cat')},\n` +
+        `         (SELECT CASE WHEN MAX(position) > 0 THEN MAX(position) + 1 ELSE 0 END FROM categories WHERE parent_id IS NULL)\n` +
         `   WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = ${text(slug)});`,
     );
   }

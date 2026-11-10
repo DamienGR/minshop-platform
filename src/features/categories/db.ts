@@ -1,7 +1,7 @@
-import { LOCALE } from '../i18n/locale.ts';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { Product } from '../products/db';
 import { withPublicId } from '../ids/publicId.ts';
+import { arrivalPositions, compareCategories, moveWithinFamily, type Ranked } from './order.ts';
 
 export interface Category {
   id: number;
@@ -18,6 +18,9 @@ export interface Category {
    *  features/seo/fields.ts); null = derived. */
   seo_title: string | null;
   seo_description: string | null;
+  /** Its rank among its siblings (migration 0059, `order.ts`); 0 = never
+   *  ranged, which sorts by name. */
+  position: number;
   created_at: string;
 }
 
@@ -33,6 +36,9 @@ export interface CategoryOption {
   name: string;
   slug: string;
   depth: number;
+  /** First or last of its family: where Admin → Catégories offers no ↑ or ↓. */
+  first: boolean;
+  last: boolean;
 }
 
 export interface CategoryFields {
@@ -53,7 +59,9 @@ export interface CategoryFields {
  * étape 6). The twins call the builders, so each query is still written once.
  */
 export function listCategoriesStatement(db: D1Database): D1PreparedStatement {
-  return db.prepare('SELECT * FROM categories ORDER BY name');
+  // The families are sorted again by `childrenOf()` and `buildTree()`, with
+  // the locale's collation; this keeps a flat reader (sitemap, llms.txt) close.
+  return db.prepare('SELECT * FROM categories ORDER BY position, name');
 }
 
 export async function listCategories(db: D1Database): Promise<Category[]> {
@@ -91,12 +99,25 @@ export async function getCategoriesByPublicIds(
   return results ?? [];
 }
 
+/**
+ * The position of a category joining the family under the parameter `parent`
+ * (`?n`): after the last if the family has been ranged, 0 — its alphabetical
+ * place — if not (`arrivalPositions()` in `order.ts`, for one newcomer). A
+ * subquery of the statement that writes the row, so two writes cannot both
+ * read the same last position. `exclude` leaves the moving row itself out.
+ */
+function nextPositionSql(parent: string, exclude?: string): string {
+  return `(SELECT CASE WHEN MAX(s.position) > 0 THEN MAX(s.position) + 1 ELSE 0 END
+             FROM categories s
+            WHERE s.parent_id IS ${parent}${exclude ? ` AND s.id != ${exclude}` : ''})`;
+}
+
 export async function createCategory(db: D1Database, c: CategoryFields): Promise<number> {
   return withPublicId('category', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO categories (name, slug, parent_id, description, seo_title, seo_description, public_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO categories (name, slug, parent_id, description, seo_title, seo_description, public_id, position)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ${nextPositionSql('?3')}) RETURNING id`,
       )
       .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, publicId)
       .first<{ id: number }>();
@@ -104,14 +125,82 @@ export async function createCategory(db: D1Database, c: CategoryFields): Promise
   });
 }
 
+/** Saves the form. A category moved under another parent joins that family by
+ *  the rule of a new one; one that stays keeps its position. SQLite evaluates
+ *  every SET from the row as it was, so `parent_id` there is the old parent. */
 export async function updateCategory(db: D1Database, id: number, c: CategoryFields): Promise<void> {
   await db
     .prepare(
-      `UPDATE categories SET name = ?, slug = ?, parent_id = ?, description = ?, seo_title = ?, seo_description = ?
-        WHERE id = ?`,
+      `UPDATE categories
+          SET name = ?1, slug = ?2, description = ?4, seo_title = ?5, seo_description = ?6,
+              position = CASE WHEN parent_id IS ?3 THEN position ELSE ${nextPositionSql('?3', '?7')} END,
+              parent_id = ?3
+        WHERE id = ?7`,
     )
     .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, id)
     .run();
+}
+
+/**
+ * Write positions into one family, one CASE statement per chunk, as
+ * `reorderMenuItems()` does: 30 rows cost 61 bound parameters against D1's
+ * 100. Positions are interpolated, never bound: integers this module
+ * computed, checked here. Scoped by parent, so a row moved to another family
+ * meanwhile is left alone.
+ */
+function positionStatements(
+  db: D1Database,
+  parentId: number | null,
+  positions: ReadonlyMap<number, number>,
+): D1PreparedStatement[] {
+  const entries = [...positions];
+  const CHUNK = 30;
+  const statements: D1PreparedStatement[] = [];
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    const chunk = entries.slice(i, i + CHUNK);
+    const cases = chunk
+      .map(([, position]) => {
+        if (!Number.isSafeInteger(position) || position < 0) throw new Error(`bad position ${position}`);
+        return `WHEN ? THEN ${position}`;
+      })
+      .join(' ');
+    const ids = chunk.map(([id]) => id);
+    statements.push(
+      db
+        .prepare(
+          `UPDATE categories SET position = CASE id ${cases} ELSE position END
+            WHERE parent_id IS ? AND id IN (${ids.map(() => '?').join(', ')})`,
+        )
+        .bind(...ids, parentId, ...ids),
+    );
+  }
+  return statements;
+}
+
+/**
+ * Move a category one rank among its siblings (ticket #228): the whole family
+ * is written 1 to n in the new order, in one batch. One read: the family of
+ * the category, found through it. False when nothing moved — the category is
+ * gone, or already first or last.
+ */
+export async function moveCategory(
+  db: D1Database,
+  id: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, name, position, parent_id FROM categories
+        WHERE parent_id IS (SELECT parent_id FROM categories WHERE id = ?1)`,
+    )
+    .bind(id)
+    .all<Ranked & { parent_id: number | null }>();
+  const family = results ?? [];
+  const order = moveWithinFamily(family, id, direction);
+  if (!order) return false;
+  const parentId = family[0].parent_id;
+  await db.batch(positionStatements(db, parentId, new Map(order.map((cid, rank) => [cid, rank + 1]))));
+  return true;
 }
 
 /**
@@ -145,11 +234,35 @@ export async function setCategoryImage(
  * Delete a category: reparent its direct children to its own parent (so the tree
  * stays connected), drop its product links, then remove it. FKs aren't enforced
  * on D1, so cleanup is explicit.
+ *
+ * The children join their parent's family by `arrivalPositions()`: last, in
+ * their order, if that family was ranged; alphabetically if not. Read with the
+ * family in one statement, written in the same batch as the reparenting.
  */
 export async function deleteCategory(db: D1Database, id: number): Promise<void> {
   const cat = await getCategory(db, id);
   if (!cat) return;
+  const { results } = await db
+    .prepare(
+      `SELECT id, name, position, parent_id FROM categories
+        WHERE parent_id = ?1 OR (parent_id IS ?2 AND id != ?1)`,
+    )
+    .bind(id, cat.parent_id)
+    .all<Ranked & { parent_id: number | null }>();
+  const rows = results ?? [];
+  const children = rows.filter((r) => r.parent_id === id);
+  const placed = arrivalPositions(
+    rows.filter((r) => r.parent_id !== id),
+    children,
+  );
+  // Only what changes: a shop that ranges nothing writes no position at all.
+  const changed = new Map(
+    children
+      .filter((c) => placed.get(c.id) !== c.position)
+      .map((c) => [c.id, placed.get(c.id)!] as const),
+  );
   await db.batch([
+    ...positionStatements(db, id, changed),
     db.prepare('UPDATE categories SET parent_id = ? WHERE parent_id = ?').bind(cat.parent_id, id),
     db.prepare('DELETE FROM product_categories WHERE category_id = ?').bind(id),
     db.prepare('DELETE FROM categories WHERE id = ?').bind(id),
@@ -390,11 +503,10 @@ export async function countProductsInCategory(
   return row?.n ?? 0;
 }
 
-/** Direct children of a category (or top-level when parentId is null). */
+/** Direct children of a category (or top-level when parentId is null), in the
+ *  order the merchant chose (`order.ts`). */
 export function childrenOf(cats: Category[], parentId: number | null): Category[] {
-  return cats
-    .filter((c) => c.parent_id === parentId)
-    .sort((a, b) => a.name.localeCompare(b.name, LOCALE));
+  return cats.filter((c) => c.parent_id === parentId).sort(compareCategories);
 }
 
 /** Build a nested tree from the flat list. */
@@ -410,7 +522,7 @@ export function buildTree(cats: Category[]): CategoryNode[] {
     }
   }
   const sortRec = (nodes: CategoryNode[], depth: number) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, LOCALE));
+    nodes.sort(compareCategories);
     for (const n of nodes) {
       n.depth = depth;
       sortRec(n.children, depth + 1);
@@ -424,10 +536,18 @@ export function buildTree(cats: Category[]): CategoryNode[] {
 export function flattenTree(nodes: CategoryNode[]): CategoryOption[] {
   const out: CategoryOption[] = [];
   const walk = (ns: CategoryNode[]) => {
-    for (const n of ns) {
-      out.push({ id: n.id, public_id: n.public_id, name: n.name, slug: n.slug, depth: n.depth });
+    ns.forEach((n, i) => {
+      out.push({
+        id: n.id,
+        public_id: n.public_id,
+        name: n.name,
+        slug: n.slug,
+        depth: n.depth,
+        first: i === 0,
+        last: i === ns.length - 1,
+      });
       walk(n.children);
-    }
+    });
   };
   walk(nodes);
   return out;

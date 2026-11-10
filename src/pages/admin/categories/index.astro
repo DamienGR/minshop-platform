@@ -10,6 +10,8 @@ import {
 } from '../../../features/categories/db';
 import { t } from '../../../features/i18n';
 
+// In the order the storefront shows: each family by its position, then its
+// name (ticket #228). The arrows move a category among its siblings.
 const rows = flattenTree(buildTree(await listCategories(env.DB)));
 const counts = await productCounts(env.DB);
 // Categories have no draft state, so deletion is the ONLY way one becomes
@@ -18,7 +20,7 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
 ---
 
 <AdminLayout title={t('admin.categories.title')} active="categories">
-  <div class="mb-8 flex items-center justify-between">
+  <div class="mb-4 flex items-center justify-between">
     <h1 class="font-serif text-3xl tracking-tight">{t('admin.categories.title')}</h1>
     <a
       href="/admin/categories/new"
@@ -27,6 +29,7 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
       {t('admin.categories.new')}
     </a>
   </div>
+  <p class="mb-8 max-w-prose text-sm text-gray-500">{t('admin.categories.orderHint')}</p>
 
   <div class="sm:overflow-x-auto">
     <table class="admin-table w-full text-left text-sm sm:min-w-[40rem]">
@@ -41,7 +44,7 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
     <tbody>
       {
         rows.map((c) => (
-          <tr class="border-b border-line">
+          <tr id={c.public_id ?? undefined} class="border-b border-line">
             <td class="py-3 pr-4">
               <a
                 href={`/admin/categories/${c.public_id}/edit`}
@@ -55,7 +58,37 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
             <td data-label={t('admin.categories.column.slug')} class="py-3 pr-4 text-gray-500">{c.slug}</td>
             <td data-label={t('admin.categories.column.products')} class="py-3 pr-4 tabular-nums text-gray-500">{counts.get(c.id) ?? 0}</td>
             <td data-label="" class="py-3 text-right">
-              <div class="flex justify-end gap-4 text-xs uppercase tracking-widest">
+              <div class="flex items-center justify-end gap-4 text-xs uppercase tracking-widest">
+                {/* Up/Down among its siblings, as in Admin → Navigation: a
+                    form each, so it works with no JavaScript. */}
+                <div class="flex items-center gap-1">
+                  <form method="POST" action={`/api/admin/categories/${c.public_id}`}>
+                    <input type="hidden" name="_action" value="move" />
+                    <input type="hidden" name="direction" value="up" />
+                    <button
+                      type="submit"
+                      aria-label={t('admin.categories.moveUp', { nom: c.name })}
+                      title={t('admin.categories.moveUp', { nom: c.name })}
+                      disabled={c.first}
+                      class="px-1 text-base text-gray-400 hover:text-brand disabled:invisible"
+                    >
+                      ↑
+                    </button>
+                  </form>
+                  <form method="POST" action={`/api/admin/categories/${c.public_id}`}>
+                    <input type="hidden" name="_action" value="move" />
+                    <input type="hidden" name="direction" value="down" />
+                    <button
+                      type="submit"
+                      aria-label={t('admin.categories.moveDown', { nom: c.name })}
+                      title={t('admin.categories.moveDown', { nom: c.name })}
+                      disabled={c.last}
+                      class="px-1 text-base text-gray-400 hover:text-brand disabled:invisible"
+                    >
+                      ↓
+                    </button>
+                  </form>
+                </div>
                 <a href={`/admin/categories/${c.public_id}/edit`} class="text-accent hover:underline">
                   {t('admin.common.edit')}
                 </a>

@@ -7,6 +7,9 @@ export const categories = {
   'admin.categories.column.slug': 'Slug',
   'admin.categories.column.products': 'Produits',
   'admin.categories.empty': 'Aucune catégorie pour l’instant.',
+  'admin.categories.orderHint': 'La boutique affiche vos catégories dans l’ordre de cette liste. Les flèches ↑ et ↓ déplacent une catégorie parmi celles de même niveau ; tant que vous n’avez rien déplacé, l’ordre est alphabétique.',
+  'admin.categories.moveUp': 'Monter « {nom} »',
+  'admin.categories.moveDown': 'Descendre « {nom} »',
   'admin.categories.confirmDelete': 'Supprimer cette catégorie ? Ses sous-catégories remonteront sous sa catégorie parente.',
   'admin.categories.confirmDeleteLinked': 'Cette catégorie figure dans votre navigation : la supprimer masquera ce lien sur la vitrine. Ses sous-catégories remonteront sous sa catégorie parente. Continuer ?',
 

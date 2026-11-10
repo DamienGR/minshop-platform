@@ -79,6 +79,7 @@ const category = (id: number, name: string, overrides: Partial<Category> = {}): 
   description: null,
   seo_title: null,
   seo_description: null,
+  position: 0,
   created_at: '2026-01-01T00:00:00Z',
   ...overrides,
 });
@@ -114,6 +115,20 @@ describe('buildCatalogCategories', () => {
     ]);
     // Direct children only: a grandchild is its parent's business.
     expect(built.find((c) => c.text === 'Bijoux')?.children.map((c) => c.text)).toEqual(['Boucles']);
+  });
+
+  // Ticket #228: the merchant's order, at both levels, where they gave one.
+  it('follows the order the merchant chose, at the top level and below', () => {
+    // Top level: Se laver, Partir, Bijoux. Under Partir: Sacs à dos, Accessoires.
+    const positions = new Map([[1, 1], [3, 2], [5, 3], [2, 1], [4, 2]]);
+    const ranged = tree.map((c) => ({ ...c, position: positions.get(c.id) ?? 0 }));
+    const built = buildCatalogCategories(ranged, {});
+
+    expect(built.map((c) => c.text)).toEqual(['Se laver', 'Partir', 'Bijoux']);
+    expect(built.find((c) => c.text === 'Partir')?.children.map((c) => c.text)).toEqual([
+      'Sacs à dos',
+      'Accessoires',
+    ]);
   });
 
   it('resolves the image and carries the description, null when absent', () => {
