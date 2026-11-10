@@ -6,17 +6,10 @@ import { accessGateDecision } from './features/auth/accessGate';
 import { verifySession } from './features/auth/session';
 import { adminCredential } from './features/auth/admin';
 import { ADMIN_HINT_COOKIE, ADMIN_HINT_MAX_AGE } from './features/auth/adminHint';
-import {
-  getStoreSettings,
-  parseStoreSettings,
-  STORE_SETTINGS_SQL,
-} from './features/settings/db';
-import {
-  MENU_ITEMS_SQL,
-  EMPTY_MENUS,
-  groupMenus,
-  type MenuItemRow,
-} from './features/navigation/db';
+import { getStoreSettings } from './features/settings/db';
+import { EMPTY_MENUS } from './features/navigation/db';
+import { readDocumentRows } from './features/storefront/reads';
+import { activeThemeTextSlots } from './features/themeTexts/active';
 import {
   checkRateLimit,
   rateLimitBucket,
@@ -102,23 +95,18 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     !path.startsWith('/partials/') &&
     !path.startsWith('/map-tiles/');
   if (isDocument) {
-    // Storefront documents also need the header/footer menus. Both reads go in
-    // ONE batch so /cart, /checkout, /account, /order, and /pay — which are never
-    // edge-cached — don't pay a second D1 round trip.
+    // Storefront documents also need the header/footer menus and, when the
+    // theme declares any, the merchant's texts (ticket #225). All go in ONE
+    // batch so /cart, /checkout, /account, /order, and /pay — which are never
+    // edge-cached — don't pay a second D1 round trip. A theme without texts
+    // reads none.
     const wantsMenus = !path.startsWith('/admin');
     try {
       if (wantsMenus) {
-        const [settings, menus] = await env.DB.batch<Record<string, string>>([
-          env.DB.prepare(STORE_SETTINGS_SQL),
-          env.DB.prepare(MENU_ITEMS_SQL),
-        ]);
-        context.locals.settings = parseStoreSettings(
-          (settings.results ?? []) as Array<{ key: string; value: string }>,
-        );
-        context.locals.menus = groupMenus(
-          (menus.results ?? []) as unknown as MenuItemRow[],
-          context.locals.settings.homePage,
-        );
+        const rows = await readDocumentRows(env.DB, { themeTexts: activeThemeTextSlots.length > 0 });
+        context.locals.settings = rows.settings;
+        context.locals.menus = rows.menus;
+        context.locals.themeTexts = rows.themeTexts;
       } else {
         context.locals.settings = await getStoreSettings(env.DB);
       }
@@ -126,8 +114,9 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
       // A batch is all-or-nothing, so a missing `menu_items` table (pre-migration)
       // would take settings down with it — and losing settings silently
       // disables the first-run setup funnel below. Retry settings alone.
-      // Empty menus render a bare header and a copyright-only footer: degraded
-      // but navigable. Losing settings is not.
+      // Empty menus render a bare header and a copyright-only footer, the
+      // theme's texts their defaults: degraded but navigable. Losing settings
+      // is not.
       try {
         context.locals.settings = await getStoreSettings(env.DB);
         context.locals.menus = EMPTY_MENUS;

@@ -3750,3 +3750,38 @@ Tenu par `src/features/shipping/calculator.test.ts`, `settings.test.ts`,
 `:has()` par zone), `test/integration/shipping.mjs` (versions 4 et 5),
 `test/integration/checkout-relay.mjs` (panier, étape des tarifs, Stripe à 0 €)
 et `test/browser/cart.spec.mjs` (panier sans script, tiroir).
+
+### 13.21 Les textes du thème dans l'en-tête, le pied de page et la fiche
+
+Noté le 2026-11-10 (ticket #225), pour annoncer les frais de port avant le
+paiement chez la première boutique réelle : sa barre du haut, les gages de son
+pied de page et sa fiche produit disaient en dur « Paiement sécurisé par
+carte » quand le virement est proposé, et « frais de port en sus » sans
+montant. Les textes du thème (§13.8, ADR 0027) n'étaient exposés qu'à
+l'accueil. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-10, sans migration, extension de l'ADR 0027 :
+
+- `texts` sur `StorefrontShellModel` (`Header.astro`, `Footer.astro`, chaque
+  page que la coque entoure, `/checkout` et `/pay` compris) et sur
+  `ProductDetailModel` (`ProductDetail.astro`), le même enregistrement que
+  celui de l'accueil : chaque clé déclarée, le texte enregistré ou le défaut ;
+- la lecture quitte le lot du catalogue pour celui du middleware, avec les
+  réglages et les menus (`readDocumentRows()`), et seulement pour un thème qui
+  déclare des emplacements : pas d'aller-retour de plus, et l'accueil ne lit
+  plus deux fois. Les textes sont résolus une fois par requête
+  (`requestThemeTexts()`) ;
+- rien ne change à la déclaration (`texts.ts`, 50 emplacements au plus), à
+  l'écran « Textes du thème » ni au cache : tout document de la vitrine porte
+  `shell`, que l'enregistrement purge déjà ;
+- la page de connexion de l'admin, qui prend la coque sans en lire les menus,
+  affiche les textes par défaut ;
+- `CUSTOMIZING.md` dit quel gabarit lit `texts`, le chapitre « Textes du
+  thème » du guide explique comment tenir à jour la livraison et le paiement.
+
+Tenu par `test/storefront/themeTexts.test.ts` (un en-tête, un pied de page et
+une fiche qui lisent leurs textes ; ceux des thèmes livrés inchangés),
+`test/storefront/productDetailLoader.test.ts` et
+`test/integration/theme-data.mjs` (un seul appel D1 avec les réglages et les
+menus, rien de lu sans emplacement, les mêmes textes pour la coque et
+l'accueil).

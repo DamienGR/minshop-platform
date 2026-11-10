@@ -1,0 +1,25 @@
+---
+import type { StorefrontShellModel } from '../../../../src/features/storefront/models';
+
+/**
+ * A footer that prints a pledge the merchant writes (ticket #225): the footer
+ * receives the same shell model as the header, texts included.
+ */
+interface Props {
+  model: StorefrontShellModel;
+}
+
+const { model } = Astro.props;
+---
+
+<footer class="alt-footer">
+  {model.texts['pledge.payment'] && <p class="alt-footer__pledge">{model.texts['pledge.payment'].text}</p>}
+  <ul>
+    {model.footerLinks.map((link) => (
+      <li>
+        <a href={link.href}>{link.text}</a>
+      </li>
+    ))}
+  </ul>
+  <p>{model.storeName}</p>
+</footer>

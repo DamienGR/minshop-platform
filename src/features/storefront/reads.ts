@@ -24,6 +24,8 @@ import {
 import { listCustomFieldsStatement } from '../products/customFields';
 import { themeTextMap, themeTextsStatement } from '../themeTexts/db';
 import type { ProductCustomField } from '../products/customization';
+import { parseStoreSettings, STORE_SETTINGS_SQL, type StoreSettings } from '../settings/db';
+import { groupMenus, MENU_ITEMS_SQL, type MenuItemRow, type Menus } from '../navigation/db';
 
 /**
  * The storefront's page reads, one `db.batch()` each.
@@ -47,6 +49,39 @@ import type { ProductCustomField } from '../products/customization';
 const rows = <T>(result: D1Result | undefined): T[] => (result?.results ?? []) as T[];
 const count = (result: D1Result | undefined): number =>
   ((result?.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+
+export interface DocumentRows {
+  settings: StoreSettings;
+  menus: Menus;
+  /** What the merchant wrote over the theme's texts; empty, unread, when the
+   *  theme declares none (tickets #165, #225). */
+  themeTexts: Map<string, string>;
+}
+
+/**
+ * What every storefront document reads before it renders, in the middleware:
+ * the settings, the header and footer menus and, for a theme that declares
+ * texts, what the merchant wrote over them — the shell prints them on every
+ * route, the home and the product page too (ticket #225). One call, so /cart,
+ * /checkout, /account, /order and /pay, which are never edge-cached, pay one
+ * round trip whatever the theme.
+ */
+export async function readDocumentRows(
+  db: D1Database,
+  { themeTexts }: { themeTexts: boolean },
+): Promise<DocumentRows> {
+  const [settingsRows, menuRows, texts] = await db.batch([
+    db.prepare(STORE_SETTINGS_SQL),
+    db.prepare(MENU_ITEMS_SQL),
+    ...(themeTexts ? [themeTextsStatement(db)] : []),
+  ]);
+  const settings = parseStoreSettings(rows<{ key: string; value: string }>(settingsRows));
+  return {
+    settings,
+    menus: groupMenus(rows<MenuItemRow>(menuRows), settings.homePage),
+    themeTexts: texts ? themeTextMap(rows<{ key: string; value: string }>(texts)) : new Map(),
+  };
+}
 
 export interface ProductPageRows {
   categories: Category[];
@@ -136,31 +171,27 @@ export interface CatalogRows {
   products: ListedProduct[];
   /** The product put forward, or null for an empty catalogue. */
   featured: ListedProduct | null;
-  /** What the merchant wrote over the theme's texts; empty, unread, when the
-   *  theme declares none (ticket #165). */
-  texts: Map<string, string>;
 }
 
 /** The catalogue: its size, the category list, one page of products, and the
  *  product it puts forward. */
 export async function readCatalogRows(
   db: D1Database,
-  query: ListingQuery & { featuredProductId?: number | null; themeTexts?: boolean },
+  query: ListingQuery & { featuredProductId?: number | null },
 ): Promise<CatalogRows> {
-  const [total, categories, products, featured, texts] = await db.batch([
+  // The theme's texts are not read here any more: the middleware's batch
+  // already holds them for the shell (readDocumentRows, ticket #225).
+  const [total, categories, products, featured] = await db.batch([
     countProductsStatement(db),
     listCategoriesStatement(db),
     catalogPageStatement(db, query),
     featuredProductStatement(db, query.featuredProductId ?? null),
-    // In the same batch, and only for a theme that has texts to read.
-    ...(query.themeTexts ? [themeTextsStatement(db)] : []),
   ]);
   return {
     total: count(total),
     categories: rows<Category>(categories),
     products: rows<ListedProduct>(products),
     featured: rows<ListedProduct>(featured)[0] ?? null,
-    texts: texts ? themeTextMap(rows<{ key: string; value: string }>(texts)) : new Map(),
   };
 }
 

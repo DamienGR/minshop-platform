@@ -56,7 +56,8 @@ comme utilisée (invariant 10). L'enregistrement purge `shell` et `catalog`.
 chaque clé déclarée, `{ text, html }`, `html` étant le Markdown rendu par
 `renderMarkdown()` avec `html: false`, `null` pour un texte d'une ligne. La
 lecture rejoint le lot D1 du catalogue, et n'a lieu que si le thème déclare des
-textes.
+textes. (Étendu par le ticket #225 : voir « Extension » plus bas ; la lecture
+est passée dans le lot du middleware.)
 
 **Le socle tient chaque déclaration sur le disque aux mêmes règles**
 (`test/storefront/themeTexts.test.ts`) : clés, libellés, formats, défaut écrit
@@ -76,11 +77,55 @@ accueil cassé.
 - un thème qui abaisse une limite rend trop long un texte déjà enregistré : la
   vitrine affiche alors le défaut, et l'admin le signale et montre le texte à
   raccourcir ;
-- les textes ne sont exposés qu'à l'accueil (`Catalog.astro`, qui rend `/` et
-  `/products`). Les ouvrir à l'en-tête, au pied de page ou à la fiche produit
-  est une extension du modèle, pas une nouvelle décision ;
+- les textes n'étaient exposés qu'à l'accueil (`Catalog.astro`, qui rend `/`
+  et `/products`). Les ouvrir à l'en-tête, au pied de page ou à la fiche
+  produit est une extension du modèle, pas une nouvelle décision : c'est fait
+  par le ticket #225 (« Extension » plus bas) ;
 - un texte n'a ni URL, ni historique, ni brouillon : c'est un réglage de
   vitrine, pas un contenu éditorial.
+
+## Extension : l'en-tête, le pied de page et la fiche produit (ticket #225)
+
+Le 2026-11-10, la première boutique réelle annonçait dans son thème, en dur,
+« Paiement sécurisé par carte » quand le virement est proposé, et « frais de
+port en sus » sans montant : la barre du haut (`Header.astro`), les gages du
+pied de page (`Footer.astro`), le prix et le pli « Livraison et paiement » de
+la fiche (`ProductDetail.astro`). La marchande ne pouvait pas les tenir à jour.
+
+**Où un texte peut aller.** Trois modèles reçoivent `texts`, le même
+enregistrement — chaque clé déclarée, résolue de la même façon :
+
+- `StorefrontShellModel.texts`, pour `Header.astro` et `Footer.astro`, sur
+  chaque page que la coque entoure, `/cart`, `/checkout`, `/pay` et `/order`
+  compris ;
+- `CatalogPageModel.texts`, pour `Catalog.astro` (`/` et `/products`), comme
+  avant ;
+- `ProductDetailModel.texts`, pour `ProductDetail.astro`. La fiche reçoit les
+  siens plutôt que ceux de la coque : son gabarit ne reçoit pas la coque.
+
+Les autres gabarits (`ContentPage.astro`, `ProductCard.astro`, les pages
+modèles) n'en reçoivent pas ; les y ouvrir serait une autre extension du même
+modèle. Une seule déclaration, `texts.ts`, sert les trois : le gabarit décide
+où va chaque clé, et rien ne change à la déclaration (50 emplacements au plus)
+ni à l'écran « Textes du thème ».
+
+**Une lecture par requête, dans le lot du middleware.** La lecture quitte le
+lot du catalogue pour celui que le middleware fait déjà sur chaque document de
+la vitrine, réglages et menus (`readDocumentRows()`,
+`src/features/storefront/reads.ts`) : pas d'aller-retour D1 de plus, y compris
+sur `/checkout` et `/pay`, qui ne sont jamais en cache. Elle n'a lieu que si
+le thème déclare des emplacements ; sans emplacement, le lot est exactement
+celui d'avant. Les textes sont résolus une fois par requête
+(`requestThemeTexts()`, `src/features/themeTexts/request.ts`) puis passés à la
+coque, au catalogue et à la fiche : l'accueil ne les lit plus deux fois.
+
+**Le cache ne demande rien de plus** : tout document de la vitrine porte
+l'étiquette `shell`, que l'enregistrement des textes purge déjà.
+
+**Une limite.** L'admin ne lit ni les menus ni les textes : la page de
+connexion, `/admin/login`, qui prend la coque de la vitrine, affiche les
+textes par défaut, comme un en-tête sans menu. Le lot échoué (une table
+absente avant migration) fait de même : textes par défaut, menus vides.
 
 ## Alternatives écartées
 
@@ -107,4 +152,9 @@ accueil cassé.
   vérifie que le thème actif est celui qui est lu, et rend un gabarit qui lit
   ses textes (valeur, défaut, échappement), et les thèmes livrés à l'identique ;
 - `test/integration/theme-data.mjs`, sur une vraie D1 : défauts, texte
-  enregistré puis vidé, refus sans écriture, lecture dans le lot du catalogue.
+  enregistré puis vidé, refus sans écriture ; depuis le ticket #225, lecture
+  dans le lot du middleware (un seul appel, rien de lu pour un thème sans
+  emplacement), et les mêmes textes pour la coque et l'accueil ;
+- `test/storefront/themeTexts.test.ts`, depuis le ticket #225 : un en-tête, un
+  pied de page et une fiche qui lisent leurs textes (valeur, défaut,
+  échappement), et les en-têtes, pieds de page et fiches livrés inchangés.

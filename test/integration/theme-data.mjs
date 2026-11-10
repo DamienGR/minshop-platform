@@ -34,21 +34,30 @@ const check = async (name, fn) => {
   }
 };
 
-/** The same binding, counting what it reads (test/integration/history-reads.mjs). */
+/** The same binding, counting what it reads (test/integration/history-reads.mjs)
+ *  and the D1 calls that read it — a batch is one call, whatever it holds. */
 function metered(db) {
   let read = 0;
+  let calls = 0;
   const add = (result) => {
     read += result?.meta?.rows_read ?? 0;
     return result;
   };
+  const call = (result) => {
+    calls++;
+    return add(result);
+  };
   const statement = (inner) => ({
     inner,
     bind: (...args) => statement(inner.bind(...args)),
-    all: async () => add(await inner.all()),
-    run: async () => add(await inner.run()),
-    raw: async (options) => inner.raw(options),
+    all: async () => call(await inner.all()),
+    run: async () => call(await inner.run()),
+    raw: async (options) => {
+      calls++;
+      return inner.raw(options);
+    },
     first: async (column) => {
-      const { results } = add(await inner.all());
+      const { results } = call(await inner.all());
       const row = results?.[0] ?? null;
       return row && column !== undefined ? row[column] : row;
     },
@@ -56,11 +65,19 @@ function metered(db) {
   return {
     binding: {
       prepare: (sql) => statement(db.prepare(sql)),
-      batch: async (statements) => (await db.batch(statements.map((s) => s.inner))).map(add),
+      batch: async (statements) => {
+        calls++;
+        return (await db.batch(statements.map((s) => s.inner))).map(add);
+      },
     },
     take() {
       const n = read;
       read = 0;
+      return n;
+    },
+    takeCalls() {
+      const n = calls;
+      calls = 0;
       return n;
     },
   };
@@ -71,10 +88,10 @@ const PRODUCTS = 500;
 try {
   const raw = await mf.getD1Database('DB');
   await applyMigrations(raw);
-  const { binding: db, take } = metered(raw);
+  const { binding: db, take, takeCalls } = metered(raw);
 
   const { loadCatalogPage } = await import('../../src/features/storefront/catalog.ts');
-  const { readCategoryRows, readProductPageRows, readCardVariants } = await import(
+  const { readCategoryRows, readProductPageRows, readCardVariants, readDocumentRows } = await import(
     '../../src/features/storefront/reads.ts'
   );
   const { buildProductCard } = await import('../../src/features/storefront/productCard.ts');
@@ -340,14 +357,22 @@ try {
     assert.deepEqual(buildProductCard(listed, { currency: 'eur' }).tags, ['non-cousu', 'nouveau'], 'search and related');
   });
 
-  console.log('\nthe texts a theme declares (ticket #165)');
+  console.log('\nthe texts a theme declares (tickets #165, #225)');
 
-  const { parseThemeTextsForm, themeTextField } = await import('../../src/features/themeTexts/slots.ts');
+  const { parseThemeTextsForm, resolveThemeTexts, themeTextField } = await import(
+    '../../src/features/themeTexts/slots.ts'
+  );
   const { saveThemeTexts, readThemeTexts } = await import('../../src/features/themeTexts/db.ts');
+  const { buildShellModel } = await import('../../src/features/storefront/shell.ts');
   const slots = [
     { key: 'hero.title', label: 'Titre', default: 'Né à l’atelier', maxLength: 40, format: 'text' },
     { key: 'hero.intro', label: 'Accroche', default: 'Des sacs *cousus main*.', maxLength: 400, format: 'markdown' },
+    { key: 'bar.shipping', label: 'Barre du haut', default: 'Expédié sous 3 à 5 jours', maxLength: 80, format: 'text' },
   ];
+  // What a request does: the middleware's batch, resolved once
+  // (features/themeTexts/request.ts), handed to the shell and the home.
+  const documentTexts = async () =>
+    resolveThemeTexts(slots, (await readDocumentRows(db, { themeTexts: true })).themeTexts);
   const home = async () =>
     (await loadCatalogPage(db, {
       base: '/',
@@ -358,8 +383,22 @@ try {
       currency: 'eur',
       eyebrow: 'Boutique',
       heading: 'Tout',
-      textSlots: slots,
+      texts: await documentTexts(),
     })).texts;
+  const shell = async () =>
+    buildShellModel({
+      storeName: 'Atelier',
+      logoImageKey: null,
+      imageBaseUrl: '',
+      announcement: '',
+      announcementHref: '',
+      headerItems: [],
+      footerItems: [],
+      searchQuery: '',
+      cartEnabled: true,
+      accountsEnabled: false,
+      texts: await documentTexts(),
+    }).texts;
   const save = async (fields) => {
     const form = new FormData();
     for (const [key, value] of Object.entries(fields)) form.set(themeTextField(key), value);
@@ -386,6 +425,15 @@ try {
     assert.equal((await readThemeTexts(db)).size, 0, 'neither an empty field nor the default is stored');
   });
 
+  await check('the shell gets the same texts as the home, saved or default (ticket #225)', async () => {
+    assert.equal((await shell())['bar.shipping'].text, 'Expédié sous 3 à 5 jours');
+    await save({ 'bar.shipping': 'Point relais dès 3,90\u00a0€, offert dès 50\u00a0€' });
+    assert.equal((await shell())['bar.shipping'].text, 'Point relais dès 3,90\u00a0€, offert dès 50\u00a0€');
+    assert.deepEqual(await shell(), await home());
+    await save({ 'bar.shipping': '' });
+    assert.equal((await readThemeTexts(db)).size, 0);
+  });
+
   await check('a text too long is refused, and nothing of the form is written', async () => {
     const parsed = await save({ 'hero.intro': 'Nouveau.', 'hero.title': 'x'.repeat(41) });
     assert.ok('error' in parsed);
@@ -393,15 +441,28 @@ try {
     assert.equal((await readThemeTexts(db)).size, 0);
   });
 
-  await check('the texts ride the catalogue batch, and a theme without slots reads none', async () => {
+  await check('the texts ride the middleware’s batch, and a theme without slots reads none', async () => {
     await save({ 'hero.title': 'La carte cadeau' });
     take();
-    await home();
+    takeCalls();
+    const read = await readDocumentRows(db, { themeTexts: true });
     const withTexts = take();
-    await catalog();
+    assert.equal(takeCalls(), 1, 'settings, menus and texts in one call');
+    assert.equal(read.themeTexts.get('hero.title'), 'La carte cadeau');
+
+    const none = await readDocumentRows(db, { themeTexts: false });
     const without = take();
+    assert.equal(takeCalls(), 1);
+    assert.equal(none.themeTexts.size, 0, 'nothing read, nothing resolved but the defaults');
     assert.ok(withTexts - without <= 2, `the texts read ${withTexts - without} rows`);
     console.log(`    (${without} rows without texts, ${withTexts} with)`);
+
+    // The catalogue reads none of its own any more: what a theme with texts
+    // costs the home is the middleware's row, not a second read.
+    await home();
+    const homeRead = take();
+    await catalog();
+    assert.equal(homeRead - withTexts, take(), 'the home reads what /products reads, besides the middleware');
   });
 } finally {
   await mf.dispose();

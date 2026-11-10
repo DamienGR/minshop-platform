@@ -20,6 +20,10 @@ const { model } = Astro.props;
 ---
 
 <header class="alt-shell">
+  {/* The theme's own texts (ticket #225, declared in ../catalog/texts.ts):
+      a top bar that says what the merchant wrote, on every route. */}
+  {model.texts['bar.shipping'] && <p class="alt-shell__bar">{model.texts['bar.shipping'].text}</p>}
+
   <div class="alt-shell__brand">
     <a href="/" aria-label={model.storeName}>
       {model.logo ? <img src={model.logo.src} alt={model.logo.alt} /> : model.storeName}

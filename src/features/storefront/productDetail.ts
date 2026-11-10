@@ -19,6 +19,7 @@ import type {
   ProductSeoModel,
   StorefrontGalleryImage,
   StorefrontImage,
+  ThemeText,
 } from './models';
 
 /**
@@ -63,6 +64,10 @@ export interface ProductDetailOptions {
   /** Absolute origin for SEO URLs. */
   origin: string;
   pathname: string;
+  /** The theme's texts, already resolved from what middleware read for the
+   *  shell (`requestThemeTexts()`, ticket #225): the page reads none of its
+   *  own. `{}` when the theme declares none. */
+  texts?: Record<string, ThemeText>;
 }
 
 function heroImage(
@@ -236,6 +241,7 @@ export async function loadProductDetail(
       ),
       backHref: catalogPath(options.settings?.homePage),
       error: options.searchParams.get('error'),
+      texts: options.texts ?? {},
     },
     purchase: {
       productId: requirePublicId(product.public_id, product.id, 'product'),

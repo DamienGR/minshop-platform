@@ -232,6 +232,7 @@ src/
     maps/      place (the ```carte block, pure) · tiles (Web Mercator, pure) · render (its HTML)
                relay (to the tile server) · serve (edge cache + relay; ADR 0029)
     themeTexts/  slots (a theme's declared texts: rules, form, resolution; pure) · active (the theme's texts.ts) · db
+               request (this request's texts, resolved once for the shell, the home and the product page)
     pageModels/  declaration (a theme's page models: rules; pure) · zones (stored, form, resolution; pure)
                active (the theme's pageModels.ts + pages/*.astro) · PageZoneFields (the editor's zones)
     adminGuide/  guide (chapters → HTML, anchors, order; pure) · content (the build's chapters) · GuidePanel
@@ -412,11 +413,13 @@ today's config.
   `shopctl/src/catalog/contract.mjs` and the field to `PRODUCT_FIELDS` in
   `catalog/plan.mjs` — the generated `imports/README.md` and its gate derive from
   that list.
-- **A text the merchant edits on the home:** nothing in the core — the theme
-  declares a slot in its own `src/themes/<id>/texts.ts` (ADR 0027,
-  `CUSTOMIZING.md`), Admin → Textes du thème shows it, and `Catalog.astro`
-  reads `model.texts[key]`. A wording that belongs to every shop is a
-  catalog key instead (`messages.ts`).
+- **A text the merchant edits** (on the home, in the header or footer, on the
+  product page): nothing in the core — the theme declares a slot in its own
+  `src/themes/<id>/texts.ts` (ADR 0027, `CUSTOMIZING.md`), Admin → Textes du
+  thème shows it, and `Catalog.astro`, `Header.astro`, `Footer.astro` or
+  `ProductDetail.astro` reads `model.texts[key]` — one record, read by
+  middleware in its batch (ticket #225). A wording that belongs to every shop
+  is a catalog key instead (`messages.ts`).
 - **A page model** (a page whose layout the theme imposes): nothing in the
   core — the theme declares it in its own `src/themes/<id>/pageModels.ts` and
   draws it in `pages/<key>.astro` (ADR 0031, `CUSTOMIZING.md`); the page
