@@ -12,6 +12,8 @@ Les pages de texte de votre boutique : à propos, livraison, conditions géné
 
 Les boutons ajoutent des signes autour du texte, comme des étoiles : c’est normal, l’aperçu montre le résultat.
 
+**Aide**, au bout des boutons, rappelle comment écrire chaque mise en forme : un clic l’ouvre, un clic ailleurs ou la touche Échap la referme. Vide, le champ du texte est court ; il s’allonge à mesure que vous écrivez.
+
 Sur une longue page, les boutons restent en haut de l’écran pendant que vous descendez dans le texte : inutile de remonter pour les atteindre.
 
 Une page publiée n’est encore dans aucun menu : ajoutez-la dans [Navigation](#guide-navigation) pour que vos clients la trouvent.

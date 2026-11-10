@@ -63,19 +63,23 @@ export const pages = {
   'admin.pages.editor.tool.imageRight': 'Photo de cette ligne à droite du texte',
   'admin.pages.editor.tool.imageRightShort': 'À droite',
   'admin.pages.editor.sideNoImage': 'Placez d’abord le curseur sur la ligne d’une image.',
-  // The empty editor's placeholder, one key per line of Markdown: the syntax
-  // around these words is built in the template, so a translation cannot break it.
-  'admin.pages.editor.placeholder.heading': 'Un intertitre',
-  'admin.pages.editor.placeholder.intro':
+  // The empty editor's one line; the syntax lives in « Aide », beside the tools.
+  'admin.pages.editor.placeholder': 'Saisissez le contenu ici…',
+  'admin.pages.editor.tool.help': 'Aide',
+  // « Aide »'s cheat sheet, one key per line of Markdown: the syntax around
+  // these words is built in the template, so a translation cannot break it.
+  'admin.pages.editor.syntax.title': 'Aide-mémoire de la mise en forme',
+  'admin.pages.editor.syntax.heading': 'Un intertitre',
+  'admin.pages.editor.syntax.intro':
     'Rédigez votre page en Markdown. Une ligne vide sépare deux paragraphes.',
-  'admin.pages.editor.placeholder.bold': 'gras',
-  'admin.pages.editor.placeholder.italic': 'italique',
-  'admin.pages.editor.placeholder.bulletList': 'une liste à puces',
-  'admin.pages.editor.placeholder.numberedList': 'une liste numérotée',
-  'admin.pages.editor.placeholder.anotherItem': 'un autre élément',
-  'admin.pages.editor.placeholder.quote': 'une citation',
-  'admin.pages.editor.placeholder.link': 'un lien',
-  'admin.pages.editor.placeholder.imageAlt': 'décrivez l’image',
+  'admin.pages.editor.syntax.bold': 'gras',
+  'admin.pages.editor.syntax.italic': 'italique',
+  'admin.pages.editor.syntax.bulletList': 'une liste à puces',
+  'admin.pages.editor.syntax.numberedList': 'une liste numérotée',
+  'admin.pages.editor.syntax.anotherItem': 'un autre élément',
+  'admin.pages.editor.syntax.quote': 'une citation',
+  'admin.pages.editor.syntax.link': 'un lien',
+  'admin.pages.editor.syntax.imageAlt': 'décrivez l’image',
   // The « Carte » tool inserts a ```carte block; its keys (lieu, adresse,
   // position) are syntax and stay in the template, these are the sample values.
   'admin.pages.editor.tool.map': 'Carte d’un lieu',
