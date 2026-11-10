@@ -1,6 +1,6 @@
 # ADR 0032 — Un jeton à usage unique pour l'accès de l'agence à l'administration
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #229 par Damien, le 2026-11-10)
 - **Date** : 2026-11-10
 - **Jalon** : après le pilote (plan §13.22, ticket #227) ; aucun des jalons 0
   à 10

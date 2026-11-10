@@ -3794,7 +3794,8 @@ mot de passe d'administration, et l'agence n'avait qu'un moyen d'y revenir,
 `shopctl admin password`, qui le remplace. Le commerçant perdait alors ses
 sessions et devait en recevoir un nouveau. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-10, migration 0058, [ADR 0032](architecture/decisions/0032-jeton-d-acces-a-usage-unique.md) :
+Fait le 2026-11-10, migration 0058, [ADR 0032](architecture/decisions/0032-jeton-d-acces-a-usage-unique.md)
+(PR #229, fusionnée par Damien le 2026-11-10, qui accepte l'ADR) :
 
 - `shopctl admin token --env <env>` tire un jeton de 32 octets avec le module
   du Worker (`src/features/auth/adminToken.ts`), écrit son empreinte SHA-256
