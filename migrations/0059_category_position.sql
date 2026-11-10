@@ -1,0 +1,18 @@
+-- Migration 0059: the order of a category among its siblings (ticket #228).
+--
+-- The merchant ranges the categories of one family — the top level, or the
+-- sub-categories of one parent — with « Monter » and « Descendre » in
+-- Admin → Catégories, and every list follows: the home's category tiles and
+-- their line of sub-categories, /products, a category page, the admin's list
+-- and the product form. The order is `position`, then the name
+-- (src/features/categories/order.ts).
+--
+-- 0 for every existing row: a family nobody has ranged sorts by name, exactly
+-- as before, and no row is rewritten. A move writes the whole family 1, 2, 3…
+-- in the order shown, so a ranged family is the one with a position above 0;
+-- a category that joins it (created, moved under it, or raised a level when its
+-- parent is deleted) goes last, and one that joins an unranged family keeps
+-- 0, its alphabetical place.
+--
+-- No index: a shop has tens of categories, and every read takes them all.
+ALTER TABLE categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0;

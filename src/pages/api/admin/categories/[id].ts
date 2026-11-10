@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import {
   updateCategory,
   deleteCategory,
+  moveCategory,
   descendantIds,
   getCategoryByPublicId,
   setCategoryImage,
@@ -16,7 +17,8 @@ import { t } from '../../../../features/i18n';
 
 export const prerender = false;
 
-// POST /api/admin/categories/:id — update, or delete when `_action=delete`.
+// POST /api/admin/categories/:id — update, delete when `_action=delete`, or
+// move a rank among its siblings when `_action=move` (ticket #228).
 // :id is the cat_ public ID; numeric row ids are not accepted.
 export const POST: APIRoute = async ({ request, params, redirect }) => {
   const publicId = parsePublicId(params.id, 'category');
@@ -30,6 +32,13 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     await deleteCategory(env.DB, id);
     await purgeCacheTags([CACHE_TAG.catalog]);
     return redirect('/admin/categories', 303);
+  }
+
+  if (String(form.get('_action')) === 'move') {
+    // Already first or last moves nothing, and needs no purge.
+    const moved = await moveCategory(env.DB, id, form.get('direction') === 'up' ? 'up' : 'down');
+    if (moved) await purgeCacheTags([CACHE_TAG.catalog]);
+    return redirect(`/admin/categories#${publicId}`, 303);
   }
 
   const fail = (msg: string) =>

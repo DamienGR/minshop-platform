@@ -42,6 +42,13 @@ it; `seo_title` has no limit. Both fold to one line the way the admin does,
 keeping the no-break spaces (U+00A0, U+2007, U+202F) a French file types
 before `:` and inside « » (ticket #218).
 
+A category `--create-categories` makes is top-level, and takes its place by the
+admin's rule (ticket #228, `src/features/categories/order.ts`): last when the
+merchant has ranged the top level, at its alphabetical place (position 0) when
+not. The rule is one subquery in the INSERT, written twice like the four below
+(`nextPositionSql()` in `src/features/categories/db.ts`), and pinned against the
+real migrations in `test/scripts/catalog.test.mjs`.
+
 Four pure rules exist twice on purpose — `slugify()`, `normalizeTags()`,
 `seoText()` and the image-header dimension reader — because one copy lives in
 the Worker bundle and the other in a CLI with no build step. Each pair is pinned against a shared

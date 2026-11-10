@@ -445,6 +445,31 @@ describe('un import réel, contre les migrations du dépôt', () => {
     expect(resumed.state.products).toHaveLength(20);
   });
 
+  // Ticket #228: the rule of the admin, written a second time in the CLI's
+  // INSERT (nextPositionSql() in src/features/categories/db.ts).
+  it('place une catégorie créée comme l\'admin : en dernier au premier niveau rangé, à sa place alphabétique sinon', () => {
+    const queries = { top: 'SELECT slug, position FROM categories WHERE parent_id IS NULL ORDER BY position, slug' };
+
+    const unranged = scenario({ csv: WITNESS, options: { createCategories: true }, queries });
+    expect(unranged.queries.top.map((category) => category.position)).toEqual([0, 0, 0, 0]);
+
+    const ranged = scenario({
+      seed: [
+        `INSERT INTO categories (name, slug, public_id, position)
+           VALUES ('Zéro déchet', 'zero-dechet', 'cat_k7m2qx8vn1', 1), ('Cadeaux', 'cadeaux', 'cat_k7m2qx8vn2', 2)`,
+      ],
+      csv: WITNESS,
+      options: { createCategories: true },
+      runs: 2,
+      queries,
+    });
+    // Last, in the order the file first names them; the second run adds none.
+    expect(ranged.queries.top.map((category) => [category.slug, category.position])).toEqual([
+      ['zero-dechet', 1], ['cadeaux', 2], ['maison', 3], ['textile', 4], ['papeterie', 5], ['soins', 6],
+    ]);
+    expect(ranged.runs[1].statements).toBe(0);
+  });
+
   it('importe cent produits', () => {
     const rows = Array.from({ length: 100 }, (_, index) => {
       const n = String(index + 1).padStart(3, '0');

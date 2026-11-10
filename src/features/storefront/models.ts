@@ -96,7 +96,8 @@ export interface StorefrontCategory extends StorefrontLink {
   /** Resolved like a card image; null when the category has none — a theme
    *  decides what an imageless category looks like. */
   image: StorefrontImage | null;
-  /** Its direct sub-categories, sorted by name. */
+  /** Its direct sub-categories, in the order the merchant chose in Admin →
+   *  Catégories (ticket #228); by name while they have not ranged them. */
   children: StorefrontLink[];
 }
 
@@ -178,7 +179,8 @@ export interface CatalogPageModel {
   route: 'home' | 'products';
   eyebrow: string;
   heading: string;
-  /** The top-level categories, sorted by name, each with its sub-categories. */
+  /** The top-level categories, in the order the merchant chose (ticket #228;
+   *  by name while unranged), each with its sub-categories. */
   categories: StorefrontCategory[];
   products: ProductCardModel[];
   /**

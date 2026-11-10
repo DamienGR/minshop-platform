@@ -143,7 +143,9 @@ response for cache invalidation.
 
 - `categories` are the top-level ones, each a link (`text`, `href`) with its
   `description`, its resolved `image` (both null until the merchant sets them)
-  and its `children`.
+  and its `children`. Both lists come in the order the merchant chose in
+  Admin → Catégories (alphabetical until they move one): render them as they
+  arrive, never re-sorted.
 - `featured` is one product card: the merchant's choice in Admin → Réglages
   while it is active, else the newest product in stock, else the newest — null
   only for an empty catalog. Its image is resolved as the page's LCP.

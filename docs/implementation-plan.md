@@ -3818,3 +3818,44 @@ et la section « Jeton à usage unique » de `test/integration/security.mjs`, qu
 vérifie le refus d'un jeton servi, échu, inconnu, mal formé ou absent, le
 double envoi qui n'ouvre qu'une session, le budget partagé avec la connexion et
 la session fermée par un changement de mot de passe.
+
+### 13.23 L'ordre des catégories, choisi par le commerçant
+
+Noté le 2026-11-10 (ticket #228), pour l'accueil de la première boutique
+réelle : ses vignettes de catégories et la ligne de leurs sous-catégories
+suivaient l'ordre alphabétique, écrit en dur, quand le site actuel range ses
+univers autrement (Zéro déchet en tête, Carte cadeau en dernier). Aucun des
+jalons 0 à 10 n'avance.
+
+Fait le 2026-11-10, migration 0059, sans ADR :
+
+- `categories.position`, 0 par défaut. Un seul ordre, la position puis le nom
+  (`src/features/categories/order.ts`), repris par `listCategoriesStatement()`,
+  `childrenOf()` (l'accueil, `/products`, la page d'une catégorie) et
+  `buildTree()` (la liste de l'admin, la catégorie parente, les cases de la
+  fiche produit). Tant que rien n'est rangé, tout vaut 0 : l'ordre reste
+  alphabétique et aucune ligne n'est réécrite ;
+- Admin → Catégories : ↑ et ↓ sur chaque ligne, entre catégories de même
+  parente, sans script. Un déplacement écrit toute la famille 1, 2, 3… dans
+  l'ordre affiché, en un lot : déplacer dans une famille jamais rangée
+  déplace bien d'un rang, et une famille rangée se reconnaît à une position
+  au-dessus de 0, même réduite à une catégorie ;
+- une catégorie qui rejoint une famille, créée dans l'admin ou par l'import
+  CSV (`--create-categories`), ou rattachée à une autre parente, se place en
+  dernier si la famille est rangée, à sa place alphabétique sinon (une
+  sous-requête de l'écriture). Les sous-catégories d'une catégorie supprimée
+  suivent la même règle et gardent leur ordre entre elles ; arrivées dans une
+  famille jamais rangée, elles prennent leur place alphabétique ;
+- le modèle de vitrine livre `categories` et `children` dans cet ordre : un
+  thème n'a rien à changer (`CUSTOMIZING.md`). Le chapitre Catégories du guide
+  a sa section « Changer l'ordre des catégories ».
+
+Choix de Damien le 2026-11-10, la proposition du ticket : chaque niveau se
+range, avec « Monter » et « Descendre » seuls, sans glisser-déposer.
+
+Tenu par `src/features/categories/order.test.ts` et `db.test.ts` (la règle,
+le premier déplacement d'une famille jamais rangée, l'arrivée),
+`test/storefront/catalog.test.ts` (le modèle de l'accueil),
+`test/scripts/catalog.test.mjs` (l'import, contre les migrations réelles) et
+`test/integration/category-order.mjs` (déplacements, création, rattachement,
+suppression et lectures de la vitrine et de l'admin, contre un D1 réel).
