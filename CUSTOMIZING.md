@@ -111,9 +111,10 @@ pass `class` instead.
 ## The shell contract
 
 `Header.astro` and `Footer.astro` receive a `StorefrontShellModel`: store name,
-resolved logo, announcement, header and footer links, and `enabled`/`href` pairs
-for search, cart, account, and blog. Merchant links are pre-filtered to targets
-that are actually publishable, so you cannot render a dead link.
+resolved logo, announcement, header and footer links, `enabled`/`href` pairs
+for search, cart, account, and blog, and the theme's `texts` (see "Texts the
+merchant edits"). Merchant links are pre-filtered to targets that are actually
+publishable, so you cannot render a dead link.
 
 Four controls carry behavior your template must not reimplement:
 
@@ -177,6 +178,9 @@ card and on the page alike, and survives a rename in the admin.
 `soldOut` accounts for variant-level inventory, and `showAddToCart`/`showBuyNow`
 already fold in the store's cart and buy-now toggles and whether any payment
 rail can actually take money.
+
+`model.texts` holds the theme's texts (see "Texts the merchant edits"): the
+line under the price, a delivery and payment fold.
 
 The route keeps the 404, the page metadata, and the JSON-LD. Those are not
 presentation, and getting them subtly wrong is invisible on the page.
@@ -322,8 +326,11 @@ the same everywhere.
 ## Texts the merchant edits
 
 A home's wording — the hero's title, a block's sentence — is the merchant's,
-not yours: declare it in `src/themes/<your-theme>/texts.ts`, and Admin →
-Textes du thème shows one field per slot. No file, no screen, nothing changes.
+not yours, and so is what the shop promises about delivery and payment: a top
+bar's "Expédié sous 3 à 5 jours", a footer's "Paiement sécurisé", the line
+under a product's price. Declare it in `src/themes/<your-theme>/texts.ts`, and
+Admin → Textes du thème shows one field per slot. No file, no screen, nothing
+changes.
 
 ```ts
 import type { ThemeTextSlot } from '../../features/storefront/models';
@@ -340,6 +347,23 @@ export const texts = [
 <h1>{model.texts['hero.title'].text}</h1>
 <div set:html={model.texts['hero.intro'].html} />
 ```
+
+One declaration serves every template that receives `texts`, and the
+template decides where each key goes (ADR 0027, ticket #225):
+
+| Template | Reads |
+| --- | --- |
+| `Header.astro`, `Footer.astro` | `model.texts` of the shell — every route, `/checkout` and `/pay` included |
+| `Catalog.astro` | `model.texts` — `/` and `/products` |
+| `ProductDetail.astro` | `model.texts` — every product page |
+
+Each holds every declared key, the same values everywhere, `{}` without a
+`texts.ts`. Prefixing the keys with where they go (`bar.`, `footer.`,
+`product.`) keeps the admin's list readable; the screen shows the slots in the
+order you declare them. Other templates (`ContentPage.astro`, `ProductCard.astro`,
+page models) receive none. The texts cost no extra read: middleware fetches
+them with the settings and menus, only for a theme that declares some, and
+saving them purges every cached storefront page.
 
 The label and help are shown to the merchant, so write them in French. A field
 left empty, or holding the default, shows the default; a text longer than

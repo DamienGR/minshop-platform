@@ -1,6 +1,6 @@
 import type { MenuItem } from '../navigation/db';
 import { mediaUrl } from '../media/url';
-import type { StorefrontLink, StorefrontShellModel } from './models';
+import type { StorefrontLink, StorefrontShellModel, ThemeText } from './models';
 
 /**
  * Builds the header/footer model.
@@ -28,6 +28,10 @@ export interface ShellInput {
   searchQuery: string;
   cartEnabled: boolean;
   accountsEnabled: boolean;
+  /** The theme's texts, already resolved from what middleware read in the
+   *  same batch (`requestThemeTexts()`, ticket #225); `{}` when it declares
+   *  none. */
+  texts?: Record<string, ThemeText>;
 }
 
 const toLink = (item: MenuItem): StorefrontLink => ({ text: item.text, href: item.href });
@@ -53,5 +57,6 @@ export function buildShellModel(input: ShellInput): StorefrontShellModel {
     search: { action: '/search', query: input.searchQuery },
     cart: { enabled: input.cartEnabled, href: '/cart' },
     account: { enabled: input.accountsEnabled, href: '/account' },
+    texts: input.texts ?? {},
   };
 }

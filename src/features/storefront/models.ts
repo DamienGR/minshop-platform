@@ -119,6 +119,15 @@ export interface StorefrontShellModel {
   search: { action: string; query: string };
   cart: { enabled: boolean; href: string };
   account: { enabled: boolean; href: string };
+  /**
+   * The texts the theme declares in its `texts.ts` (tickets #165, #225), by
+   * key — a delivery promise in the top bar, a footer pledge: what the
+   * merchant wrote in Admin → Textes du thème, else the slot's default. Every
+   * declared key is present, on every route the shell wraps, `/checkout` and
+   * `/pay` included; a theme that declares none gets `{}`. The same record the
+   * home and the product page receive.
+   */
+  texts: Record<string, ThemeText>;
 }
 
 /** One sort control. `current` marks the field the list is ordered by; clicking
@@ -183,7 +192,8 @@ export interface CatalogPageModel {
   /**
    * The texts the theme declares in its `texts.ts` (ticket #165), by key: what
    * the merchant wrote in Admin → Textes du thème, else the slot's default.
-   * Every declared key is present; a theme that declares none gets `{}`.
+   * Every declared key is present; a theme that declares none gets `{}`. The
+   * shell and the product page receive the same record (ticket #225).
    */
   texts: Record<string, ThemeText>;
   sort: StorefrontSortModel;
@@ -192,7 +202,10 @@ export interface CatalogPageModel {
 
 /**
  * A text the theme lets the merchant edit (ticket #165, ADR 0027), declared in
- * the theme's optional `src/themes/<id>/texts.ts`:
+ * the theme's optional `src/themes/<id>/texts.ts`. One declaration serves every
+ * template that receives `texts` — the header and footer (`shell.texts`), the
+ * home (`model.texts` of the catalogue) and the product page (`model.texts`,
+ * ticket #225) — and the template decides where each key goes:
  *
  *     import type { ThemeTextSlot } from '../../features/storefront/models';
  *     export const texts = [
@@ -352,6 +365,12 @@ export interface ProductDetailModel {
   backHref: string;
   /** Validated message from ?error=, or null. */
   error: string | null;
+  /**
+   * The texts the theme declares in its `texts.ts` (ticket #225) — the line
+   * under the price, the delivery and payment fold: the same record as the
+   * shell's, every declared key present, `{}` for a theme that declares none.
+   */
+  texts: Record<string, ThemeText>;
 }
 
 /**

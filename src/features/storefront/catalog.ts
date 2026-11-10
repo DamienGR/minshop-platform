@@ -13,9 +13,8 @@ import type {
   StorefrontCategory,
   StorefrontPaginationModel,
   StorefrontSortModel,
-  ThemeTextSlot,
+  ThemeText,
 } from './models';
-import { resolveThemeTexts } from '../themeTexts/slots';
 
 /**
  * The catalog loader.
@@ -154,9 +153,10 @@ export interface CatalogPageOptions {
   /** The merchant's choice (Admin → Réglages, ticket #164), from the settings
    *  the request already holds; null for the automatic one. */
   featuredProductId?: number | null;
-  /** The active theme's text slots (`themeTexts/active.ts`), passed in so the
-   *  loader stays testable outside a Vite build; none reads nothing. */
-  textSlots?: readonly ThemeTextSlot[];
+  /** The theme's texts, already resolved from what middleware read for the
+   *  shell (`requestThemeTexts()`, ticket #225): the catalogue reads none of
+   *  its own. `{}` when the theme declares none. */
+  texts?: Record<string, ThemeText>;
 }
 
 export async function loadCatalogPage(
@@ -177,7 +177,6 @@ export async function loadCatalogPage(
     offset: (asked - 1) * PAGE_SIZE,
     order,
     featuredProductId: options.featuredProductId ?? null,
-    themeTexts: (options.textSlots?.length ?? 0) > 0,
   });
   const { total, categories } = read;
   const { page, offset, totalPages } = paginate(
@@ -226,7 +225,7 @@ export async function loadCatalogPage(
           priority: true,
         })
       : null,
-    texts: resolveThemeTexts(options.textSlots ?? [], read.texts, { baseUrl: options.imageBaseUrl }),
+    texts: options.texts ?? {},
     sort: buildSortModel(options.base, sort, dir),
     pagination: buildPaginationModel(options.base, page, totalPages, sort, dir),
   };

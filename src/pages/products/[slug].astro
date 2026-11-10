@@ -8,6 +8,7 @@ import { loadProductDetail } from '../../features/storefront/productDetail';
 import { getConfig } from '../../config';
 import { publicOrigin } from '../../features/http/origin';
 import { addCacheTags, productCacheTags } from '../../features/cache/tags';
+import { requestThemeTexts } from '../../features/themeTexts/request';
 import { t } from '../../features/i18n';
 
 const loaded = await loadProductDetail(env.DB, {
@@ -19,6 +20,8 @@ const loaded = await loadProductDetail(env.DB, {
   currency: getConfig().currency,
   origin: publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN),
   pathname: Astro.url.pathname,
+  // Read by middleware for the shell, in its batch (ticket #225).
+  texts: requestThemeTexts(Astro.locals),
 });
 
 // Status, metadata, JSON-LD, and cache tagging stay with the route: none of

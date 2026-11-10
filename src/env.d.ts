@@ -38,6 +38,10 @@ declare namespace App {
     /** Resolved header/footer navigation, batched with settings so uncached
      *  routes (/cart, /checkout, /account) pay no extra round trip. */
     menus?: import('./features/navigation/db').Menus;
+    /** What the merchant wrote over the theme's texts, read in the same batch
+     *  and only for a theme that declares some (ticket #225). Templates get
+     *  them resolved, through `requestThemeTexts()`. */
+    themeTexts?: Map<string, string>;
   }
 }
 

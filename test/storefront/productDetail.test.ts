@@ -100,6 +100,7 @@ const detail = (overrides: Partial<ProductDetailModel> = {}): ProductDetailModel
   related: [],
   backHref: '/',
   error: null,
+  texts: {},
   ...overrides,
 });
 

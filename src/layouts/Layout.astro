@@ -6,6 +6,7 @@ import { normalizeSearchQuery } from '../features/search/query';
 import { EMPTY_MENUS, visibleItems } from '../features/navigation/db';
 import { getEmailProvider } from '../features/email';
 import { buildShellModel } from '../features/storefront/shell';
+import { requestThemeTexts } from '../features/themeTexts/request';
 import { storefrontIndexable } from '../features/storefront/indexable';
 import { vaultReady } from '../features/secrets/store';
 import { LANG, LOCALE, t } from '../features/i18n';
@@ -86,7 +87,8 @@ const indexable = storefrontIndexable(Astro.locals.settings, vaultReady());
 
 // The header and footer are store-owned, so they receive a model rather than
 // request context. Built from values middleware already loaded — no extra D1
-// read, on routes (checkout, pay) least able to afford one.
+// read, on routes (checkout, pay) least able to afford one. The theme's texts
+// came in that same batch (ticket #225).
 const shell = buildShellModel({
   storeName,
   logoImageKey,
@@ -98,6 +100,7 @@ const shell = buildShellModel({
   searchQuery: query,
   cartEnabled,
   accountsEnabled: accountsOn,
+  texts: requestThemeTexts(Astro.locals),
 });
 ---
 

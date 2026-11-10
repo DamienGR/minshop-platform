@@ -19,7 +19,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   if ('error' in parsed) return redirect(`${SCREEN}?error=${encodeURIComponent(parsed.error)}`, 303);
 
   await saveThemeTexts(env.DB, parsed.writes);
-  // The texts are on the home, which every storefront document can be.
+  // The texts are in the shell, which every storefront document carries, as
+  // well as on the home and the product page (ticket #225); `shell` is on all
+  // of them, `catalog` too.
   await purgeCacheTags([CACHE_TAG.shell, CACHE_TAG.catalog]);
   return redirect(`${SCREEN}?saved=1`, 303);
 };

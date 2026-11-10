@@ -62,7 +62,7 @@ vi.mock('../../src/features/payments', () => ({
 
 const { loadProductDetail } = await import('../../src/features/storefront/productDetail');
 
-const load = () =>
+const load = (options: { texts?: Record<string, { text: string; html: string | null }> } = {}) =>
   loadProductDetail({} as D1Database, {
     slug: 'sample-tee',
     searchParams: new URLSearchParams(),
@@ -72,6 +72,7 @@ const load = () =>
     currency: 'usd',
     origin: 'https://shop.example.com',
     pathname: '/products/sample-tee',
+    ...options,
   });
 
 const variant = (overrides: Record<string, unknown> = {}) => ({
@@ -271,5 +272,21 @@ describe('the product page’s own address', () => {
     expect(loaded.model.href).toBe('/products/sample-tee');
     const card = buildProductCard({ ...rows.product, card_variants: null } as never, { currency: 'usd' });
     expect(loaded.model.href).toBe(card.href);
+  });
+});
+
+// Ticket #225. The page receives the theme's texts the shell received, read
+// once by middleware: the loader hands them on and reads none of its own.
+describe('the theme’s texts on the product page', () => {
+  it('are the record it was given, `{}` without one', async () => {
+    const texts = { 'product.shipping': { text: 'Expédié sous 3 à 5 jours', html: null } };
+
+    const loaded = await load({ texts });
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    expect(loaded.model.texts).toBe(texts);
+
+    const bare = await load();
+    expect(bare.status === 'ok' && bare.model.texts).toEqual({});
   });
 });

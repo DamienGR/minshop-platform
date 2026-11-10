@@ -30,6 +30,8 @@ const { model, purchase } = Astro.props;
     {model.priceVaries && 'from '}
     {model.formattedPrice}
   </p>
+  {/* The theme's own texts (ticket #225, declared in ../catalog/texts.ts). */}
+  {model.texts['product.priceNote'] && <p class="alt-detail__note">{model.texts['product.priceNote'].text}</p>}
 
   <ProductPurchaseForm model={purchase} />
 
@@ -40,6 +42,13 @@ const { model, purchase } = Astro.props;
     soldOutLabel="Unavailable"
     class="alt-detail__media"
   />
+
+  {model.texts['product.delivery']?.html && (
+    <details class="alt-detail__delivery">
+      <summary>Delivery</summary>
+      <div set:html={model.texts['product.delivery'].html} />
+    </details>
+  )}
 
   {model.description && (
     <details class="alt-detail__description">
