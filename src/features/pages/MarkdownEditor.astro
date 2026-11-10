@@ -22,36 +22,33 @@ interface Props {
   help?: string;
   /** In characters, as the server counts them; the field's bound too. */
   maxLength?: number;
-  rows?: number;
-  /** The empty field's text; the body's cheat sheet below by default, none
-   *  when empty. */
-  placeholder?: string;
 }
 
-// Shown only while the body is empty. Doubles as the Markdown cheat sheet for a
-// merchant who has never written any — it covers exactly what the toolbar above
-// can insert, so the buttons and the hint teach the same syntax.
+// « Aide »'s cheat sheet, at the end of the toolbar: the Markdown a merchant
+// who has never written any needs first. It used to be the empty field's
+// placeholder, which held that field open at its full height and was gone at
+// the first keystroke; behind a button, it is one click away at any time.
 // Built line by line: the catalog holds the words, this holds the syntax, so a
 // translation can never break the Markdown it is teaching.
-const PLACEHOLDER = [
-  `## ${t('admin.pages.editor.placeholder.heading')}`,
+const SYNTAX_HELP = [
+  `## ${t('admin.pages.editor.syntax.heading')}`,
   '',
-  t('admin.pages.editor.placeholder.intro'),
+  t('admin.pages.editor.syntax.intro'),
   '',
-  `**${t('admin.pages.editor.placeholder.bold')}**  ` +
-    `_${t('admin.pages.editor.placeholder.italic')}_  \`code\``,
+  `**${t('admin.pages.editor.syntax.bold')}**  ` +
+    `_${t('admin.pages.editor.syntax.italic')}_  \`code\``,
   '',
-  `- ${t('admin.pages.editor.placeholder.bulletList')}`,
-  `- ${t('admin.pages.editor.placeholder.anotherItem')}`,
+  `- ${t('admin.pages.editor.syntax.bulletList')}`,
+  `- ${t('admin.pages.editor.syntax.anotherItem')}`,
   '',
-  `1. ${t('admin.pages.editor.placeholder.numberedList')}`,
-  `2. ${t('admin.pages.editor.placeholder.anotherItem')}`,
+  `1. ${t('admin.pages.editor.syntax.numberedList')}`,
+  `2. ${t('admin.pages.editor.syntax.anotherItem')}`,
   '',
-  `> ${t('admin.pages.editor.placeholder.quote')}`,
+  `> ${t('admin.pages.editor.syntax.quote')}`,
   '',
-  `[${t('admin.pages.editor.placeholder.link')}](https://example.com)`,
+  `[${t('admin.pages.editor.syntax.link')}](https://example.com)`,
   '',
-  `![${t('admin.pages.editor.placeholder.imageAlt')}](/images/media/photo.webp)`,
+  `![${t('admin.pages.editor.syntax.imageAlt')}](/images/media/photo.webp)`,
   '',
   '```carte',
   `lieu: ${t('admin.pages.editor.mapTemplate.name')}`,
@@ -175,10 +172,10 @@ const sideTools: Array<{ value: string; label: string; title: string }> = [
   },
 ];
 
-const { name, value, id, label, help, maxLength, rows = 24 } = Astro.props;
-const placeholder = Astro.props.placeholder ?? PLACEHOLDER;
+const { name, value, id, label, help, maxLength } = Astro.props;
 const fieldId = `${id}-field`;
 const helpId = `${id}-help`;
+const syntaxId = `${id}-syntax`;
 ---
 
 <div
@@ -296,6 +293,29 @@ const helpId = `${id}-help`;
               </button>
             ))
           }
+          {/* « Aide », at the far end: the cheat sheet in a bubble. A native
+              popover, so it opens without the script (centred then, m-auto),
+              closes on Escape or a click elsewhere, and sits in the top layer:
+              the editor's frame clips (overflow-clip), and an empty field is
+              shorter than the sheet. The script anchors it under the button. */}
+          <button
+            type="button"
+            data-syntax-toggle
+            popovertarget={syntaxId}
+            title={t('admin.pages.editor.syntax.title')}
+            class="ml-auto rounded px-2 py-1 text-xs text-gray-600 underline underline-offset-2 hover:bg-gray-100 hover:text-brand"
+          >
+            {t('admin.pages.editor.tool.help')}
+          </button>
+          <div
+            id={syntaxId}
+            popover
+            data-syntax-help
+            class="m-auto w-[min(32rem,calc(100vw-1rem))] overflow-auto rounded-md border border-line bg-paper p-4 text-gray-700 shadow-lg"
+          >
+            <p class="text-xs uppercase tracking-widest text-gray-400">{t('admin.pages.editor.syntax.title')}</p>
+            <pre class="mt-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">{SYNTAX_HELP}</pre>
+          </div>
         </div>
 
         {/* Never h-full: that resolves to 100% of the pane, and the pane is
@@ -304,17 +324,20 @@ const helpId = `${id}-help`;
             The script sets min-height to the content height, so the field
             grows with the text and never scrolls on its own — the page
             scrolls instead. flex-1 still lets it stretch to fill the pane
-            when the preview is the taller column. */}
+            when the preview is the taller column.
+            min-h-50 is the empty field's height, 200 px, and the floor of a
+            short one: the script reads it rather than repeat it. Without the
+            script the field scrolls (overflow-y-auto); with it, it never has
+            to, and the script hides the bar. */}
         <textarea
           name={name}
           id={fieldId}
           data-editor
-          rows={rows}
           maxlength={maxLength}
           aria-describedby={help ? helpId : undefined}
           spellcheck="true"
-          placeholder={placeholder || undefined}
-          class="block w-full flex-1 resize-none overflow-hidden border-0 px-4 py-3 font-mono text-sm leading-relaxed focus:outline-none"
+          placeholder={t('admin.pages.editor.placeholder')}
+          class="block min-h-50 w-full flex-1 resize-none overflow-y-auto border-0 px-4 py-3 font-mono text-sm leading-relaxed focus:outline-none"
           >{value}</textarea
         >
       </div>
@@ -440,6 +463,56 @@ const helpId = `${id}-help`;
       }
     });
 
+    // « Aide »: the browser opens and closes the bubble (popover); this puts it
+    // under its button, or above when the sheet fits only there, and keeps it
+    // there while the page scrolls and the toolbar sticks. Hidden for the one
+    // frame between opening and placing, so it never shows where the browser
+    // would have put it.
+    const syntaxToggle = root.querySelector<HTMLElement>('[data-syntax-toggle]');
+    const syntaxHelp = root.querySelector<HTMLElement>('[data-syntax-help]');
+    if (syntaxToggle && syntaxHelp) {
+      const GAP = 4;
+      const EDGE = 8;
+      const placeHelp = () => {
+        const anchor = syntaxToggle.getBoundingClientRect();
+        // The button gone from the window, its bubble has nothing to point at.
+        if (anchor.bottom < 0 || anchor.top > window.innerHeight) {
+          syntaxHelp.hidePopover();
+          return;
+        }
+        const width = syntaxHelp.offsetWidth;
+        // The whole sheet, borders included, whatever max-height it was given.
+        const height = syntaxHelp.scrollHeight + syntaxHelp.offsetHeight - syntaxHelp.clientHeight;
+        const below = window.innerHeight - anchor.bottom - GAP - EDGE;
+        const above = anchor.top - GAP - EDGE;
+        const down = height <= below || below >= above;
+        const room = Math.max(down ? below : above, 0);
+        Object.assign(syntaxHelp.style, {
+          margin: '0',
+          right: 'auto',
+          bottom: 'auto',
+          maxHeight: `${room}px`,
+          left: `${Math.max(EDGE, Math.min(anchor.right - width, window.innerWidth - width - EDGE))}px`,
+          top: `${down ? anchor.bottom + GAP : anchor.top - GAP - Math.min(height, room)}px`,
+          visibility: '',
+        });
+      };
+      syntaxHelp.addEventListener('beforetoggle', (event) => {
+        if ((event as ToggleEvent).newState === 'open') syntaxHelp.style.visibility = 'hidden';
+      });
+      syntaxHelp.addEventListener('toggle', (event) => {
+        // Capture: a scroll of any box the editor sits in moves the button too.
+        if ((event as ToggleEvent).newState === 'open') {
+          placeHelp();
+          window.addEventListener('scroll', placeHelp, true);
+          window.addEventListener('resize', placeHelp);
+        } else {
+          window.removeEventListener('scroll', placeHelp, true);
+          window.removeEventListener('resize', placeHelp);
+        }
+      });
+    }
+
     // Media picker → insert an image at the cursor. Alt text is prompted for
     // rather than left empty: an unlabelled image is an accessibility failure,
     // and the filename is rarely a good description.
@@ -525,23 +598,21 @@ const helpId = `${id}-help`;
     };
 
     /**
+     * The field's floor: its stylesheet min-height (min-h-50, 200 px), read
+     * once, before autosize() writes its own over it. An empty field stands
+     * at it, so typing the first line does not make the editor jump.
+     */
+    const floor = parseFloat(getComputedStyle(editor).minHeight) || 0;
+    // The field grows with its text, so it never has to scroll on its own: a
+    // scrollbar would only flash in on a rounding. Without this script it does.
+    editor.style.overflowY = 'hidden';
+
+    /**
      * Grow the field to its content so it never scrolls on its own — one page
      * scrollbar instead of a nested one. min-height rather than height, so
      * flex-1 can still stretch it to fill the pane when the preview is taller.
      * Runs unthrottled: it is a layout read/write on one element, not a fetch.
      */
-    /**
-     * Floor of `rows` lines. Without it an empty page collapses to a single
-     * line, which would clip the multi-line Markdown placeholder to its first
-     * row — exactly when a merchant most needs to read it.
-     */
-    const minRowsHeight = () => {
-      const cs = getComputedStyle(editor);
-      const line = parseFloat(cs.lineHeight) || 20;
-      const rows = Number(editor.rows) || 10;
-      return rows * line + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-    };
-
     const autosize = () => {
       // A hidden textarea reports scrollHeight 0; skip so it isn't collapsed.
       if (!editor.offsetParent) return;
@@ -552,7 +623,13 @@ const helpId = `${id}-help`;
       // there (ticket #203), that click is the common case: put the page back.
       const { scrollX, scrollY } = window;
       editor.style.minHeight = '0px';
-      editor.style.minHeight = `${Math.max(editor.scrollHeight, minRowsHeight())}px`;
+      // Measured unstretched: beside a taller preview, flex-1 makes the field
+      // as tall as it, and that height, kept as its floor, held an emptied
+      // field open long after the preview had shrunk.
+      editor.style.flexGrow = '0';
+      const content = editor.scrollHeight;
+      editor.style.flexGrow = '';
+      editor.style.minHeight = `${Math.max(content, floor)}px`;
       if (window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
     };
 
