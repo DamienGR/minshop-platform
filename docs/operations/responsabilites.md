@@ -45,6 +45,14 @@ ne signe pas à sa place.
 - **Les accès** : l'agence n'utilise que des accès nominatifs que le
   commerçant lui a donnés ; le commerçant ne partage jamais un identifiant, il
   invite.
+- **L'accès de l'agence à l'administration** : l'agence peut ouvrir une
+  session de 8 heures dans l'administration sans le mot de passe du commerçant,
+  par un jeton à usage unique que seul le compte Cloudflare permet de créer
+  ([ADR 0032](../architecture/decisions/0032-jeton-d-acces-a-usage-unique.md)).
+  Elle s'en sert pour le support et la maintenance prévus au contrat. Le mot de
+  passe et les sessions du commerçant ne changent pas, et Réglages lui montre
+  la date du dernier passage. L'accès cesse avec le départ de la boutique vers
+  un compte du commerçant ([procédure](sortie-client.md)).
 - **Les e-mails d'alerte** : le commerçant donne l'adresse qui reçoit les
   alertes de commande ; l'agence vérifie qu'elle est saisie avant d'ouvrir les
   paiements ([mise en ligne](mise-en-ligne.md)).

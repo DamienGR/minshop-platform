@@ -21,6 +21,7 @@ npm run shopctl -- provision --env staging --dry-run
 npm run shopctl -- provision --env staging
 npm run shopctl -- deploy --env staging
 npm run shopctl -- admin password --env production < fichier   # avant le 1er deploy
+npm run shopctl -- admin token --env production   # jeton d'accès à usage unique (15 min)
 npm run shopctl -- deploy --env production --yes
 npm run shopctl -- destroy --env staging --confirm <slug>
 npm run shopctl -- privacy export --env production --email <adresse>
@@ -46,7 +47,9 @@ Four rules hold for every command, present and future:
 - **no secret on the command line.** A credential-shaped argument is refused —
   it is already in the shell history and the CI log — and every relayed line
   goes through `redact()` using the manifest's own patterns. Secrets the CLI
-  generates go to wrangler on STDIN and are never returned, logged or written.
+  generates go to wrangler on STDIN and are never returned, logged or written —
+  with ONE exception (ADR 0032): the one-time admin token `admin token` shows
+  once, through `Reporter.reveal()`, because the operator has to paste it.
 - **nothing that touches an account is defaulted.** `provision` and `deploy`
   refuse to run without `--env`; `deploy --env production` refuses without
   `--yes`; neither will guess the Cloudflare account (the manifest — `accountId`,
@@ -189,6 +192,18 @@ new domain first. Run after `provision`, before the first `deploy`, the wizard
 then opens only after a login. It is also the lost-password reset, without the
 public window `scripts/admin-reset.sh` opened
 (`docs/operations/runbooks/mot-de-passe-admin.md`).
+
+`admin token` is the agency's way in once the merchant holds the password
+(ticket #227, ADR 0032): it draws a token with the shop's own
+`src/features/auth/adminToken.ts` (child Node, like the hash), writes its
+SHA-256 to `admin_access_tokens` (migration 0058) with a fifteen-minute expiry
+timed by D1's clock, reads it back, and shows the token once — at the
+terminal, or as `token` in the `--json` report. Pasted at `/admin/token`, it
+opens an eight-hour session bound to the current password, which it does not
+touch. It refuses (4) a tree without the module, a database without the table,
+and an admin without a password, where the token would open nothing. Unused
+expired tokens are purged when the next one is written; used ones stay, as the
+record Réglages shows the merchant.
 
 A shop's LIFECYCLE has four steps, and the account boundary falls between the
 second and the third (ADR 0015): build on the agency account, private preview

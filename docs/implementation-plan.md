@@ -3786,3 +3786,35 @@ une fiche qui lisent leurs textes ; ceux des thèmes livrés inchangés),
 `test/integration/theme-data.mjs` (un seul appel D1 avec les réglages et les
 menus, rien de lu sans emplacement, les mêmes textes pour la coque et
 l'accueil).
+
+### 13.22 L'accès de l'agence à l'administration par un jeton à usage unique
+
+Noté le 2026-11-10 (ticket #227) : une boutique remise au commerçant n'a qu'un
+mot de passe d'administration, et l'agence n'avait qu'un moyen d'y revenir,
+`shopctl admin password`, qui le remplace. Le commerçant perdait alors ses
+sessions et devait en recevoir un nouveau. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-10, migration 0058, [ADR 0032](architecture/decisions/0032-jeton-d-acces-a-usage-unique.md) :
+
+- `shopctl admin token --env <env>` tire un jeton de 32 octets avec le module
+  du Worker (`src/features/auth/adminToken.ts`), écrit son empreinte SHA-256
+  dans `admin_access_tokens` pour 15 minutes, la relit, puis affiche le jeton
+  une seule fois (`Reporter.reveal()`, l'exception à la règle des secrets de
+  la CLI). La commande refuse un arbre sans le module, une base sans la table et
+  une administration sans mot de passe ;
+- `/admin/token`, un formulaire POST joignable sans session comme
+  `/admin/login`, consomme le jeton en une seule requête et ouvre une session
+  ordinaire de 8 heures, liée au mot de passe courant, sans le changer. Il
+  partage avec la connexion le seau `auth` du limiteur, le compteur exact et
+  Turnstile ;
+- Réglages → **Accès de l'agence** affiche la date du dernier passage, et le
+  Worker écrit l'événement `admin_token_used`, sans le jeton. Le chapitre
+  Réglages du guide, le runbook du mot de passe (une section pour l'agence et
+  la phrase inexacte sur l'écran de changement corrigée), les responsabilités
+  annexées au contrat, `AGENTS.md` et `docs/agents/shopctl.md` suivent.
+
+Tenu par `src/features/auth/adminToken.test.ts`, `test/scripts/admin.test.mjs`
+et la section « Jeton à usage unique » de `test/integration/security.mjs`, qui
+vérifie le refus d'un jeton servi, échu, inconnu, mal formé ou absent, le
+double envoi qui n'ouvre qu'une session, le budget partagé avec la connexion et
+la session fermée par un changement de mot de passe.

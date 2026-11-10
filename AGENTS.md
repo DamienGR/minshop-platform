@@ -179,7 +179,9 @@ Four rules hold for every command, present and future:
   changes meaning; a new failure mode takes a new code.
 - **no secret on the command line.** A credential-shaped argument is refused,
   every relayed line goes through `redact()`, and secrets the CLI generates go
-  to wrangler on STDIN, never returned, logged or written.
+  to wrangler on STDIN, never returned, logged or written. One value is the
+  exception, by ADR 0032: the one-time admin token `admin token` shows once
+  (`Reporter.reveal()`) — single-use, fifteen minutes, only its digest stored.
 - **nothing that touches an account is defaulted.** `provision` and `deploy`
   refuse to run without `--env`; `deploy --env production` refuses without
   `--yes`; the Cloudflare account is never guessed, and two sources that
@@ -223,6 +225,7 @@ src/
                spaces (one-line fold that keeps the no-break spaces; leaf)
     legal/     terms (consent gate) · vat (TTC split)
     auth/      access (CF Access JWT) · session (admin login cookie) · turnstile · Turnstile.astro
+               adminToken (one-time agency token, /admin/token; ADR 0032)
     settings/  db (runtime settings) · availability · home · timeZone
     secrets/   store (provider keys, encrypted in D1) · crypto
     http/      origin · securityHeaders (twin of public/_headers)

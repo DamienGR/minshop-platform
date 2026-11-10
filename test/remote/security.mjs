@@ -118,7 +118,7 @@ await check(`${routes.length} routes d'administration dérivées des fichiers, r
       const refused =
         status === 403 ||
         (path.startsWith('/api/') && status === 401) ||
-        (path === '/admin/login' && status === 200) ||
+        ((path === '/admin/login' || path === '/admin/token') && status === 200) ||
         (!path.startsWith('/api/') && status === 303 && locationPath(response) === '/admin/login');
       if (!refused) wrong.push(`${verb} ${path} → ${status}`);
     }
@@ -156,7 +156,7 @@ section('L\'origine des formulaires');
 
 await check('un POST d\'une autre origine, ou sans origine, est refusé', async () => {
   const wrong = [];
-  for (const path of ['/admin/login', '/account/login', '/api/cart', '/cart']) {
+  for (const path of ['/admin/login', '/admin/token', '/account/login', '/api/cart', '/cart']) {
     for (const headers of [{ origin: 'https://evil.example', 'content-type': FORM }, { 'content-type': FORM }]) {
       const response = await get(path, { method: 'POST', headers, body: 'password=x' });
       if (response.status !== 403) wrong.push(`${path} ${headers.origin ? 'evil.example' : 'sans Origin'} → ${response.status}`);

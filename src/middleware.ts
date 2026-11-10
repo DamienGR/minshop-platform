@@ -38,7 +38,8 @@ import {
  *   2. Admin password set in D1 (via the setup wizard) → form login at
  *      `/admin/login` (password + optional Turnstile) that issues a signed session
  *      cookie; protected requests without a valid cookie are redirected to the
- *      login form (APIs get 401).
+ *      login form (APIs get 401). `/admin/token` issues the same session for a
+ *      one-time token written by `shopctl admin token` (ADR 0032).
  *   3. Cloudflare Access assertion present → ALWAYS verify the JWT signature
  *      against the team JWKS (forge-proof, even against direct *.workers.dev
  *      hits). Access mode REQUIRES CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD; without
@@ -185,8 +186,10 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
   //    bypassed by forging it.
   const cred = await adminCredential(env.DB);
   if (cred.enabled) {
-    // The login page itself must be reachable unauthenticated (to log in).
-    if (path === '/admin/login') return next();
+    // The login page itself must be reachable unauthenticated (to log in), and
+    // so must the one-time token page beside it (ticket #227, ADR 0032): both
+    // open a session only on a credential, and share one attempt counter.
+    if (path === '/admin/login' || path === '/admin/token') return next();
     const session = context.cookies.get('admin_session')?.value ?? null;
     // Sign/verify with AUTH_SECRET (high-entropy key); the credential is the bound tag.
     const signingKey = env.AUTH_SECRET || cred.tagSource;

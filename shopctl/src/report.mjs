@@ -86,6 +86,18 @@ export class Reporter {
     this.prose.write(title ? `\n${redact(title)}\n` : '\n');
   }
 
+  /**
+   * The one value shopctl hands back rather than redacts: a one-time admin
+   * token (`shopctl admin token`, ADR 0032), which the operator has to paste.
+   * Written once, to the terminal; under --json it is a field of the result
+   * instead, and this writes nothing, so stdout stays a single document. The
+   * label goes through redact() like any line; the value does not, on purpose.
+   */
+  reveal(label, value) {
+    if (this.json) return;
+    this.out.write(`\n${redact(label)}\n  ${value}\n\n`);
+  }
+
   /** The machine-readable result. Emitted only under --json, exactly once. */
   result(payload) {
     if (!this.json) return;

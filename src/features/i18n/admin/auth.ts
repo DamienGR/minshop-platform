@@ -9,6 +9,13 @@ export const auth = {
   'admin.login.error.verification': 'La vérification a échoué — veuillez réessayer.',
   'admin.login.error.password': 'Mot de passe incorrect.',
 
+  // ─── Accès par jeton à usage unique (ticket #227) ─────────────────────────────
+  'admin.token.title': 'Accès par jeton',
+  'admin.token.intro': 'Collez le jeton à usage unique créé par `shopctl admin token`. Il ouvre une session de 8 heures sans changer le mot de passe.',
+  'admin.token.field': 'Jeton',
+  'admin.token.submit': 'Ouvrir une session',
+  'admin.token.error.invalid': 'Ce jeton n’est pas valable : inconnu, déjà utilisé ou expiré.',
+
   // ─── Configuration initiale ────────────────────────────────────────────────────
   'admin.setup.title': 'Configuration initiale',
   'admin.setup.heading': 'Configurez votre boutique',
