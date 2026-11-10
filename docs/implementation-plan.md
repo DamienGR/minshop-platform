@@ -3795,7 +3795,8 @@ mot de passe d'administration, et l'agence n'avait qu'un moyen d'y revenir,
 sessions et devait en recevoir un nouveau. Aucun des jalons 0 à 10 n'avance.
 
 Fait le 2026-11-10, migration 0058, [ADR 0032](architecture/decisions/0032-jeton-d-acces-a-usage-unique.md)
-(PR #229, fusionnée par Damien le 2026-11-10, qui accepte l'ADR) :
+(PR #229, fusionnée par Damien le 2026-11-10, qui accepte l'ADR), livré dans
+le socle v0.9.0 :
 
 - `shopctl admin token --env <env>` tire un jeton de 32 octets avec le module
   du Worker (`src/features/auth/adminToken.ts`), écrit son empreinte SHA-256
@@ -3828,7 +3829,7 @@ suivaient l'ordre alphabétique, écrit en dur, quand le site actuel range ses
 univers autrement (Zéro déchet en tête, Carte cadeau en dernier). Aucun des
 jalons 0 à 10 n'avance.
 
-Fait le 2026-11-10, migration 0059, sans ADR :
+Fait le 2026-11-10, migration 0059, sans ADR, livré dans le socle v0.9.0 :
 
 - `categories.position`, 0 par défaut. Un seul ordre, la position puis le nom
   (`src/features/categories/order.ts`), repris par `listCategoriesStatement()`,
