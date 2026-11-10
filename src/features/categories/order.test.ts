@@ -4,7 +4,7 @@ import { arrivalPositions, compareCategories, isRanged, moveWithinFamily, type R
 const c = (id: number, name: string, position = 0): Ranked => ({ id, name, position });
 const names = (family: Ranked[]) => [...family].sort(compareCategories).map((x) => x.name);
 
-// Artisagna's top level (ticket #228): the alphabet puts Zéro déchet last.
+// A shop's top level (ticket #228): the alphabet puts Zéro déchet last.
 const UNIVERS = [
   c(1, 'Carte cadeau'),
   c(2, 'Créations bébés'),
