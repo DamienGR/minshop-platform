@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { MANUAL_ORDER } from '../categories/productOrder';
 
 // Whitelisted sort columns. The query param `sort` maps to a fixed column name
 // here, so user input is never interpolated into SQL.
@@ -61,4 +62,37 @@ export function parseStoreSortQuery(
     sort === 'price' || sort === 'name' || sort === 'newest' ? sort : 'newest';
   const normalizedDir = dir?.toLowerCase() === 'asc' ? 'asc' : 'desc';
   return { sort: normalizedSort, dir: normalizedDir };
+}
+
+/** A category page's sort: the storefront's, or the merchant's (`manual`). */
+export type CategorySort = StoreSort | 'manual';
+
+export interface CategorySortQuery {
+  sort: CategorySort;
+  /** Ignored by `manual`, which has no reverse. */
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * A category page's sorting. The bare path is the merchant's order (« Par
+ * défaut »), and so is anything that would have meant Nouveautés ↓ without
+ * saying so: on a category with no order the two read the same rows, so the
+ * page decides how to LABEL it once it knows (`buildCategorySortModel()`).
+ * An explicit `sort=newest` stays Nouveautés, and `?dir=asc` alone stays
+ * Nouveautés ↑, the address its pagination links have always carried.
+ */
+export function parseCategorySortQuery(
+  sort: string | null,
+  dir: string | null,
+): CategorySortQuery {
+  const query = parseStoreSortQuery(sort, dir);
+  if (query.sort === 'newest' && query.dir === 'desc' && sort !== 'newest') {
+    return { sort: 'manual', dir: 'desc' };
+  }
+  return query;
+}
+
+/** The clause for a category page's sort. */
+export function categoryOrderClause({ sort, dir }: CategorySortQuery): string {
+  return sort === 'manual' ? MANUAL_ORDER : orderByClause(sort, dir);
 }

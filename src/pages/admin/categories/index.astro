@@ -89,6 +89,10 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
                     </button>
                   </form>
                 </div>
+                {/* The order of its products, its page's « Par défaut » (ticket #239). */}
+                <a href={`/admin/categories/${c.public_id}/products`} class="text-gray-500 hover:text-brand">
+                  {t('admin.categories.productOrder')}
+                </a>
                 <a href={`/admin/categories/${c.public_id}/edit`} class="text-accent hover:underline">
                   {t('admin.common.edit')}
                 </a>
