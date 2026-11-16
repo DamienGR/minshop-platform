@@ -47,7 +47,9 @@ const check = async (name, fn) => {
   }
 };
 
-/** Schema as it exists BEFORE this migration — the upgrade path's starting point. */
+/** Schema as it exists BEFORE this migration — the upgrade path's starting point.
+ *  Save `categories.hidden`, which came with migration 0062 (ticket #240): the
+ *  menu read asks it now, and category-hidden.mjs holds that rule. */
 const PRE_MENU_SCHEMA = `
   CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL,
                          updated_at TEXT NOT NULL DEFAULT (datetime('now')));
@@ -56,7 +58,8 @@ const PRE_MENU_SCHEMA = `
                          image_key TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, public_id TEXT UNIQUE, name TEXT NOT NULL,
                            slug TEXT NOT NULL UNIQUE, parent_id INTEGER,
-                           created_at TEXT NOT NULL DEFAULT (datetime('now')));
+                           created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                           hidden INTEGER NOT NULL DEFAULT 0);
   CREATE TABLE pages (id INTEGER PRIMARY KEY AUTOINCREMENT, public_id TEXT UNIQUE, title TEXT NOT NULL,
                       slug TEXT NOT NULL UNIQUE, body_markdown TEXT NOT NULL DEFAULT '',
                       published INTEGER NOT NULL DEFAULT 0,

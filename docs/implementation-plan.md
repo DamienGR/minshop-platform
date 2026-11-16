@@ -3959,3 +3959,49 @@ les liens de pagination) et `test/integration/category-product-order.mjs`
 (la route de l'admin, les lectures de la vitrine sous chaque tri, la
 pagination, les arrivées, les suppressions, une liste de 130 produits, contre
 un D1 réel).
+
+### 13.27 Une catégorie cachée
+
+Noté le 2026-11-16 (ticket #240) : pour retirer une catégorie de la boutique,
+le temps d'une saison ou pendant qu'on la prépare, il fallait la supprimer, et
+perdre son rangement, son image, sa description et le classement de ses
+produits. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-16, migration 0062, sans ADR :
+
+- `categories.hidden`, 0 par défaut, et la case « Cacher cette catégorie » de
+  son formulaire. Une catégorie cachée l'est avec toute sa branche : la règle
+  est une seule sous-requête, `HIDDEN_CATEGORY_IDS`
+  (`src/features/categories/visibility.ts`), chaque catégorie cachée puis tout
+  ce qui est dessous. Elle part d'un index partiel (`hidden = 1`) : les menus la
+  lisent à chaque requête de la vitrine, et sans catégorie cachée son coût ne
+  grandit pas avec le nombre de catégories ;
+- la vitrine passe par elle partout où elle liste, lie ou ouvre une catégorie :
+  `/categories/<slug>` en 404 (`getVisibleCategoryBySlug()`), l'accueil et
+  `/products` (`listVisibleCategoriesStatement()`, si bien qu'un thème ne la
+  reçoit jamais), la ligne des sous-catégories, `sitemap.xml`, `llms.txt`, la
+  fiche produit et l'API publique (`categoriesForProduct()`, qui ne donne les
+  cachées que sur demande : la fiche de l'admin, dont le formulaire réécrit
+  tout, et l'index sémantique, que cacher ne recalcule pas). La page d'une
+  catégorie parente ne descend plus dans une sous-catégorie cachée ;
+- ses produits restent en vente : le catalogue, la recherche et leur fiche ne
+  changent pas. Un produit se cache par sa propre case « Actif » ;
+- un lien de menu vers la branche devient indisponible, comme vers une page en
+  brouillon : la vitrine le tait, Admin → Navigation le signale (« Catégorie
+  cachée — invisible sur la vitrine ») et le garde pour le retour de la
+  catégorie ; le sélecteur ne propose pas une catégorie cachée, et l'ajout la
+  refuse ;
+- l'admin dit « Cachée » ou « Cachée avec sa catégorie parente » dans la liste
+  des catégories (`flattenTree()`, la même règle lue dans l'arbre qu'il a
+  déjà), « (cachée) » à côté de la case de la fiche produit. Le chapitre
+  Catégories du guide a sa section « Cacher une catégorie ».
+
+Choix de Damien le 2026-11-16 (carte de décision) : introuvable pour les
+visiteurs, en 404, avec ses sous-catégories ; ses produits restent en vente.
+
+Tenu par `src/features/categories/db.test.ts` (la branche dans l'arbre de
+l'admin), `form.test.ts` (la case) et `test/integration/category-hidden.mjs`,
+contre un D1 réel : listes de la vitrine et de l'admin d'accord, 404 de la
+catégorie et de ses sous-catégories, page de la parente, fiche, API, menus et
+leur sélecteur, produits toujours au catalogue, retour à l'identique en
+décochant, coût de la règle sans catégorie cachée.

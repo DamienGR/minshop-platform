@@ -12,6 +12,7 @@ const category = (id: number, name: string, overrides: Partial<Category> = {}): 
   seo_title: null,
   seo_description: null,
   position: 0,
+  hidden: 0,
   created_at: '2026-01-01T00:00:00Z',
   ...overrides,
 });
@@ -58,5 +59,25 @@ describe('buildTree and flattenTree', () => {
   it('marks an only child both first and last', () => {
     const [row] = flattenTree(buildTree([category(9, 'Seule')]));
     expect([row.first, row.last]).toEqual([true, true]);
+  });
+
+  // Ticket #240: hiding a category hides its branch, and the admin says which
+  // ones are off the storefront, by their own box or with their parent.
+  it('marks a hidden category and everything under it as concealed, nothing else', () => {
+    const rows = flattenTree(
+      buildTree([
+        ...CATS.map((c) => (c.id === 3 ? { ...c, hidden: 1 } : c)),
+        category(7, 'Pochettes zippées', { parent_id: 5 }),
+      ]),
+    );
+    expect(rows.map((r) => [r.name, r.hidden, r.concealed])).toEqual([
+      ['Zéro déchet', false, false],
+      ['Univers féminin', true, true],
+      ['Accessoires', false, true],
+      ['Bien-être', false, true],
+      ['Sacs et pochettes', false, true],
+      ['Pochettes zippées', false, true],
+      ['Carte cadeau', false, false],
+    ]);
   });
 });

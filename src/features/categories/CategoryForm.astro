@@ -58,7 +58,7 @@ const seoFallbackDescription = t('shell.meta.description', { boutique: storeName
         // Values are cat_ public IDs — resolved back to row ids server-side.
         parentOptions.map((o) => (
           <option value={o.public_id} selected={category?.parent_id === o.id}>
-            {'  '.repeat(o.depth) + o.name}
+            {'  '.repeat(o.depth) + o.name + (o.concealed ? ` ${t('admin.categories.hiddenSuffix')}` : '')}
           </option>
         ))
       }
@@ -124,6 +124,16 @@ const seoFallbackDescription = t('shell.meta.description', { boutique: storeName
     fallbackTitle={seoFallbackTitle}
     fallbackDescription={seoFallbackDescription}
   />
+
+  {/* Ticket #240: off the storefront with its whole branch, its page a 404;
+      its products stay on sale. */}
+  <div>
+    <label class="flex items-center gap-2 text-sm font-medium">
+      <input name="hidden" type="checkbox" checked={category?.hidden === 1} class="h-4 w-4" />
+      {t('admin.categories.form.hidden')}
+    </label>
+    <p class="mt-1 text-xs text-faint">{t('admin.categories.form.hiddenHint')}</p>
+  </div>
 
   <div class="flex gap-3 pt-2">
     <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">

@@ -3,6 +3,7 @@ import type { Product } from '../products/db';
 import { withPublicId } from '../ids/publicId.ts';
 import { arrivalPositions, compareCategories, moveWithinFamily, type Ranked } from './order.ts';
 import { MANUAL_ORDER } from './productOrder.ts';
+import { HIDDEN_CATEGORY_IDS } from './visibility.ts';
 
 export interface Category {
   id: number;
@@ -22,6 +23,10 @@ export interface Category {
   /** Its rank among its siblings (migration 0059, `order.ts`); 0 = never
    *  ranged, which sorts by name. */
   position: number;
+  /** 1 when the merchant ticked « Cacher cette catégorie » (migration 0062).
+   *  Its OWN box: a category under a hidden one is hidden too, which only
+   *  `HIDDEN_CATEGORY_IDS` and `concealed` below say. */
+  hidden: number;
   created_at: string;
 }
 
@@ -40,6 +45,12 @@ export interface CategoryOption {
   /** First or last of its family: where Admin → Catégories offers no ↑ or ↓. */
   first: boolean;
   last: boolean;
+  /** Its own « Cacher cette catégorie » box is ticked. */
+  hidden: boolean;
+  /** Off the storefront: hidden itself, or under a hidden category. The
+   *  storefront asks `HIDDEN_CATEGORY_IDS`; the admin, which reads the whole
+   *  tree anyway, derives the same answer from it (ticket #240). */
+  concealed: boolean;
 }
 
 export interface CategoryFields {
@@ -49,6 +60,14 @@ export interface CategoryFields {
   description: string | null;
   seo_title: string | null;
   seo_description: string | null;
+  /** « Cacher cette catégorie » (ticket #240). */
+  hidden: boolean;
+}
+
+/** Every category, hidden ones included: the admin's list. */
+export async function listCategories(db: D1Database): Promise<Category[]> {
+  const { results } = await db.prepare('SELECT * FROM categories ORDER BY position, name').all<Category>();
+  return results ?? [];
 }
 
 /**
@@ -59,14 +78,19 @@ export interface CategoryFields {
  * made seven of them: batched, its warm CPU fell by about 40 % (certification,
  * étape 6). The twins call the builders, so each query is still written once.
  */
-export function listCategoriesStatement(db: D1Database): D1PreparedStatement {
+/** The categories a visitor can see (ticket #240), in the same order: the
+ *  storefront's list (the home, /products, a category's sub-categories,
+ *  sitemap.xml, llms.txt). */
+export function listVisibleCategoriesStatement(db: D1Database): D1PreparedStatement {
   // The families are sorted again by `childrenOf()` and `buildTree()`, with
   // the locale's collation; this keeps a flat reader (sitemap, llms.txt) close.
-  return db.prepare('SELECT * FROM categories ORDER BY position, name');
+  return db.prepare(
+    `SELECT * FROM categories WHERE id NOT IN ${HIDDEN_CATEGORY_IDS} ORDER BY position, name`,
+  );
 }
 
-export async function listCategories(db: D1Database): Promise<Category[]> {
-  const { results } = await listCategoriesStatement(db).all<Category>();
+export async function listVisibleCategories(db: D1Database): Promise<Category[]> {
+  const { results } = await listVisibleCategoriesStatement(db).all<Category>();
   return results ?? [];
 }
 
@@ -74,8 +98,13 @@ export async function getCategory(db: D1Database, id: number): Promise<Category 
   return db.prepare('SELECT * FROM categories WHERE id = ?').bind(id).first<Category>();
 }
 
-export async function getCategoryBySlug(db: D1Database, slug: string): Promise<Category | null> {
-  return db.prepare('SELECT * FROM categories WHERE slug = ?').bind(slug).first<Category>();
+/** The category a storefront URL names, or null when there is none — or when
+ *  it, or a category above it, is hidden (ticket #240): its page is a 404. */
+export async function getVisibleCategoryBySlug(db: D1Database, slug: string): Promise<Category | null> {
+  return db
+    .prepare(`SELECT * FROM categories WHERE slug = ? AND id NOT IN ${HIDDEN_CATEGORY_IDS}`)
+    .bind(slug)
+    .first<Category>();
 }
 
 /** Category by its prefixed public ID (boundary resolution; null if missing). */
@@ -117,10 +146,10 @@ export async function createCategory(db: D1Database, c: CategoryFields): Promise
   return withPublicId('category', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO categories (name, slug, parent_id, description, seo_title, seo_description, public_id, position)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ${nextPositionSql('?3')}) RETURNING id`,
+        `INSERT INTO categories (name, slug, parent_id, description, seo_title, seo_description, public_id, hidden, position)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ${nextPositionSql('?3')}) RETURNING id`,
       )
-      .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, publicId)
+      .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, publicId, c.hidden ? 1 : 0)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -134,11 +163,12 @@ export async function updateCategory(db: D1Database, id: number, c: CategoryFiel
     .prepare(
       `UPDATE categories
           SET name = ?1, slug = ?2, description = ?4, seo_title = ?5, seo_description = ?6,
+              hidden = ?8,
               position = CASE WHEN parent_id IS ?3 THEN position ELSE ${nextPositionSql('?3', '?7')} END,
               parent_id = ?3
         WHERE id = ?7`,
     )
-    .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, id)
+    .bind(c.name, c.slug, c.parent_id, c.description, c.seo_title, c.seo_description, id, c.hidden ? 1 : 0)
     .run();
 }
 
@@ -318,26 +348,40 @@ export async function productCounts(db: D1Database): Promise<Map<number, number>
   return counts;
 }
 
-/** Categories assigned to a product. */
+export interface ProductCategoriesScope {
+  /** Hidden categories too (ticket #240): the admin's boxes, the semantic
+   *  index. Off by default, so a storefront reader cannot forget the rule. */
+  includeHidden?: boolean;
+}
+
+/** Categories assigned to a product: those a visitor can see, unless the
+ *  caller asks for all of them. */
 export function categoriesForProductStatement(
   db: D1Database,
   productId: number,
+  { includeHidden = false }: ProductCategoriesScope = {},
 ): D1PreparedStatement {
   return db
     .prepare(
       `SELECT c.* FROM categories c
        JOIN product_categories pc ON pc.category_id = c.id
-       WHERE pc.product_id = ? ORDER BY c.name`,
+       WHERE pc.product_id = ?${includeHidden ? '' : ` AND c.id NOT IN ${HIDDEN_CATEGORY_IDS}`}
+       ORDER BY c.name`,
     )
     .bind(productId);
 }
 
-export async function categoriesForProduct(db: D1Database, productId: number): Promise<Category[]> {
-  const { results } = await categoriesForProductStatement(db, productId).all<Category>();
+export async function categoriesForProduct(
+  db: D1Database,
+  productId: number,
+  scope: ProductCategoriesScope = {},
+): Promise<Category[]> {
+  const { results } = await categoriesForProductStatement(db, productId, scope).all<Category>();
   return results ?? [];
 }
 
-/** Categories for many products in one D1 query, keyed by product id. */
+/** The categories a visitor can see, for many products in one D1 query, keyed
+ *  by product id: the public catalogue API's (`/api/products`). */
 export async function categoriesForProducts(
   db: D1Database,
   productIds: number[],
@@ -354,6 +398,7 @@ export async function categoriesForProducts(
          FROM product_categories pc
          JOIN categories c ON c.id = pc.category_id
         WHERE pc.product_id IN (${placeholders})
+          AND c.id NOT IN ${HIDDEN_CATEGORY_IDS}
         ORDER BY pc.product_id, c.name`,
     )
     .bind(...ids)
@@ -450,6 +495,10 @@ const MANUAL_POSITION = `(SELECT cpp.position FROM category_product_positions cp
 /** A page of active products in a category and its descendants, as SQL:
  *  bound (categoryId, limit, offset). Exported for the card wrapper.
  *
+ *  The walk stops at a hidden sub-category (ticket #240): its products are
+ *  not listed through its parent, though they stay on sale. The category
+ *  itself is visible — its page is a 404 otherwise.
+ *
  *  An order that names `manual_position` (`MANUAL_ORDER`, ticket #239) gets
  *  the column, the rank the merchant gave each product in THIS category; the
  *  other sorts do without, and without its probe per product. */
@@ -458,7 +507,7 @@ export function productsInCategorySql(orderBy = 'created_at DESC'): string {
   return `WITH RECURSIVE sub(id) AS (
          SELECT id FROM categories WHERE id = ?1
          UNION ALL
-         SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+         SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id WHERE c.hidden = 0
        )
        SELECT DISTINCT p.*${manual} FROM products p
        JOIN product_categories pc ON pc.product_id = p.id
@@ -490,7 +539,9 @@ export interface OrderedProduct {
 /**
  * Every product the category's page can show — its own and its
  * sub-categories', offline ones too, so a product put back online has its
- * place — in the page's « Par défaut » order (ticket #239). And whether the
+ * place — in the page's « Par défaut » order (ticket #239). A hidden
+ * sub-category's are listed for the same reason (ticket #240): the page
+ * leaves them out only until it is shown again. And whether the
  * category has an order at all: a category whose placed products have all
  * left it still has one, empty, until the merchant removes it.
  */
@@ -584,7 +635,8 @@ export async function productsInCategory(
   return results ?? [];
 }
 
-/** Total active products in a category + its descendants (for pagination). */
+/** Total active products in a category + its visible descendants (for
+ *  pagination): the walk of `productsInCategorySql()`. */
 export function countProductsInCategoryStatement(
   db: D1Database,
   categoryId: number,
@@ -594,7 +646,7 @@ export function countProductsInCategoryStatement(
       `WITH RECURSIVE sub(id) AS (
          SELECT id FROM categories WHERE id = ?1
          UNION ALL
-         SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+         SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id WHERE c.hidden = 0
        )
        SELECT COUNT(DISTINCT p.id) AS n FROM products p
        JOIN product_categories pc ON pc.product_id = p.id
@@ -640,11 +692,14 @@ export function buildTree(cats: Category[]): CategoryNode[] {
   return roots;
 }
 
-/** Flatten a tree to depth-tagged options (pre-order) for selects/checkboxes. */
+/** Flatten a tree to depth-tagged options (pre-order) for selects/checkboxes.
+ *  A node under a hidden one is `concealed`: the rule of `HIDDEN_CATEGORY_IDS`,
+ *  read from the tree the admin already holds. */
 export function flattenTree(nodes: CategoryNode[]): CategoryOption[] {
   const out: CategoryOption[] = [];
-  const walk = (ns: CategoryNode[]) => {
+  const walk = (ns: CategoryNode[], underHidden: boolean) => {
     ns.forEach((n, i) => {
+      const hidden = n.hidden === 1;
       out.push({
         id: n.id,
         public_id: n.public_id,
@@ -653,10 +708,12 @@ export function flattenTree(nodes: CategoryNode[]): CategoryOption[] {
         depth: n.depth,
         first: i === 0,
         last: i === ns.length - 1,
+        hidden,
+        concealed: hidden || underHidden,
       });
-      walk(n.children);
+      walk(n.children, hidden || underHidden);
     });
   };
-  walk(nodes);
+  walk(nodes, false);
   return out;
 }

@@ -4,7 +4,7 @@ import {
   categoriesForProductStatement,
   countProductsInCategoryStatement,
   hasProductOrderStatement,
-  listCategoriesStatement,
+  listVisibleCategoriesStatement,
   productsInCategorySql,
   RELATED_PRODUCTS_SQL,
   type Category,
@@ -168,6 +168,8 @@ export function featuredProductStatement(db: D1Database, chosenId: number | null
 
 export interface CatalogRows {
   total: number;
+  /** The categories a visitor can see (ticket #240): a hidden one, and every
+   *  category under it, never reaches a theme. */
   categories: Category[];
   products: ListedProduct[];
   /** The product put forward, or null for an empty catalogue. */
@@ -184,7 +186,7 @@ export async function readCatalogRows(
   // already holds them for the shell (readDocumentRows, ticket #225).
   const [total, categories, products, featured] = await db.batch([
     countProductsStatement(db),
-    listCategoriesStatement(db),
+    listVisibleCategoriesStatement(db),
     catalogPageStatement(db, query),
     featuredProductStatement(db, query.featuredProductId ?? null),
   ]);
@@ -242,7 +244,7 @@ export async function readCategoryRows(
 }> {
   const [trail, categories, total, products, ordered] = await db.batch([
     ancestorsStatement(db, categoryId),
-    listCategoriesStatement(db),
+    listVisibleCategoriesStatement(db),
     countProductsInCategoryStatement(db, categoryId),
     categoryPageStatement(db, categoryId, { pageSize, offset, order }),
     hasProductOrderStatement(db, categoryId),

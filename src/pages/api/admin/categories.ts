@@ -39,6 +39,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     description: parsed.data.description,
     seo_title: parsed.data.seo_title,
     seo_description: parsed.data.seo_description,
+    hidden: parsed.data.hidden,
   });
   // The image is written apart, through the statement that sources it from
   // `media` (invariant 10). A file deleted meanwhile leaves the category

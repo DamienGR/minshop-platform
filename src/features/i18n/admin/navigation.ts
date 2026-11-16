@@ -62,6 +62,7 @@ export const navigation = {
   'admin.navigation.unavailable.missing': 'La cible n’existe plus',
   'admin.navigation.unavailable.draft': 'Brouillon — invisible sur la vitrine',
   'admin.navigation.unavailable.inactive': 'Inactif — invisible sur la vitrine',
+  'admin.navigation.unavailable.hidden': 'Catégorie cachée — invisible sur la vitrine',
   'admin.navigation.unavailable.other': 'Indisponible',
 
   // ─── Erreurs de /api/admin/navigation ──────────────────────────────────────────
