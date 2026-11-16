@@ -56,7 +56,7 @@ beforeEach(() => {
           id: 'shr_known',
           object: 'shipping_rate',
           display_name: 'Retrait en boutique',
-          metadata: { delivery: 'pickup' },
+          metadata: { delivery: 'pickup', instructions: '12 rue des Lilas, le mercredi.' },
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       );
@@ -171,6 +171,8 @@ describe('a paid checkout', () => {
       currency: 'eur',
     });
     expect(result.order?.shippingAddress).toMatchObject({ city: 'Nantes', country: 'FR' });
+    // A rate that said nothing to the buyer leaves the order without a word.
+    expect(result.order?.shippingInstructions).toBeNull();
     // The rate was inline, so nothing had to be fetched back.
     expect(outbound).toEqual([]);
   });
@@ -271,6 +273,8 @@ describe('a paid checkout', () => {
     expect(outbound.some((url) => url.includes('/v1/shipping_rates/shr_known'))).toBe(true);
     expect(result.order?.shippingLabel).toBe('Retrait en boutique');
     expect(result.order?.deliveryMethod).toBe('pickup');
+    // Its instructions for the buyer ride the rate's metadata (ticket #237).
+    expect(result.order?.shippingInstructions).toBe('12 rue des Lilas, le mercredi.');
   });
 
   it('does not guess the mode when the rate cannot be read', async () => {

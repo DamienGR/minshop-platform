@@ -9,7 +9,14 @@ import type { D1Database } from '@cloudflare/workers-types';
  * ordering pass unnoticed.
  */
 
-export const NOTIFICATION_KINDS = ['customer-receipt', 'owner-notification', 'order-shipped'] as const;
+/** `order-pickup-ready` is a pickup's notice where a delivery gets
+ *  `order-shipped` (ticket #238); `kind` is free text, so it took no migration. */
+export const NOTIFICATION_KINDS = [
+  'customer-receipt',
+  'owner-notification',
+  'order-shipped',
+  'order-pickup-ready',
+] as const;
 
 /**
  * Versioned-kind family for guest-link reissue (see the public-ID plan): each

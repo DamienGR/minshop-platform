@@ -3909,3 +3909,72 @@ marque suit, balayage compris ; une photo retenue par `page.route` laisse la
 première affichée, `aria-busy` et l'indicateur jusqu'à son arrivée ; le
 mouvement réduit change la photo d'un coup, sans voile. Les trois échouent sur
 le socle v0.9.1.
+
+### 13.26 Les instructions d'un tarif pour l'acheteur, et le retrait prêt
+
+Noté le 2026-11-16 (tickets #237 et #238), pour la première boutique réelle :
+un retrait sur place ne disait à l'acheteur ni où ni quand venir, et la
+commande d'un retrait se « marquait comme expédiée », avec transporteur,
+numéro de suivi et l'e-mail « Votre commande est en route ». Aucun des jalons
+0 à 10 n'avance.
+
+Fait le 2026-11-16, migration 0061, sans ADR :
+
+- chaque tarif, quel que soit son mode, peut porter des « Instructions pour
+  l'acheteur » : du Markdown de 500 caractères au plus, rendu par
+  `renderMarkdown()` (le HTML brut reste du texte), sans image, refusée à
+  l'enregistrement (`src/features/shipping/instructions.ts`). Le document de
+  livraison passe en version 6 seulement quand un tarif en a
+  (`shippingSchemaFor`), en 4 ou 5 sinon : une boutique sans instructions
+  reste lisible par un socle antérieur. La livraison offerte de la zone n'en
+  a pas ;
+- à /checkout, le texte se lit sous son tarif, hors de son libellé, lié au
+  bouton radio par `aria-describedby` (`.shipping-instructions`, à
+  spécificité nulle dans `base.css`). Une carte vers une zone dont un tarif a
+  des instructions passe par /checkout (`zoneHasInstructions`), comme pour un
+  point relais : Stripe ne reçoit que le tarif choisi ;
+- la commande garde sa copie (`orders.shipping_instructions`), prise au
+  paiement comme `shipping_label` : par `pending_payments` pour les moyens
+  qui règlent depuis leur ligne en attente, par les métadonnées du tarif
+  Stripe (`instructions`, 500 caractères comme la limite de Stripe) pour la
+  carte. Le JSON de `/api/checkout` les renvoie ;
+- après le paiement, une section « Livraison » (le tarif et ses instructions)
+  sur la page de commande, dans l'e-mail de confirmation et dans celui
+  d'expédition, avant le point relais. L'HTML des e-mails passe par
+  `src/features/email/markdown.ts` (styles en ligne, liens absolus, titres en
+  paragraphes gras), le texte reste tel qu'écrit. L'e-mail de nouvelle
+  commande nomme le tarif choisi ; la fiche de l'admin rappelle les
+  instructions données ;
+- une commande dont `delivery_method` vaut `pickup` (la donnée, jamais le
+  libellé) a sur sa fiche une section « Retrait » et « Marquer comme prête à
+  retirer », sans transporteur ni suivi ; l'état enregistré reste
+  `fulfilled`. La liste dit « À préparer » puis « Prête à retirer »
+  (`src/features/orders/fulfillment.ts`) ; le filtre et la colonne prennent
+  les mots « Traitement », « À traiter » et « Traitée » ;
+- l'e-mail « Votre commande … est prête à retirer » (le genre
+  `order-pickup-ready` de la file d'envoi, sans migration) nomme le lieu, le
+  tarif choisi, avec ses instructions. « Votre commande est en route » ne
+  part jamais pour un retrait : un avis d'expédition en file pour un retrait,
+  mis par un socle antérieur ou un autre chemin, part comme l'avis de
+  retrait, sous sa clé d'idempotence ; un avis de retrait pour une commande
+  qui n'en est pas un est sauté ;
+- l'outil MCP `fulfill_order` dit un retrait prêt (`ready_for_pickup`), sans
+  transporteur, et une commande lue par le MCP donne `delivery_method` et
+  `shipping_instructions` ;
+- le guide : « Donner des instructions à l'acheteur » (Livraison),
+  « Préparer un retrait sur place » et le filtre « Traitement » (Commandes).
+
+Choix de Damien le 2026-11-16 : un seul état, « Prête à retirer », sans
+« Retirée » ; des mots neutres pour le filtre et la colonne de la liste,
+chaque ligne gardant « Expédiée » ou « Prête à retirer ».
+
+Tenu par `settings.test.ts` et `calculator.test.ts` (le document, le
+formulaire, les options), `email/markdown.test.ts` et
+`orderPickupReady.test.ts` (les e-mails), `outbox.test.ts` (un retrait jamais
+« en route »), `orders/fulfillment.test.ts`, `stripeWebhook.test.ts`,
+`test/integration/shipping-instructions.mjs` (le texte sous son tarif, la
+copie sur la commande par chaque chemin, la carte par /checkout, la fiche
+d'un retrait, contre le Worker construit) et
+`test/browser/checkout-instructions.spec.mjs` (le champ de l'admin
+enregistré, le texte sous son tarif qui décrit le bouton radio, la carte
+marquée une fois choisie, sans défilement de côté, axe).

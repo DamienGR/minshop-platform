@@ -39,7 +39,9 @@ import {
   allowedCountries,
   createConfigRatesCalculator,
   deliveryMethodOf,
+  zoneHasInstructions,
   zoneOffersRelay,
+  type ShippingOption,
 } from '../../features/shipping/calculator';
 import { shippingFor } from '../../features/shipping/effective';
 import { shipmentWeightFor } from '../../features/shipping/lines';
@@ -325,13 +327,16 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // offers a fixed list and no point, so a card payment goes through /checkout
   // too, which asks the address and phone once and hands Stripe the chosen rate
   // alone (ADR 0020; Damien, 2026-10-30). The cart's destination picks the zone.
+  // The same goes for a zone with a rate whose instructions the buyer must read
+  // before paying (ticket #237): Stripe's page shows a rate's name, nothing under it.
   const cartCountry =
     String(form.get('country') ?? '').trim().toUpperCase() || allowedCountries(effectiveShipping)[0] || '*';
   const cardThroughCheckout =
     selected === 'stripe' &&
-    cfg.features.relayPoints &&
-    boxtalConfigured(settings.configuredSecrets, vaultReady()) &&
-    zoneOffersRelay(effectiveShipping, cartCountry);
+    ((cfg.features.relayPoints &&
+      boxtalConfigured(settings.configuredSecrets, vaultReady()) &&
+      zoneOffersRelay(effectiveShipping, cartCountry)) ||
+      zoneHasInstructions(effectiveShipping, cartCountry));
   if ((IN_APP_SHIPPING_RAILS.includes(selected) || cardThroughCheckout) && shippingApplies) {
     const params = new URLSearchParams({ method: selected });
     if (cardThroughCheckout && cartCountry !== '*') params.set('country', cartCountry);
@@ -926,7 +931,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'demo', 'bank_transfer'];
   const needsShipTo = shippingOn && IN_APP_JSON_RAILS.includes(method);
   let shipTo: ReturnType<typeof parseShipTo> = null;
-  let chosen: { label: string; amountCents: number; pickup?: boolean } | undefined;
+  let chosen: ShippingOption | undefined;
   let inAppQuote: ReturnType<typeof quoteFor> | null = null;
 
   if (needsShipTo) {
@@ -952,7 +957,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       return cjson(
         {
           error: `Unknown shipping_label "${wantLabel}".`,
-          shipping_options: shipOptions.map((o) => ({ label: o.label, amount_cents: o.amountCents })),
+          shipping_options: shipOptions.map((o) => ({
+            label: o.label,
+            amount_cents: o.amountCents,
+            ...(o.instructions && { instructions: o.instructions }),
+          })),
         },
         400,
       );
@@ -988,6 +997,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         subtotalCents,
         shippingCents: chosen.amountCents,
         shippingLabel: chosen.label,
+        shippingInstructions: chosen.instructions ?? null,
         shippingWeightGrams: inAppQuote.shipmentWeightGrams,
         deliveryMethod: deliveryMethodOf(chosen),
         itemsJson: JSON.stringify(
@@ -1025,6 +1035,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         subtotal_cents: subtotalCents,
         shipping_cents: chosen.amountCents,
         shipping_label: chosen.label,
+        ...(chosen.instructions && { shipping_instructions: chosen.instructions }),
         total_cents: subtotalCents + chosen.amountCents,
         ship_to: shipTo,
         ...(jsonComment.value && { comment: jsonComment.value }),
@@ -1102,6 +1113,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
             amountCents: chosen.amountCents,
             weightGrams: inAppQuote?.shipmentWeightGrams ?? null,
             deliveryMethod: deliveryMethodOf(chosen),
+            instructions: chosen.instructions ?? null,
             address: {
               name: shipTo.name,
               line1: shipTo.line1,
@@ -1171,6 +1183,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     ...(chosen && {
       shipping_cents: chosen.amountCents,
       shipping_label: chosen.label,
+      ...(chosen.instructions && { shipping_instructions: chosen.instructions }),
       total_cents: subtotalCents + chosen.amountCents,
     }),
     ...(jsonComment.value && { comment: jsonComment.value }),

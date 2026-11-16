@@ -265,6 +265,8 @@ export const fr = {
   'order.paidWith': 'Payé par {moyen}',
   // The point the shopper chose at checkout (ADR 0020).
   'order.relayPoint': 'Votre point relais',
+  // The rate the order was paid with, over its instructions (ticket #237).
+  'order.delivery': 'Livraison',
   'order.refundedFull': 'Remboursé : {montant}.',
   'order.refundedPartial': 'Remboursé : {montant} — {reste} restent payés.',
   'order.continueShopping': 'Poursuivre vos achats',
@@ -404,6 +406,8 @@ export const fr = {
   'email.order.subject': 'Votre commande {boutique} n°{numero}',
   'email.order.heading': 'Merci pour votre commande',
   'email.order.subheading': 'La commande n°{numero} est confirmée. Nous vous écrirons de nouveau à l’expédition.',
+  // A pickup is never shipped (ticket #238): the next e-mail says it is ready.
+  'email.order.subheadingPickup': 'La commande n°{numero} est confirmée. Nous vous écrirons de nouveau quand elle sera prête à retirer.',
   'email.order.thanks': 'Merci pour votre commande !',
   'email.order.reference': 'Commande n°{numero}, {boutique}',
   'email.order.download': 'Votre téléchargement est prêt.',
@@ -411,6 +415,8 @@ export const fr = {
   'email.order.viewOrderLine': 'Voir ma commande : {url}',
   'email.order.footer': 'Une question sur cette commande ? Répondez simplement à cet e-mail.',
   'email.relay.heading': 'Votre point relais',
+  // The rate and its instructions for the buyer (ticket #237).
+  'email.delivery.heading': 'Livraison',
   'email.relay.code': 'Code du point : {code}',
   'email.total.shipping': 'Livraison',
   'email.total.discount': 'Remise',
@@ -424,6 +430,8 @@ export const fr = {
   'email.notification.identifiers': 'Identifiants de la commande',
   'email.notification.shipTo': 'Livrer à',
   'email.notification.relayPoint': 'Point relais choisi',
+  // Which rate, so a shop with a pickup per place knows which one (ticket #237).
+  'email.notification.rate': 'Tarif de livraison',
   'email.notification.customer': 'Client : {email}',
   'email.notification.newOrder': 'Nouvelle commande n°{numero}',
   'email.notification.publicId': 'Identifiant public : {id}',
@@ -440,6 +448,12 @@ export const fr = {
   'email.shipped.trackButton': 'Suivre mon colis',
   'email.shipped.footer': 'Détail de la commande : ',
   'email.shipped.relayPoint': 'À retirer au point relais',
+  // A pickup marked ready in the admin (ticket #238), never « en route ».
+  'email.pickup.subject': 'Votre commande {boutique} n°{numero} est prête à retirer',
+  'email.pickup.heading': 'Votre commande est prête',
+  'email.pickup.subheading': 'La commande n°{numero} est prête à retirer.',
+  'email.pickup.text': 'Votre commande n°{numero} est prête à retirer !',
+  'email.pickup.where': 'Où la retirer',
   'email.refund.subjectFull': 'Votre commande {boutique} n°{numero} a été remboursée',
   'email.refund.subjectPartial': 'Un remboursement pour votre commande {boutique} n°{numero}',
   'email.refund.headingFull': 'Votre commande a été remboursée',

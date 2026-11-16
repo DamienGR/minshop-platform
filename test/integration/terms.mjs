@@ -44,7 +44,7 @@ try {
        ship_address TEXT, customization TEXT, buyer_comment TEXT)`,
     `CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_session_id TEXT UNIQUE,
        public_id TEXT UNIQUE, email TEXT, amount_total_cents INTEGER NOT NULL,
-       shipping_cents INTEGER NOT NULL DEFAULT 0, shipping_label TEXT,
+       shipping_cents INTEGER NOT NULL DEFAULT 0, shipping_label TEXT, shipping_instructions TEXT,
        shipping_weight_grams INTEGER, delivery_method TEXT,
        discount_cents INTEGER NOT NULL DEFAULT 0, tax_cents INTEGER NOT NULL DEFAULT 0,
        currency TEXT NOT NULL, ship_address TEXT, status TEXT NOT NULL,

@@ -476,6 +476,18 @@ export function extractMediaKeys(markdown: string, options: RenderOptions = {}):
 }
 
 /**
+ * Whether the text holds an image, from this store or anywhere: a text that
+ * takes none (a shipping rate's instructions, ticket #237) is refused on save
+ * rather than rendered without it. From parser tokens, like extractMediaKeys,
+ * so `![x](y)` written inside a code block is text and refuses nothing.
+ */
+export function markdownHasImage(markdown: string): boolean {
+  const walk = (tokens: ReturnType<typeof md.parse>): boolean =>
+    tokens.some((token) => token.type === 'image' || (token.children?.length ? walk(token.children) : false));
+  return walk(md.parse(markdown, {}));
+}
+
+/**
  * Every ```carte block of a body, parsed, with the line its fence opens on.
  * From parser tokens, like extractMediaKeys: a ```carte written inside another
  * code block, or indented as code, is text and draws nothing.

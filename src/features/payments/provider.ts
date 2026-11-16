@@ -30,6 +30,9 @@ export interface ShippingOption {
   /** Local pickup — no carrier delivery. Adapters record the mode as data
    *  (Stripe: rate metadata) rather than parsing the merchant's label text. */
   pickup?: boolean;
+  /** The rate's instructions for the buyer (ticket #237), copied onto the
+   *  order: Stripe carries them in the rate's metadata. */
+  instructions?: string;
 }
 
 export interface CreateCheckoutParams {
@@ -78,6 +81,9 @@ export interface CreateCheckoutParams {
     deliveryMethod: DeliveryMethod;
     address: ShippingAddress;
     email: string | null;
+    /** The chosen rate's instructions for the buyer (ticket #237), copied
+     *  onto the order like its label. Absent or null: none. */
+    instructions?: string | null;
   };
 }
 

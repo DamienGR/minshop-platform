@@ -25,6 +25,9 @@ export interface PendingPayment {
   /** Which service was chosen, and what the shipment weighed when it was priced.
    *  Under weight bands the amount alone no longer explains itself. */
   shipping_label: string | null;
+  /** The chosen rate's instructions for the buyer (ticket #237), carried to
+   *  the order like its label; null for none and for a pre-0061 row. */
+  shipping_instructions: string | null;
   shipping_weight_grams: number | null;
   delivery_method: string | null; // 'pickup' | 'shipping' | 'relay' | NULL (legacy/none)
   ship_address: string | null; // JSON (ShippingAddress) or null
@@ -48,6 +51,7 @@ export interface NewPendingPayment {
   itemsJson: string | null;
   shippingCents?: number;
   shippingLabel?: string | null;
+  shippingInstructions?: string | null;
   shippingWeightGrams?: number | null;
   deliveryMethod?: DeliveryMethod | null;
   /** Pre-serialized JSON ShippingAddress, or null. */
@@ -61,8 +65,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
   await db
     .prepare(
       `INSERT INTO pending_payments
-         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       p.publicId,
@@ -76,6 +80,7 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
       p.itemsJson,
       p.shippingCents ?? 0,
       p.shippingLabel ?? null,
+      p.shippingInstructions ?? null,
       p.shippingWeightGrams ?? null,
       p.deliveryMethod ?? null,
       p.shipAddressJson ?? null,
@@ -157,6 +162,8 @@ export function pendingToPaidOrder(p: PendingPayment): PaidOrderInput {
     amountTotalCents: p.amount_total_cents,
     shippingCents: p.shipping_cents,
     shippingLabel: p.shipping_label,
+    // `?? null`: a row read before 0061 ran has no such column at all.
+    shippingInstructions: p.shipping_instructions ?? null,
     shippingWeightGrams: p.shipping_weight_grams,
     deliveryMethod: parseDeliveryMethod(p.delivery_method),
     shippingAddress,

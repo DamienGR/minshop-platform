@@ -23,6 +23,7 @@ import {
   ORDER_STATUS_OPTIONS,
   ORDER_METHOD_OPTIONS,
 } from '../../../features/orders/filter';
+import { fulfillmentLabel } from '../../../features/orders/fulfillment';
 import { listUnmatchedRefundEvents } from '../../../features/refunds/db';
 import { isPurchaseStale, listLabelsNeedingAttention } from '../../../features/shipping/labelStore';
 import { t, tn, type MessageKey } from '../../../features/i18n';
@@ -385,8 +386,8 @@ const statusLabel = (status: string) =>
         anyLabel: t('admin.orders.list.filter.anyFulfillment'),
         value: filters.fulfillment,
         options: [
-          { value: 'unfulfilled', label: t('admin.orders.fulfillment.unfulfilled') },
-          { value: 'fulfilled', label: t('admin.orders.fulfillment.fulfilled') },
+          { value: 'unfulfilled', label: t('admin.orders.list.filter.toProcess') },
+          { value: 'fulfilled', label: t('admin.orders.list.filter.processed') },
         ],
       },
       {
@@ -477,9 +478,7 @@ const statusLabel = (status: string) =>
                     : 'bg-white text-gray-500 ring-line'
                 }`}
               >
-                {o.fulfillment_status === 'fulfilled'
-                  ? t('admin.orders.fulfillment.fulfilled')
-                  : t('admin.orders.fulfillment.unfulfilled')}
+                {fulfillmentLabel(o)}
               </span>
             </td>
             <td data-label={t('admin.common.date')} class="py-3 text-gray-500">{formatDate(o.created_at, undefined, timeZone)}</td>
