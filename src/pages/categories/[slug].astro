@@ -1,7 +1,7 @@
 ---
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
-import { getCategoryBySlug, childrenOf } from '../../features/categories/db';
+import { getVisibleCategoryBySlug, childrenOf } from '../../features/categories/db';
 import { categoryPageStatement, readCategoryRows } from '../../features/storefront/reads';
 import type { ListedProduct } from '../../features/products/cardVariants';
 import ProductCard from '#theme/ProductCard.astro';
@@ -22,7 +22,8 @@ import { addCacheTags, productCacheTags } from '../../features/cache/tags';
 import { t } from '../../features/i18n';
 
 const { slug } = Astro.params;
-const category = slug ? await getCategoryBySlug(env.DB, slug) : null;
+// A hidden category, or one under it, is a 404 like a draft page (ticket #240).
+const category = slug ? await getVisibleCategoryBySlug(env.DB, slug) : null;
 
 if (!category) {
   // `t` reads as unused to astro check, which stops analysing frontmatter at the

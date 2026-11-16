@@ -1,6 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { t } from '../i18n/index.ts';
 import type { MenuItem, MenuLocation, MenuTargetType } from './db.ts';
+import { HIDDEN_CATEGORY_IDS } from '../categories/visibility.ts';
 
 /**
  * How many options a picker offers before the merchant has to search.
@@ -39,8 +40,8 @@ export interface TargetChoices {
  * different things. It is also the wrong affordance — a merchant building
  * navigation is hunting for one known item, not reviewing recent edits.
  *
- * Only AVAILABLE targets are offered. An item already pointing at a draft or
- * inactive target still appears in the menu list with its warning; the list and
+ * Only AVAILABLE targets are offered. An item already pointing at a draft,
+ * inactive or hidden target still appears in the menu list with its warning; the list and
  * the picker answer different questions ("what is in this menu" vs "what may I
  * add"), so they deliberately disagree.
  */
@@ -52,7 +53,7 @@ export async function targetChoices(
   const sources: Partial<Record<MenuTargetType, { table: string; name: string; where: string }>> = {
     page: { table: 'pages', name: 'title', where: 'published = 1' },
     product: { table: 'products', name: 'name', where: 'active = 1' },
-    category: { table: 'categories', name: 'name', where: '1 = 1' },
+    category: { table: 'categories', name: 'name', where: `id NOT IN ${HIDDEN_CATEGORY_IDS}` },
   };
   const source = sources[targetType];
   if (!source) return { options: [], remaining: 0 };
@@ -83,9 +84,8 @@ export async function targetChoices(
 /**
  * Why an item is hidden on the storefront, or null when it is fine.
  *
- * Categories have no draft or inactive state — 0004_categories.sql defines only
- * id/name/slug/parent_id/created_at — so deletion is the only way one becomes
- * unavailable, which also makes it the easiest to miss.
+ * A category that still exists is unavailable because it, or a category above
+ * it, is hidden (ticket #240): the one state the merchant can undo.
  */
 export function unavailableReason(item: MenuItem): string | null {
   if (item.available) return null;
@@ -99,7 +99,7 @@ export function unavailableReason(item: MenuItem): string | null {
     case 'product':
       return t('admin.navigation.unavailable.inactive');
     case 'category':
-      return t('admin.navigation.unavailable.missing');
+      return t('admin.navigation.unavailable.hidden');
     default:
       return t('admin.navigation.unavailable.other');
   }

@@ -145,7 +145,8 @@ response for cache invalidation.
   `description`, its resolved `image` (both null until the merchant sets them)
   and its `children`. Both lists come in the order the merchant chose in
   Admin → Catégories (alphabetical until they move one): render them as they
-  arrive, never re-sorted.
+  arrive, never re-sorted. A category the merchant hid, and everything under
+  it, is never in them (ticket #240).
 - `featured` is one product card: the merchant's choice in Admin → Réglages
   while it is active, else the newest product in stock, else the newest — null
   only for an empty catalog. Its image is resolved as the page's LCP.

@@ -80,6 +80,7 @@ const category = (id: number, name: string, overrides: Partial<Category> = {}): 
   seo_title: null,
   seo_description: null,
   position: 0,
+  hidden: 0,
   created_at: '2026-01-01T00:00:00Z',
   ...overrides,
 });

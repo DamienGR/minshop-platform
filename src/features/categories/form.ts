@@ -18,6 +18,8 @@ export interface ParsedCategoryForm extends SeoFields {
   /** The media key the picker chose; null clears the image. Resolved against
    *  `media` by the guarded write, never trusted as it stands. */
   imageKey: string | null;
+  /** « Cacher cette catégorie » (ticket #240): a box, ticked or absent. */
+  hidden: boolean;
 }
 
 export function parseCategoryForm(
@@ -57,6 +59,7 @@ export function parseCategoryForm(
       parentPublicId,
       description: description || null,
       imageKey: imageKey || null,
+      hidden: form.get('hidden') != null,
       ...seo.data,
     },
   };

@@ -14,8 +14,8 @@ import { t } from '../../../features/i18n';
 // name (ticket #228). The arrows move a category among its siblings.
 const rows = flattenTree(buildTree(await listCategories(env.DB)));
 const counts = await productCounts(env.DB);
-// Categories have no draft state, so deletion is the ONLY way one becomes
-// unavailable — which makes this the easiest broken link to create silently.
+// A menu link to a category dies with it: the one warning deleting gives.
+// (Hiding one hides its link too, but is undone by unticking the box.)
 const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.id));
 ---
 
@@ -54,6 +54,12 @@ const menuRefs = await menuReferencesFor(env.DB, 'category', rows.map((r) => r.i
                 {c.depth > 0 && <span class="text-gray-400">↳ </span>}
                 {c.name}
               </a>
+              {/* Ticket #240: hidden by its own box, or with its parent. */}
+              {c.concealed && (
+                <span class="ml-2 rounded bg-surface px-1.5 py-0.5 text-xs text-gray-500">
+                  {c.hidden ? t('admin.categories.badge.hidden') : t('admin.categories.badge.hiddenByParent')}
+                </span>
+              )}
             </td>
             <td data-label={t('admin.categories.column.slug')} class="py-3 pr-4 text-gray-500">{c.slug}</td>
             <td data-label={t('admin.categories.column.products')} class="py-3 pr-4 tabular-nums text-gray-500">{counts.get(c.id) ?? 0}</td>

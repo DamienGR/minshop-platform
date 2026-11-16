@@ -233,6 +233,7 @@ const seoFallbackDescription =
                 class="h-4 w-4"
               />
               {c.name}
+              {c.concealed && <span class="text-xs text-gray-400">{t('admin.categories.hiddenSuffix')}</span>}
             </label>
           ))}
         </div>
