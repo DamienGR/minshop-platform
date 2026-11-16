@@ -56,6 +56,135 @@ if (loaded.backfillRelated) {
     const form = document.querySelector('[data-options-form]');
     const out = document.querySelector('[data-price-display]');
     const track = document.querySelector('[data-hero-track]');
+
+    // The gallery changes photo by a cross-fade, never by sliding past the
+    // photos in between (ticket #235, ProductGallery). The track jumps to the
+    // photo at once, under a copy of the one that was showing (the veil), and
+    // the veil leaves the way the stylesheet says: a fade in base.css, which a
+    // theme may restyle. The track is position:relative, so a frame's
+    // offsetLeft is measured from its content box: exactly the scrollLeft
+    // that brings the frame flush left.
+    let show = null;
+    const frames = track instanceof HTMLElement ? [...track.querySelectorAll('img[id^="pi-"]')] : [];
+    if (frames.length > 0) {
+      const hero = track.closest('[data-product-hero]') || track;
+      const thumbs = [...hero.querySelectorAll('a[href^="#pi-"]')];
+      const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+      // The frame on screen: the nearest to the scroll position, as a swipe
+      // can leave the track between two for a moment.
+      const onScreen = () =>
+        frames.reduce((a, b) =>
+          Math.abs(b.offsetLeft - track.scrollLeft) < Math.abs(a.offsetLeft - track.scrollLeft) ? b : a,
+        );
+      // The thumbnail of the photo on screen says so: with a fade, nothing
+      // else tells where the shopper is in the series.
+      const mark = (frame) => {
+        for (const thumb of thumbs) {
+          if (thumb.getAttribute('href') === `#${frame.id}`) thumb.setAttribute('aria-current', 'true');
+          else thumb.removeAttribute('aria-current');
+        }
+      };
+      // A layer over a frame, inside the track so it scrolls with it, and
+      // before the sold-out label so the label stays on top.
+      const lay = (layer, frame) => {
+        Object.assign(layer.style, {
+          left: `${frame.offsetLeft}px`,
+          top: `${frame.offsetTop}px`,
+          width: `${frame.offsetWidth}px`,
+          height: `${frame.offsetHeight}px`,
+        });
+        frames[frames.length - 1].after(layer);
+      };
+      let turn = 0;
+      show = async (img) => {
+        const mine = ++turn;
+        mark(img);
+        for (const wait of track.querySelectorAll('[data-hero-wait]')) wait.remove();
+        // Every frame but the first is lazy. The one asked for loads now, and
+        // the photo on screen stays until the next can be drawn: never an
+        // empty frame. A load that lasts shows the waiting mark over it.
+        if (!img.complete) {
+          img.loading = 'eager';
+          track.setAttribute('aria-busy', 'true');
+          const wait = document.createElement('span');
+          wait.setAttribute('data-hero-wait', '');
+          lay(wait, onScreen());
+          await img.decode().catch(() => {});
+          wait.remove();
+          if (mine !== turn) return;
+        }
+        track.removeAttribute('aria-busy');
+        const from = onScreen();
+        if (from === img) return;
+        // The veil is the file already on screen, decoded before it goes up so
+        // it never flashes blank. It comes from memory; a browser that would
+        // fetch it again gets no fade rather than a wait. Reduced motion: no
+        // veil, the photo changes at once.
+        let veil = null;
+        if (!still.matches) {
+          veil = document.createElement('img');
+          veil.src = from.currentSrc || from.src;
+          veil.alt = '';
+          veil.className = from.className;
+          veil.setAttribute('data-hero-veil', '');
+          await Promise.race([veil.decode(), new Promise((done) => setTimeout(done, 100))]).catch(() => {});
+          if (mine !== turn) return;
+          if (!veil.complete) veil = null;
+        }
+        for (const old of track.querySelectorAll('[data-hero-veil]')) old.remove();
+        track.scrollTo({ left: img.offsetLeft, behavior: 'instant' });
+        if (!veil) return;
+        lay(veil, img);
+        // Its style is read once before it leaves, or there is no transition.
+        // How it leaves is the stylesheet's; the script waits for whatever
+        // that started (none, a fade, a theme's sweep) and takes it away.
+        void getComputedStyle(veil).opacity;
+        veil.setAttribute('data-hero-veil', 'out');
+        const leaving = veil.getAnimations?.() ?? [];
+        Promise.race([
+          Promise.allSettled(leaving.map((a) => a.finished)),
+          new Promise((done) => setTimeout(done, 3000)),
+        ]).then(() => veil.remove());
+      };
+
+      // A swipe moves the track by itself: once it rests, the mark follows.
+      let resting = 0;
+      track.addEventListener(
+        'scroll',
+        () => {
+          clearTimeout(resting);
+          resting = setTimeout(() => {
+            if (!track.hasAttribute('aria-busy')) mark(onScreen());
+          }, 120);
+        },
+        { passive: true },
+      );
+      mark(onScreen());
+
+      // A thumbnail is a link to its frame, all it is without a script. With
+      // one, the click is the gallery's: no #pi- fragment in the address and
+      // the history, and the page stays where it is. A click that opens a tab
+      // or a window stays the browser's.
+      const frameOf = (event) => {
+        const link = event.target instanceof Element ? event.target.closest('a[href^="#pi-"]') : null;
+        const img = link ? document.getElementById(link.getAttribute('href').slice(1)) : null;
+        return img instanceof HTMLImageElement && track.contains(img) ? img : null;
+      };
+      hero.addEventListener('click', (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const img = frameOf(event);
+        if (!img) return;
+        event.preventDefault();
+        show(img);
+      });
+      // The pointer on a thumbnail starts its photo's load: by the click, it
+      // is often there.
+      hero.addEventListener('pointerover', (event) => {
+        const img = frameOf(event);
+        if (img) img.loading = 'eager';
+      });
+    }
+
     if (form instanceof HTMLFormElement && out instanceof HTMLElement) {
       const currency = (out.dataset.currency || 'usd').toUpperCase();
       const base = Number(out.dataset.base || '0');
@@ -69,16 +198,12 @@ if (loaded.backfillRelated) {
       });
       const divisor = 10 ** (fmt.resolvedOptions().maximumFractionDigits ?? 2);
 
-      // Scroll the gallery carousel to the variant's linked image (if any). The
-      // track is position:relative, so each image's offsetLeft is measured from the
-      // track's content box — exactly the scrollLeft needed to bring it flush left.
-      // data-image-id carries the gallery anchor (pimg_ public ID), never a row id.
+      // The variant's linked image (if any), by the gallery's own change of
+      // photo. data-image-id carries the gallery anchor (pimg_ public ID),
+      // never a row id.
       const showImage = (imageId) => {
-        if (!(track instanceof HTMLElement) || !imageId) return;
-        const img = document.getElementById(`pi-${imageId}`);
-        if (img instanceof HTMLElement && track.contains(img)) {
-          track.scrollLeft = img.offsetLeft;
-        }
+        const img = imageId ? document.getElementById(`pi-${imageId}`) : null;
+        if (show && img instanceof HTMLImageElement && track.contains(img)) show(img);
       };
 
       // The variant the price last reflected, so a second read of the same
@@ -96,8 +221,7 @@ if (loaded.backfillRelated) {
       };
       // Only a change of variant moves the carousel: an add-on ticked or a
       // personalisation field left (ticket #125) keeps the photo the shopper
-      // is looking at. Setting track.scrollLeft only moves the carousel, never
-      // the page.
+      // is looking at. Moving the track never moves the page.
       form.addEventListener('change', (event) => {
         const target = event.target;
         update(target instanceof HTMLInputElement && target.name === 'variant_id');

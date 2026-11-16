@@ -290,6 +290,33 @@ describe('the product gallery', () => {
     expect(html).toContain('data-product-hero');
   });
 
+  it('never scrolls its track smoothly', async () => {
+    // A smooth scroll slid past every photo between two, twelve of them from
+    // the first to the last of thirteen (ticket #235). The product page's
+    // script cross-fades instead; without a script, a thumbnail jumps.
+    const html = await render(ProductGallery, {
+      images: galleryFrames('pimg_one', 'pimg_two'),
+      hero: { ...image('/images/tee.jpg'), priority: true },
+      soldOut: false,
+    });
+    const track = html.match(/<div[^>]*data-hero-track[^>]*>/)?.[0] ?? '';
+
+    expect(track).toContain('snap-mandatory');
+    expect(track).not.toContain('scroll-smooth');
+  });
+
+  it('leaves the mark of the photo on screen to the script', async () => {
+    // Without a script nothing follows the shopper's clicks: a mark written
+    // here would stay on the first thumbnail while another photo shows.
+    const html = await render(ProductGallery, {
+      images: galleryFrames('pimg_one', 'pimg_two'),
+      hero: { ...image('/images/tee.jpg'), priority: true },
+      soldOut: false,
+    });
+
+    expect(html).not.toContain('aria-current');
+  });
+
   it('falls back to a single hero when there is nothing to scroll', async () => {
     const html = await render(ProductGallery, {
       images: [galleryImage('pimg_only')],

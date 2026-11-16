@@ -92,6 +92,79 @@
   }
 }
 
+/* The product gallery's change of photo (ticket #235, the product page's
+   script). The veil is a copy of the photo that was showing, laid over the
+   next one; the script marks it 'out' and waits for what that starts. The
+   waiting mark sits over the photo on screen while the next one loads, and
+   shows only if the load lasts. With reduced motion the script lays no veil
+   (the photo changes at once) and the mark stands still.
+
+   The mechanics are ordinary rules: the layers copy the frame's classes,
+   whose snap point and width they must not keep. Everything a theme may
+   change sits in :where(), at no specificity, so the theme's own rule on
+   [data-hero-veil], [data-hero-veil='out'], [data-hero-wait] or the current
+   thumbnail wins wherever it is written, outside any @layer: the duration,
+   the easing, or another property than opacity (a sweep in clip-path). */
+[data-hero-veil],
+[data-hero-wait] {
+  position: absolute;
+  pointer-events: none;
+  scroll-snap-align: none;
+}
+:where([data-hero-veil]) {
+  transition: opacity 300ms ease-out;
+}
+:where([data-hero-veil='out']) {
+  opacity: 0;
+}
+:where([data-hero-wait]) {
+  opacity: 0;
+  animation: hero-wait-show 0s linear 250ms forwards;
+}
+:where([data-hero-wait])::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -1.125rem 0 0 -1.125rem;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in srgb, var(--color-ink, #111827) 15%, transparent);
+  border-top-color: var(--color-ink, #111827);
+  background: color-mix(in srgb, var(--color-paper, #ffffff) 70%, transparent);
+  animation: hero-wait-turn 0.8s linear infinite;
+}
+@keyframes hero-wait-show {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes hero-wait-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where([data-hero-wait])::after {
+    animation: none;
+  }
+}
+/* The thumbnail of the photo on screen: a frame in the brand colour inside
+   its border, over the picture, where neither the hover border nor the focus
+   ring goes. */
+:where([data-product-hero] a[aria-current='true']) {
+  border-color: var(--color-brand, currentColor);
+}
+:where([data-product-hero] a[aria-current='true'])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--color-brand, currentColor);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 /* Admin mobile nav (pure-CSS checkbox disclosure). Flip the chevron when the
    toggle is checked, and fade/slide the list in. The list-reveal is scoped to
    small screens — at sm+ the list is always shown (sm:block) as the sidebar, so
