@@ -35,7 +35,7 @@ export const shipping = {
   'admin.shipping.save': 'Enregistrer la livraison',
   'admin.shipping.replaceInvalid': 'Remplacer la configuration invalide',
   'admin.shipping.stripeNote':
-    'Stripe affiche les tarifs du pays choisi dans le panier, puis confirme l’adresse définitive sur sa page de paiement. Les autres moyens de paiement demandent l’adresse avant le paiement.',
+    'Stripe affiche les tarifs du pays choisi dans le panier, puis confirme l’adresse définitive sur sa page de paiement. Les autres moyens de paiement demandent l’adresse avant le paiement, comme la carte quand un tarif de la zone est un point relais ou a des instructions pour l’acheteur.',
 
   // ─── Zones ─────────────────────────────────────────────────────────────────────
   'admin.shipping.zone.name': 'Nom de la zone',
@@ -67,6 +67,8 @@ export const shipping = {
   'admin.shipping.rate.relayNoKeys': 'Les clés Boxtal ne sont pas enregistrées dans Réglages : ce tarif n’est pas proposé à la commande tant qu’elles manquent.',
   'admin.shipping.rate.price': 'Prix',
   'admin.shipping.rate.freeOver': 'Offert dès ({devise})',
+  'admin.shipping.rate.instructions': 'Instructions pour l’acheteur',
+  'admin.shipping.rate.instructionsHint': 'Facultatif. L’acheteur les lit sous ce tarif avant de payer, puis sur sa commande et dans ses e-mails : pour un retrait, l’adresse, les horaires et comment convenir d’un moment. Gras, italique, listes et liens comme dans une page, sans image ; {max} caractères au plus.',
   'admin.shipping.rate.remove': 'Retirer le tarif',
   'admin.shipping.rate.add': 'Ajouter un tarif',
   'admin.shipping.band.heading': 'Tranches de poids',
@@ -106,6 +108,9 @@ export const shipping = {
   'admin.shipping.error.relayOffer': 'Choisissez une offre de point relais.',
   'admin.shipping.error.pickupFreeOver':
     'Un retrait sur place ne s’offre pas dès un montant : indiquez ses frais, 0 pour gratuit.',
+  'admin.shipping.error.instructionsLength': 'Les instructions ne doivent pas dépasser {max} caractères.',
+  'admin.shipping.error.instructionsImage':
+    'Les instructions ne prennent pas d’image : décrivez le lieu, ou mettez un lien vers une page qui le montre.',
   'admin.shipping.error.priceRequired': 'Indiquez un prix.',
   'admin.shipping.error.bandRequired': 'Ajoutez au moins une tranche de poids.',
   'admin.shipping.error.bandsMax': 'Au maximum {max} tranches par tarif.',

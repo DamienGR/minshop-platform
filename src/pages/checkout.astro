@@ -31,6 +31,7 @@ import { countryOptions, countryName, isCountryCode } from '../features/shipping
 import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { asksRecipientPhone, plausiblePhone } from '../features/shipping/recipient';
+import { shippingInstructionsHtml } from '../features/shipping/instructions';
 import { getRelayPointSearch } from '../features/shipping/boxtal';
 import type { PickupPoint, Weekday } from '../features/shipping/provider';
 import {
@@ -503,6 +504,7 @@ if (submitted) {
                     deliveryMethod: deliveryMethodOf(chosen),
                     address: shippingAddress,
                     email: addr.email,
+                    instructions: chosen.instructions ?? null,
                   },
                 });
                 return Astro.redirect(result.url, 303);
@@ -515,6 +517,7 @@ if (submitted) {
                 subtotalCents,
                 shippingCents: chosen.amountCents,
                 shippingLabel: chosen.label,
+                shippingInstructions: chosen.instructions ?? null,
                 shippingWeightGrams: quote.shipmentWeightGrams,
                 deliveryMethod: deliveryMethodOf(chosen),
                 itemsJson,
@@ -560,6 +563,12 @@ const hasErrors = errors.length > 0;
 const preferredLabel = fld('shipping_label');
 const checkedLabel = options.some((o) => o.label === preferredLabel) ? preferredLabel : options[0]?.label;
 const relayChoices = relayOption ? (relayPoints.get(relayOption.label) ?? []) : [];
+// A rate's instructions (ticket #237), read under it before paying: the
+// merchant's Markdown, rendered as a page is. By option, in list order. The
+// card then holds the label and, under it, the text: outside the label, so a
+// list or a link is not part of the radio's name, tied to it by
+// aria-describedby instead. A rate without any keeps its markup.
+const optionInstructions = options.map((o) => (o.instructions ? shippingInstructionsHtml(o.instructions) : null));
 
 const WEEKDAYS: Array<[Weekday, string]> = [
   ['MONDAY', t('checkout.relay.day.MONDAY')],
@@ -799,24 +808,56 @@ const distanceLabel = (meters: number | null): string | null =>
 
           <fieldset class="space-y-2">
             <legend class="mb-1 text-sm font-medium">{t('checkout.shipping')}</legend>
-            {options.map((o) => (
-              <label class="flex cursor-pointer items-center justify-between rounded-lg border border-line bg-surface p-3 text-sm has-[:checked]:border-brand">
-                <span class="flex items-center gap-2">
-                  <input type="radio" name="shipping_label" value={o.label} checked={o.label === checkedLabel} />
-                  <span>
-                    {o.label}
-                    {o.relayOffer !== undefined && (
-                      <span class="block text-xs text-faint">{t('checkout.relay.rateHint')}</span>
-                    )}
+            {options.map((o, i) =>
+              optionInstructions[i] ? (
+                <div class="rounded-lg border border-line bg-surface text-sm has-[:checked]:border-brand" data-rate-instructions>
+                  <label class="flex cursor-pointer items-center justify-between p-3">
+                    <span class="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="shipping_label"
+                        value={o.label}
+                        checked={o.label === checkedLabel}
+                        aria-describedby={`rate-instructions-${i}`}
+                      />
+                      <span>
+                        {o.label}
+                        {o.relayOffer !== undefined && (
+                          <span class="block text-xs text-faint">{t('checkout.relay.rateHint')}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span class="text-muted">
+                      {o.amountCents === 0 ? t('checkout.shippingFree') : formatPrice(o.amountCents, currency)} ·{' '}
+                      {t('checkout.total')}{' '}
+                      {formatPrice(subtotalCents + o.amountCents, currency)}
+                    </span>
+                  </label>
+                  <div
+                    id={`rate-instructions-${i}`}
+                    class="shipping-instructions px-3 pb-3 pl-8 text-muted"
+                    set:html={optionInstructions[i]}
+                  />
+                </div>
+              ) : (
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-line bg-surface p-3 text-sm has-[:checked]:border-brand">
+                  <span class="flex items-center gap-2">
+                    <input type="radio" name="shipping_label" value={o.label} checked={o.label === checkedLabel} />
+                    <span>
+                      {o.label}
+                      {o.relayOffer !== undefined && (
+                        <span class="block text-xs text-faint">{t('checkout.relay.rateHint')}</span>
+                      )}
+                    </span>
                   </span>
-                </span>
-                <span class="text-muted">
-                  {o.amountCents === 0 ? t('checkout.shippingFree') : formatPrice(o.amountCents, currency)} ·{' '}
-                  {t('checkout.total')}{' '}
-                  {formatPrice(subtotalCents + o.amountCents, currency)}
-                </span>
-              </label>
-            ))}
+                  <span class="text-muted">
+                    {o.amountCents === 0 ? t('checkout.shippingFree') : formatPrice(o.amountCents, currency)} ·{' '}
+                    {t('checkout.total')}{' '}
+                    {formatPrice(subtotalCents + o.amountCents, currency)}
+                  </span>
+                </label>
+              ),
+            )}
           </fieldset>
 
           {

@@ -27,6 +27,7 @@ import {
   type ShippingValidationError,
 } from '../../features/shipping/settings';
 import type { RatePricing } from '../../features/shipping/calculator';
+import { normalizeShippingInstructions } from '../../features/shipping/instructions';
 
 export const prerender = false;
 
@@ -62,6 +63,7 @@ function blankRate(token: string): ShippingFormRate {
     amountValue: '',
     bands: [],
     freeOverValue: '',
+    instructionsValue: '',
   };
 }
 function blankZone(token: string) {
@@ -226,6 +228,7 @@ function parseModelForPreview(m: ShippingFormModel): ShippingValidationError[] {
         pricing: previewPricing(r),
         freeOverCents:
           r.mode === 'pickup' || r.freeOverValue === '' ? null : Math.round(Number(r.freeOverValue) * 100),
+        instructions: normalizeShippingInstructions(r.instructionsValue) || null,
       })),
     })),
   });
@@ -489,6 +492,21 @@ const label = (path: string) => `text-xs uppercase tracking-widest text-gray-500
               {rate.mode === 'relay' && (
                 <p class="mt-2 text-xs text-gray-500">{t('admin.shipping.rate.relayHint')}</p>
               )}
+              {/* Ticket #237: what the buyer reads under this rate before
+                  paying, then on the order and in its e-mails. Any mode. */}
+              <label class="mt-3 block">
+                <span class={label('')}>{t('admin.shipping.rate.instructions')}</span>
+                <textarea
+                  name={`zone[${zone.token}][rate][${rate.token}][instructions]`}
+                  rows="3"
+                  maxlength={SHIPPING_LIMITS.instructions}
+                  aria-describedby={`instructions-hint-${rate.token}`}
+                  class="mt-1 w-full rounded border border-line px-2 py-1 text-sm"
+                >{rate.instructionsValue}</textarea>
+                <span id={`instructions-hint-${rate.token}`} class="mt-1 block text-xs text-gray-500">
+                  {t('admin.shipping.rate.instructionsHint', { max: SHIPPING_LIMITS.instructions })}
+                </span>
+              </label>
               {rate.mode === 'relay' && !boxtalReady && (
                 <p class="mt-2 text-sm text-amber-800">{t('admin.shipping.rate.relayNoKeys')}</p>
               )}

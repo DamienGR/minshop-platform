@@ -29,6 +29,7 @@ import { formatWeight } from '../../../features/shipping/weight';
 import { parseOrderOrLegacyPublicId } from '../../../features/ids/publicId';
 import { t, type MessageKey } from '../../../features/i18n';
 import { customizationText, parseCustomization } from '../../../features/products/customization';
+import { fulfillmentLabel, isPickupOrder } from '../../../features/orders/fulfillment';
 
 // The route param is the order public ID — ord_ or a preserved legacy shape
 // (hex32/UUID). Numeric row ids are not accepted.
@@ -72,6 +73,9 @@ const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
 const items = await listOrderItemsWithImages(env.DB, order.id);
 const inventoryExceptions = await listOrderInventoryExceptions(env.DB, order.id);
 const fulfilled = order.fulfillment_status === 'fulfilled';
+// A pickup is made ready to collect, never shipped (ticket #238): its own
+// section, its own action without carrier or tracking, and its own e-mail.
+const pickup = isPickupOrder(order);
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 
 // ── Shipping label (Boxtal) ──────────────────────────────────────────────────
@@ -328,6 +332,16 @@ const willEmailCustomer =
       )
     }
     {
+      order.shipping_instructions && (
+        <div class="col-span-2">
+          <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.shippingInstructions')}</dt>
+          {/* As the rate said them when the order was paid (ticket #237), in
+              the Markdown the merchant wrote: the buyer read them rendered. */}
+          <dd class="whitespace-pre-line break-words" data-shipping-instructions>{order.shipping_instructions}</dd>
+        </div>
+      )
+    }
+    {
       order.buyer_comment && (
         <div class="col-span-2">
           <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.buyerComment')}</dt>
@@ -350,7 +364,9 @@ const willEmailCustomer =
   <RefundPanel order={order} timeZone={timeZone} />
 
   <div class="mb-8 rounded-lg border border-line p-5">
-    <h2 class="mb-3 text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.fulfillment')}</h2>
+    <h2 class="mb-3 text-xs uppercase tracking-widest text-gray-400">
+      {pickup ? t('admin.orders.detail.pickup') : t('admin.orders.detail.fulfillment')}
+    </h2>
     {
       labelUnreconciled && labelRecord && (
         <div class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
@@ -427,7 +443,7 @@ const willEmailCustomer =
       fulfilled ? (
         <div class="space-y-2 text-sm">
           <p>
-            <span class="font-medium text-green-700">{t('admin.orders.fulfillment.fulfilled')}</span>
+            <span class="font-medium text-green-700">{fulfillmentLabel(order)}</span>
             {order.fulfilled_at && <span class="text-gray-400"> · {formatDate(order.fulfilled_at, undefined, timeZone)}</span>}
           </p>
           {order.tracking_number && (
@@ -452,7 +468,7 @@ const willEmailCustomer =
           <form method="POST" action={`/api/admin/orders/${order.public_id}`}>
             <input type="hidden" name="_action" value="unfulfill" />
             <button type="submit" class="text-xs uppercase tracking-widest text-gray-400 hover:text-red-600">
-              {t('admin.orders.detail.markUnfulfilled')}
+              {pickup ? t('admin.orders.detail.markNotReady') : t('admin.orders.detail.markUnfulfilled')}
             </button>
           </form>
         </div>
@@ -681,6 +697,18 @@ const willEmailCustomer =
               <a href="/admin/settings#boxtal" class="text-accent hover:underline">{t('admin.orders.detail.label.settingsMissing')}</a>
             </p>
           )}
+        {pickup ? (
+          <form method="POST" action={`/api/admin/orders/${order.public_id}`} class="space-y-2 text-sm" data-pickup-ready>
+            <input type="hidden" name="_action" value="fulfill" />
+            <button
+              type="submit"
+              class="rounded-md bg-brand px-5 py-2 font-medium text-white hover:bg-brand-hover"
+            >
+              {t('admin.orders.detail.markReadyForPickup')}
+            </button>
+            {willEmailCustomer && <p class="text-xs text-gray-500">{t('admin.orders.detail.pickupWillEmail')}</p>}
+          </form>
+        ) : (
         <form
           method="POST"
           action={`/api/admin/orders/${order.public_id}`}
@@ -710,6 +738,7 @@ const willEmailCustomer =
             {t('admin.orders.detail.markFulfilled')}
           </button>
         </form>
+        )}
         </div>
       )
     }

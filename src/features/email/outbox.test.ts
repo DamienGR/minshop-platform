@@ -11,6 +11,8 @@ vi.mock('../settings/db', () => ({ getStoreSettings: vi.fn() }));
 vi.mock('./orderConfirmation', () => ({
   orderConfirmationEmail: vi.fn(() => ({ to: 'c@x', subject: 'r', html: '', text: '' })),
   orderNotificationEmail: vi.fn(() => ({ to: 'o@x', subject: 'n', html: '', text: '' })),
+  orderShippedEmail: vi.fn(() => ({ to: 'c@x', subject: 'shipped', html: '', text: '' })),
+  orderPickupReadyEmail: vi.fn(() => ({ to: 'c@x', subject: 'ready', html: '', text: '' })),
 }));
 vi.mock('../orders/guestAccess.ts', () => ({
   guestOrderUrl: vi.fn(async () => null),
@@ -320,6 +322,61 @@ describe('deliverOrderNotifications', () => {
     await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
     expect(rows[0].state).toBe('skipped');
     expect(send).not.toHaveBeenCalled();
+  });
+
+  describe('a pickup is ready, never on its way (ticket #238)', () => {
+    const row = (kind: string): Row => ({
+      order_id: 7,
+      kind,
+      state: 'pending',
+      attempts: 0,
+      lease_expires_at: null,
+      last_error: null,
+    });
+    const fulfilled = (delivery_method: string | null) =>
+      vi.mocked(getOrder).mockResolvedValue({ ...ORDER, fulfillment_status: 'fulfilled', delivery_method } as never);
+
+    it('sends the ready notice for a pickup, under its own key', async () => {
+      fulfilled('pickup');
+      const rows = [row('order-pickup-ready')];
+      await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+      expect(rows[0].state).toBe('sent');
+      expect(send.mock.calls[0][0]).toMatchObject({ subject: 'ready', idempotencyKey: `order-pickup-ready/${PUBLIC_ID}` });
+    });
+
+    it('turns a shipped notice queued for a pickup into the ready one, under the same key', async () => {
+      // Queued by a path that did not ask (a core before #238, a label run):
+      // the buyer still gets one notice, and the true one.
+      fulfilled('pickup');
+      const rows = [row('order-shipped'), row('order-pickup-ready')];
+      await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+      expect(send.mock.calls.map(([m]) => m.subject)).toEqual(['ready', 'ready']);
+      // One key for both: Resend delivers the second as the first.
+      expect(new Set(send.mock.calls.map(([m]) => m.idempotencyKey))).toEqual(
+        new Set([`order-pickup-ready/${PUBLIC_ID}`]),
+      );
+      expect(send.mock.calls.some(([m]) => m.subject === 'shipped')).toBe(false);
+    });
+
+    it('skips a ready notice for an order that is shipped, and ships it as before', async () => {
+      fulfilled('shipping');
+      const rows = [row('order-pickup-ready'), row('order-shipped')];
+      await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+      expect(rows.map((r) => r.state)).toEqual(['skipped', 'sent']);
+      expect(send.mock.calls[0][0]).toMatchObject({ subject: 'shipped', idempotencyKey: `order-shipped/${PUBLIC_ID}` });
+    });
+
+    it('skips the ready notice of a pickup made not ready again before the send', async () => {
+      vi.mocked(getOrder).mockResolvedValue({
+        ...ORDER,
+        fulfillment_status: 'unfulfilled',
+        delivery_method: 'pickup',
+      } as never);
+      const rows = [row('order-pickup-ready')];
+      await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+      expect(rows[0].state).toBe('skipped');
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 
   it('reclaims an expired lease from a dead deliverer', async () => {

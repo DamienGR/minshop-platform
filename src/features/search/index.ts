@@ -170,7 +170,9 @@ export async function getSearchProvider(): Promise<SearchProvider> {
  */
 export async function indexProduct(p: Product): Promise<void> {
   if (!(await vectorReady())) return;
-  const cats = await categoriesForProduct(env.DB, p.id);
+  // Every category, hidden ones too (ticket #240): hiding one re-indexes
+  // nothing, so the vector must not depend on when the product was saved.
+  const cats = await categoriesForProduct(env.DB, p.id, { includeHidden: true });
   const text = productEmbedText(p, cats.map((c) => c.name));
   const values = await embedText(env.AI!, getConfig().search.embeddingModel, text);
   await env.VECTORIZE!.upsert([{ id: String(p.id), values }]);
@@ -192,7 +194,7 @@ export async function indexProducts(products: Product[]): Promise<number> {
   const model = getConfig().search.embeddingModel;
   const vectors = await Promise.all(
     products.map(async (p) => {
-      const cats = await categoriesForProduct(env.DB, p.id);
+      const cats = await categoriesForProduct(env.DB, p.id, { includeHidden: true });
       const values = await embedText(env.AI!, model, productEmbedText(p, cats.map((c) => c.name)));
       return { id: String(p.id), values };
     }),

@@ -31,7 +31,9 @@ if (!product) {
 }
 
 const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
-const selectedCategoryIds = (await categoriesForProduct(env.DB, product.id)).map((c) => c.id);
+// Hidden ones included (ticket #240): the form writes back the whole set, so a
+// box missing here would take the product out of a hidden category on save.
+const selectedCategoryIds = (await categoriesForProduct(env.DB, product.id, { includeHidden: true })).map((c) => c.id);
 const images = await listProductImages(env.DB, product.id);
 const error = Astro.url.searchParams.get('error');
 

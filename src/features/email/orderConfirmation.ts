@@ -11,6 +11,7 @@ import { t, formatNumber } from '../i18n/index.ts';
 import { customizationText, parseCustomization } from '../products/customization.ts';
 import { orderVatExemption } from '../legal/vat.ts';
 import type { EmailMessage } from './provider';
+import { emailMarkdownHtml } from './markdown.ts';
 import {
   PALETTE,
   emailShell,
@@ -133,6 +134,26 @@ function relayBlock(order: Order, heading: string, withCode = false): { text: st
 }
 
 /**
+ * The rate the order was paid with and its instructions for the buyer (ticket
+ * #237), under « Livraison », from the copy the order took when it was paid.
+ * Nothing for an order whose rate said none: its e-mails stay as they were.
+ * The HTML part renders the merchant's Markdown for a mailbox (absolute links,
+ * inline styles); the text part keeps it as they wrote it.
+ */
+function deliveryBlock(order: Order, heading: string, origin: string): { text: string[]; html: string } {
+  const instructions = order.shipping_instructions;
+  if (!instructions) return { text: [], html: '' };
+  const label = order.shipping_label;
+  return {
+    text: [``, `${heading} :`, ...(label ? [label] : []), ...instructions.split('\n')],
+    html:
+      emailLabel(heading) +
+      (label ? `<p style="margin:0 0 8px;font-size:14px;line-height:1.6;font-weight:600;">${escapeHtml(label)}</p>` : '') +
+      emailMarkdownHtml(instructions, origin),
+  };
+}
+
+/**
  * The comment the buyer left on the order (ADR 0028), under its heading, its
  * line breaks kept. Their text: escaped in the HTML part like everything else,
  * and never turned into a link.
@@ -165,6 +186,7 @@ export function orderConfirmationEmail(
   const money = (cents: number) => formatPrice(cents, order.currency);
   const orderUrl = guestOrderUrl ?? null;
   const hasDigital = items.some((item) => Boolean(item.file_key));
+  const delivery = deliveryBlock(order, t('email.delivery.heading'), baseUrl);
   const relay = relayBlock(order, t('email.relay.heading'));
   const comment = commentBlock(order, t('email.order.comment'));
 
@@ -180,6 +202,7 @@ export function orderConfirmationEmail(
     ``,
     ...rows,
     ...totalLines(order, money),
+    ...delivery.text,
     ...relay.text,
     ...comment.text,
     ...(hasDigital && orderUrl ? [``, t('email.order.download')] : []),
@@ -189,7 +212,11 @@ export function orderConfirmationEmail(
   const html = emailShell({
     storeName,
     heading: t('email.order.heading'),
-    subheading: t('email.order.subheading', { numero: num }),
+    // A pickup is never shipped (ticket #238): the next e-mail says it is ready.
+    subheading:
+      order.delivery_method === 'pickup'
+        ? t('email.order.subheadingPickup', { numero: num })
+        : t('email.order.subheading', { numero: num }),
     body:
       emailItemsTable(
         items.map((it) => ({
@@ -202,6 +229,7 @@ export function orderConfirmationEmail(
         totalRows(order, money),
       ) +
       vatExemptionHtml(order) +
+      delivery.html +
       relay.html +
       comment.html +
       (hasDigital && orderUrl
@@ -240,6 +268,8 @@ export function orderNotificationEmail(
   const num = orderReference(order.public_id, order.id, getConfig().orderNumber);
   const money = (cents: number) => formatPrice(cents, order.currency);
   const shipText = formatShipAddress(order);
+  // Which rate, so a shop with a pickup per place knows which (ticket #237).
+  const rate = order.shipping_label;
   const relay = relayBlock(order, t('email.notification.relayPoint'), true);
   // Read before the lines: it may change how they are made or packed.
   const comment = commentBlock(order, t('email.notification.comment'));
@@ -258,6 +288,7 @@ export function orderNotificationEmail(
     ``,
     `${t('email.notification.shipTo')} :`,
     shipText,
+    ...(rate ? [``, `${t('email.notification.rate')} :`, rate] : []),
     ...relay.text,
     ...comment.text,
     ``,
@@ -281,6 +312,10 @@ export function orderNotificationEmail(
       )}<br><span style="font-family:monospace;">${escapeHtml(publicId)}</span></p>` +
       emailLabel(t('email.notification.shipTo')) +
       `<p style="margin:0;font-size:14px;line-height:1.6;">${escapeHtml(shipText).replace(/\n/g, '<br>')}</p>` +
+      (rate
+        ? emailLabel(t('email.notification.rate')) +
+          `<p style="margin:0;font-size:14px;line-height:1.6;">${escapeHtml(rate)}</p>`
+        : '') +
       relay.html +
       comment.html +
       emailItemsTable(
@@ -305,18 +340,24 @@ export function orderNotificationEmail(
   };
 }
 
-/** Build the "your order has shipped" email. `order.email` must be set. */
+/**
+ * Build the "your order has shipped" email. `order.email` must be set. Never
+ * for a pickup, which is not shipped: orderPickupReadyEmail is its notice.
+ */
 export function orderShippedEmail(
   order: Order,
   storeName: string,
   /** Tokenized guest link (allowlisted email position); null = omit the link. */
   guestOrderUrl?: string | null,
+  /** The site origin, for the links of the rate's instructions (ticket #237). */
+  baseUrl = '',
 ): EmailMessage {
   const cfg = getConfig();
   const num = orderReference(order.public_id, order.id, cfg.orderNumber);
   const url = orderTrackingUrl(order);
   const carrier = shippedCarrierName(order.tracking_carrier);
   const orderUrl = guestOrderUrl ?? null;
+  const delivery = deliveryBlock(order, t('email.delivery.heading'), baseUrl);
   const relay = relayBlock(order, t('email.shipped.relayPoint'));
 
   const text = [
@@ -329,6 +370,7 @@ export function orderShippedEmail(
           ...(url ? [t('email.shipped.trackLine', { url })] : []),
         ]
       : []),
+    ...delivery.text,
     ...relay.text,
     ...(orderUrl ? [``, t('email.order.viewOrderLine', { url: orderUrl })] : []),
   ].join('\n');
@@ -351,6 +393,7 @@ export function orderShippedEmail(
     subheading: t('email.shipped.subheading', { numero: num }),
     body:
       trackingHtml +
+      delivery.html +
       relay.html +
       (url
         ? emailButton(url, t('email.shipped.trackButton'))
@@ -366,6 +409,57 @@ export function orderShippedEmail(
   return {
     to: order.email!,
     subject: t('email.shipped.subject', { boutique: storeName, numero: num }),
+    html,
+    text,
+  };
+}
+
+/**
+ * Build the "ready to collect" email of a pickup order (ticket #238), sent
+ * where a delivery is told it is on its way. `order.email` must be set. The
+ * place is the rate the buyer chose, a shop with several places having a rate
+ * for each, and its instructions say where, when and how (ticket #237).
+ */
+export function orderPickupReadyEmail(
+  order: Order,
+  storeName: string,
+  /** Tokenized guest link (allowlisted email position); null = omit the link. */
+  guestOrderUrl: string | null,
+  /** The site origin, for the links of the rate's instructions. */
+  baseUrl: string,
+): EmailMessage {
+  const cfg = getConfig();
+  const num = orderReference(order.public_id, order.id, cfg.orderNumber);
+  const orderUrl = guestOrderUrl ?? null;
+  const heading = t('email.pickup.where');
+  const label = order.shipping_label;
+  const instructions = order.shipping_instructions;
+  const place = label || instructions;
+
+  const text = [
+    t('email.pickup.text', { numero: num }),
+    ...(place
+      ? [``, `${heading} :`, ...(label ? [label] : []), ...(instructions ? instructions.split('\n') : [])]
+      : []),
+    ...(orderUrl ? [``, t('email.order.viewOrderLine', { url: orderUrl })] : []),
+  ].join('\n');
+
+  const html = emailShell({
+    storeName,
+    heading: t('email.pickup.heading'),
+    subheading: t('email.pickup.subheading', { numero: num }),
+    body:
+      (place ? emailLabel(heading) : '') +
+      (label
+        ? `<p style="margin:0 0 8px;font-size:14px;line-height:1.6;font-weight:600;">${escapeHtml(label)}</p>`
+        : '') +
+      (instructions ? emailMarkdownHtml(instructions, baseUrl) : '') +
+      (orderUrl ? emailButton(orderUrl, t('email.order.viewOrder')) : ''),
+  });
+
+  return {
+    to: order.email!,
+    subject: t('email.pickup.subject', { boutique: storeName, numero: num }),
     html,
     text,
   };

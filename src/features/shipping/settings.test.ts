@@ -376,8 +376,9 @@ describe('validateShippingDocument', () => {
   it('reads a document an older core saved, and refuses one from a newer core', () => {
     expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 3 }))).status).toBe('valid');
     expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 4 }))).status).toBe('valid');
-    expect(SHIPPING_SCHEMA_VERSION).toBe(5);
-    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 6 }))).status).toBe('invalid');
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 5 }))).status).toBe('valid');
+    expect(SHIPPING_SCHEMA_VERSION).toBe(6);
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(doc({ schema: 7 }))).status).toBe('invalid');
   });
   it('requires at least one band on a weight rate', () => {
     const empty = doc({
@@ -527,6 +528,118 @@ describe('a rate offered from a threshold (ticket #220)', () => {
         [0, 'Indiquez un montant supérieur à zéro.'],
       ]);
     }
+  });
+});
+
+describe('a rate’s instructions for the buyer (ticket #237)', () => {
+  const said = (instructions: unknown, over: Partial<RuntimeShippingConfig['zones'][number]['rates'][number]> = {}) =>
+    doc({
+      zones: [
+        {
+          name: 'France',
+          countries: ['FR'],
+          rates: [
+            { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+            {
+              label: 'Retrait à l’atelier',
+              pricing: { type: 'pickup', amountCents: 0 },
+              instructions: instructions as string,
+              ...over,
+            },
+          ],
+          freeOverCents: null,
+        },
+      ],
+    });
+  const messages = (d: RuntimeShippingConfig) => validateShippingDocument(d).map((e) => e.message);
+  const TEXT = '12 rue des Lilas, Rennes.\n\n- le mercredi, 14 h – 18 h\n- sinon, [écrivez-nous](/pages/contact)';
+
+  it('is written as version 6, and only then', () => {
+    expect(shippingSchemaFor(said(TEXT))).toBe(6);
+    expect(shippingSchemaFor(said(TEXT, { pricing: { type: 'flat', amountCents: 500 }, freeOverCents: 6000 }))).toBe(6);
+    // Without any, a shop's document stays the one an older core reads.
+    expect(shippingSchemaFor(said(null))).toBe(4);
+    expect(shippingSchemaFor(said(undefined, { pricing: { type: 'flat', amountCents: 500 }, freeOverCents: 6000 }))).toBe(5);
+  });
+
+  it('reads back whole from a version 6 document, and reaches the calculator', () => {
+    const parsed = parseRuntimeShippingConfig(serializeRuntimeShippingConfig(said(TEXT)));
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.config.zones[0]!.rates[1]!.instructions).toBe(TEXT);
+    expect(parsed.config.zones[0]!.rates[0]).not.toHaveProperty('instructions');
+    const { config } = effectiveShippingConfig(buildTime, parsed, null);
+    expect(config.zones[0]!.rates[1]).toMatchObject({ instructions: TEXT });
+  });
+
+  it('is refused in an older document, which a rollback would read without it', () => {
+    const parsed = parseRuntimeShippingConfig(serializeRuntimeShippingConfig({ ...said(TEXT), schema: 5 }));
+    expect(parsed.status).toBe('invalid');
+    if (parsed.status === 'invalid') expect(parsed.error).toBe('La configuration de livraison contient un tarif mal formé.');
+    expect(parseRuntimeShippingConfig(serializeRuntimeShippingConfig(said(42))).status).toBe('invalid');
+  });
+
+  it('stands on any mode, at most 500 characters, without an image', () => {
+    expect(messages(said(TEXT))).toEqual([]);
+    expect(messages(said(TEXT, { pricing: { type: 'flat', amountCents: 500 } }))).toEqual([]);
+    expect(messages(said('x'.repeat(500)))).toEqual([]);
+    expect(messages(said('x'.repeat(501)))).toEqual(['Les instructions ne doivent pas dépasser 500 caractères.']);
+    expect(messages(said('Voici l’atelier :\n\n![la porte](/images/porte.jpg)'))).toEqual([
+      'Les instructions ne prennent pas d’image\u202f: décrivez le lieu, ou mettez un lien vers une page qui le montre.',
+    ]);
+    // Raw HTML is text, not an image: the page renders it escaped.
+    expect(messages(said('<img src="/images/porte.jpg">'))).toEqual([]);
+  });
+
+  it('is checked in build-time configuration like in a saved one', () => {
+    const buildTimeSaid: ShippingConfig = {
+      enabled: true,
+      zones: [
+        {
+          countries: ['FR'],
+          rates: [{ label: 'Retrait', pricing: { type: 'pickup', amountCents: 0 }, instructions: '![x](/x.png)' }],
+          freeOverCents: null,
+        },
+      ],
+    };
+    expect(validateBuildTimeShipping(buildTimeSaid)).toBe(
+      'Les instructions ne prennent pas d’image\u202f: décrivez le lieu, ou mettez un lien vers une page qui le montre.',
+    );
+  });
+
+  it('round-trips through the editor, trimmed, with Windows line ends folded', () => {
+    expect(documentToForm(said(TEXT), 'eur', 'g', formatWeightValue).zones[0]!.rates.map((r) => r.instructionsValue)).toEqual([
+      '',
+      TEXT,
+    ]);
+    const form = (instructions: string) =>
+      new TestForm()
+        .set('enabled', '1')
+        .set('revision', '1')
+        .set('zone_order', 'z_a')
+        .set('zone[z_a][name]', 'France')
+        .set('zone[z_a][countries][]', 'FR')
+        .set('zone[z_a][rate_order]', 'r_1')
+        .set('zone[z_a][rate][r_1][label]', 'Retrait à l’atelier')
+        .set('zone[z_a][rate][r_1][mode]', 'pickup')
+        .set('zone[z_a][rate][r_1][amount]', '0')
+        .set('zone[z_a][rate][r_1][instructions]', instructions);
+    const options = { currency: 'eur', unit: 'g' as const };
+
+    const parsed = parseShippingForm(form('  12 rue des Lilas\r\nle mercredi  \r\n'), options);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.document.zones[0]!.rates[0]).toMatchObject({ instructions: '12 rue des Lilas\nle mercredi' });
+    expect(shippingSchemaFor(parsed.document)).toBe(6);
+
+    // Blank: nothing written, and the document stays the one it was.
+    const blank = parseShippingForm(form('   \r\n '), options);
+    expect(blank.document.zones[0]!.rates[0]).not.toHaveProperty('instructions');
+    expect(shippingSchemaFor(blank.document)).toBe(4);
+
+    // Refused text is kept in the field for the merchant to correct.
+    const refused = parseShippingForm(form('x'.repeat(501)), options);
+    expect(refused.errors.map((e) => [e.field, e.rateIndex])).toEqual([['instructions', 0]]);
+    expect(refused.model.zones[0]!.rates[0]!.instructionsValue).toBe('x'.repeat(501));
   });
 });
 

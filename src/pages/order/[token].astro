@@ -12,6 +12,7 @@ import { clearCart } from '../../features/cart/cart';
 import { catalogPath } from '../../features/settings/home';
 import { paymentMethodName } from '../../features/payments/labels';
 import { orderRelayPoint, relayPointLines } from '../../features/shipping/relay.ts';
+import { shippingInstructionsHtml } from '../../features/shipping/instructions.ts';
 import { formatNumber, t } from '../../features/i18n';
 import { orderVatExemption } from '../../features/legal/vat';
 import { customizationText, parseCustomization } from '../../features/products/customization';
@@ -61,6 +62,11 @@ const orderRef = order
 const paymentLabel = order?.payment_method ? paymentMethodName(order.payment_method) : null;
 // Where the parcel is to be collected, as the checkout served the point.
 const relayPoint = order ? orderRelayPoint(order) : null;
+// The chosen rate's instructions (ticket #237), from the copy the order took
+// when it was paid: a rate edited since changes nothing here.
+const deliveryInstructions = order?.shipping_instructions
+  ? shippingInstructionsHtml(order.shipping_instructions)
+  : null;
 const vatExemption = order ? orderVatExemption(order) : null;
 // Computed here rather than as `rate && (…)` in the template: an exempt order
 // records a rate of 0, and Astro prints a falsy 0 where it would drop a false.
@@ -129,6 +135,13 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
             leaving the franchise en base keeps the mention on what it sold
             before (ADR 0024). */}
         {vatExemption && <p class="text-sm text-muted">{t(`vat.exemption.${vatExemption}`)}</p>}
+        {deliveryInstructions && (
+          <section class="mt-8 rounded-lg border border-line bg-surface p-5" data-order-delivery>
+            <h2 class="font-serif text-2xl">{t('order.delivery')}</h2>
+            {order.shipping_label && <p class="mt-3 font-medium">{order.shipping_label}</p>}
+            <div class="shipping-instructions mt-2" set:html={deliveryInstructions} />
+          </section>
+        )}
         {relayPoint && (
           <section class="mt-8 rounded-lg border border-line bg-surface p-5">
             <h2 class="font-serif text-2xl">{t('order.relayPoint')}</h2>

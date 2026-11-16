@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import { catalogPath, resolveHomePath } from '../settings/home.ts';
 import { withPublicId } from '../ids/publicId.ts';
 import { t } from '../i18n/index.ts';
+import { HIDDEN_CATEGORY_IDS } from '../categories/visibility.ts';
 
 export type MenuLocation = 'header' | 'footer';
 export type MenuTargetType = 'home' | 'catalog' | 'page' | 'product' | 'category';
@@ -143,7 +144,7 @@ SELECT
     WHEN 'catalog'  THEN 1
     WHEN 'page'     THEN CASE WHEN pg.published = 1 THEN 1 ELSE 0 END
     WHEN 'product'  THEN CASE WHEN pr.active = 1 THEN 1 ELSE 0 END
-    WHEN 'category' THEN CASE WHEN c.id IS NOT NULL THEN 1 ELSE 0 END
+    WHEN 'category' THEN CASE WHEN c.id IS NOT NULL AND c.id NOT IN ${HIDDEN_CATEGORY_IDS} THEN 1 ELSE 0 END
   END AS available
 FROM bounded mi
 LEFT JOIN pages      pg ON mi.target_type = 'page'     AND pg.id = mi.target_id
@@ -278,7 +279,7 @@ export async function addMenuItem(
                     (?2 IN ('home', 'catalog') AND ?3 IS NULL)
                  OR (?2 = 'page'     AND EXISTS (SELECT 1 FROM pages      WHERE id = ?3 AND published = 1))
                  OR (?2 = 'product'  AND EXISTS (SELECT 1 FROM products   WHERE id = ?3 AND active = 1))
-                 OR (?2 = 'category' AND EXISTS (SELECT 1 FROM categories WHERE id = ?3))
+                 OR (?2 = 'category' AND EXISTS (SELECT 1 FROM categories WHERE id = ?3 AND id NOT IN ${HIDDEN_CATEGORY_IDS}))
               )
               AND NOT (
                     ?2 IN ('home', 'catalog')

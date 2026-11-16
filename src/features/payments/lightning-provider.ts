@@ -27,6 +27,8 @@ export interface MintLightningOrderInput {
   subtotalCents: number;
   shippingCents?: number;
   shippingLabel?: string | null;
+  /** The chosen rate's instructions for the buyer (ticket #237). */
+  shippingInstructions?: string | null;
   shippingWeightGrams?: number | null;
   deliveryMethod?: DeliveryMethod | null;
   /** Pre-serialized JSON cart snapshot: [{ id, q, n, p }]. */
@@ -86,6 +88,7 @@ export async function mintLightningOrder(
     itemsJson: input.itemsJson ?? null,
     shippingCents,
     shippingLabel: input.shippingLabel ?? null,
+    shippingInstructions: input.shippingInstructions ?? null,
     shippingWeightGrams: input.shippingWeightGrams ?? null,
     deliveryMethod: input.deliveryMethod ?? null,
     shipAddressJson: input.shippingAddress ? JSON.stringify(input.shippingAddress) : null,

@@ -127,6 +127,14 @@ What it asserts, and why each one is here rather than in vitest:
   motion the photo changes at once, without a veil. `serve.mjs` links
   sample-tee's default to its second photo and adds an in-stock Medium on a
   third. Skipped against `BASE_URL`.
+- **a rate's instructions** (`checkout-instructions.spec.mjs`) — the text a
+  rate says to the buyer (ticket #237): saved through Admin → Livraison's own
+  page, it stands under its rate at the rate step of /checkout, outside the
+  label, as the radio's accessible description; the card is marked once its
+  rate is chosen, the page does not scroll sideways, and axe passes on the
+  rates. The transfer opens the rate step (the demo skips it): the spec opens
+  it and closes it again, and empties the field it filled, so the store is
+  left with the rates it had. Skipped against `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

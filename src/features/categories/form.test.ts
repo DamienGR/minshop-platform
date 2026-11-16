@@ -33,3 +33,16 @@ describe('a category’s description', () => {
     });
   });
 });
+
+// Ticket #240: a box, so an unticked one is simply absent from the form.
+describe('« Cacher cette catégorie »', () => {
+  const hidden = (entries: Record<string, string>) => {
+    const parsed = parseCategoryForm(form({ name: 'Noël', ...entries }));
+    return 'error' in parsed ? parsed : parsed.data.hidden;
+  };
+
+  it('is on when the box is sent, off when it is not', () => {
+    expect(hidden({ hidden: 'on' })).toBe(true);
+    expect(hidden({})).toBe(false);
+  });
+});

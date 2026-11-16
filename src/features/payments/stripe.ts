@@ -41,6 +41,22 @@ export function classifyRateDelivery(
   return parseDeliveryMethod(metadata?.delivery) ?? 'unknown';
 }
 
+/**
+ * A rate's metadata, as session creation stamps it: its delivery mode, and
+ * the instructions it carries for the buyer (ticket #237), which reach the
+ * order only this way — the rate is chosen on Stripe's page. A metadata value
+ * holds 500 characters, the limit Admin → Livraison puts on instructions.
+ */
+export function rateMetadata(delivery: DeliveryMethod, instructions?: string | null): Record<string, string> {
+  return { delivery, ...(instructions ? { instructions } : {}) };
+}
+
+/** The instructions a chosen rate carried, or null for none (or an older session). */
+export function rateInstructions(metadata: Record<string, string> | null | undefined): string | null {
+  const value = metadata?.instructions;
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
 // Shipping details have moved across Stripe API versions (session.shipping_details
 // → session.collected_information.shipping_details); this is the shape we read.
 type ShippingDetails = {
@@ -133,7 +149,7 @@ export function createStripeProvider(
                   amount: chosen.amountCents,
                   currency: params.lineItems[0]?.currency ?? DEFAULT_CURRENCY,
                 },
-                metadata: { delivery: chosen.deliveryMethod },
+                metadata: rateMetadata(chosen.deliveryMethod, chosen.instructions),
                 ...(params.automaticTax && { tax_behavior: 'exclusive' as const }),
               },
             },
@@ -157,7 +173,7 @@ export function createStripeProvider(
               // The mode travels as rate metadata because the label is merchant
               // prose: settlement reads this back to record delivery_method
               // without parsing "Local pickup" out of display text.
-              metadata: { delivery: o.pickup ? 'pickup' : 'shipping' },
+              metadata: rateMetadata(o.pickup ? 'pickup' : 'shipping', o.instructions),
               ...(params.automaticTax && { tax_behavior: 'exclusive' as const }),
             },
           })),
@@ -257,12 +273,14 @@ export function createStripeProvider(
         // rate is chosen on Stripe's page. `display_name` is the label we sent as
         // `shipping_rate_data.display_name`, so no duplicate metadata is needed.
         let shippingLabel: string | null = null;
+        let shippingInstructions: string | null = null;
         let deliveryMethod: DeliveryMethod | 'unknown' | null = null;
         const rateRef = session.shipping_cost?.shipping_rate;
         if (typeof rateRef === 'string') {
           try {
             const rate = await stripe.shippingRates.retrieve(rateRef);
             shippingLabel = rate.display_name ?? null;
+            shippingInstructions = rateInstructions(rate.metadata);
             deliveryMethod = classifyRateDelivery(rate.metadata);
           } catch {
             // A missing rate must not fail an otherwise valid paid order — but
@@ -273,6 +291,7 @@ export function createStripeProvider(
           }
         } else if (rateRef && typeof rateRef === 'object') {
           shippingLabel = rateRef.display_name ?? null;
+          shippingInstructions = rateInstructions(rateRef.metadata);
           deliveryMethod = classifyRateDelivery(rateRef.metadata);
         }
         const weightRaw = session.metadata?.shipping_weight_grams;
@@ -322,6 +341,7 @@ export function createStripeProvider(
             amountTotalCents: session.amount_total ?? 0,
             shippingCents,
             shippingLabel,
+            shippingInstructions,
             shippingWeightGrams,
             deliveryMethod,
             discountCents,
