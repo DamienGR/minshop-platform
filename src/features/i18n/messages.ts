@@ -54,6 +54,8 @@ export const fr = {
   'catalog.title.all': 'Tous les produits',
   'catalog.categories.label': 'Catégories',
   'catalog.sort.label': 'Trier',
+  // The merchant's order of a category's products (ticket #239): no arrow, no reverse.
+  'catalog.sort.default': 'Par défaut',
   'catalog.sort.newest': 'Nouveautés',
   'catalog.sort.price': 'Prix',
   'catalog.sort.name': 'Nom',

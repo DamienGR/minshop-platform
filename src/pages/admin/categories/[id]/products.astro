@@ -1,0 +1,145 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import ProductImage from '../../../../features/products/ProductImage.astro';
+import { getCategoryByPublicId, listProductsForOrdering } from '../../../../features/categories/db';
+import { parsePublicId } from '../../../../features/ids/publicId';
+import { t } from '../../../../features/i18n';
+
+/**
+ * Admin → Catégories → « Ordre des produits » (ticket #239): what the
+ * category's page shows, its sub-categories' products included, in its
+ * « Par défaut » order, each with its rank in a field. The form posts the list
+ * as shown and the ranks; `applyRanks()` (features/categories/productOrder.ts)
+ * moves the products whose rank changed, and the whole list is written 1 to n.
+ * No script: a product goes from 40th to 1st in one entry.
+ */
+const publicId = parsePublicId(Astro.params.id, 'category');
+const category = publicId ? await getCategoryByPublicId(env.DB, publicId) : null;
+
+if (!category) {
+  return new Response(t('admin.categories.notFound'), { status: 404 });
+}
+
+const { ordered, products } = await listProductsForOrdering(env.DB, category.id);
+const error = Astro.url.searchParams.get('error');
+const saved = Astro.url.searchParams.has('saved');
+const cleared = Astro.url.searchParams.has('cleared');
+const action = `/api/admin/categories/${category.public_id}`;
+---
+
+<AdminLayout title={t('admin.categories.productOrder.title', { nom: category.name })} active="categories">
+  <a href="/admin/categories" class="text-sm text-gray-500 hover:text-brand">&larr; {t('admin.categories.back')}</a>
+  <h1 class="mt-4 mb-2 font-serif text-3xl tracking-tight">
+    {t('admin.categories.productOrder.title', { nom: category.name })}
+  </h1>
+  <p class="mb-2 max-w-prose text-sm text-gray-500">{t('admin.categories.productOrder.intro')}</p>
+  <p class="mb-8 max-w-prose text-sm text-gray-500" data-product-order={ordered ? 'ordered' : 'none'}>
+    {ordered ? t('admin.categories.productOrder.ordered') : t('admin.categories.productOrder.unordered')}
+  </p>
+
+  {
+    error && (
+      <p class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {error}
+      </p>
+    )
+  }
+  {
+    (saved || cleared) && !error && (
+      <p role="status" class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        {saved ? t('admin.categories.productOrder.saved') : t('admin.categories.productOrder.cleared')}
+      </p>
+    )
+  }
+
+  {
+    products.length === 0 ? (
+      <p role="status" class="text-sm text-gray-500">
+        {t('admin.categories.productOrder.empty')}
+      </p>
+    ) : (
+      <form method="POST" action={action} class="max-w-2xl">
+        <input type="hidden" name="_action" value="productOrder" />
+        <table class="w-full text-left text-sm">
+          <thead>
+            <tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
+              <th class="w-20 py-3 pr-4 font-normal">{t('admin.categories.productOrder.column.rank')}</th>
+              <th class="py-3 font-normal">{t('admin.categories.productOrder.column.product')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              products.map((p, i) => (
+                <tr class="border-b border-line" data-product={p.public_id}>
+                  <td class="py-2 pr-4">
+                    <input type="hidden" name="product" value={p.public_id} />
+                    <input
+                      type="number"
+                      name={`rank-${p.public_id}`}
+                      value={i + 1}
+                      min="1"
+                      max={products.length}
+                      step="1"
+                      inputmode="numeric"
+                      aria-label={t('admin.categories.productOrder.rankLabel', { nom: p.name })}
+                      class="w-16 rounded-md border border-line px-2 py-1 tabular-nums focus:border-brand focus:outline-none"
+                    />
+                  </td>
+                  <td class="py-2">
+                    <a
+                      href={`/admin/products/${p.public_id}/edit`}
+                      class="flex items-center gap-3 hover:text-brand"
+                    >
+                      <ProductImage
+                        imageKey={p.image_key}
+                        alt=""
+                        usage="thumbnail"
+                        class="h-10 w-10 shrink-0 rounded object-cover"
+                      />
+                      <span class="font-medium">{p.name}</span>
+                    </a>
+                    {(!p.active || (ordered && p.manual_position === null)) && (
+                      <span class="mt-1 flex flex-wrap gap-2 pl-[3.25rem] text-xs text-gray-500">
+                        {!p.active && (
+                          <span class="rounded bg-gray-100 px-1.5 py-0.5">{t('admin.categories.productOrder.offline')}</span>
+                        )}
+                        {ordered && p.manual_position === null && (
+                          <span class="rounded bg-amber-50 px-1.5 py-0.5 text-amber-800" data-unplaced>
+                            {t('admin.categories.productOrder.unplaced')}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        <button
+          type="submit"
+          class="mt-6 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+        >
+          {t('admin.categories.productOrder.save')}
+        </button>
+      </form>
+    )
+  }
+
+  {
+    ordered && (
+      <form
+        method="POST"
+        action={action}
+        class="mt-10 border-t border-line pt-6"
+        onsubmit={`return confirm('${t('admin.categories.productOrder.confirmClear')}')`}
+      >
+        <input type="hidden" name="_action" value="clearProductOrder" />
+        <button type="submit" class="text-xs uppercase tracking-widest text-red-600 hover:underline">
+          {t('admin.categories.productOrder.clear')}
+        </button>
+      </form>
+    )
+  }
+</AdminLayout>

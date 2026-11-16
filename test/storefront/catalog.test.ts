@@ -6,6 +6,8 @@ import {
   buildCatalogCategories,
   buildPaginationModel,
   buildSortModel,
+  buildCategorySortModel,
+  categorySortParams,
   catalogRoute,
 } from '../../src/features/storefront/catalog';
 import type { Category } from '../../src/features/categories/db';
@@ -189,6 +191,41 @@ describe('buildSortModel', () => {
     for (const option of buildSortModel('/categories/apparel', 'newest', 'desc').options) {
       expect(option.href.startsWith('/categories/apparel')).toBe(true);
     }
+  });
+});
+
+describe('the sort of a category page (ticket #239)', () => {
+  const base = '/categories/sacs';
+  const labels = (model: ReturnType<typeof buildCategorySortModel>) =>
+    model.options.map((o) => `${o.label}${o.current ? '*' : ''}${o.direction ? ` ${o.direction}` : ''}`);
+
+  it('offers « Par défaut » first, on the bare path, with no arrow, once the merchant ordered it', () => {
+    const model = buildCategorySortModel(base, { sort: 'manual', dir: 'desc' }, true);
+    expect(labels(model)).toEqual(['Par défaut*', 'Nouveautés', 'Prix', 'Nom']);
+    expect(model.options[0]).toMatchObject({ href: base, direction: null });
+    // Nouveautés is no longer the bare path: its link names it.
+    expect(model.options[1].href).toBe(`${base}?sort=newest&dir=desc`);
+  });
+
+  it('keeps « Par défaut » on offer, not current, under another sort', () => {
+    const model = buildCategorySortModel(base, { sort: 'price', dir: 'asc' }, true);
+    expect(labels(model)).toEqual(['Par défaut', 'Nouveautés', 'Prix* asc', 'Nom']);
+    expect(model.options[0].href).toBe(base);
+  });
+
+  it('changes nothing on a category with no order: the bare path reads Nouveautés ↓', () => {
+    const model = buildCategorySortModel(base, { sort: 'manual', dir: 'desc' }, false);
+    expect(model).toEqual(buildSortModel(base, 'newest', 'desc'));
+    expect(labels(model)).toEqual(['Nouveautés* desc', 'Prix', 'Nom']);
+  });
+
+  it('keeps the sort in the pagination links, sort=newest included once the bare path is « Par défaut »', () => {
+    expect(categorySortParams({ sort: 'manual', dir: 'desc' }, true)).toEqual({});
+    expect(categorySortParams({ sort: 'manual', dir: 'desc' }, false)).toEqual({});
+    expect(categorySortParams({ sort: 'newest', dir: 'desc' }, true)).toEqual({ sort: 'newest', dir: undefined });
+    expect(categorySortParams({ sort: 'newest', dir: 'desc' }, false)).toEqual({ sort: undefined, dir: undefined });
+    expect(categorySortParams({ sort: 'newest', dir: 'asc' }, false)).toEqual({ sort: undefined, dir: 'asc' });
+    expect(categorySortParams({ sort: 'price', dir: 'asc' }, true)).toEqual({ sort: 'price', dir: 'asc' });
   });
 });
 

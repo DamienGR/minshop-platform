@@ -3909,3 +3909,53 @@ marque suit, balayage compris ; une photo retenue par `page.route` laisse la
 première affichée, `aria-busy` et l'indicateur jusqu'à son arrivée ; le
 mouvement réduit change la photo d'un coup, sans voile. Les trois échouent sur
 le socle v0.9.1.
+
+### 13.25 L'ordre des produits d'une catégorie, choisi par le commerçant
+
+Noté le 2026-11-16 (ticket #239), à la demande de Damien : la page d'une
+catégorie listait ses produits du plus récent au plus ancien, ou par prix ou
+par nom au choix du visiteur, sans que le commerçant puisse mettre en avant
+ceux qu'il veut. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-16, migration 0060, sans ADR :
+
+- une table `category_product_positions (category_id, product_id, position)`
+  plutôt qu'une colonne de `product_categories` : la page d'une catégorie
+  montre aussi les produits de ses sous-catégories, et l'ordre range ce que la
+  page montre, si bien qu'une ligne peut nommer un produit qui n'est pas coché
+  dans la catégorie elle-même. Chaque sous-catégorie a son propre ordre ;
+- Admin → Catégories → « Ordre des produits » (`/admin/categories/<id>/products`) :
+  tous les produits que la page peut montrer, hors ligne compris pour garder
+  leur place, dans l'ordre « Par défaut », chacun avec son rang dans un champ
+  numérique. Le formulaire renvoie la liste telle qu'affichée et les rangs ;
+  un produit dont le rang change est retiré puis remis à ce rang, les autres
+  gardent leur ordre (`applyRanks()`, `src/features/categories/productOrder.ts`),
+  et toute la liste est réécrite 1 à n en un lot. « Supprimer l'ordre » efface
+  les lignes de la catégorie. Sans script ;
+- vitrine : `MANUAL_ORDER` (les produits placés par position, puis les autres
+  du plus récent au plus ancien) est le tri de l'adresse nue. Sur une catégorie
+  sans ordre, il lit exactement les lignes de Nouveautés ↓, si bien que la page
+  choisit son tri avant de savoir si la catégorie a un ordre, et ne l'apprend
+  qu'au retour du lot (`hasProductOrderStatement()`), pour libeller la barre de
+  tri : « Par défaut » en tête, sans flèche ni tri inverse, sur une catégorie
+  ordonnée ; Nouveautés ↓ courant sur une autre, comme avant. Nouveautés, Prix
+  et Nom ne changent pas ; `sort=newest` reste explicite dans les liens d'une
+  catégorie ordonnée, et `?dir=asc` seul reste Nouveautés ↑. La colonne
+  `manual_position` n'est lue que sous ce tri (une sonde de clé primaire par
+  produit) ;
+- un produit sans ligne (nouveau, ou lié à la catégorie après coup, dans
+  l'admin comme par l'import CSV) suit les produits placés, du plus récent au
+  plus ancien, et la liste de l'admin le marque « Pas encore placé ». Une ligne
+  dont le produit a quitté la catégorie ne lit rien et disparaît au prochain
+  enregistrement ; supprimer le produit ou la catégorie supprime ses lignes.
+
+Choix de Damien le 2026-11-16 (cartes de décision) : l'ordre couvre tous les
+produits de la page, sous-catégories comprises ; des numéros de position
+plutôt que ↑/↓ ou le glisser-déposer.
+
+Tenu par `productOrder.test.ts` (les rangs), `src/features/products/sort.test.ts`
+(le tri d'une adresse), `test/storefront/catalog.test.ts` (la barre de tri et
+les liens de pagination) et `test/integration/category-product-order.mjs`
+(la route de l'admin, les lectures de la vitrine sous chaque tri, la
+pagination, les arrivées, les suppressions, une liste de 130 produits, contre
+un D1 réel).

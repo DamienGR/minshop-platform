@@ -48,6 +48,7 @@ fi
 RESET_SQL="
 DELETE FROM order_notifications;
 DELETE FROM order_items;
+DELETE FROM category_product_positions;
 DELETE FROM product_categories;
 DELETE FROM product_custom_fields;
 DELETE FROM product_extras;

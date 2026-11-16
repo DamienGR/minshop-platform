@@ -33,7 +33,12 @@ const imageUrl = category.image_key ? mediaUrl(category.image_key, getConfig().i
 
 <AdminLayout title={t('admin.categories.edit.title', { nom: category.name })} active="categories">
   <a href="/admin/categories" class="text-sm text-gray-500 hover:text-brand">&larr; {t('admin.categories.back')}</a>
-  <h1 class="mt-4 mb-6 text-2xl font-bold">{t('admin.categories.edit.heading')}</h1>
+  <div class="mt-4 mb-6 flex flex-wrap items-baseline justify-between gap-4">
+    <h1 class="text-2xl font-bold">{t('admin.categories.edit.heading')}</h1>
+    <a href={`/admin/categories/${category.public_id}/products`} class="text-sm text-accent hover:underline">
+      {t('admin.categories.productOrder')}
+    </a>
+  </div>
   <CategoryForm
     action={`/api/admin/categories/${category.public_id}`}
     submitLabel={t('admin.categories.edit.submit')}
