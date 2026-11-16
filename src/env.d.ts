@@ -57,9 +57,10 @@ declare namespace Cloudflare {
     CHECKOUT_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
     SEARCH_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
     CONTACT_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
-    // Optional: Cloudflare Images binding for upload optimization (needs
-    // Transformations enabled). Absent = uploads stored as-is (imageOptimize.ts
-    // guards + falls back), so the free-plan default config omits it.
+    // Cloudflare Images binding for upload optimization. wrangler.template.jsonc
+    // declares it on every shop; still optional here because a configuration can
+    // lack it (one rendered before the template declared it), and then uploads
+    // are stored as-is (imageOptimize.ts guards + falls back).
     IMAGES?: ImagesBindingMin;
     // Semantic search (config.search.provider='vector'). Present only when bound:
     // AI = Workers AI (embeddings); VECTORIZE = the Vectorize index. Both optional

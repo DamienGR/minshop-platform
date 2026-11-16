@@ -59,6 +59,16 @@ describe('preparing a shop', () => {
     expect(config).not.toMatch(/__[A-Z_]+__/);
   });
 
+  // « Optimiser les images à l'import » needs the binding, and a shop cannot add
+  // one: its wrangler.jsonc is rendered from the template, and a hand edit is
+  // lost at the next deploy. Declared, it costs nothing until the merchant turns
+  // the option on.
+  it('declares the Images binding on every shop', () => {
+    for (const slug of ['pilot-fr', 'canary-minimal']) {
+      expect(prepare(slug).config).toMatch(/^\s*"images": \{ "binding": "IMAGES" \},$/m);
+    }
+  });
+
   // Same template as provision-cf.sh renders, so a witness build and a real
   // provisioning cannot disagree about which bindings a shop gets.
   it('gives the two shops disjoint resource names', () => {
