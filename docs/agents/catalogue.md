@@ -49,6 +49,13 @@ not. The rule is one subquery in the INSERT, written twice like the four below
 (`nextPositionSql()` in `src/features/categories/db.ts`), and pinned against the
 real migrations in `test/scripts/catalog.test.mjs`.
 
+An import links products to categories and writes no product order (ticket
+#239, migration 0060): a product it adds to a category the merchant ordered in
+Admin → Catégories → « Ordre des produits » follows the placed ones on that
+page, newest first, until the merchant places it. A link it removes leaves the
+product's row in `category_product_positions`, which the page no longer reads
+and the next save drops.
+
 Four pure rules exist twice on purpose — `slugify()`, `normalizeTags()`,
 `seoText()` and the image-header dimension reader — because one copy lives in
 the Worker bundle and the other in a CLI with no build step. Each pair is pinned against a shared

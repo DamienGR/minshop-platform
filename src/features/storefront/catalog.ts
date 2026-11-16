@@ -1,6 +1,12 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { childrenOf, type Category } from '../categories/db';
-import { orderByClause, parseStoreSortQuery, STORE_SORTS } from '../products/sort';
+import {
+  orderByClause,
+  parseStoreSortQuery,
+  STORE_SORTS,
+  type CategorySortQuery,
+} from '../products/sort';
+import { t } from '../i18n';
 import { MAX_PUBLIC_PAGE, paginate, queryHref, requestedPage } from '../../pagination';
 import { catalogPageStatement, readCatalogRows } from './reads';
 import type { ListedProduct } from '../products/cardVariants';
@@ -57,6 +63,44 @@ export function buildSortModel(base: string, sort: string, dir: 'asc' | 'desc'):
         direction: current ? dir : null,
       };
     }),
+  };
+}
+
+/**
+ * A category page's sort links (ticket #239). A category the merchant ordered
+ * offers « Par défaut » first: the bare path, no arrow, no reverse. One with
+ * no order offers the storefront's three, and its bare path — the same rows
+ * (`MANUAL_ORDER`) — reads as what it is, Nouveautés ↓.
+ */
+export function buildCategorySortModel(
+  base: string,
+  { sort, dir }: CategorySortQuery,
+  ordered: boolean,
+): StorefrontSortModel {
+  if (!ordered) return buildSortModel(base, sort === 'manual' ? 'newest' : sort, sort === 'manual' ? 'desc' : dir);
+  const { options } = buildSortModel(base, sort, dir);
+  return {
+    options: [
+      { label: t('catalog.sort.default'), href: base, current: sort === 'manual', direction: null },
+      ...options,
+    ],
+  };
+}
+
+/**
+ * The query a category page's own links keep — its pagination — for the sort
+ * it shows (ticket #239). The bare path is « Par défaut » on a category the
+ * merchant ordered and Nouveautés ↓ on another, so only there may an explicit
+ * `sort=newest` be dropped.
+ */
+export function categorySortParams(
+  { sort, dir }: CategorySortQuery,
+  ordered: boolean,
+): { sort?: string; dir?: string } {
+  if (sort === 'manual') return {};
+  return {
+    sort: sort === 'newest' && !ordered ? undefined : sort,
+    dir: dir === 'desc' ? undefined : dir,
   };
 }
 
