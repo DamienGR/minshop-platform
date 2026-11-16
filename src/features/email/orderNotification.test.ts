@@ -11,6 +11,7 @@ const order = (overrides: Partial<Order> = {}): Order =>
     amount_total_cents: 100,
     shipping_cents: 0,
     shipping_label: null,
+    shipping_instructions: null,
     shipping_weight_grams: null,
     discount_cents: 0,
     tax_cents: 0,

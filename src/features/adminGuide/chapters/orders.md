@@ -11,6 +11,16 @@ Les commandes de votre boutique. Une commande n’arrive ici qu’une fois payé
 
 Une erreur ? **Marquer comme non expédiée** annule l’expédition.
 
+### Préparer un retrait sur place
+
+Une commande à retirer n’est pas expédiée : elle est prête, et l’acheteur vient la chercher. La liste dit « À préparer », puis « Prête à retirer ».
+
+1. Ouvrez la commande : le tarif choisi dit où l’acheteur viendra, et les instructions qu’il a lues sont rappelées sous **Instructions données à l’acheteur**.
+2. Préparez la commande.
+3. Dans **Retrait**, cliquez sur **Marquer comme prête à retirer**. Ni transporteur ni numéro de suivi : le client reçoit un e-mail qui lui dit que sa commande est prête, où la retirer et comment.
+
+Une erreur ? **Marquer comme non prête** annule.
+
 ### Acheter l’étiquette chez Boxtal
 
 Si votre boutique est reliée à Boxtal, la commande propose d’acheter l’étiquette :
@@ -37,7 +47,7 @@ Dans la commande, section **Remboursements** :
 ### Retrouver une commande
 
 - La recherche trouve une commande par son numéro.
-- Les filtres **Paiement**, **Expédition** et **Moyen de paiement** réduisent la liste.
+- Les filtres **Paiement**, **Traitement** et **Moyen de paiement** réduisent la liste. « Traitée » réunit les commandes expédiées et les retraits prêts.
 - **Exporter en CSV** télécharge la liste, à ouvrir dans un tableur.
 
 ### Les encadrés à traiter

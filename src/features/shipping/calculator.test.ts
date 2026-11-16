@@ -9,6 +9,7 @@ import {
   hasCatchAllZone,
   normalizeRate,
   zoneOffersRelay,
+  zoneHasInstructions,
   deliveryMethodOf,
   parseDeliveryMethod,
   FREE_SHIPPING_LABEL,
@@ -536,6 +537,67 @@ describe('a rate offered from a threshold (ticket #220)', () => {
       ['Colissimo', 690],
       ['Mondial Relay', 0],
     ]);
+  });
+});
+
+describe('a rate’s instructions for the buyer (ticket #237)', () => {
+  const said: ShippingConfig = {
+    enabled: true,
+    zones: [
+      {
+        countries: ['FR'],
+        rates: [
+          { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+          {
+            label: 'Mondial Relay',
+            pricing: { type: 'relay', offer: 'MONR-CpourToi', price: { type: 'flat', amountCents: 390 } },
+            instructions: 'Choisissez un point près de chez vous.',
+          },
+          {
+            label: 'Retrait à l’atelier',
+            pricing: { type: 'pickup', amountCents: 0 },
+            instructions: '12 rue des Lilas, le mercredi.',
+          },
+        ],
+        freeOverCents: 5000,
+      },
+      { countries: ['BE'], rates: [{ label: 'bpost', pricing: { type: 'flat', amountCents: 900 } }], freeOverCents: null },
+    ],
+  };
+
+  it('rides each option of its rate, whatever its mode', () => {
+    const { options } = quoteShipping(said, {
+      subtotalCents: 1000,
+      country: 'FR',
+      itemWeightGrams: 500,
+      relayOffers: ['MONR-CpourToi'],
+    });
+    expect(options).toEqual([
+      { label: 'Colissimo', amountCents: 690 },
+      {
+        label: 'Mondial Relay',
+        amountCents: 390,
+        relayOffer: 'MONR-CpourToi',
+        instructions: 'Choisissez un point près de chez vous.',
+      },
+      { label: 'Retrait à l’atelier', amountCents: 0, pickup: true, instructions: '12 rue des Lilas, le mercredi.' },
+    ]);
+  });
+
+  it('never stands on the zone’s free shipping, which is no rate of the merchant’s', () => {
+    const { options } = quoteShipping(said, { subtotalCents: 6000, country: 'FR', itemWeightGrams: 500 });
+    const free = options.find((o) => o.label === FREE_SHIPPING_LABEL);
+    expect(free).toBeDefined();
+    expect(free).not.toHaveProperty('instructions');
+  });
+
+  it('sends the card of the zone through /checkout, and only that zone’s', () => {
+    expect(zoneHasInstructions(said, 'FR')).toBe(true);
+    expect(zoneHasInstructions(said, 'fr')).toBe(true);
+    expect(zoneHasInstructions(said, 'BE')).toBe(false);
+    expect(zoneHasInstructions(said, 'US')).toBe(false);
+    expect(zoneHasInstructions({ ...said, enabled: false }, 'FR')).toBe(false);
+    expect(zoneHasInstructions(cfg, 'US')).toBe(false);
   });
 });
 

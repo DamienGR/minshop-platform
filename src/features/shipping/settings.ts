@@ -22,6 +22,11 @@ import {
 } from './calculator.ts';
 import { CATCH_ALL, countryName, isCountryCode } from './countries.ts';
 import { toGrams, type WeightUnit } from './weight.ts';
+import {
+  SHIPPING_INSTRUCTIONS_MAX,
+  normalizeShippingInstructions,
+  shippingInstructionsProblem,
+} from './instructions.ts';
 import { toMinorUnits } from '../../money.ts';
 import { currencyDecimals } from '../../money.ts';
 import { t } from '../i18n/index.ts';
@@ -30,20 +35,25 @@ export const SHIPPING_CONFIG_KEY = 'shipping_config';
 
 /** 1 = flat rates only. 2 adds pricing modes and the package-weight allowance.
  *  3 adds the pickup pricing mode. 4 adds the relay mode (ADR 0020). 5 adds a
- *  rate's own free-over threshold (ticket #220). Bumped so a rollback fails
- *  CLOSED on a document it cannot fully understand instead of silently dropping
- *  rates — or charging for one the merchant offered. The newest this core reads. */
-export const SHIPPING_SCHEMA_VERSION = 5;
+ *  rate's own free-over threshold (ticket #220). 6 adds a rate's instructions
+ *  for the buyer (ticket #237). Bumped so a rollback fails CLOSED on a document
+ *  it cannot fully understand instead of silently dropping rates — or charging
+ *  for one the merchant offered, or selling a pickup without saying where. The
+ *  newest this core reads. */
+export const SHIPPING_SCHEMA_VERSION = 6;
 
 /**
  * The version a save writes: the lowest that holds the document, from 4 up.
  * A document with no rate threshold reads the same under v4, so a core that
  * stops at v4 (socle v0.8.1 and before) keeps reading it after a rollback; only
- * a document that offers a rate is closed to it, which is the point of 5.
+ * a document that offers a rate is closed to it, which is the point of 5. In
+ * the same way, only a rate's instructions close a document to a core that
+ * stops at 5 (socle v0.9.2 and before), which would sell the rate without them.
  */
 export function shippingSchemaFor(config: Pick<RuntimeShippingConfig, 'zones'>): number {
-  const offersARate = config.zones.some((zone) => zone.rates.some((rate) => rate.freeOverCents != null));
-  return offersARate ? 5 : 4;
+  const rates = config.zones.flatMap((zone) => zone.rates);
+  if (rates.some((rate) => Boolean(rate.instructions))) return 6;
+  return rates.some((rate) => rate.freeOverCents != null) ? 5 : 4;
 }
 
 /** A provider offer code as a relay rate stores it: `<operator>-<service>`.
@@ -60,6 +70,8 @@ export const SHIPPING_LIMITS = {
   bandsPerRate: 20,
   zoneName: 60,
   rateLabel: 60,
+  /** A rate's instructions, in characters (features/shipping/instructions.ts). */
+  instructions: SHIPPING_INSTRUCTIONS_MAX,
   json: 64 * 1024,
   amountMinorUnits: 999_999_999,
 } as const;
@@ -69,6 +81,9 @@ export interface RuntimeShippingRate {
   pricing: RatePricing;
   /** Offered once the subtotal reaches this (schema 5). Written only when set. */
   freeOverCents?: number | null;
+  /** What the buyer reads under the rate and on the order (schema 6),
+   *  Markdown. Written only when set. */
+  instructions?: string | null;
 }
 
 export interface RuntimeShippingZone {
@@ -110,7 +125,8 @@ export interface ShippingValidationError {
     | 'freeOver'
     | 'bands'
     | 'upTo'
-    | 'offer';
+    | 'offer'
+    | 'instructions';
   message: string;
 }
 
@@ -369,6 +385,24 @@ export function validateShippingDocument(doc: RuntimeShippingConfig): ShippingVa
         }
       }
 
+      const instructions = rate?.instructions;
+      if (instructions != null) {
+        const problem = typeof instructions === 'string' ? shippingInstructionsProblem(instructions) : 'type';
+        if (problem) {
+          errors.push({
+            zoneIndex,
+            rateIndex,
+            field: 'instructions',
+            message:
+              problem === 'image'
+                ? t('admin.shipping.error.instructionsImage')
+                : problem === 'length'
+                  ? t('admin.shipping.error.instructionsLength', { max: SHIPPING_LIMITS.instructions })
+                  : t('admin.shipping.stored.rate'),
+          });
+        }
+      }
+
       let pricing: RatePricing | undefined = rate?.pricing;
       if (pricing?.type === 'relay') {
         if (typeof pricing.offer !== 'string' || !RELAY_OFFER_CODE.test(pricing.offer)) {
@@ -482,6 +516,11 @@ export function parseRuntimeShippingConfig(
         if (freeOver != null && (doc.schema < 5 || typeof freeOver !== 'number')) {
           return { status: 'invalid', raw, error: t('admin.shipping.stored.rate') };
         }
+        // Instructions are version 6's, by the same reasoning.
+        const instructions = (rate as RuntimeShippingRate).instructions;
+        if (instructions != null && (doc.schema < 6 || typeof instructions !== 'string')) {
+          return { status: 'invalid', raw, error: t('admin.shipping.stored.rate') };
+        }
       }
     }
   } else if (typeof doc.enabled !== 'boolean') {
@@ -509,6 +548,8 @@ export function parseRuntimeShippingConfig(
           // Schema 1 is migrated, never trusted: only a version 5 rate has one.
           ...((doc.schema as number) >= 5 &&
             typeof rate?.freeOverCents === 'number' && { freeOverCents: rate.freeOverCents }),
+          ...((doc.schema as number) >= 6 &&
+            typeof rate?.instructions === 'string' && { instructions: rate.instructions }),
         };
       }),
       freeOverCents: typeof zone?.freeOverCents === 'number' ? zone.freeOverCents : null,
@@ -557,6 +598,7 @@ export function validateBuildTimeShipping(cfg: ShippingConfig): string | null {
               label: rate.label,
               pricing: rate.pricing,
               ...(rate.freeOverCents != null && { freeOverCents: rate.freeOverCents }),
+              ...(rate.instructions != null && { instructions: rate.instructions }),
             }
           : { label: rate.label, pricing: { type: 'flat' as const, amountCents: rate.amountCents } },
       ),
@@ -769,6 +811,8 @@ export interface ShippingFormRate {
   bands: ShippingFormBand[];
   /** « Offert dès » (ticket #220); blank = never. Not on a pickup rate. */
   freeOverValue: string;
+  /** « Instructions pour l'acheteur » (ticket #237), as typed; blank = none. */
+  instructionsValue: string;
 }
 
 /** Whether a form rate is priced by weight bands, a relay rate's own included. */
@@ -829,6 +873,7 @@ function rateToForm(
     relayPricing: relay?.price.type ?? 'flat',
     amountValue: price.type !== 'weight' ? amountToValue(price.amountCents, currency) : '',
     freeOverValue: rate.freeOverCents == null ? '' : amountToValue(rate.freeOverCents, currency),
+    instructionsValue: rate.instructions ?? '',
     bands:
       price.type === 'weight'
         ? price.bands.map((band) => ({
@@ -1059,7 +1104,22 @@ export function parseShippingForm(
           ? toMinorUnits(major, currency)
           : Number.NaN;
 
-      rates.push({ token: rateToken, label, mode, relayOffer, relayPricing, amountValue, bands, freeOverValue });
+      // Kept as typed for the form; stored folded and trimmed, and only when
+      // something is left.
+      const instructionsValue = String(form.get(`${ratePrefix}[instructions]`) ?? '');
+      const instructions = normalizeShippingInstructions(instructionsValue);
+
+      rates.push({
+        token: rateToken,
+        label,
+        mode,
+        relayOffer,
+        relayPricing,
+        amountValue,
+        bands,
+        freeOverValue,
+        instructionsValue,
+      });
       const price = byWeight
         ? ({ type: 'weight', bands: documentBands } as const)
         : ({ type: 'flat', amountCents: flatCents } as const);
@@ -1072,6 +1132,7 @@ export function parseShippingForm(
               ? { type: 'pickup', amountCents: flatCents }
               : price,
         ...(rateFreeOverCents != null && { freeOverCents: rateFreeOverCents }),
+        ...(instructions && { instructions }),
       });
     });
 

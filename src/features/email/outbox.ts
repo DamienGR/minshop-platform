@@ -16,7 +16,12 @@ import { getConfig } from '../../config';
 import { getSetting, setSetting, getStoreSettings, type StoreSettings } from '../settings/db';
 import { getOrder, listOrderItemsWithImages } from '../orders/db';
 import { getEmailProvider } from './index';
-import { orderConfirmationEmail, orderNotificationEmail, orderShippedEmail } from './orderConfirmation';
+import {
+  orderConfirmationEmail,
+  orderNotificationEmail,
+  orderPickupReadyEmail,
+  orderShippedEmail,
+} from './orderConfirmation';
 import { guestLinkReissueEmail } from './guestLinkReissue';
 import { guestOrderUrl, getGuestAccess, sweepAbandonedGuestAccess } from '../orders/guestAccess.ts';
 import { ownerAlertRecipient, shouldSendCustomerOrderEmail } from './orderPolicy';
@@ -148,17 +153,30 @@ export async function deliverOrderNotifications(
       // Shipped notice: queued at fulfillment (label purchase or manual). An
       // order that got UNfulfilled before delivery is skipped, not sent — the
       // promise it makes ("on its way") would be false.
-      if (kind === 'order-shipped') {
+      //
+      // A pickup is never on its way (ticket #238): its notice says it is
+      // ready. The message follows the ORDER, not the row: a shipped notice
+      // queued for a pickup — by a core that predates the ready one, or any
+      // path that did not ask — goes out as the ready notice, under that
+      // notice's key, so the two cannot both arrive through Resend. A ready
+      // notice for an order that is not a pickup is skipped.
+      if (kind === 'order-shipped' || kind === 'order-pickup-ready') {
+        const pickup = order.delivery_method === 'pickup';
         const applicable =
           Boolean(order.email) &&
           shouldSendCustomerOrderEmail(order.payment_method) &&
-          order.fulfillment_status === 'fulfilled';
+          order.fulfillment_status === 'fulfilled' &&
+          (kind === 'order-shipped' || pickup);
         if (!applicable) {
           await markSkipped(db, orderId, kind, attempts);
           continue;
         }
-        const msg = orderShippedEmail(order, storeName, await guestOrderUrl(db, order.public_id, origin));
-        await emailer.send({ ...msg, idempotencyKey: `${kind}/${order.public_id ?? orderId}` });
+        const guestUrl = await guestOrderUrl(db, order.public_id, origin);
+        const msg = pickup
+          ? orderPickupReadyEmail(order, storeName, guestUrl, origin)
+          : orderShippedEmail(order, storeName, guestUrl, origin);
+        const keyKind = pickup ? 'order-pickup-ready' : kind;
+        await emailer.send({ ...msg, idempotencyKey: `${keyKind}/${order.public_id ?? orderId}` });
         await markSent(db, orderId, kind, attempts);
         continue;
       }

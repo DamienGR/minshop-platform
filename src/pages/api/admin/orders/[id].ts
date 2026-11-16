@@ -20,6 +20,7 @@ import {
   type LabelSender,
 } from '../../../../features/shipping/boxtal/orderLabel.ts';
 import { queueNotification } from '../../../../features/email/outboxStore';
+import { isPickupOrder } from '../../../../features/orders/fulfillment';
 import {
   recordExternalRefund,
   syncProviderRefund,
@@ -409,17 +410,20 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     );
   }
 
-  // Fulfill
-  const carrier = String(form.get('carrier') ?? '').trim() || null;
-  const trackingNumber = String(form.get('tracking_number') ?? '').trim() || null;
+  // Fulfill. A pickup is made ready to collect (ticket #238): no carrier and
+  // no tracking, whatever the form sent, and the ready notice in place of the
+  // shipped one. Read off the order's recorded mode, never its label.
+  const pickup = isPickupOrder(existing);
+  const carrier = pickup ? null : String(form.get('carrier') ?? '').trim() || null;
+  const trackingNumber = pickup ? null : String(form.get('tracking_number') ?? '').trim() || null;
   if (!(await fulfillOrder(env.DB, id, carrier, trackingNumber))) {
     return fail(t('admin.orders.notice.fulfillBlocked'));
   }
 
-  // Durable shipped notice: queue + attempt now; a failed send is retried by
-  // the outbox sweep instead of vanishing into a log line. Demo orders and
-  // orders without an email are marked skipped by the deliverer itself.
-  await queueNotification(env.DB, id, 'order-shipped');
+  // Durable notice: queue + attempt now; a failed send is retried by the
+  // outbox sweep instead of vanishing into a log line. Demo orders and orders
+  // without an email are marked skipped by the deliverer itself.
+  await queueNotification(env.DB, id, pickup ? 'order-pickup-ready' : 'order-shipped');
   try {
     await deliverOrderNotifications(env.DB, id, new URL(request.url).origin);
   } catch (err) {

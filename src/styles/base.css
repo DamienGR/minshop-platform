@@ -477,6 +477,20 @@
   padding: 0.5rem 0.75rem;
   text-align: left;
 }
+/* A shipping rate's instructions for the buyer (ticket #237): the merchant's
+   Markdown under the rate at /checkout and on the order's page, at the size of
+   the line it sits under. A heading stays a bold line: a delivery note is not
+   a page. Zero specificity (:where()), so a theme restyles it outside @layer. */
+:where(.shipping-instructions) > * + * { margin-top: 0.375rem; }
+:where(.shipping-instructions) :where(ul, ol) { padding-left: 1.25rem; }
+:where(.shipping-instructions) ul { list-style: disc; }
+:where(.shipping-instructions) ol { list-style: decimal; }
+:where(.shipping-instructions) :where(h1, h2, h3, h4, h5, h6) { font-size: inherit; font-weight: 600; }
+:where(.shipping-instructions) a {
+  color: var(--color-accent, currentColor);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 /* Never let a wide upload break the column; keep the aspect ratio, and centre
    the image in the measure — a 240px photo pinned to the left of a 768px column
    reads as a mistake for the same reason the column itself did.

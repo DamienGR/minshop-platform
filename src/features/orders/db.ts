@@ -29,6 +29,9 @@ export interface Order {
   amount_total_cents: number;
   shipping_cents: number;
   shipping_label: string | null;
+  /** The chosen rate's instructions for the buyer (ticket #237), Markdown, as
+   *  the rate said them when the order was paid; null when it said none. */
+  shipping_instructions: string | null;
   shipping_weight_grams: number | null;
   discount_cents: number;
   tax_cents: number;
@@ -191,6 +194,8 @@ export interface PaidOrderInput {
   /** The service the shopper actually chose, and the weight it was priced at.
    *  Snapshotted so later catalog or rate edits cannot rewrite history. */
   shippingLabel?: string | null;
+  /** The chosen rate's instructions (ticket #237), copied like its label. */
+  shippingInstructions?: string | null;
   shippingWeightGrams?: number | null;
   deliveryMethod?: DeliveryMethod | 'unknown' | null;
   discountCents?: number;
@@ -539,6 +544,7 @@ export async function recordPaidOrder(
     o.amountTotalCents,
     o.shippingCents ?? 0,
     o.shippingLabel ?? null,
+    o.shippingInstructions ?? null,
     o.shippingWeightGrams ?? null,
     o.deliveryMethod ?? null,
     o.discountCents ?? 0,
@@ -566,12 +572,12 @@ export async function recordPaidOrder(
     carried?.buyer_comment ?? null,
   ] as const;
   const orderColumns =
-    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point, buyer_comment';
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point, buyer_comment';
   const insertOrder = o.reservationId
     ? db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -583,7 +589,7 @@ export async function recordPaidOrder(
     : db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

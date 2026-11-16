@@ -61,6 +61,7 @@ export function createBankTransferProvider(db: D1Database, settings: StoreSettin
         itemsJson: params.orderItemsJson ?? null,
         shippingCents,
         shippingLabel: params.selectedShipping?.label ?? null,
+        shippingInstructions: params.selectedShipping?.instructions ?? null,
         shippingWeightGrams: params.selectedShipping?.weightGrams ?? null,
         deliveryMethod: params.selectedShipping?.deliveryMethod ?? null,
         shipAddressJson: params.selectedShipping ? JSON.stringify(params.selectedShipping.address) : null,

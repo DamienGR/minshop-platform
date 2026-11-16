@@ -29,6 +29,10 @@ export interface ShippingOption {
   /** Delivered to a relay point the shopper picks: the provider's offer code,
    *  which fixes the network searched and the label bought (ADR 0020). */
   relayOffer?: string;
+  /** What the buyer reads under the rate and on the order (ticket #237): the
+   *  merchant's Markdown, rendered by features/shipping/instructions.ts.
+   *  Absent on a rate without, and on the synthesized free option. */
+  instructions?: string;
 }
 
 /** How an order reaches the buyer, as orders and pending payments record it. */
@@ -98,6 +102,9 @@ export interface ShippingRate {
    *  the subtotal reaches this (ticket #220). Absent or null: never. A delivery
    *  rate's alone: a pickup rate never carries one. */
   freeOverCents?: number | null;
+  /** Instructions for the buyer (ticket #237), Markdown, any mode. Absent or
+   *  null: none. Carried by every option the rate resolves to. */
+  instructions?: string | null;
 }
 
 /** What a zone may hold. The legacy `{ label, amountCents }` shape predates weight
@@ -218,15 +225,17 @@ export function quoteShipping(cfg: ShippingConfig, input: ShippingQuoteInput): S
   // not conjure one the merchant never configured.
   let deliveryResolved = false;
   for (const rate of rates) {
+    // The rate's words for the buyer travel with every option it becomes.
+    const said = rate.instructions ? { instructions: rate.instructions } : {};
     if (rate.pricing.type === 'pickup') {
       // Weight can never disqualify pickup: the shopper carries it.
-      options.push({ label: rate.label, amountCents: rate.pricing.amountCents, pickup: true });
+      options.push({ label: rate.label, amountCents: rate.pricing.amountCents, pickup: true, ...said });
       continue;
     }
     const relayOffer = rate.pricing.type === 'relay' ? rate.pricing.offer : undefined;
     if (relayOffer !== undefined && !input.relayOffers?.includes(relayOffer)) continue;
     const price = rate.pricing.type === 'relay' ? rate.pricing.price : rate.pricing;
-    const tag = relayOffer !== undefined ? { relayOffer } : {};
+    const tag = { ...(relayOffer !== undefined ? { relayOffer } : {}), ...said };
     if (price.type === 'flat') {
       // Flat rates do not care about weight, so an unknown weight must not hide them.
       options.push({ label: rate.label, amountCents: priced(rate, price.amountCents), ...tag });
@@ -312,6 +321,18 @@ export function zoneOffersRelay(cfg: ShippingConfig, country: string): boolean {
   if (!cfg.enabled) return false;
   const zone = shippingZoneFor(country, cfg.zones);
   return zone !== null && zone.rates.map(normalizeRate).some((rate) => rate.pricing.type === 'relay');
+}
+
+/**
+ * Whether the zone serving `country` holds a rate with instructions for the
+ * buyer (ticket #237). Stripe's page shows a rate's name and nothing under it,
+ * so a card payment then goes through /checkout, where they are read before
+ * paying, and Stripe gets the chosen rate alone — as for a relay rate.
+ */
+export function zoneHasInstructions(cfg: ShippingConfig, country: string): boolean {
+  if (!cfg.enabled) return false;
+  const zone = shippingZoneFor(country, cfg.zones);
+  return zone !== null && zone.rates.map(normalizeRate).some((rate) => Boolean(rate.instructions));
 }
 
 /** Whether any zone accepts the rest of the world. Providers expand this into their

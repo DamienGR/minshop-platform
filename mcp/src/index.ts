@@ -122,6 +122,8 @@ function orderDto(o: Order) {
     amount_total_cents: o.amount_total_cents,
     shipping_cents: o.shipping_cents,
     shipping_label: o.shipping_label,
+    shipping_instructions: o.shipping_instructions,
+    delivery_method: o.delivery_method,
     discount_cents: o.discount_cents,
     tax_cents: o.tax_cents,
     currency: o.currency,
@@ -499,7 +501,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       {
         description:
           'Mark an order fulfilled (shipped) by its ord_… public ID (legacy public IDs are ' +
-          'also accepted), with optional carrier + tracking number.',
+          'also accepted), with optional carrier + tracking number. A pickup order ' +
+          '(delivery_method "pickup") is not shipped: it is marked ready for pickup, and ' +
+          'carrier and tracking number are ignored. No e-mail is sent to the buyer.',
         inputSchema: {
           id: z.string().min(1).describe('ord_… public ID (or legacy public ID)'),
           carrier: z.string().optional(),
@@ -512,6 +516,12 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         if (!publicId) return result(`Invalid order id ${id} — expected an ord_… public ID.`);
         const order = await getOrderByPublicId(db, publicId);
         if (!order) return result(`No order with id ${id}.`);
+        // A pickup is made ready to collect, never shipped (ticket #238): the
+        // same recorded state, no carrier, no tracking, and said as such.
+        if (order.delivery_method === 'pickup') {
+          await fulfillOrder(db, order.id, null, null);
+          return result({ ready_for_pickup: publicId, reference: orderReference(publicId) });
+        }
         await fulfillOrder(db, order.id, carrier ?? null, tracking_number ?? null);
         return result({ fulfilled: publicId, reference: orderReference(publicId) });
       },

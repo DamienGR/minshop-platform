@@ -36,6 +36,19 @@ Un tarif offert garde ses limites : une commande trop lourde pour lui ne le vo
 
 Le panier annonce ce que l’acheteur paiera : la livraison la moins chère, et ce qu’il lui manque pour la livraison offerte (« Plus que 12,50 € pour la livraison offerte en point relais »).
 
+### Donner des instructions à l’acheteur
+
+Chaque tarif peut porter des **Instructions pour l’acheteur**. L’acheteur les lit sous le tarif avant de payer, puis sur sa commande et dans ses e-mails. Pour un retrait, c’est là que vont l’adresse, les horaires et la façon de convenir d’un moment.
+
+1. Sous le tarif, remplissez **Instructions pour l’acheteur** : du gras, des listes et des liens comme dans une page, sans image, 500 caractères au plus.
+2. Cliquez sur **Enregistrer la livraison**.
+
+Plusieurs lieux de retrait ? Créez un tarif **Retrait sur place** par lieu, chacun avec son libellé (« Retrait à l’atelier », « Retrait au marché ») et ses instructions : la commande dit où l’acheteur a choisi de venir.
+
+Une commande garde les instructions du jour où elle a été payée : les modifier ensuite ne change rien à une commande déjà payée.
+
+Une zone dont un tarif a des instructions fait passer le paiement par carte par votre boutique, comme un point relais : l’acheteur saisit son adresse et lit les instructions avant de payer.
+
 ### Le poids de l’emballage
 
 **Poids de l’emballage** : le carton et le calage. Il s’ajoute une fois par commande au poids des articles.
