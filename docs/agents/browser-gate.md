@@ -117,9 +117,16 @@ What it asserts, and why each one is here rather than in vitest:
   linked to another (ticket #185); a variant the shopper picks brings its
   photo, an add-on ticked does not move the gallery, and Back hands the
   chosen variant's price and photo back (Chromium restores the form at
-  pageshow, after the script ran). `serve.mjs` links sample-tee's default to
-  its second photo and adds an in-stock Medium on a third. Skipped against
-  `BASE_URL`.
+  pageshow, after the script ran). A thumbnail changes the photo by a fade
+  (ticket #235): the track takes no position but the first photo's and the
+  last's, a veil goes up and is gone once the stylesheet's fade ends, and the
+  address, the history and the page stay as they were; the thumbnail of the
+  photo on screen carries `aria-current`, after a swipe too. A photo the test
+  holds back (`page.route`) leaves the first on screen, the track
+  `aria-busy` and the waiting mark showing until it arrives; with reduced
+  motion the photo changes at once, without a veil. `serve.mjs` links
+  sample-tee's default to its second photo and adds an in-stock Medium on a
+  third. Skipped against `BASE_URL`.
 - **design signature** (`design-signature.spec.mjs`) — visual regression as the
   COMPUTED style of ten probes, committed per theme under
   `test/browser/__signatures__/` for the shipped themes and under the shop's

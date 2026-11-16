@@ -189,7 +189,7 @@ presentation, and getting them subtly wrong is invisible on the page.
 
 | Control | What it owns |
 | --- | --- |
-| `<ProductGallery>` | Frame anchors the variant selector scrolls to, and LCP treatment on the first frame only. |
+| `<ProductGallery>` | Frame anchors the thumbnails and the variant selector bring up, and LCP treatment on the first frame only. The product page's script changes the photo by a fade: `[data-hero-veil]` (the photo leaving, `='out'` once it goes), `[data-hero-wait]` (the mark over a photo still loading) and the current thumbnail's `[aria-current]` are yours to restyle. |
 | `<ProductPurchaseForm>` | Form actions and methods, `product_id`/`variant_id`/`extra` field names, sold-out and required states, and `data-fullpage`. |
 
 `data-fullpage` deserves a specific warning. The shell's cart script intercepts
@@ -199,6 +199,28 @@ and nothing errors — Buy now just quietly stops working.
 
 Both controls take a `class`. `<ProductGallery>` also takes `soldOutLabel` if
 you want different wording.
+
+The gallery's fade is the core's in `base.css`, at no specificity (`:where()`),
+so a rule of your theme on the same selectors wins as long as it is written
+outside any `@layer`. The script lays the veil, marks it `out`, and removes it
+once whatever that started has finished: change the duration, the easing, or
+the property. A sweep instead of a fade, for instance:
+
+```css
+[data-hero-veil] {
+  transition: clip-path 0.8s var(--ease-out, ease-out);
+  clip-path: inset(0 0 0 0);
+}
+[data-hero-veil='out'] {
+  opacity: revert-layer;
+  clip-path: inset(0 0 0 100%);
+}
+```
+
+When you move another property, undo the core's fade in the `out` state, or
+the veil drops to nothing at once: `revert-layer` gives it back the photo's
+own opacity (a sold-out photo's is lighter). With reduced motion the script
+lays no veil.
 
 ## The content page contract
 

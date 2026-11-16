@@ -3861,3 +3861,51 @@ le premier déplacement d'une famille jamais rangée, l'arrivée),
 `test/scripts/catalog.test.mjs` (l'import, contre les migrations réelles) et
 `test/integration/category-order.mjs` (déplacements, création, rattachement,
 suppression et lectures de la vitrine et de l'admin, contre un D1 réel).
+
+### 13.24 Le changement de photo de la fiche, en fondu
+
+Noté le 2026-11-16 (ticket #235), pendant la recette de la première boutique
+réelle : pour changer de photo, la galerie de la fiche faisait glisser sa piste
+devant toutes les photos d'entre les deux (`scroll-smooth`), au clic sur une
+vignette comme au choix d'une variante. Mesuré sur une copie locale de la
+boutique, fiche de 13 photos : 1,5 s de glissé devant 12 photos sur
+ordinateur, 1,1 s sur téléphone, même avec le mouvement réduit demandé. Le clic
+sur une vignette faisait aussi défiler la page et ajoutait une entrée à
+l'historique. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-16, sans migration ni ADR, livré dans le socle v0.9.2 :
+
+- la piste perd `scroll-smooth` (`ProductGallery.astro`) : sans script, une
+  vignette saute à sa photo ;
+- avec le script de la fiche, la vignette et la variante passent par une seule
+  fonction, `show()` : la piste saute sur la photo sous un voile, une copie de
+  la photo affichée que la feuille de style efface (`[data-hero-veil='out']`,
+  300 ms dans `base.css`). Une photo pas encore chargée laisse l'affichée en
+  place (`img.decode()`), avec `aria-busy` sur la piste et un indicateur
+  (`[data-hero-wait]`) qui ne paraît qu'après 250 ms ; le survol d'une
+  vignette lance le chargement. Mouvement réduit : pas de voile. Le clic sur
+  une vignette est pris par le script : ni `#pi-…` dans l'adresse, ni entrée
+  d'historique, et la page ne bouge pas ; Ctrl, Cmd ou Maj le laissent au
+  navigateur ;
+- la vignette de la photo affichée porte `aria-current`, posé par le script
+  au clic, au choix d'une variante et quand un balayage s'arrête, et dessiné
+  par `base.css` (un cadre à la couleur de la marque, sous la bordure). Sans
+  script rien n'est marqué : rien ne suivrait les clics ;
+- l'apparence est à spécificité nulle (`:where()`) dans `base.css` : un thème
+  change la durée, la courbe ou la propriété (un volet en `clip-path`) par ses
+  propres règles hors `@layer`, et le script attend seulement la fin de ce que
+  la sortie du voile a lancé (`getAnimations()`). `CUSTOMIZING.md` donne
+  l'exemple du volet.
+
+Choix de Damien le 2026-11-16, sur la question du ticket : la vignette de la
+photo affichée est marquée, avec son style, dans la même version.
+
+Tenu par `test/storefront/productDetail.test.ts` (la piste sans
+`scroll-smooth`, aucune marque écrite par le serveur) et
+`test/browser/product-gallery.spec.mjs` : une vignette mène à sa photo sans
+autre position de la piste que la première et la dernière, avec un voile qui
+s'en va, sans changer l'adresse, l'historique ni la position de la page, et la
+marque suit, balayage compris ; une photo retenue par `page.route` laisse la
+première affichée, `aria-busy` et l'indicateur jusqu'à son arrivée ; le
+mouvement réduit change la photo d'un coup, sans voile. Les trois échouent sur
+le socle v0.9.1.

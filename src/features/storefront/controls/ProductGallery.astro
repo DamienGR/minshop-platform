@@ -7,11 +7,20 @@ import { t } from '../../i18n';
  * The product hero: a snap-scrolling gallery when there is more than one image,
  * a single image otherwise.
  *
+ * The track does not scroll smoothly (ticket #235). A thumbnail or a variant
+ * changes the photo by a cross-fade (the product page's script); a smooth
+ * scroll slid past every photo in between, twelve of them from the first to
+ * the last of thirteen. Without a script, a thumbnail jumps to its photo. A
+ * swipe still slides: the finger moves the track, and the browser snaps it.
+ * With the script, the thumbnail of the photo on screen carries
+ * `aria-current` (base.css draws it); without one, nothing is marked, since
+ * nothing would follow the shopper's clicks.
+ *
  * `data-product-hero` marks the hero in BOTH forms; `data-hero-track` exists
  * only in the gallery. A check that looked for the track missed every product
  * with one image — on a real catalogue, most of them.
  *
- * Owns the anchor ids the thumbnails and the variant selector scroll to, and
+ * Owns the anchor ids the thumbnails and the variant selector bring up, and
  * the LCP treatment on the first frame — eager and high priority, with every
  * later frame lazy. Both are easy to lose when restyling and invisible when
  * they go missing.
@@ -51,7 +60,7 @@ const hasGallery = images.length > 1;
         tabindex="0"
         role="group"
         aria-label={t('product.gallery')}
-        class="no-scrollbar relative flex snap-x snap-mandatory overflow-x-auto scroll-smooth rounded-lg bg-surface"
+        class="no-scrollbar relative flex snap-x snap-mandatory overflow-x-auto rounded-lg bg-surface"
       >
         {images.map((image) => (
           <img
@@ -88,7 +97,7 @@ const hasGallery = images.length > 1;
               position: String(index + 1),
               total: String(images.length),
             })}
-            class="shrink-0 overflow-hidden rounded border border-line bg-surface transition hover:border-brand"
+            class="relative shrink-0 overflow-hidden rounded border border-line bg-surface transition hover:border-brand"
           >
             <img
               src={image.thumbnail.src}
