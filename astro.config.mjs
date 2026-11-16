@@ -45,8 +45,10 @@ export default defineConfig({
   // cookie-authenticated Admin/account forms.
   security: { checkOrigin: false },
   adapter: cloudflare({
-    // Keep Cloudflare Images opt-in. The adapter otherwise auto-provisions an
-    // IMAGES binding even though minshop stores and serves originals from R2.
+    // Keep Astro's image service out of it. The adapter would otherwise run its
+    // own transforms through an IMAGES binding; minshop serves what R2 stores,
+    // and the IMAGES binding the Wrangler configuration declares is used only at
+    // upload, behind the merchant's switch (features/products/imageOptimize.ts).
     imageService: 'passthrough',
     platformProxy: { enabled: true },
   }),

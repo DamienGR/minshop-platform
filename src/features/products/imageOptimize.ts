@@ -7,20 +7,24 @@ import { getSetting } from '../settings/db';
  * via the Cloudflare Images binding. Controlled by config.images.optimizeOnUpload:
  *
  *   - OFF (default): the original file is stored unchanged — $0, fully local.
- *   - ON: transforms via the Cloudflare Images binding — free up to 5,000/mo, then
- *     usage-billed (separate from the Workers plan; works on Workers Free). Runs in
+ *   - ON: transforms via the Cloudflare Images binding, which wrangler.template.jsonc
+ *     declares on every shop. One unique transformation per upload: 5,000 a month
+ *     on the Images Free plan, which refuses the next one and bills nothing; $0.50
+ *     per 1,000 beyond them on Images Paid (separate from the Workers plan). Runs in
  *     local dev too — miniflare's offline binding supports the width + format we use
  *     (verified); `wrangler dev --remote` uses the production transformer.
  *
  * The fallback (and the try/catch) mean enabling it can never break an upload —
- * if the binding is missing or errors, you just store the original.
+ * if the binding is missing, errors or is past its quota, you just store the
+ * original.
  */
 export async function optimizeUpload(file: File): Promise<File> {
   const cfg = getConfig().images;
   // Réglages → Général toggle (D1 `image_optimize`) wins over the build-time default.
   const override = await getSetting(env.DB, 'image_optimize');
   const optimize = override == null ? cfg.optimizeOnUpload : override === '1';
-  // Feature off, or the IMAGES binding isn't declared (free-plan default) → store as-is.
+  // Feature off, or no IMAGES binding (a configuration rendered before the template
+  // declared it, or one that took it out) → store as-is.
   if (!optimize || !env.IMAGES) return file;
 
   try {

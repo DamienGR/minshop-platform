@@ -6,17 +6,15 @@
   // path. Keep shared runtime settings in sync with wrangler.jsonc; bindings
   // intentionally differ because this template defaults to free-plan resources.
   //
-  // FREE-PLAN DEFAULT: only D1 + R2 — both included on the Cloudflare free plan.
-  // Every other integration degrades gracefully when its binding is absent; add a
-  // binding back (+ redeploy) to enable the feature:
+  // FREE-PLAN DEFAULT: D1 + R2, and the Images binding — all included on the
+  // Cloudflare free plan (Images: see the binding below). Every other integration
+  // degrades gracefully when its binding is absent; add a binding back
+  // (+ redeploy) to enable the feature:
   //   • Semantic search — add  "ai": { "binding": "AI" }  and
   //     "vectorize": [{ "binding": "VECTORIZE", "index_name": "<name>-products" }]
   //     (create the index first: wrangler vectorize create <name>-products
   //     --dimensions=768 --metric=cosine),
   //     then flip it on in Admin → Settings → Search. Until then: keyword (FTS5).
-  //   • Image optimize-on-upload — add "images": { "binding": "IMAGES" }, set
-  //     images.optimizeOnUpload in src/store.config.ts, and redeploy. Without the
-  //     binding, uploads are stored as-is in R2.
   //   • Cloudflare-native email — add  "send_email": [{ "name": "EMAIL" }]  (Workers
   //     PAID plan + onboarded sender domain). Resend (HTTP) works on the free plan
   //     and is configured entirely in Admin → Settings → Email.
@@ -90,6 +88,16 @@
     // Private deliverables: never enable r2.dev or attach a custom domain.
     { "binding": "FILES", "bucket_name": "__FILES_BUCKET__", "jurisdiction": "__JURISDICTION__" }
   ],
+  // Cloudflare Images, for « Optimiser les images à l'import »: an upload is
+  // scaled down to images.maxWidth and stored as WebP
+  // (src/features/products/imageOptimize.ts). OFF until Admin → Réglages →
+  // Général or images.optimizeOnUpload in src/store.config.ts turns it on.
+  // Declared on every shop because a shop cannot add it: this file is rendered
+  // from the template, and a hand edit is lost at the next deploy. It costs
+  // nothing until used, then one unique transformation per uploaded photo; the
+  // Images Free plan gives 5,000 a month, refuses the next one and bills nothing,
+  // and a refused or failed transformation stores the original.
+  "images": { "binding": "IMAGES" },
   "vars": {
     // Defaults until the first-run wizard writes the real values to D1. The
     // store name is the manifest's client.displayName, which the wizard then

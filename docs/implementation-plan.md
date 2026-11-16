@@ -3959,3 +3959,34 @@ les liens de pagination) et `test/integration/category-product-order.mjs`
 (la route de l'admin, les lectures de la vitrine sous chaque tri, la
 pagination, les arrivées, les suppressions, une liste de 130 produits, contre
 un D1 réel).
+
+### 13.28 L'optimisation des images au dépôt, possible dans chaque boutique
+
+Noté le 2026-11-16, pendant la recette de la première boutique réelle, à la
+demande de Damien : une photo déposée y est stockée et servie telle quelle. Le
+socle sait la réduire et la convertir en WebP au dépôt (« Optimiser les images
+à l'import », `optimizeUpload()`), mais par la liaison Cloudflare Images, que
+le gabarit Wrangler ne déclarait pas : l'option restait grisée, et une boutique
+ne pouvait pas l'ajouter, puisque son `wrangler.jsonc` est rendu depuis le
+gabarit et qu'une retouche à la main disparaît au déploiement suivant. Aucun des
+jalons 0 à 10 n'avance.
+
+Fait le 2026-11-16, sans migration ni ADR :
+
+- `wrangler.template.jsonc` déclare `"images": { "binding": "IMAGES" }` pour
+  chaque boutique, et le `wrangler.jsonc` du socle aussi. La liaison ne coûte
+  rien tant que l'option est éteinte, et elle reste éteinte par défaut
+  (`images.optimizeOnUpload: false`) : une boutique l'allume dans
+  `src/store.config.ts`, pour tous ses environnements, ou dans Admin →
+  Réglages → Général, pour un seul ;
+- allumée, une photo déposée coûte une transformation unique, une seule fois.
+  Le plan Images gratuit, celui de tout compte par défaut, en donne 5 000 par
+  mois, refuse la suivante et ne facture rien (tarifs de Cloudflare Images,
+  mis à jour le 19 octobre 2026) ; une transformation refusée ou en échec garde
+  l'original, comme avant ;
+- rien ne change pour l'import CSV (`shopctl catalog`), qui écrit dans R2 sans
+  passer par le Worker, ni pour la diffusion « Cloudflare à la demande », qui
+  transforme à l'affichage depuis le domaine d'images de production.
+
+Tenu par `test/scripts/prepare-client.test.mjs` : chaque boutique témoin rend
+la liaison. Le test échoue sur le socle v0.9.2.

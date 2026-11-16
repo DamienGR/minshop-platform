@@ -2,10 +2,11 @@
 	// Committed default config. Read by the one-click "Deploy to Cloudflare" button
 	// (which provisions D1 + R2 and rewrites database_id) AND by local `astro dev`.
 	//
-	// FREE-PLAN DEFAULT: D1 + R2 only — both on the Cloudflare free plan. Optional
-	// integrations (Images, Workers AI + Vectorize for semantic search, Cloudflare
-	// Email) are commented below; uncomment + redeploy to enable. Every one degrades
-	// gracefully when its binding is absent, so the store runs without them.
+	// FREE-PLAN DEFAULT: D1 + R2, and the Images binding — all on the Cloudflare
+	// free plan. Optional integrations (Workers AI + Vectorize for semantic search,
+	// Cloudflare Email) are commented below; uncomment + redeploy to enable. Every
+	// one degrades gracefully when its binding is absent, so the store runs without
+	// them.
 	//
 	// `main` points at a custom entrypoint that re-exports Astro's fetch handler
 	// and adds `scheduled` for the cron below; the adapter still builds the app.
@@ -96,9 +97,12 @@
 			"bucket_name": "minshop-files"
 		}
 	],
+	// Cloudflare Images, for upload optimization: OFF until Admin → Settings →
+	// General or images.optimizeOnUpload turns it on, and free until then
+	// (wrangler.template.jsonc says what it costs after).
+	"images": { "binding": "IMAGES" },
 	// Optional integrations — uncomment + redeploy to enable (see README → Search,
 	// Settings). Each is just a binding; the code checks for it and falls back.
-	//   "images": { "binding": "IMAGES" },
 	//   "ai": { "binding": "AI" },
 	//   "vectorize": [{ "binding": "VECTORIZE", "index_name": "minshop-products" }],
 	//   "send_email": [{ "name": "EMAIL" }],

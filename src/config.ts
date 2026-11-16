@@ -98,10 +98,13 @@ export interface SiteConfig {
   };
   /**
    * Downscale + recompress uploaded product images to WebP on upload via the
-   * Cloudflare Images binding. OFF by default. Free up to 5,000 transforms/mo
-   * (one per uploaded image), then usage-billed — separate from the Workers plan,
-   * works on Workers Free. Transforms in local dev too (miniflare's offline binding
-   * handles width + format; verified). On = smaller images served from R2.
+   * Cloudflare Images binding, which wrangler.template.jsonc declares on every
+   * shop. OFF by default; Admin → Réglages → Général overrides this per
+   * environment. One unique transformation per uploaded image: 5,000 a month on
+   * the Images Free plan, which refuses the next one (the original is then
+   * stored) and bills nothing — separate from the Workers plan. Transforms in
+   * local dev too (miniflare's offline binding handles width + format; verified).
+   * On = smaller images served from R2.
    */
   images: {
     optimizeOnUpload: boolean;
@@ -296,7 +299,7 @@ function defaultConfig(): SiteConfig {
       vatExemption: null, // 'franchise' for a seller under art. 293 B du CGI
     },
     images: {
-      optimizeOnUpload: false, // set true after enabling Transformations (free ≤5k/mo)
+      optimizeOnUpload: false, // the IMAGES binding is declared; a shop opts in here or in Admin
       maxWidth: 1000,
       baseUrl: (env.IMAGE_BASE_URL ?? '').replace(/\/+$/, ''),
     },
