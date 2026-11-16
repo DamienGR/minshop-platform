@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { orderByClause, parseStoreSortQuery, STORE_SORTS } from './sort';
+import {
+  categoryOrderClause,
+  orderByClause,
+  parseCategorySortQuery,
+  parseStoreSortQuery,
+  STORE_SORTS,
+} from './sort';
+import { MANUAL_ORDER } from '../categories/productOrder';
 
 describe('products orderByClause', () => {
   it('defaults to created_at DESC (with an id tiebreak) when no params', () => {
@@ -57,5 +64,33 @@ describe('products orderByClause', () => {
     expect(parseStoreSortQuery('price', 'ASC')).toEqual({ sort: 'price', dir: 'asc' });
     expect(parseStoreSortQuery('sold', 'asc')).toEqual({ sort: 'newest', dir: 'asc' });
     expect(parseStoreSortQuery('name', 'sideways')).toEqual({ sort: 'name', dir: 'desc' });
+  });
+});
+
+describe('the sort of a category page (ticket #239)', () => {
+  it('reads the bare path, and what meant Nouveautés ↓ without saying so, as the merchant’s order', () => {
+    for (const [sort, dir] of [
+      [null, null],
+      [null, 'desc'],
+      ['bogus', null],
+      ['sold', 'desc'],
+      ['manual', null],
+    ] as const) {
+      expect(parseCategorySortQuery(sort, dir), `${sort} ${dir}`).toEqual({ sort: 'manual', dir: 'desc' });
+    }
+  });
+
+  it('keeps an explicit sort, Nouveautés included, and ?dir=asc alone as Nouveautés ↑', () => {
+    expect(parseCategorySortQuery('newest', null)).toEqual({ sort: 'newest', dir: 'desc' });
+    expect(parseCategorySortQuery('newest', 'asc')).toEqual({ sort: 'newest', dir: 'asc' });
+    expect(parseCategorySortQuery(null, 'asc')).toEqual({ sort: 'newest', dir: 'asc' });
+    expect(parseCategorySortQuery('price', 'asc')).toEqual({ sort: 'price', dir: 'asc' });
+    expect(parseCategorySortQuery('name', null)).toEqual({ sort: 'name', dir: 'desc' });
+  });
+
+  it('orders the placed products first, then the others as Nouveautés ↓ would', () => {
+    expect(categoryOrderClause({ sort: 'manual', dir: 'desc' })).toBe(MANUAL_ORDER);
+    expect(MANUAL_ORDER.endsWith(orderByClause('newest', 'desc'))).toBe(true);
+    expect(categoryOrderClause({ sort: 'price', dir: 'asc' })).toBe(orderByClause('price', 'asc'));
   });
 });

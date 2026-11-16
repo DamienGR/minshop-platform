@@ -16,6 +16,25 @@ export const categories = {
   'admin.categories.confirmDelete': 'Supprimer cette catégorie ? Ses sous-catégories remonteront sous sa catégorie parente.',
   'admin.categories.confirmDeleteLinked': 'Cette catégorie figure dans votre navigation : la supprimer masquera ce lien sur la vitrine. Ses sous-catégories remonteront sous sa catégorie parente. Continuer ?',
 
+  // ─── Ordre des produits (ticket #239) ──────────────────────────────────────────
+  'admin.categories.productOrder': 'Ordre des produits',
+  'admin.categories.productOrder.title': 'Ordre des produits de « {nom} »',
+  'admin.categories.productOrder.intro': 'Les produits de la catégorie et de ses sous-catégories, dans l’ordre où sa page les affiche. Changez le rang des produits à déplacer, puis enregistrez : chacun prend le rang indiqué, les autres gardent leur ordre.',
+  'admin.categories.productOrder.ordered': 'La page de la catégorie affiche ses produits dans cet ordre, sous le tri « Par défaut ». Les visiteurs peuvent toujours trier par nouveautés, prix ou nom.',
+  'admin.categories.productOrder.unordered': 'Pas encore d’ordre : la page de la catégorie affiche les nouveautés en premier. Enregistrez cette liste pour lui donner son ordre.',
+  'admin.categories.productOrder.column.rank': 'Rang',
+  'admin.categories.productOrder.column.product': 'Produit',
+  'admin.categories.productOrder.rankLabel': 'Rang de « {nom} »',
+  'admin.categories.productOrder.offline': 'Hors ligne',
+  'admin.categories.productOrder.unplaced': 'Pas encore placé',
+  'admin.categories.productOrder.save': 'Enregistrer l’ordre',
+  'admin.categories.productOrder.clear': 'Supprimer l’ordre',
+  'admin.categories.productOrder.confirmClear': 'Supprimer l’ordre des produits ? La page de la catégorie reviendra aux nouveautés en premier.',
+  'admin.categories.productOrder.empty': 'Aucun produit dans cette catégorie ni dans ses sous-catégories.',
+  'admin.categories.productOrder.saved': 'Ordre enregistré.',
+  'admin.categories.productOrder.cleared': 'Ordre supprimé : la page de la catégorie affiche les nouveautés en premier.',
+  'admin.categories.productOrder.error.nothing': 'Aucun produit à ranger : la liste a changé depuis son affichage. Rechargez la page.',
+
   // ─── Création et modification ──────────────────────────────────────────────────
   'admin.categories.back': 'Retour aux catégories',
   'admin.categories.create': 'Créer la catégorie',

@@ -484,6 +484,8 @@ export async function deleteProduct(db: D1Database, id: number): Promise<void> {
   // Clear category links first (FKs aren't enforced on D1).
   await db.batch([
     db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id),
+    // Its place in every category's order (ticket #239); the others close up.
+    db.prepare('DELETE FROM category_product_positions WHERE product_id = ?').bind(id),
     db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id),
     // Its personalisation fields go with it; an order line keeps its own copy.
     db.prepare('DELETE FROM product_custom_fields WHERE product_id = ?').bind(id),

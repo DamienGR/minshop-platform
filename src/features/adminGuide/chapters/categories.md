@@ -25,6 +25,21 @@ Une catégorie change de place parmi celles de même niveau : les catégories 
 
 Une fois l’ordre d’un niveau choisi, une catégorie qui y arrive se place en dernier : une nouvelle catégorie, une catégorie qui change de **Catégorie parente**, ou les sous-catégories d’une catégorie supprimée, qui gardent leur ordre entre elles. Déplacez-la ensuite si besoin. Dans un niveau jamais rangé, elle prend sa place alphabétique.
 
+### Choisir l’ordre des produits d’une catégorie
+
+Sans ordre choisi, la page d’une catégorie affiche ses nouveautés en premier. Vous pouvez y placer vos produits dans l’ordre de votre choix : la page les affiche alors dans cet ordre sous le tri « Par défaut », et vos clients peuvent toujours trier par nouveautés, prix ou nom.
+
+1. Ouvrez **Catégories**.
+2. Sur la ligne de la catégorie, cliquez sur **Ordre des produits**.
+3. La liste montre les produits de la catégorie et de ses sous-catégories, chacun avec son rang. Changez le rang des produits à déplacer : tapez 1 pour mettre un produit en tête, ou le rang du produit qu’il doit remplacer.
+4. Cliquez sur **Enregistrer l’ordre**.
+
+Chaque produit déplacé prend le rang indiqué, et les autres gardent leur ordre. Vous pouvez en déplacer plusieurs à la fois. Les produits **Hors ligne** sont dans la liste pour garder leur place, mais n’apparaissent pas sur la boutique.
+
+Un produit ajouté à la catégorie après coup, ou tout nouveau, se place après ceux que vous avez rangés, les plus récents d’abord : la liste le marque **Pas encore placé**. Donnez-lui son rang et enregistrez.
+
+L’ordre d’une catégorie ne vaut que pour sa page : chaque sous-catégorie a le sien. Pour revenir aux nouveautés en premier, cliquez sur **Supprimer l’ordre** en bas de la liste.
+
 ### Cacher une catégorie
 
 Pour retirer une catégorie de la boutique sans la supprimer, le temps d’une saison ou pendant que vous la préparez :

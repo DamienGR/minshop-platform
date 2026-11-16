@@ -7,7 +7,7 @@ import type { ListedProduct } from '../../features/products/cardVariants';
 import ProductCard from '#theme/ProductCard.astro';
 import { buildProductCard } from '../../features/storefront/productCard';
 import { getConfig } from '../../config';
-import { orderByClause, parseStoreSortQuery } from '../../features/products/sort';
+import { categoryOrderClause, parseCategorySortQuery } from '../../features/products/sort';
 import {
   MAX_PUBLIC_PAGE,
   paginate,
@@ -16,7 +16,7 @@ import {
 } from '../../pagination';
 import Pagination from '../../components/Pagination.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
-import { buildSortModel } from '../../features/storefront/catalog';
+import { buildCategorySortModel, categorySortParams } from '../../features/storefront/catalog';
 import { catalogPath } from '../../features/settings/home';
 import { addCacheTags, productCacheTags } from '../../features/cache/tags';
 import { t } from '../../features/i18n';
@@ -31,11 +31,14 @@ if (!category) {
   return new Response(t('http.notFound'), { status: 404 });
 }
 
-const { sort, dir } = parseStoreSortQuery(
+// The bare path is the merchant's order when there is one (ticket #239), and
+// the same rows as Nouveautés ↓ when there is not: whether there is comes back
+// with the batch, and only decides how the sort links read.
+const sortQuery = parseCategorySortQuery(
   Astro.url.searchParams.get('sort'),
   Astro.url.searchParams.get('dir'),
 );
-const order = orderByClause(sort, dir);
+const order = categoryOrderClause(sortQuery);
 
 const PAGE_SIZE = 24;
 // One D1 batch for everything but the category itself (features/storefront/
@@ -46,7 +49,7 @@ const read = await readCategoryRows(env.DB, category.id, {
   offset: (asked - 1) * PAGE_SIZE,
   order,
 });
-const { trail, categories, total } = read;
+const { trail, categories, total, ordered } = read;
 const subcats = childrenOf(categories, category.id);
 const { page, offset, totalPages } = paginate(
   Astro.url.searchParams,
@@ -74,8 +77,7 @@ const cards = products.map((product, i) =>
 const base = `/categories/${category.slug}`;
 const hrefFor = (p: number) =>
   queryHref(base, {
-    sort: sort === 'newest' ? undefined : sort,
-    dir: dir === 'desc' ? undefined : dir,
+    ...categorySortParams(sortQuery, ordered),
     page: p > 1 ? p : undefined,
   });
 // The catalog is at / until the home page is pointed elsewhere.
@@ -121,7 +123,7 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
     )
   }
 
-  <CatalogSort model={buildSortModel(base, sort, dir)} />
+  <CatalogSort model={buildCategorySortModel(base, sortQuery, ordered)} />
 
   {
     /* Same contract as the catalogue's own empty state, which the storefront

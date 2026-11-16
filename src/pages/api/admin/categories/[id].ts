@@ -7,7 +7,11 @@ import {
   descendantIds,
   getCategoryByPublicId,
   setCategoryImage,
+  listProductsForOrdering,
+  saveProductOrder,
+  clearProductOrder,
 } from '../../../../features/categories/db';
+import { applyRanks, parseRank } from '../../../../features/categories/productOrder';
 import { parseCategoryForm } from '../../../../features/categories/form';
 import { uniqueCategorySlug } from '../../../../features/categories/slug';
 import { parsePublicId } from '../../../../features/ids/publicId';
@@ -17,8 +21,10 @@ import { t } from '../../../../features/i18n';
 
 export const prerender = false;
 
-// POST /api/admin/categories/:id — update, delete when `_action=delete`, or
-// move a rank among its siblings when `_action=move` (ticket #228).
+// POST /api/admin/categories/:id — update, delete when `_action=delete`,
+// move a rank among its siblings when `_action=move` (ticket #228), or save or
+// remove the order of its products, `_action=productOrder` and
+// `_action=clearProductOrder` (ticket #239).
 // :id is the cat_ public ID; numeric row ids are not accepted.
 export const POST: APIRoute = async ({ request, params, redirect }) => {
   const publicId = parsePublicId(params.id, 'category');
@@ -39,6 +45,38 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     const moved = await moveCategory(env.DB, id, form.get('direction') === 'up' ? 'up' : 'down');
     if (moved) await purgeCacheTags([CACHE_TAG.catalog]);
     return redirect(`/admin/categories#${publicId}`, 303);
+  }
+
+  if (String(form.get('_action')) === 'productOrder') {
+    // Admin → Catégories → « Ordre des produits » (ticket #239): the list as
+    // it was shown, in `product`, and the rank typed for each. Only products
+    // the category's page can show are kept, whatever the form names.
+    const back = `/admin/categories/${publicId}/products`;
+    const { products } = await listProductsForOrdering(env.DB, id);
+    const byPublicId = new Map(products.map((p) => [p.public_id, p.id]));
+    const shown = [
+      ...new Set(
+        form
+          .getAll('product')
+          .map((value) => byPublicId.get(String(value)))
+          .filter((pid): pid is number => pid !== undefined),
+      ),
+    ];
+    if (shown.length === 0) {
+      return redirect(`${back}?error=${encodeURIComponent(t('admin.categories.productOrder.error.nothing'))}`, 303);
+    }
+    const typed = new Map(
+      products.map((p) => [p.id, parseRank(form.get(`rank-${p.public_id}`))] as const),
+    );
+    await saveProductOrder(env.DB, id, applyRanks(shown, typed));
+    await purgeCacheTags([CACHE_TAG.catalog]);
+    return redirect(`${back}?saved=1`, 303);
+  }
+
+  if (String(form.get('_action')) === 'clearProductOrder') {
+    await clearProductOrder(env.DB, id);
+    await purgeCacheTags([CACHE_TAG.catalog]);
+    return redirect(`/admin/categories/${publicId}/products?cleared=1`, 303);
   }
 
   const fail = (msg: string) =>

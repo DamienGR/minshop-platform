@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { Product } from '../products/db';
 import { withPublicId } from '../ids/publicId.ts';
 import { arrivalPositions, compareCategories, moveWithinFamily, type Ranked } from './order.ts';
+import { MANUAL_ORDER } from './productOrder.ts';
 import { HIDDEN_CATEGORY_IDS } from './visibility.ts';
 
 export interface Category {
@@ -295,6 +296,8 @@ export async function deleteCategory(db: D1Database, id: number): Promise<void> 
     ...positionStatements(db, id, changed),
     db.prepare('UPDATE categories SET parent_id = ? WHERE parent_id = ?').bind(cat.parent_id, id),
     db.prepare('DELETE FROM product_categories WHERE category_id = ?').bind(id),
+    // Its products' order goes with it (ticket #239); its parent's keeps them.
+    db.prepare('DELETE FROM category_product_positions WHERE category_id = ?').bind(id),
     db.prepare('DELETE FROM categories WHERE id = ?').bind(id),
   ]);
 }
@@ -484,23 +487,130 @@ export async function setProductCategories(
   await db.batch(stmts);
 }
 
+/** The rank the merchant gave product `p` in category `?1` (migration 0060),
+ *  NULL for one not placed: one probe of the primary key. */
+const MANUAL_POSITION = `(SELECT cpp.position FROM category_product_positions cpp
+          WHERE cpp.category_id = ?1 AND cpp.product_id = p.id)`;
+
 /** A page of active products in a category and its descendants, as SQL:
  *  bound (categoryId, limit, offset). Exported for the card wrapper.
  *
  *  The walk stops at a hidden sub-category (ticket #240): its products are
  *  not listed through its parent, though they stay on sale. The category
- *  itself is visible — its page is a 404 otherwise. */
+ *  itself is visible — its page is a 404 otherwise.
+ *
+ *  An order that names `manual_position` (`MANUAL_ORDER`, ticket #239) gets
+ *  the column, the rank the merchant gave each product in THIS category; the
+ *  other sorts do without, and without its probe per product. */
 export function productsInCategorySql(orderBy = 'created_at DESC'): string {
+  const manual = orderBy.includes('manual_position') ? `, ${MANUAL_POSITION} AS manual_position` : '';
   return `WITH RECURSIVE sub(id) AS (
          SELECT id FROM categories WHERE id = ?1
          UNION ALL
          SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id WHERE c.hidden = 0
        )
-       SELECT DISTINCT p.* FROM products p
+       SELECT DISTINCT p.*${manual} FROM products p
        JOIN product_categories pc ON pc.product_id = p.id
        WHERE pc.category_id IN (SELECT id FROM sub) AND p.active = 1
        ORDER BY ${orderBy}
        LIMIT ?2 OFFSET ?3`;
+}
+
+/** Whether the merchant has given category `?` an order of its products
+ *  (ticket #239), as a row `{ n: 0 | 1 }` — the storefront batch's way of
+ *  knowing whether to offer « Par défaut ». */
+export function hasProductOrderStatement(db: D1Database, categoryId: number): D1PreparedStatement {
+  return db
+    .prepare('SELECT EXISTS (SELECT 1 FROM category_product_positions WHERE category_id = ?) AS n')
+    .bind(categoryId);
+}
+
+/** A product as Admin → Catégories → « Ordre des produits » lists it. */
+export interface OrderedProduct {
+  id: number;
+  public_id: string | null;
+  name: string;
+  active: number;
+  image_key: string | null;
+  /** Its rank in this category's order, null while it is not placed. */
+  manual_position: number | null;
+}
+
+/**
+ * Every product the category's page can show — its own and its
+ * sub-categories', offline ones too, so a product put back online has its
+ * place — in the page's « Par défaut » order (ticket #239). A hidden
+ * sub-category's are listed for the same reason (ticket #240): the page
+ * leaves them out only until it is shown again. And whether the
+ * category has an order at all: a category whose placed products have all
+ * left it still has one, empty, until the merchant removes it.
+ */
+export async function listProductsForOrdering(
+  db: D1Database,
+  categoryId: number,
+): Promise<{ ordered: boolean; products: OrderedProduct[] }> {
+  const [products, ordered] = await db.batch([
+    db
+      .prepare(
+        `WITH RECURSIVE sub(id) AS (
+           SELECT id FROM categories WHERE id = ?1
+           UNION ALL
+           SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+         )
+         SELECT p.id, p.public_id, p.name, p.active, p.image_key, p.created_at,
+                ${MANUAL_POSITION} AS manual_position
+           FROM products p
+          WHERE p.id IN (SELECT product_id FROM product_categories
+                          WHERE category_id IN (SELECT id FROM sub))
+          ORDER BY ${MANUAL_ORDER}`,
+      )
+      .bind(categoryId),
+    hasProductOrderStatement(db, categoryId),
+  ]);
+  return {
+    ordered: ((ordered.results?.[0] as { n?: number } | undefined)?.n ?? 0) > 0,
+    products: (products.results ?? []) as OrderedProduct[],
+  };
+}
+
+/**
+ * Write a category's order: `productIds` ranked 1 to n, every earlier row of
+ * the category dropped — those of products that have left it included — in
+ * one batch, so the page never reads half an order. Ids and ranks are
+ * integers this module was handed or computed, checked here and
+ * interpolated; 90 rows a statement keeps clear of D1's 100 bound
+ * parameters, here none.
+ */
+export async function saveProductOrder(
+  db: D1Database,
+  categoryId: number,
+  productIds: readonly number[],
+): Promise<void> {
+  const ids = [...productIds];
+  for (const id of [categoryId, ...ids]) {
+    if (!Number.isSafeInteger(id) || id < 1) throw new Error(`bad id ${id}`);
+  }
+  if (new Set(ids).size !== ids.length) throw new Error('a product ranked twice');
+  const CHUNK = 90;
+  const inserts: D1PreparedStatement[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const values = ids
+      .slice(i, i + CHUNK)
+      .map((id, k) => `(${categoryId}, ${id}, ${i + k + 1})`)
+      .join(', ');
+    inserts.push(
+      db.prepare(`INSERT INTO category_product_positions (category_id, product_id, position) VALUES ${values}`),
+    );
+  }
+  await db.batch([
+    db.prepare('DELETE FROM category_product_positions WHERE category_id = ?').bind(categoryId),
+    ...inserts,
+  ]);
+}
+
+/** Remove a category's order: its page goes back to Nouveautés. */
+export async function clearProductOrder(db: D1Database, categoryId: number): Promise<void> {
+  await db.prepare('DELETE FROM category_product_positions WHERE category_id = ?').bind(categoryId).run();
 }
 
 /** A page of active products in a category, including descendant categories. */

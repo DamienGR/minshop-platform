@@ -3,6 +3,7 @@ import {
   ancestorsStatement,
   categoriesForProductStatement,
   countProductsInCategoryStatement,
+  hasProductOrderStatement,
   listVisibleCategoriesStatement,
   productsInCategorySql,
   RELATED_PRODUCTS_SQL,
@@ -227,22 +228,32 @@ export async function readCardVariants(
   return new Map((results ?? []).map((row) => [row.id, row.card_variants]));
 }
 
-/** A category page: its trail, the category list, its size, one page of products. */
+/** A category page: its trail, the category list, its size, one page of
+ *  products, and whether the merchant ordered them (ticket #239) — which the
+ *  page learns only here, so a sort is chosen before it (`parseCategorySortQuery`). */
 export async function readCategoryRows(
   db: D1Database,
   categoryId: number,
   { pageSize, offset, order }: ListingQuery,
-): Promise<{ trail: Category[]; categories: Category[]; total: number; products: ListedProduct[] }> {
-  const [trail, categories, total, products] = await db.batch([
+): Promise<{
+  trail: Category[];
+  categories: Category[];
+  total: number;
+  products: ListedProduct[];
+  ordered: boolean;
+}> {
+  const [trail, categories, total, products, ordered] = await db.batch([
     ancestorsStatement(db, categoryId),
     listVisibleCategoriesStatement(db),
     countProductsInCategoryStatement(db, categoryId),
     categoryPageStatement(db, categoryId, { pageSize, offset, order }),
+    hasProductOrderStatement(db, categoryId),
   ]);
   return {
     trail: rows<Category>(trail),
     categories: rows<Category>(categories),
     total: count(total),
     products: rows<ListedProduct>(products),
+    ordered: count(ordered) > 0,
   };
 }
