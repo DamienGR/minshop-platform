@@ -10,6 +10,9 @@ export const categories = {
   'admin.categories.orderHint': 'La boutique affiche vos catégories dans l’ordre de cette liste. Les flèches ↑ et ↓ déplacent une catégorie parmi celles de même niveau ; tant que vous n’avez rien déplacé, l’ordre est alphabétique.',
   'admin.categories.moveUp': 'Monter « {nom} »',
   'admin.categories.moveDown': 'Descendre « {nom} »',
+  'admin.categories.badge.hidden': 'Cachée',
+  'admin.categories.badge.hiddenByParent': 'Cachée avec sa catégorie parente',
+  'admin.categories.hiddenSuffix': '(cachée)',
   'admin.categories.confirmDelete': 'Supprimer cette catégorie ? Ses sous-catégories remonteront sous sa catégorie parente.',
   'admin.categories.confirmDeleteLinked': 'Cette catégorie figure dans votre navigation : la supprimer masquera ce lien sur la vitrine. Ses sous-catégories remonteront sous sa catégorie parente. Continuer ?',
 
@@ -54,6 +57,8 @@ export const categories = {
   'admin.categories.form.imageReplace': 'Remplacer l’image',
   'admin.categories.form.imageRemove': 'Retirer l’image',
   'admin.categories.form.imageAlt': 'Image actuelle de la catégorie',
+  'admin.categories.form.hidden': 'Cacher cette catégorie',
+  'admin.categories.form.hiddenHint': 'Elle disparaît de la boutique avec ses sous-catégories : sa page n’existe plus pour les visiteurs, et elle sort de l’accueil, des menus et du plan du site. Ses produits restent en vente.',
   'admin.categories.error.nameRequired': 'Le nom est obligatoire.',
   'admin.categories.error.invalidParent': 'Catégorie parente invalide.',
   'admin.categories.error.parentGone': 'Cette catégorie parente n’existe plus.',

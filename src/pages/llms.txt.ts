@@ -4,7 +4,7 @@ import { PUBLIC_CACHE_CONTROL } from '../features/cache/public';
 import { env } from 'cloudflare:workers';
 import { getConfig, formatPrice } from '../config';
 import { listProducts, countProducts } from '../features/products/db';
-import { listCategories } from '../features/categories/db';
+import { listVisibleCategories } from '../features/categories/db';
 import { listPublishedPages } from '../features/pages/db';
 import { publicOrigin } from '../features/http/origin';
 
@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
   const total = await countProducts(env.DB);
   const products = total > 0 ? await listProducts(env.DB, total, 0) : [];
-  const categories = await listCategories(env.DB);
+  const categories = await listVisibleCategories(env.DB);
   const pages = await listPublishedPages(env.DB);
 
   const productLines = products.map((p) => {
