@@ -3917,7 +3917,8 @@ catégorie listait ses produits du plus récent au plus ancien, ou par prix ou
 par nom au choix du visiteur, sans que le commerçant puisse mettre en avant
 ceux qu'il veut. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-16, migration 0060, sans ADR :
+Fait le 2026-11-16, migration 0060, sans ADR (PR #241), livré dans le socle
+v0.10.0 :
 
 - une table `category_product_positions (category_id, product_id, position)`
   plutôt qu'une colonne de `product_categories` : la page d'une catégorie
@@ -3968,7 +3969,8 @@ commande d'un retrait se « marquait comme expédiée », avec transporteur,
 numéro de suivi et l'e-mail « Votre commande est en route ». Aucun des jalons
 0 à 10 n'avance.
 
-Fait le 2026-11-16, migration 0061, sans ADR :
+Fait le 2026-11-16, migration 0061, sans ADR (PR #244), livré dans le socle
+v0.10.0 :
 
 - chaque tarif, quel que soit son mode, peut porter des « Instructions pour
   l'acheteur » : du Markdown de 500 caractères au plus, rendu par
@@ -4036,7 +4038,8 @@ le temps d'une saison ou pendant qu'on la prépare, il fallait la supprimer, et
 perdre son rangement, son image, sa description et le classement de ses
 produits. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-16, migration 0062, sans ADR :
+Fait le 2026-11-16, migration 0062, sans ADR (PR #242), livré dans le socle
+v0.10.0 :
 
 - `categories.hidden`, 0 par défaut, et la case « Cacher cette catégorie » de
   son formulaire. Une catégorie cachée l'est avec toute sa branche : la règle
@@ -4086,7 +4089,8 @@ ne pouvait pas l'ajouter, puisque son `wrangler.jsonc` est rendu depuis le
 gabarit et qu'une retouche à la main disparaît au déploiement suivant. Aucun des
 jalons 0 à 10 n'avance.
 
-Fait le 2026-11-16, sans migration ni ADR :
+Fait le 2026-11-16, sans migration ni ADR (PR #245), livré dans le socle
+v0.10.0 :
 
 - `wrangler.template.jsonc` déclare `"images": { "binding": "IMAGES" }` pour
   chaque boutique, et le `wrangler.jsonc` du socle aussi. La liaison ne coûte
