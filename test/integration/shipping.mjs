@@ -191,8 +191,7 @@ await check('a rate offered from a threshold saves as schema 5, and a rollback c
   const saved = await saveRuntimeShippingConfig(db, 0, document({ zones: [relay] }));
   assert.equal(saved.ok, true);
   const raw = await readRaw(db);
-  assert.equal(JSON.parse(raw).schema, SHIPPING_SCHEMA_VERSION);
-  assert.equal(SHIPPING_SCHEMA_VERSION, 5);
+  assert.equal(JSON.parse(raw).schema, 5);
   const parsed = parseRuntimeShippingConfig(raw);
   assert.equal(parsed.status, 'valid');
   assert.equal(parsed.config.zones[0].rates[1].freeOverCents, 6000);
@@ -200,6 +199,34 @@ await check('a rate offered from a threshold saves as schema 5, and a rollback c
   assert.equal('freeOverCents' in JSON.parse(raw).zones[0].rates[0], false);
   // Taking the threshold off writes a document v0.8.1 reads again.
   const back = await saveRuntimeShippingConfig(db, 1, document({ zones: [{ ...relay, rates: [relay.rates[0], { ...relay.rates[1], freeOverCents: null }] }] }));
+  assert.equal(back.ok, true);
+  assert.equal(JSON.parse(await readRaw(db)).schema, 4);
+});
+
+await check('a rate with instructions saves as schema 6, and a rollback cannot read it', async () => {
+  // Ticket #237. A core that knows 5 at most would show the rate without
+  // what it says to the buyer: it fails closed instead.
+  const db = await freshDb();
+  const said = (instructions) => ({
+    ...zone(),
+    countries: ['FR'],
+    rates: [
+      { label: 'Colissimo', pricing: { type: 'flat', amountCents: 690 } },
+      { label: 'Retrait à l’atelier', pricing: { type: 'pickup', amountCents: 0 }, ...(instructions && { instructions }) },
+    ],
+  });
+  const saved = await saveRuntimeShippingConfig(db, 0, document({ zones: [said('12 rue des Lilas, le mercredi.')] }));
+  assert.equal(saved.ok, true);
+  const raw = await readRaw(db);
+  assert.equal(JSON.parse(raw).schema, SHIPPING_SCHEMA_VERSION);
+  assert.equal(SHIPPING_SCHEMA_VERSION, 6);
+  const parsed = parseRuntimeShippingConfig(raw);
+  assert.equal(parsed.status, 'valid');
+  assert.equal(parsed.config.zones[0].rates[1].instructions, '12 rue des Lilas, le mercredi.');
+  // The rate without any carries nothing.
+  assert.equal('instructions' in JSON.parse(raw).zones[0].rates[0], false);
+  // Emptying them writes a document an older core reads again.
+  const back = await saveRuntimeShippingConfig(db, 1, document({ zones: [said(null)] }));
   assert.equal(back.ok, true);
   assert.equal(JSON.parse(await readRaw(db)).schema, 4);
 });
