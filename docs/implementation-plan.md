@@ -4109,3 +4109,49 @@ v0.10.0 :
 
 Tenu par `test/scripts/prepare-client.test.mjs` : chaque boutique témoin rend
 la liaison. Le test échoue sur le socle v0.9.2.
+
+### 13.29 Un ornement du thème dans le titre d'une page
+
+Noté le 2026-11-17 (ticket #251), pour les titres de la première boutique
+réelle : son thème signe ses grands titres d'une feuille, et Damien veut la
+placer en écrivant `[feuille]` dans le titre. Le thème le fait pour ce qu'il
+dessine, mais le socle imprimait aussi le titre d'une page en texte seul, et le
+code y paraissait en toutes lettres. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-17, sans migration ni ADR :
+
+- le thème déclare ses codes dans un fichier facultatif,
+  `src/themes/<id>/titles.ts` (`export const titleMarks = ['feuille']`), lu au
+  build par `#theme/titles.ts` comme `texts.ts` et `pageModels.ts`
+  (`src/features/titleMarks/active.ts`). Un mot en minuscules, lettres et
+  chiffres, traits d'union entre eux, vingt au plus ; un mot invalide est
+  écarté et la suite échoue sur la déclaration ;
+- une fonction pure, `plainTitle()` (`src/features/titleMarks/marks.ts`),
+  retire chaque code déclaré (casse indifférente, espaces tolérées entre les
+  crochets) et ses espaces, sans en laisser en tête, en fin ni devant un point
+  ou une virgule ; l'espace insécable devant « ? » reste. Un lien Markdown
+  `[mot](…)` n'est pas un code ;
+- elle s'applique là où le titre d'une page devient du texte seul : le titre
+  du document (`<title>`, `og:title`, `twitter:title`) de la page et de son
+  aperçu, `llms.txt`, le texte d'un menu sans libellé (vitrine, aperçu et
+  écran Navigation, son texte grisé compris), la description qu'une page à
+  modèle au corps vide tire de ses zones, et le **Titre pour Google** grisé de
+  l'éditeur. Rempli, le **Titre pour Google** reste pris tel quel ;
+- le gabarit reçoit le titre tel qu'il est écrit (`ContentPageModel.title`,
+  `ModelPageModel.title`, les zones), et le thème dessine l'ornement ;
+- l'éditeur de page annonce les codes sous **Titre** (« Codes du thème :
+  [feuille] »), et le chapitre Pages du guide a sa section « Placer un
+  ornement dans le titre » ;
+- rien ne change pour un thème sans déclaration : les thèmes livrés n'en
+  déclarent aucun. Les noms de produit et de catégorie restent hors du ticket :
+  ils partent dans les commandes, Stripe et les e-mails.
+
+Choix de Damien le 2026-11-17 (carte de décision) : les trois propositions du
+ticket, une liste déclarée, la ligne « Codes du thème » dans l'éditeur, les
+produits et les catégories hors du ticket.
+
+Tenu par `src/features/titleMarks/marks.test.ts` (la règle), par
+`test/storefront/titleMarks.test.ts`, avec un thème de fixture qui déclare
+`feuille` (titre du document, `llms.txt`, menu et description sans le code,
+gabarit avec ; chaque thème du disque tenu aux règles) et par
+`src/features/navigation/db.test.ts` (libellé et noms de produit inchangés).

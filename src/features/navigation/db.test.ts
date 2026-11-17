@@ -51,11 +51,11 @@ describe('resolveMenuHref', () => {
 
 describe('label fallback', () => {
   it('prefers an explicit label over the target name', () => {
-    expect(toMenuItem(row({ label: 'Our story' }), null).text).toBe('Our story');
+    expect(toMenuItem(row({ label: 'Our story' }), null, []).text).toBe('Our story');
   });
 
   it('falls back to the target name when unset', () => {
-    expect(toMenuItem(row(), null).text).toBe('About');
+    expect(toMenuItem(row(), null, []).text).toBe('About');
   });
 
   // Without singleton defaults in the query, COALESCE(NULL, NULL) renders an
@@ -64,10 +64,12 @@ describe('label fallback', () => {
     const home = toMenuItem(
       row({ target_type: 'home', target_id: null, target_name: 'Home', target_slug: null }),
       null,
+      [],
     );
     const catalog = toMenuItem(
       row({ target_type: 'catalog', target_id: null, target_name: 'Shop', target_slug: null }),
       null,
+      [],
     );
     expect(home.text).toBe('Home');
     expect(catalog.text).toBe('Shop');
@@ -79,6 +81,31 @@ describe('label fallback', () => {
     expect(SINGLETON_LABELS).toEqual({ home: 'Accueil', catalog: 'Catalogue' });
     expect(MENU_ITEMS_SQL).toMatch(/WHEN 'home'\s+THEN 'Accueil'/);
     expect(MENU_ITEMS_SQL).toMatch(/WHEN 'catalog'\s+THEN 'Catalogue'/);
+  });
+});
+
+// A theme may draw an ornament where a page's title holds its code (ticket
+// #251): a menu prints the title as plain text, so the code goes there.
+describe('a page title’s theme codes', () => {
+  const FEUILLE = ['feuille'];
+  const page = (overrides: Partial<MenuItemRow> = {}) => row({ target_type: 'page', target_name: 'La [feuille] marque', ...overrides });
+
+  it('leave an unlabelled page’s item, and only its text', () => {
+    const item = toMenuItem(page(), null, FEUILLE);
+    expect(item.text).toBe('La marque');
+    expect(item.targetName).toBe('La [feuille] marque');
+    expect(groupMenus([page()], null, FEUILLE).header[0].text).toBe('La marque');
+  });
+
+  it('stay in a label the merchant wrote, and in a product’s or a category’s name', () => {
+    expect(toMenuItem(page({ label: 'Notre [feuille] histoire' }), null, FEUILLE).text).toBe('Notre [feuille] histoire');
+    for (const target_type of ['product', 'category'] as const) {
+      expect(toMenuItem(page({ target_type }), null, FEUILLE).text).toBe('La [feuille] marque');
+    }
+  });
+
+  it('stay where the theme declares none', () => {
+    expect(toMenuItem(page(), null, []).text).toBe('La [feuille] marque');
   });
 });
 
@@ -105,13 +132,14 @@ describe('groupMenus', () => {
         row({ id: 3, location: 'header', position: 1, target_name: 'C' }),
       ],
       null,
+      [],
     );
     expect(menus.header.map((i) => i.text)).toEqual(['A', 'C']);
     expect(menus.footer.map((i) => i.text)).toEqual(['B']);
   });
 
   it('returns both menus even when empty', () => {
-    expect(groupMenus([], null)).toEqual({ header: [], footer: [] });
+    expect(groupMenus([], null, [])).toEqual({ header: [], footer: [] });
   });
 });
 
@@ -123,12 +151,13 @@ describe('visibleItems', () => {
         row({ id: 2, target_name: 'Draft', available: 0 }),
       ],
       null,
+      [],
     ).header;
     expect(visibleItems(items).map((i) => i.text)).toEqual(['Live']);
   });
 
   it('drops a nameless item, which would render as an invisible link', () => {
-    const items = groupMenus([row({ target_name: null, available: 1 })], null).header;
+    const items = groupMenus([row({ target_name: null, available: 1 })], null, []).header;
     expect(visibleItems(items)).toHaveLength(0);
   });
 });

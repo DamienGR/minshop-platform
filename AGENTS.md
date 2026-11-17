@@ -238,6 +238,7 @@ src/
                request (this request's texts, resolved once for the shell, the home and the product page)
     pageModels/  declaration (a theme's page models: rules; pure) · zones (stored, form, resolution; pure)
                active (the theme's pageModels.ts + pages/*.astro) · PageZoneFields (the editor's zones)
+    titleMarks/  marks (a theme's title codes: rules, plainTitle; pure) · active (the theme's titles.ts)
     adminGuide/  guide (chapters → HTML, anchors, order; pure) · content (the build's chapters) · GuidePanel
                chapters/<section>.md (the core's; a shop's own in client/guide/*.md)
     adminShell/  footer (core version, support link)
@@ -429,6 +430,12 @@ today's config.
   editor offers it beside « Basique ». `test/storefront/pageModels.test.ts`
   holds every theme's declarations and templates to the contract; the
   `atelier` theme carries the two witnesses.
+- **An ornament in a page's title** (`[feuille]`): nothing in the core — the
+  theme declares its codes in its own `src/themes/<id>/titles.ts` and draws
+  them from the title its template receives (ticket #251, `CUSTOMIZING.md`).
+  A place where the core prints a page's title as plain text passes it
+  through `plainTitle()` with `activeTitleMarks`; product and category names
+  keep their codes.
 - **A content page:** nothing to add — merchants create them at `/admin/pages`.
   Published pages appear at `/pages/<slug>`, in the sitemap and `llms.txt`
   automatically. The footer is a menu (migration 0028): a page reaches it only

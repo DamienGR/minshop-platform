@@ -11,6 +11,7 @@ import { buildPageView } from '../../../../features/pages/view';
 import Lightbox from '../../../../features/pages/Lightbox.astro';
 import { productImageSources } from '../../../../features/products/image';
 import { activePageModels, pageModelTemplate } from '../../../../features/pageModels/active';
+import { activeTitleMarks } from '../../../../features/titleMarks/active';
 import { readStoredZones } from '../../../../features/pageModels/zones';
 import { getMenus } from '../../../../features/navigation/db';
 import { publicOrigin } from '../../../../features/http/origin';
@@ -52,13 +53,13 @@ const draft = parsed.data;
 
 // Admin documents load no menus (middleware.ts): this one is the storefront's
 // page, so it reads them, header and footer as a shopper sees them.
-Astro.locals.menus = await getMenus(env.DB, Astro.locals.settings?.homePage);
+Astro.locals.menus = await getMenus(env.DB, Astro.locals.settings?.homePage, activeTitleMarks);
 Astro.response.headers.set('x-robots-tag', 'noindex');
 
 const baseUrl = getConfig().images.baseUrl;
 const delivery = Astro.locals.settings?.imageDelivery;
 // The options of pages/[slug].astro, the tiles aside.
-const { pageModel, view, lightbox, description } = buildPageView(draft, activePageModels, {
+const { pageModel, view, lightbox, description, titleText } = buildPageView(draft, activePageModels, {
   baseUrl,
   dimensions: await pageImageDimensions(env.DB, page.id),
   placeMaps: {
@@ -71,14 +72,14 @@ const { pageModel, view, lightbox, description } = buildPageView(draft, activePa
     const sources = productImageSources(key, { baseUrl, delivery, sizes: ROW_IMAGE_SIZES });
     return sources.srcset ? sources : null;
   },
-});
+}, activeTitleMarks);
 const Template = (pageModel ? pageModelTemplate(pageModel.key) : null) as typeof ContentPage | null;
 // The page's address as it stands: a slug changed in the form is the save's to settle.
 const pagePath = `/pages/${encodeURIComponent(page.slug)}`;
 ---
 
 <Layout
-  title={draft.title}
+  title={titleText}
   seoTitle={draft.seo_title}
   description={draft.seo_description ?? description}
   canonical={new URL(pagePath, publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN)).href}
