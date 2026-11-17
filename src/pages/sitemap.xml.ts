@@ -4,39 +4,10 @@ import { env } from 'cloudflare:workers';
 import { listProducts, countProducts } from '../features/products/db';
 import { listVisibleCategories } from '../features/categories/db';
 import { listPublishedPages } from '../features/pages/db';
-import { catalogPath } from '../features/settings/home';
 import { publicOrigin } from '../features/http/origin';
+import { sitemapLocs } from '../features/seo/sitemap';
 
 export const prerender = false;
-
-/**
- * Every URL the sitemap should list, in order.
- *
- * The catalog is included at whichever address it actually lives at. When the
- * home page has been pointed at a page or product, `/` renders that target and
- * canonicals to it — so listing `/` would put a non-canonical duplicate in the
- * sitemap (the target is already listed on its own URL), while the real catalog
- * at `/products` would be missing entirely.
- *
- * Pure and exported so the rule is testable without standing up a request.
- */
-export function sitemapLocs(
-  origin: string,
-  homePage: string | null | undefined,
-  data: {
-    categories: { slug: string }[];
-    products: { slug: string }[];
-    pages: { slug: string }[];
-  },
-): string[] {
-  return [
-    `${origin}${catalogPath(homePage)}`,
-    ...data.categories.map((c) => `${origin}/categories/${c.slug}`),
-    ...data.products.map((p) => `${origin}/products/${p.slug}`),
-    // Published pages only — drafts must not be discoverable.
-    ...data.pages.map((p) => `${origin}/pages/${p.slug}`),
-  ];
-}
 
 // Dynamic sitemap: storefront + every active product, visible category, and published page. Slugs are
 // URL-safe (a-z0-9-), so no XML escaping is needed.

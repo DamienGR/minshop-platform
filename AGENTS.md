@@ -561,7 +561,10 @@ today's config.
 ## Conventions
 
 - Comments explain *why*, match surrounding density.
-- Colocate tests: `foo.ts` + `foo.test.ts`. Test pure logic; integration (D1/R2)
+- Colocate tests: `foo.ts` + `foo.test.ts` — except under `src/pages/`, where
+  Astro builds every file into a public route, a test included: a route's
+  logic and its test go in `src/features/`
+  (`test/scripts/page-routes.test.mjs`). Test pure logic; integration (D1/R2)
   lives in `test/integration/`, against real migrations and the built Worker.
 - A unit test's temporary directory comes from `scratchDir(prefix)`
   (`test/helpers/scratch.mjs`), which removes it when the test ends. Under
