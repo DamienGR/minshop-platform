@@ -108,7 +108,7 @@ try {
       heading: 'Tout',
     });
   const menus = async () =>
-    groupMenus((await db.prepare(MENU_ITEMS_SQL).all()).results ?? [], null);
+    groupMenus((await db.prepare(MENU_ITEMS_SQL).all()).results ?? [], null, []);
 
   // Maison ─┬─ Coussins ── Lin
   //         └─ Noël (hidden later) ── Guirlandes

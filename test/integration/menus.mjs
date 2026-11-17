@@ -296,7 +296,7 @@ await check('unavailable targets vanish from the storefront but stay listed for 
   await db.prepare('UPDATE products SET active = 0 WHERE id = 1').run();
   await db.prepare('DELETE FROM categories WHERE id = 1').run();
 
-  const menus = await getMenus(db, null);
+  const menus = await getMenus(db, null, []);
   assert.equal(menus.footer.length, 3, 'admin still sees every item');
   assert.equal(visibleItems(menus.footer).length, 0, 'storefront renders none of them');
   assert.deepEqual(
@@ -309,17 +309,32 @@ await check('catalog href follows the home page setting', async () => {
   const db = await seededStore();
   await db.exec('DELETE FROM menu_items');
   await addMenuItem(db, { location: 'header', targetType: 'catalog', targetId: null, label: null });
-  assert.equal((await getMenus(db, null)).header[0].href, '/');
-  assert.equal((await getMenus(db, 'page:1')).header[0].href, '/products');
+  assert.equal((await getMenus(db, null, [])).header[0].href, '/');
+  assert.equal((await getMenus(db, 'page:1', [])).header[0].href, '/products');
 });
 
 await check('label override wins, clearing it restores the target name', async () => {
   const db = await seededStore();
   await db.exec('DELETE FROM menu_items');
   const added = await addMenuItem(db, { location: 'header', targetType: 'page', targetId: 1, label: 'Our story' });
-  assert.equal((await getMenus(db, null)).header[0].text, 'Our story');
+  assert.equal((await getMenus(db, null, [])).header[0].text, 'Our story');
   await setMenuItemLabel(db, added.id, null);
-  assert.equal((await getMenus(db, null)).header[0].text, 'About');
+  assert.equal((await getMenus(db, null, [])).header[0].text, 'About');
+});
+
+// A theme's title codes (ticket #251): the menu prints a page's title as plain
+// text, read from the same statement the middleware batches.
+await check('a page title loses the theme codes in a menu, not in its label', async () => {
+  const db = await seededStore();
+  await db.exec('DELETE FROM menu_items');
+  await db.prepare("UPDATE pages SET title = 'La [feuille] marque' WHERE id = 1").run();
+  const added = await addMenuItem(db, { location: 'header', targetType: 'page', targetId: 1, label: null });
+  const [item] = (await getMenus(db, null, ['feuille'])).header;
+  assert.equal(item.text, 'La marque');
+  assert.equal(item.targetName, 'La [feuille] marque');
+  assert.equal((await getMenus(db, null, [])).header[0].text, 'La [feuille] marque');
+  await setMenuItemLabel(db, added.id, 'Notre [feuille] histoire');
+  assert.equal((await getMenus(db, null, ['feuille'])).header[0].text, 'Notre [feuille] histoire');
 });
 
 // ── reordering ──────────────────────────────────────────────────────────────
@@ -332,14 +347,14 @@ await check('move swaps with the neighbour and is a no-op at the ends', async ()
   const c = await addMenuItem(db, { location: 'header', targetType: 'page', targetId: 1, label: 'C' });
 
   await moveMenuItem(db, c.id, 'up');
-  assert.deepEqual((await getMenus(db, null)).header.map((i) => i.text), ['A', 'C', 'B']);
+  assert.deepEqual((await getMenus(db, null, [])).header.map((i) => i.text), ['A', 'C', 'B']);
   await moveMenuItem(db, a.id, 'up'); // already first
-  assert.deepEqual((await getMenus(db, null)).header.map((i) => i.text), ['A', 'C', 'B']);
+  assert.deepEqual((await getMenus(db, null, [])).header.map((i) => i.text), ['A', 'C', 'B']);
   await moveMenuItem(db, b.id, 'down'); // already last
-  assert.deepEqual((await getMenus(db, null)).header.map((i) => i.text), ['A', 'C', 'B']);
+  assert.deepEqual((await getMenus(db, null, [])).header.map((i) => i.text), ['A', 'C', 'B']);
 
   await removeMenuItem(db, c.id);
-  assert.deepEqual((await getMenus(db, null)).header.map((i) => i.text), ['A', 'B']);
+  assert.deepEqual((await getMenus(db, null, [])).header.map((i) => i.text), ['A', 'B']);
 });
 
 await check('a menu never crosses into the other when reordering', async () => {
@@ -348,7 +363,7 @@ await check('a menu never crosses into the other when reordering', async () => {
   const h = await addMenuItem(db, { location: 'header', targetType: 'page', targetId: 1, label: 'H' });
   await addMenuItem(db, { location: 'footer', targetType: 'page', targetId: 1, label: 'F' });
   await moveMenuItem(db, h.id, 'down'); // no neighbour in the header
-  const menus = await getMenus(db, null);
+  const menus = await getMenus(db, null, []);
   assert.deepEqual(menus.header.map((i) => i.text), ['H']);
   assert.deepEqual(menus.footer.map((i) => i.text), ['F']);
 });
@@ -407,7 +422,7 @@ await check('a deleted target with a custom label is reported as deleted, not dr
   await db.prepare('DELETE FROM pages WHERE id = 1').run();
   await db.prepare('DELETE FROM products WHERE id = 1').run();
 
-  const menus = await getMenus(db, null);
+  const menus = await getMenus(db, null, []);
   assert.equal(menus.footer[0].text, 'Company', 'label survives the delete');
   assert.equal(menus.footer[0].targetExists, false);
   assert.deepEqual(
@@ -422,7 +437,7 @@ await check('a draft target keeps its draft reason (not confused with deletion)'
   await db.exec('DELETE FROM menu_items');
   await addMenuItem(db, { location: 'footer', targetType: 'page', targetId: 1, label: 'Company' });
   await db.prepare('UPDATE pages SET published = 0 WHERE id = 1').run();
-  const item = (await getMenus(db, null)).footer[0];
+  const item = (await getMenus(db, null, [])).footer[0];
   assert.equal(item.targetExists, true, 'the row is still there');
   assert.equal(unavailableReason(item), 'Brouillon — invisible sur la vitrine');
 });
@@ -466,7 +481,7 @@ await check('reorder sets the whole order from an id list', async () => {
   }
   const [a, b, c, d] = ids;
   await reorderMenuItems(db, 'footer', [d, b, a, c]);
-  assert.deepEqual((await getMenus(db, null)).footer.map((i) => i.text), ['D', 'B', 'A', 'C']);
+  assert.deepEqual((await getMenus(db, null, [])).footer.map((i) => i.text), ['D', 'B', 'A', 'C']);
 });
 
 // A partial list would set position 0 on one row while an omitted row keeps 0,
@@ -480,7 +495,7 @@ await check('reorder rejects incomplete, padded, and duplicate id lists', async 
     ids.push((await addMenuItem(db, { location: 'footer', targetType: 'page', targetId: 1, label })).id);
   }
   const [a, b, c] = ids;
-  const order = async () => (await getMenus(db, null)).footer.map((i) => i.text);
+  const order = async () => (await getMenus(db, null, [])).footer.map((i) => i.text);
   const before = await order();
 
   assert.equal(await reorderMenuItems(db, 'footer', [c]), false, 'incomplete');
@@ -515,7 +530,7 @@ await check('reorder is scoped to one menu', async () => {
 
   assert.equal(await reorderMenuItems(db, 'header', [h2, h1, f1]), false, 'foreign id rejected');
   await reorderMenuItems(db, 'header', [h2, h1]);
-  const menus = await getMenus(db, null);
+  const menus = await getMenus(db, null, []);
   assert.deepEqual(menus.header.map((i) => i.text), ['H2', 'H1']);
   assert.equal(await positionOf(f1), footerBefore, 'the other menu is untouched');
 });
@@ -533,7 +548,7 @@ await check('reorder handles a list larger than one chunk', async () => {
   }
   const reversed = [...ids].reverse();
   await reorderMenuItems(db, 'footer', reversed);
-  const got = (await getMenus(db, null)).footer.map((i) => i.id);
+  const got = (await getMenus(db, null, [])).footer.map((i) => i.id);
   assert.deepEqual(got, reversed, 'every item across both chunks is repositioned');
 });
 
