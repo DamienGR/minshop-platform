@@ -6,11 +6,35 @@ import Pagination from '../../../components/Pagination.astro';
 import { MEDIA_PAGE_SIZE, countMedia } from '../../../features/media/db';
 import { isUnused, usageLinks } from '../../../features/media/usage';
 import { mediaUrl } from '../../../features/media/url';
+import {
+  HEAVY_BYTES,
+  isOptimizable,
+  optimizableSummary,
+  readCursor,
+  readTally,
+  tallyParams,
+} from '../../../features/media/optimize';
 import { loadMediaPage } from '../../api/admin/media';
 import { paginate, queryHref } from '../../../pagination';
 import { t, tn, formatNumber } from '../../../features/i18n';
 
 const error = Astro.url.searchParams.get('error');
+
+// « Optimiser » (ticket #255) needs the Images binding the template declares;
+// a configuration rendered without it offers nothing rather than a button
+// that can only fail.
+const maxWidth = getConfig().images.maxWidth;
+const canOptimize = !!env.IMAGES;
+const heavy = canOptimize ? await optimizableSummary(env.DB, maxWidth) : { count: 0, bytes: 0 };
+
+// A run's report, carried in the query string by the redirect: `running` is a
+// pass with photos still ahead of its cursor, `done` the final count.
+const params = Astro.url.searchParams;
+const report = params.get('optimize') === 'running' ? 'running' : params.get('optimize') === 'done' ? 'done' : null;
+const reported = readTally((name) => params.get(name));
+const passCursor = readCursor(params.get('after'));
+const passRemaining = readCursor(params.get('remaining'));
+const nothingDone = reported.optimized + reported.kept + reported.failed === 0;
 
 // Count first so paginate() clamps an out-of-range ?page= to the last real page
 // instead of querying past the end and rendering an empty grid.
@@ -53,6 +77,77 @@ function formatSize(bytes: number | null): string | null {
       <p class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         {error}
       </p>
+    )
+  }
+
+  {
+    report && (
+      <div
+        class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+        role="status"
+      >
+        {report === 'running' && <p class="font-medium">{t('admin.media.optimize.running')}</p>}
+        {reported.optimized > 0 && (
+          <p>
+            {tn('admin.media.optimize.result.optimized.one', 'admin.media.optimize.result.optimized.other', reported.optimized, {
+              avant: formatSize(reported.bytesBefore) ?? '',
+              apres: formatSize(reported.bytesAfter) ?? '',
+            })}
+          </p>
+        )}
+        {reported.kept > 0 && (
+          <p>{tn('admin.media.optimize.result.kept.one', 'admin.media.optimize.result.kept.other', reported.kept)}</p>
+        )}
+        {reported.failed > 0 && (
+          <p>{tn('admin.media.optimize.result.failed.one', 'admin.media.optimize.result.failed.other', reported.failed)}</p>
+        )}
+        {report === 'done' && nothingDone && <p>{t('admin.media.optimize.result.none')}</p>}
+        {report === 'running' && (
+          <form method="post" action="/api/admin/media/optimize" data-auto-continue class="mt-3 flex items-center gap-3">
+            <input type="hidden" name="after" value={passCursor} />
+            {Object.entries(tallyParams(reported)).map(([name, value]) => (
+              <input type="hidden" name={name} value={value} />
+            ))}
+            <button
+              type="submit"
+              class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+            >
+              {t('admin.media.optimize.continue')}
+            </button>
+            <span>
+              {tn('admin.media.optimize.result.remaining.one', 'admin.media.optimize.result.remaining.other', passRemaining)}
+            </span>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  {
+    canOptimize && heavy.count > 0 && report !== 'running' && (
+      <section class="mb-8 rounded-md border border-line p-4" aria-labelledby="heavy-photos">
+        <h2 id="heavy-photos" class="text-sm font-medium">
+          {t('admin.media.optimize.heading')}
+        </h2>
+        <p class="mt-1 text-sm text-gray-600">
+          {tn('admin.media.optimize.summary.one', 'admin.media.optimize.summary.other', heavy.count, {
+            largeur: formatNumber(maxWidth),
+            seuil: formatSize(HEAVY_BYTES) ?? '',
+            poids: formatSize(heavy.bytes) ?? '',
+          })}
+        </p>
+        <p class="mt-1 text-xs text-gray-500">
+          {t('admin.media.optimize.explain', { largeur: formatNumber(maxWidth) })}
+        </p>
+        <form method="post" action="/api/admin/media/optimize" class="mt-3">
+          <button
+            type="submit"
+            class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+          >
+            {t('admin.media.optimize.all')}
+          </button>
+        </form>
+      </section>
     )
   }
 
@@ -135,7 +230,9 @@ function formatSize(bytes: number | null): string | null {
                   </Fragment>
                 )}
               </p>
-              <div class="mt-auto flex items-center gap-3 pt-1">
+              {/* Up to three actions in a quarter of the grid: they wrap
+                  rather than run into the next photo's. */}
+              <div class="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
                 <button
                   type="button"
                   data-copy-url={url}
@@ -144,6 +241,18 @@ function formatSize(bytes: number | null): string | null {
                 >
                   {t('admin.media.copyUrl')}
                 </button>
+                {canOptimize && isOptimizable(m, maxWidth) && (
+                  <form method="post" action={`/api/admin/media/${m.public_id}`}>
+                    <input type="hidden" name="_action" value="optimize" />
+                    <input type="hidden" name="page" value={page} />
+                    <button
+                      type="submit"
+                      class="text-xs uppercase tracking-widest text-gray-500 hover:text-brand"
+                    >
+                      {t('admin.media.optimize.one')}
+                    </button>
+                  </form>
+                )}
                 {unused && (
                   <form method="post" action={`/api/admin/media/${m.public_id}`}>
                     <input type="hidden" name="_action" value="delete" />
@@ -167,6 +276,12 @@ function formatSize(bytes: number | null): string | null {
 </AdminLayout>
 
 <script>
+  // A pass over the heavy photos is a series of form posts, one batch each.
+  // With scripting on it moves to the next batch by itself, after a beat that
+  // lets the count show; with it off, « Continuer » does the same.
+  const next = document.querySelector<HTMLFormElement>('form[data-auto-continue]');
+  if (next) setTimeout(() => next.requestSubmit(), 400);
+
   // Copy-to-clipboard needs JS by nature; everything else on this page is plain
   // forms, so the grid still works with scripting off.
   document.addEventListener('click', async (event) => {

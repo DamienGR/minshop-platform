@@ -359,12 +359,17 @@ today's config.
    sitemaps, `llms.txt`, and search indexes on stores you don't control.
 10. **Media is the only owner of stored files.** Products, pages, and the logo
     record USAGE by `image_key`; removing an image from any of them deletes the
-    association only. Only `/api/admin/media/:id` deletes an R2 object, and it
-    refuses while anything still references the row. Deletion and every
-    association write are guarded in a single SQL statement so the two cannot
-    race; never re-introduce a check-then-write.
+    association only. Only `/api/admin/media/:id` deletes an R2 object with
+    its row, and it refuses while anything still references the row. Deletion
+    and every association write are guarded in a single SQL statement so the
+    two cannot race; never re-introduce a check-then-write.
     A page's zones (ADR 0031) are part of the page: the photos of every zone it
     keeps are claimed with the body's, the model in use or not.
+    « Optimiser » in Médias (ticket #255) never writes over an object: the
+    lighter file goes under a NEW key, the row and every reference move to it
+    in one batch guarded on the row (`features/media/optimize.ts`), and the old
+    object goes last. The first key stays in `media.source_key`, which is how
+    `shopctl catalog` still recognises the photo.
 11. **Page bodies are Markdown with `html: false`.** Raw HTML is escaped, not
     parsed, so a page body can never inject script — including from a
     compromised admin session. The storefront and the admin preview call the

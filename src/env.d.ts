@@ -17,7 +17,8 @@ interface CacheStorage {
 // Astro 7 + @astrojs/cloudflare v14: bindings are accessed via
 //   import { env } from 'cloudflare:workers'
 // and `env` is typed as Cloudflare.Env. Declare the shape here.
-// Minimal shape of the Cloudflare Images binding — just what optimizeUpload uses.
+// Minimal shape of the Cloudflare Images binding — just what transformForStorage
+// uses (features/media/transform.ts: at upload, and « Optimiser » in Médias).
 interface ImagesBindingMin {
   input(stream: ReadableStream): {
     transform(opts: { width?: number; height?: number }): {

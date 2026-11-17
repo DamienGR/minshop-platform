@@ -15,13 +15,15 @@
  *
  * Reads one JSON scenario on stdin, writes one JSON result on stdout:
  *
- *   { imports: [{ csv, options, interruptAfter }], currency, queries }
+ *   { imports: [{ csv, options, interruptAfter, before }], currency, queries }
  *      → { runs: [{ summary, refusals, warnings, statements, uploads }], state }
  *
  * Every entry of `imports` runs against the state the previous one left, which
  * is what makes the interesting cases expressible as data: the same file twice
  * is idempotence, a file then an edited copy of it is an update, and
- * `interruptAfter` truncating one run's statements is resumption.
+ * `interruptAfter` truncating one run's statements is resumption. `before`
+ * holds `{ sql, params }` statements run just ahead of that import: what the
+ * admin did to the store between two runs, written with the admin's own SQL.
  *
  * `{ csv, runs }` is shorthand for the same file N times.
  */
@@ -45,7 +47,7 @@ const READS = {
   categories: 'SELECT id, slug, name FROM categories',
   productCategories: 'SELECT product_id, category_id FROM product_categories',
   productImages: 'SELECT id, product_id, image_key, position FROM product_images',
-  media: 'SELECT id, image_key, original_name, mime_type, size_bytes, width, height FROM media',
+  media: 'SELECT id, image_key, source_key, original_name, mime_type, size_bytes, width, height FROM media',
 };
 
 export function migrate(db) {
@@ -105,6 +107,7 @@ export function runScenario(scenario) {
 
   const runs = [];
   for (const step of imports) {
+    for (const { sql, params = [] } of step.before ?? []) db.prepare(sql).run(...params);
     runs.push(importOnce(db, {
       csv: resolve(ROOT, step.csv),
       currency: step.currency ?? scenario.currency ?? 'EUR',
