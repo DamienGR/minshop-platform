@@ -69,7 +69,7 @@ export interface DocumentRows {
  */
 export async function readDocumentRows(
   db: D1Database,
-  { themeTexts }: { themeTexts: boolean },
+  { themeTexts, titleMarks }: { themeTexts: boolean; titleMarks: readonly string[] },
 ): Promise<DocumentRows> {
   const [settingsRows, menuRows, texts] = await db.batch([
     db.prepare(STORE_SETTINGS_SQL),
@@ -79,7 +79,7 @@ export async function readDocumentRows(
   const settings = parseStoreSettings(rows<{ key: string; value: string }>(settingsRows));
   return {
     settings,
-    menus: groupMenus(rows<MenuItemRow>(menuRows), settings.homePage),
+    menus: groupMenus(rows<MenuItemRow>(menuRows), settings.homePage, titleMarks),
     themeTexts: texts ? themeTextMap(rows<{ key: string; value: string }>(texts)) : new Map(),
   };
 }

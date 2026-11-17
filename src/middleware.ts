@@ -10,6 +10,7 @@ import { getStoreSettings } from './features/settings/db';
 import { EMPTY_MENUS } from './features/navigation/db';
 import { readDocumentRows } from './features/storefront/reads';
 import { activeThemeTextSlots } from './features/themeTexts/active';
+import { activeTitleMarks } from './features/titleMarks/active';
 import {
   checkRateLimit,
   rateLimitBucket,
@@ -104,7 +105,11 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     const wantsMenus = !path.startsWith('/admin');
     try {
       if (wantsMenus) {
-        const rows = await readDocumentRows(env.DB, { themeTexts: activeThemeTextSlots.length > 0 });
+        const rows = await readDocumentRows(env.DB, {
+          themeTexts: activeThemeTextSlots.length > 0,
+          // A page's title in a menu is plain text: the theme's codes go (ticket #251).
+          titleMarks: activeTitleMarks,
+        });
         context.locals.settings = rows.settings;
         context.locals.menus = rows.menus;
         context.locals.themeTexts = rows.themeTexts;

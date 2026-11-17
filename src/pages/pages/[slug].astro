@@ -13,6 +13,7 @@ import { buildPageView } from '../../features/pages/view';
 import Lightbox from '../../features/pages/Lightbox.astro';
 import { productImageSources } from '../../features/products/image';
 import { activePageModels, pageModelTemplate } from '../../features/pageModels/active';
+import { activeTitleMarks } from '../../features/titleMarks/active';
 import { contactSettings, submitContact } from '../../features/contact';
 import { publicOrigin } from '../../features/http/origin';
 import { vaultReady } from '../../features/secrets/store';
@@ -85,8 +86,9 @@ const tileBase = `/map-tiles/${encodeURIComponent(page.slug)}`;
 const baseUrl = getConfig().images.baseUrl;
 const delivery = settings?.imageDelivery;
 // The body, and the zones of the theme's model when the page has one (ADR
-// 0031), each rendered with the same options.
-const { pageModel, view, lightbox, description } = buildPageView(page, activePageModels, {
+// 0031), each rendered with the same options. The template gets the title as
+// written; the document's title goes without the theme's codes (ticket #251).
+const { pageModel, view, lightbox, description, titleText } = buildPageView(page, activePageModels, {
   baseUrl,
   dimensions,
   placeMaps: {
@@ -102,14 +104,14 @@ const { pageModel, view, lightbox, description } = buildPageView(page, activePag
     const sources = productImageSources(key, { baseUrl, delivery, sizes: ROW_IMAGE_SIZES });
     return sources.srcset ? sources : null;
   },
-});
+}, activeTitleMarks);
 // A model's template is the theme's `pages/<key>.astro`; « Basique » is its
 // ContentPage, as every page was before.
 const Template = (pageModel ? pageModelTemplate(pageModel.key) : null) as typeof ContentPage | null;
 const layoutStyle = view.layoutStyle;
 ---
 
-<Layout title={page.title} seoTitle={page.seo_title} description={page.seo_description ?? description}>
+<Layout title={titleText} seoTitle={page.seo_title} description={page.seo_description ?? description}>
   {Template ? <Template model={view} /> : <ContentPage model={view} />}
   {lightbox && <Lightbox />}
   {

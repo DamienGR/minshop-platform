@@ -372,7 +372,7 @@ try {
   // What a request does: the middleware's batch, resolved once
   // (features/themeTexts/request.ts), handed to the shell and the home.
   const documentTexts = async () =>
-    resolveThemeTexts(slots, (await readDocumentRows(db, { themeTexts: true })).themeTexts);
+    resolveThemeTexts(slots, (await readDocumentRows(db, { themeTexts: true, titleMarks: [] })).themeTexts);
   const home = async () =>
     (await loadCatalogPage(db, {
       base: '/',
@@ -445,12 +445,12 @@ try {
     await save({ 'hero.title': 'La carte cadeau' });
     take();
     takeCalls();
-    const read = await readDocumentRows(db, { themeTexts: true });
+    const read = await readDocumentRows(db, { themeTexts: true, titleMarks: [] });
     const withTexts = take();
     assert.equal(takeCalls(), 1, 'settings, menus and texts in one call');
     assert.equal(read.themeTexts.get('hero.title'), 'La carte cadeau');
 
-    const none = await readDocumentRows(db, { themeTexts: false });
+    const none = await readDocumentRows(db, { themeTexts: false, titleMarks: [] });
     const without = take();
     assert.equal(takeCalls(), 1);
     assert.equal(none.themeTexts.size, 0, 'nothing read, nothing resolved but the defaults');

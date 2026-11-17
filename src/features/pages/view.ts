@@ -4,6 +4,7 @@ import { modelMarkdownTexts, readStoredZones, resolvePageZones, type StoredZones
 import type { Tile } from '../maps/tiles.ts';
 import { markdownExcerpt, placeMapsDrawTile, renderMarkdown, usesLightbox, type RenderOptions } from './markdown.ts';
 import { normalizePageLayout, pageLayoutStyle } from './layouts.ts';
+import { plainTitle } from '../titleMarks/marks.ts';
 
 /**
  * A page as the storefront draws it, and as the editor's whole-page preview
@@ -28,20 +29,41 @@ export interface PageView {
   view: ContentPageModel | ModelPageModel;
   /** Whether a row of photos anywhere on the page opens large (Lightbox.astro). */
   lightbox: boolean;
-  /** The meta description: the body's first words, else the zones'. */
+  /** The meta description: the body's first words, else the zones', without
+   *  the theme's title codes (ticket #251). */
   description: string;
+  /** The title as plain text, without the theme's codes (ticket #251): what
+   *  the document's title carries. `view.title` keeps them for the theme. */
+  titleText: string;
 }
 
 const zonesOf = (page: PageSource): StoredZones =>
   typeof page.zones === 'string' ? readStoredZones(page.zones) : page.zones;
 
-export function buildPageView(page: PageSource, models: readonly ThemePageModel[], options: RenderOptions): PageView {
+/**
+ * `titleMarks` are the codes the active theme declares (ticket #251): the
+ * template receives the title as the merchant wrote it, codes included, and
+ * draws them; the plain-text title and description go without.
+ */
+export function buildPageView(
+  page: PageSource,
+  models: readonly ThemePageModel[],
+  options: RenderOptions,
+  titleMarks: readonly string[],
+): PageView {
   const html = renderMarkdown(page.body_markdown, options);
   const layout = normalizePageLayout(page.layout);
   const base: ContentPageModel = { title: page.title, html, layout, layoutStyle: pageLayoutStyle(layout) };
+  const titleText = plainTitle(page.title, titleMarks);
   const pageModel = pageModelOf(models, page.model);
   if (!pageModel) {
-    return { pageModel, view: base, lightbox: usesLightbox(html), description: markdownExcerpt(page.body_markdown) };
+    return {
+      pageModel,
+      view: base,
+      lightbox: usesLightbox(html),
+      description: markdownExcerpt(page.body_markdown),
+      titleText,
+    };
   }
 
   const zones = zonesOf(page);
@@ -55,9 +77,17 @@ export function buildPageView(page: PageSource, models: readonly ThemePageModel[
     pageModel,
     view,
     lightbox: [html, ...texts.map((text) => text.html ?? '')].some(usesLightbox),
+    // A zone may be a title the theme decorates: its codes go before the
+    // excerpt is cut, so they cannot take its length either.
     description:
       markdownExcerpt(page.body_markdown) ||
-      markdownExcerpt(texts.map((text) => text.text).filter(Boolean).join('\n\n')),
+      markdownExcerpt(
+        texts
+          .map((text) => plainTitle(text.text, titleMarks))
+          .filter(Boolean)
+          .join('\n\n'),
+      ),
+    titleText,
   };
 }
 

@@ -7,12 +7,11 @@ import { listProducts, countProducts } from '../features/products/db';
 import { listVisibleCategories } from '../features/categories/db';
 import { listPublishedPages } from '../features/pages/db';
 import { publicOrigin } from '../features/http/origin';
+import { llmsLinkText as linkText, llmsPageLine } from '../features/seo/llms';
+import { activeTitleMarks } from '../features/titleMarks/active';
 
 export const prerender = false;
 
-// Markdown link text can't contain unescaped brackets; product names are free
-// text, so strip brackets and collapse whitespace. Slugs are URL-safe already.
-const linkText = (s: string) => s.replace(/[[\]]/g, '').replace(/\s+/g, ' ').trim();
 const oneLine = (s: string | null, max = 100) => {
   if (!s) return '';
   const t = s.replace(/\s+/g, ' ').trim();
@@ -48,8 +47,9 @@ export const GET: APIRoute = async ({ url, locals }) => {
   );
 
   // Merchant-authored informational pages (shipping, returns, policies) — the
-  // context an agent needs that the catalog itself doesn't carry.
-  const pageLines = pages.map((p) => `- [${linkText(p.title)}](${origin}/pages/${p.slug})`);
+  // context an agent needs that the catalog itself doesn't carry. Their titles
+  // go without the theme's codes (ticket #251).
+  const pageLines = pages.map((p) => llmsPageLine(p, origin, activeTitleMarks));
 
   // Optional: this store's MCP endpoint, when one is deployed. The MCP server is
   // a SEPARATE Worker whose hostname the storefront cannot derive — they share a

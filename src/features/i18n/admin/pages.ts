@@ -9,6 +9,9 @@ export const pages = {
   'admin.pages.status.published': 'Publiée',
   'admin.pages.status.draft': 'Brouillon',
   'admin.pages.field.title': 'Titre',
+  // Under « Titre », when the theme declares codes (ticket #251).
+  'admin.pages.field.titleMarks':
+    'Codes du thème : {codes}. Placés dans le titre, ils y dessinent un ornement ; Google et les menus lisent le titre sans eux.',
   'admin.pages.field.slug': 'Slug',
   'admin.pages.field.urlSlug': 'Slug de l’URL',
   'admin.pages.field.layout': 'Mise en page',

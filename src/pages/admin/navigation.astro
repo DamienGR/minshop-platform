@@ -17,6 +17,8 @@ import {
   PICKER_LIMIT,
 } from '../../features/navigation/admin';
 import { t, type MessageKey } from '../../features/i18n';
+import { activeTitleMarks } from '../../features/titleMarks/active';
+import { plainTitle } from '../../features/titleMarks/marks';
 
 const url = Astro.url;
 const error = url.searchParams.get('error');
@@ -31,7 +33,12 @@ const pickerLocation: MenuLocation = url.searchParams.get('location') === 'foote
 const pickerQuery = url.searchParams.get('q') ?? '';
 
 const homePage = Astro.locals.settings?.homePage ?? null;
-const menus = await getMenus(env.DB, homePage);
+// The items as the storefront prints them: a page's title without the
+// theme's codes (ticket #251).
+const menus = await getMenus(env.DB, homePage, activeTitleMarks);
+// What an item prints while its label is empty: the field's grey text.
+const printedName = (item: (typeof menus.header)[number]) =>
+  item.targetType === 'page' && item.targetName ? plainTitle(item.targetName, activeTitleMarks) : item.targetName;
 
 // Every object type's options are fetched and rendered up front so switching the
 // type <select> is instant — CSS reveals the matching picker instead of a page
@@ -371,7 +378,7 @@ const locations: { key: MenuLocation; title: string; note: string }[] = [
                               name="label"
                               value={item.label ?? ''}
                               maxlength={MAX_MENU_LABEL}
-                              placeholder={item.targetName ?? t('admin.navigation.item.linkText')}
+                              placeholder={printedName(item) || t('admin.navigation.item.linkText')}
                               class="min-w-0 flex-1 rounded border border-line bg-white px-2 py-1 text-xs focus:border-brand focus:outline-none"
                             />
                             <button

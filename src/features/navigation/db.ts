@@ -3,6 +3,7 @@ import { catalogPath, resolveHomePath } from '../settings/home.ts';
 import { withPublicId } from '../ids/publicId.ts';
 import { t } from '../i18n/index.ts';
 import { HIDDEN_CATEGORY_IDS } from '../categories/visibility.ts';
+import { plainTitle } from '../titleMarks/marks.ts';
 
 export type MenuLocation = 'header' | 'footer';
 export type MenuTargetType = 'home' | 'catalog' | 'page' | 'product' | 'category';
@@ -176,8 +177,18 @@ export function resolveMenuHref(
   }
 }
 
-/** Row → renderable item. `text` is the override, else the target's own name. */
-export function toMenuItem(row: MenuItemRow, homePage: string | null | undefined): MenuItem {
+/**
+ * Row → renderable item. `text` is the override, else the target's own name:
+ * for a page, its title without the theme's codes (ticket #251), since a menu
+ * prints it as plain text. `targetName` keeps the title as written.
+ */
+export function toMenuItem(
+  row: MenuItemRow,
+  homePage: string | null | undefined,
+  titleMarks: readonly string[],
+): MenuItem {
+  const name =
+    row.target_type === 'page' && row.target_name !== null ? plainTitle(row.target_name, titleMarks) : row.target_name;
   return {
     id: row.id,
     publicId: row.public_id,
@@ -186,7 +197,7 @@ export function toMenuItem(row: MenuItemRow, homePage: string | null | undefined
     targetId: row.target_id,
     position: row.position,
     label: row.label,
-    text: row.label ?? row.target_name ?? '',
+    text: row.label ?? name ?? '',
     targetName: row.target_name,
     href: resolveMenuHref(row.target_type, row.target_slug, homePage),
     available: row.available === 1,
@@ -196,10 +207,14 @@ export function toMenuItem(row: MenuItemRow, homePage: string | null | undefined
 }
 
 /** Split a flat result set into the two menus, preserving order. */
-export function groupMenus(rows: MenuItemRow[], homePage: string | null | undefined): Menus {
+export function groupMenus(
+  rows: MenuItemRow[],
+  homePage: string | null | undefined,
+  titleMarks: readonly string[],
+): Menus {
   const menus: Menus = { header: [], footer: [] };
   for (const row of rows) {
-    const item = toMenuItem(row, homePage);
+    const item = toMenuItem(row, homePage, titleMarks);
     // Defensive: a location outside the CHECK constraint would otherwise throw.
     if (item.location === 'header' || item.location === 'footer') menus[item.location].push(item);
   }
@@ -214,9 +229,10 @@ export function visibleItems(items: MenuItem[]): MenuItem[] {
 export async function getMenus(
   db: D1Database,
   homePage: string | null | undefined,
+  titleMarks: readonly string[],
 ): Promise<Menus> {
   const { results } = await db.prepare(MENU_ITEMS_SQL).all<MenuItemRow>();
-  return groupMenus(results ?? [], homePage);
+  return groupMenus(results ?? [], homePage, titleMarks);
 }
 
 export const isMenuLocation = (v: unknown): v is MenuLocation =>

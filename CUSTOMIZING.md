@@ -21,6 +21,7 @@ theme engine and no code editor in Admin — you edit source, build, and deploy.
 | `src/themes/<your-theme>/tokens.css` | Your theme's design tokens: the `@theme` block (colors, fonts, radii) plus the prose and container scales. |
 | `src/themes/<your-theme>/texts.ts` | Optional. The texts your theme lets the merchant edit in Admin → Textes du thème — see "Texts the merchant edits". |
 | `src/themes/<your-theme>/pageModels.ts`, `pages/<key>.astro` | Optional. The page models your theme offers in a page's editor, and the template that draws each — see "Page models". |
+| `src/themes/<your-theme>/titles.ts` | Optional. The codes a merchant writes in a page's title for your theme to draw an ornament — see "Ornaments in a page's title". |
 | `client/guide/*.md` | Optional. Your shop's own chapters of the admin guide, after the core's — see "Chapters of the admin guide". |
 
 That is the whole store-owned surface.
@@ -470,6 +471,38 @@ template that breaks on an empty list. Keep a key
 once merchants have written to it — a renamed zone is a text the page keeps
 but no longer shows. The `atelier` theme carries two witnesses, « La marque »
 and « Où nous trouver », to copy from.
+
+## Ornaments in a page's title
+
+Your theme may sign a title with an ornament — a leaf, a star — and let the
+merchant choose where it goes by writing a code in the title: « La [feuille]
+marque ». Declare the codes in `src/themes/<your-theme>/titles.ts` (ticket
+#251):
+
+```ts
+export const titleMarks = ['feuille'];
+```
+
+Each is a lowercase word, letters and digits with hyphens between them,
+written without its brackets; twenty at most. The merchant may type it in any
+case, with spaces inside the brackets. The page editor lists them under the
+title (« Codes du thème : [feuille] »).
+
+Your templates receive the title as the merchant wrote it — `ContentPage`'s
+and a page model's `model.title`, a model's zones — and drawing the ornament
+is yours. Everywhere the core prints a page's title as plain text, the code
+goes, with its spaces: the document's `<title>`, `og:title` and
+`twitter:title` (a « Titre pour Google » the merchant fills in is used as
+written), `llms.txt`, a menu item without a label, the description a model
+page with an empty body takes from its zones, and the grey « Titre pour
+Google » of the editor. Product and category names keep theirs: they leave
+the shop, in orders, Stripe and e-mails.
+
+What your theme prints itself — a summary, a region's name, a menu you build
+from the titles — needs your own copy of the rule, since a theme imports no
+core code: remove `[code]` and the spaces around it, leaving none at the
+start, at the end, or before `.` and `,`. No file, nothing changes:
+`test/storefront/titleMarks.test.ts` holds every theme on disk to the rules.
 
 ## Chapters of the admin guide
 

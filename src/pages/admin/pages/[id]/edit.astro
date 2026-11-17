@@ -9,6 +9,8 @@ import {
   normalizePageLayout,
 } from '../../../../features/pages/layouts';
 import { activePageModels } from '../../../../features/pageModels/active';
+import { activeTitleMarks } from '../../../../features/titleMarks/active';
+import { titleMarkCode } from '../../../../features/titleMarks/marks';
 import { isListZone, pageModelOf } from '../../../../features/pageModels/declaration';
 import { readStoredZones } from '../../../../features/pageModels/zones';
 import { buildPageView } from '../../../../features/pages/view';
@@ -41,10 +43,15 @@ const modelHint = pageModel ? (pageModel.help ?? '') : t('admin.pages.model.basi
 // list on the page, that would be a « Monter » or « Descendre ».
 const hasLists = !!pageModel?.zones.some(isListZone);
 // What /pages/<slug> carries while « Référencement » is empty (ticket #216):
-// the page's own view, as the storefront builds it, for its description.
+// the page's own view, as the storefront builds it, for its title without the
+// theme's codes (ticket #251) and its description.
 const storeName = Astro.locals.settings?.storeName ?? getConfig().storeName;
-const seoFallbackTitle = documentTitle({ title: page.title, storeName });
-const seoFallbackDescription = buildPageView(page, models, { baseUrl: getConfig().images.baseUrl }).description;
+const seoFallback = buildPageView(page, models, { baseUrl: getConfig().images.baseUrl }, activeTitleMarks);
+const seoFallbackTitle = documentTitle({ title: seoFallback.titleText, storeName });
+const seoFallbackDescription = seoFallback.description;
+// The codes the theme draws in a title, announced under the field: a code
+// typed wrong would otherwise print as text.
+const titleMarkCodes = activeTitleMarks.map(titleMarkCode).join(' ');
 ---
 
 <AdminLayout title={t('admin.pages.edit.documentTitle', { titre: page.title })} active="pages">
@@ -108,6 +115,13 @@ const seoFallbackDescription = buildPageView(page, models, { baseUrl: getConfig(
           maxlength="120"
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
         />
+        {
+          titleMarkCodes && (
+            <span class="mt-1 block normal-case tracking-normal text-gray-400">
+              {t('admin.pages.field.titleMarks', { codes: titleMarkCodes })}
+            </span>
+          )
+        }
       </label>
       <label class="block flex-1 text-xs uppercase tracking-widest text-gray-400">
         {t('admin.pages.field.slug')}

@@ -82,6 +82,15 @@ Une zone peut être une liste : des points de vente, chacun avec son nom, son 
 - **Monter** et **Descendre** changent l’ordre et enregistrent la page.
 - Pour retirer une entrée, cochez **Retirer à l’enregistrement**, puis enregistrez.
 
+### Placer un ornement dans le titre
+
+Votre thème peut dessiner un ornement dans le titre d’une page, une feuille par exemple, à l’endroit que vous choisissez. S’il en propose, la ligne « Codes du thème » sous le **Titre** les donne.
+
+1. Dans le **Titre**, écrivez le code à l’endroit voulu, crochets compris : « La [feuille] marque ».
+2. Cliquez sur **Enregistrer** : la page affiche l’ornement à la place du code.
+
+Google, les menus et le **Titre pour Google** grisé lisent le titre sans le code : « La marque ». Un **Titre pour Google** que vous remplissez est repris tel quel : écrivez-le sans code. Un code que le thème ne propose pas reste du texte, crochets compris.
+
 ### Choisir une mise en page
 
 - **Standard** : pour les textes longs, comme les conditions de vente.

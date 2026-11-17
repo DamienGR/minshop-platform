@@ -41,7 +41,7 @@ const page = (overrides: Partial<PageSource> = {}): PageSource => ({
 describe('a page’s view (ADR 0031)', () => {
   it('is the page as it always was for « Basique », or a model the theme lost', () => {
     for (const model of ['', 'gone']) {
-      const { pageModel, view, description } = buildPageView(page({ model }), [POINTS], OPTIONS);
+      const { pageModel, view, description } = buildPageView(page({ model }), [POINTS], OPTIONS, []);
       expect(pageModel).toBeNull();
       expect(view).toEqual({
         title: 'Où nous trouver',
@@ -55,7 +55,7 @@ describe('a page’s view (ADR 0031)', () => {
 
   it('hands the model’s template every zone, rendered like the body', () => {
     const zones = JSON.stringify({ accroche: 'Au marché', points: [{ nom: 'Halles', carte: MAP }, { nom: 'Port' }] });
-    const { pageModel, view } = buildPageView(page({ model: 'points-de-vente', zones }), [POINTS], OPTIONS);
+    const { pageModel, view } = buildPageView(page({ model: 'points-de-vente', zones }), [POINTS], OPTIONS, []);
     expect(pageModel).toBe(POINTS);
     const model = view as ModelPageModel;
     expect(model.model).toBe('points-de-vente');
@@ -67,25 +67,25 @@ describe('a page’s view (ADR 0031)', () => {
   });
 
   it('takes the zones as stored or as the editor sent them', () => {
-    const stored = buildPageView(page({ model: 'points-de-vente', zones: '{"accroche":"A"}' }), [POINTS], OPTIONS);
-    const sent = buildPageView(page({ model: 'points-de-vente', zones: { accroche: 'A' } }), [POINTS], OPTIONS);
+    const stored = buildPageView(page({ model: 'points-de-vente', zones: '{"accroche":"A"}' }), [POINTS], OPTIONS, []);
+    const sent = buildPageView(page({ model: 'points-de-vente', zones: { accroche: 'A' } }), [POINTS], OPTIONS, []);
     expect(sent.view).toEqual(stored.view);
   });
 
   it('opens a row of photos large wherever it is, body or zone', () => {
-    expect(buildPageView(page(), [POINTS], OPTIONS).lightbox).toBe(false);
-    expect(buildPageView(page({ body_markdown: ROW }), [POINTS], OPTIONS).lightbox).toBe(true);
+    expect(buildPageView(page(), [POINTS], OPTIONS, []).lightbox).toBe(false);
+    expect(buildPageView(page({ body_markdown: ROW }), [POINTS], OPTIONS, []).lightbox).toBe(true);
     const inZone = JSON.stringify({ points: [{ nom: 'Halles', carte: ROW }] });
-    expect(buildPageView(page({ model: 'points-de-vente', zones: inZone }), [POINTS], OPTIONS).lightbox).toBe(true);
+    expect(buildPageView(page({ model: 'points-de-vente', zones: inZone }), [POINTS], OPTIONS, []).lightbox).toBe(true);
     // A zone of a model the page does not use draws nothing, a row included.
-    expect(buildPageView(page({ zones: inZone }), [POINTS], OPTIONS).lightbox).toBe(false);
+    expect(buildPageView(page({ zones: inZone }), [POINTS], OPTIONS, []).lightbox).toBe(false);
   });
 
   it('describes the page by its body, else by its zones', () => {
     const zones = JSON.stringify({ accroche: 'Au marché le samedi', points: [{ nom: 'Halles' }] });
-    expect(buildPageView(page({ model: 'points-de-vente', zones }), [POINTS], OPTIONS).description).toBe('Nos marchés.');
+    expect(buildPageView(page({ model: 'points-de-vente', zones }), [POINTS], OPTIONS, []).description).toBe('Nos marchés.');
     expect(
-      buildPageView(page({ model: 'points-de-vente', zones, body_markdown: '' }), [POINTS], OPTIONS).description,
+      buildPageView(page({ model: 'points-de-vente', zones, body_markdown: '' }), [POINTS], OPTIONS, []).description,
     ).toBe('Au marché le samedi Halles');
   });
 });
