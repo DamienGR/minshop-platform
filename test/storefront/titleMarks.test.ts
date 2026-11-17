@@ -10,15 +10,25 @@ import { documentTitle } from '../../src/features/seo/meta';
 import { llmsPageLine } from '../../src/features/seo/llms';
 import { groupMenus, visibleItems, type MenuItemRow } from '../../src/features/navigation/db';
 import type { ThemePageModel } from '../../src/features/storefront/models';
+import { isShippedTheme, resolveTheme } from '../../scripts/themes.mjs';
 
 /**
  * The title codes contract (ticket #251): what a theme may declare in
  * `titles.ts`, and where the core prints a page's title without them. Every
  * theme on disk is held to the rules, the selected one or not, so a shop's
  * broken declaration fails here rather than printing its codes as text.
+ *
+ * What the shipped themes do with a code — declare none, print it as text —
+ * holds them only: a shop's own theme is where a code gets drawn, and held to
+ * the same rule it would fail the moment it drew one (v0.10.2 did, on the
+ * theme the ticket was written for).
  */
 
 const declarations = import.meta.glob<{ titleMarks?: unknown }>('../../src/themes/*/titles.ts', { eager: true });
+const shippedDeclarations = Object.keys(declarations).filter((path) =>
+  isShippedTheme(path.split('/').at(-2) ?? ''),
+);
+const shipped = isShippedTheme(resolveTheme().id);
 
 const marks = validTitleMarks(fixtureMarks);
 
@@ -67,8 +77,11 @@ describe('a theme’s title codes (ticket #251)', () => {
     expect(marks).toEqual(['feuille']);
   });
 
-  it('the shipped themes declare none, so nothing changes for them', () => {
-    expect(declarations).toEqual({});
+  it('the shipped themes declare none', () => {
+    expect(shippedDeclarations).toEqual([]);
+  });
+
+  it.skipIf(!shipped)('so nothing changes for the selected one, when it is shipped', () => {
     expect(activeTitleMarks).toEqual([]);
     const { titleText } = buildPageView(page(), [], {}, activeTitleMarks);
     expect(titleText).toBe('La [feuille] marque');
@@ -107,7 +120,9 @@ describe('a page titled « La [feuille] marque », in a theme that declares `feu
     const { view } = buildPageView(page(), [], {}, marks);
     expect(view.title).toBe('La [feuille] marque');
     const container = await AstroContainer.create();
-    for (const template of [ContentPage, AltContentPage]) {
+    // A shop's own ContentPage may draw the code, which is the point: only a
+    // shipped one, and the fixture, are held to printing it as written.
+    for (const template of shipped ? [ContentPage, AltContentPage] : [AltContentPage]) {
       const html = await container.renderToString(template as never, { props: { model: view } });
       expect(html).toContain('La [feuille] marque');
     }
