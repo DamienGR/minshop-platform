@@ -4118,7 +4118,8 @@ placer en écrivant `[feuille]` dans le titre. Le thème le fait pour ce qu'il
 dessine, mais le socle imprimait aussi le titre d'une page en texte seul, et le
 code y paraissait en toutes lettres. Aucun des jalons 0 à 10 n'avance.
 
-Fait le 2026-11-17, sans migration ni ADR :
+Fait le 2026-11-17, sans migration ni ADR (PR #252), livré dans le socle
+v0.10.2 :
 
 - le thème déclare ses codes dans un fichier facultatif,
   `src/themes/<id>/titles.ts` (`export const titleMarks = ['feuille']`), lu au
