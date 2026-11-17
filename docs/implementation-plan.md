@@ -4146,6 +4146,10 @@ Fait le 2026-11-17, sans migration ni ADR :
   déclarent aucun. Les noms de produit et de catégorie restent hors du ticket :
   ils partent dans les commandes, Stripe et les e-mails.
 
+Choix de Damien le 2026-11-17 (carte de décision) : les trois propositions du
+ticket, une liste déclarée, la ligne « Codes du thème » dans l'éditeur, les
+produits et les catégories hors du ticket.
+
 Tenu par `src/features/titleMarks/marks.test.ts` (la règle), par
 `test/storefront/titleMarks.test.ts`, avec un thème de fixture qui déclare
 `feuille` (titre du document, `llms.txt`, menu et description sans le code,
