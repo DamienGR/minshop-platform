@@ -44,6 +44,26 @@ export const media = {
   'admin.media.error.unknownAction': 'Action inconnue.',
   'admin.media.error.notFound': 'Fichier introuvable.',
 
+  // ─── Optimiser les photos déjà déposées (ticket #255) ──────────────────────────
+  'admin.media.optimize.heading': 'Photos lourdes',
+  'admin.media.optimize.summary.one': '{count} photo plus large que {largeur} px ou de plus de {seuil}, {poids}.',
+  'admin.media.optimize.summary.other': '{count} photos plus larges que {largeur} px ou de plus de {seuil}, {poids} en tout.',
+  'admin.media.optimize.explain': 'Optimiser une photo la ramène à {largeur} px de large au plus, en WebP, comme une photo déposée aujourd’hui. Partout où elle sert, la version allégée la remplace. L’original est effacé : c’est sans retour.',
+  'admin.media.optimize.all': 'Optimiser les photos lourdes',
+  'admin.media.optimize.one': 'Optimiser',
+  'admin.media.optimize.continue': 'Continuer',
+  'admin.media.optimize.running': 'Optimisation en cours…',
+  'admin.media.optimize.result.optimized.one': '{count} photo optimisée, de {avant} à {apres}.',
+  'admin.media.optimize.result.optimized.other': '{count} photos optimisées, de {avant} à {apres} en tout.',
+  'admin.media.optimize.result.kept.one': '{count} photo déjà légère, gardée telle quelle.',
+  'admin.media.optimize.result.kept.other': '{count} photos déjà légères, gardées telles quelles.',
+  'admin.media.optimize.result.failed.one': '{count} photo n’a pas pu être optimisée. Réessayez plus tard.',
+  'admin.media.optimize.result.failed.other': '{count} photos n’ont pas pu être optimisées. Réessayez plus tard.',
+  'admin.media.optimize.result.remaining.one': 'Il en reste {count}.',
+  'admin.media.optimize.result.remaining.other': 'Il en reste {count}.',
+  'admin.media.optimize.result.none': 'Aucune photo à optimiser.',
+  'admin.media.optimize.error.binding': 'Ajoutez la liaison IMAGES et redéployez avant d’optimiser des photos.',
+
   // ─── Sélecteur de médias (MediaPicker) ─────────────────────────────────────────
   'admin.media.picker.label': 'Choisir dans la médiathèque',
   'admin.media.picker.title': 'Choisir une image',

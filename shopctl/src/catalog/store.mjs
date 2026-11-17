@@ -112,7 +112,7 @@ const READS = [
   ['categories', 'SELECT id, slug, name FROM categories'],
   ['productCategories', 'SELECT product_id, category_id FROM product_categories'],
   ['productImages', 'SELECT id, product_id, image_key, position FROM product_images'],
-  ['media', 'SELECT id, image_key FROM media'],
+  ['media', 'SELECT id, image_key, source_key FROM media'],
 ];
 
 /**

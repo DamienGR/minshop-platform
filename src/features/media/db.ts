@@ -14,6 +14,12 @@ export interface Media {
   width: number | null;
   height: number | null;
   created_at: string;
+  /** The key the photo had before « Optimiser » gave it a lighter one (migration
+   *  0063, ticket #255): what the catalogue importer still calls it. NULL for a
+   *  photo never optimized after it was stored. */
+  source_key: string | null;
+  /** When « Optimiser » processed the row, kept or not; NULL = never. */
+  optimized_at: string | null;
 }
 
 /** Grid/picker page size. Bounds both the admin page and the JSON API. */

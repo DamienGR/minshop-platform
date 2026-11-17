@@ -4156,3 +4156,61 @@ Tenu par `src/features/titleMarks/marks.test.ts` (la règle), par
 `feuille` (titre du document, `llms.txt`, menu et description sans le code,
 gabarit avec ; chaque thème du disque tenu aux règles) et par
 `src/features/navigation/db.test.ts` (libellé et noms de produit inchangés).
+
+### 13.30 Alléger les photos déjà déposées
+
+Noté le 2026-11-17 (ticket #255), pendant la recette de la première boutique
+réelle : la cliente y avait déposé des photos de plus de 2 Mo avant que
+l'optimisation au dépôt (§13.28) soit allumée. Elles restent servies telles
+quelles partout où elles paraissent, et le socle n'avait rien pour les
+reprendre. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-17, migration 0063, sans ADR, livré dans le socle v0.11.0 :
+
+- Médias signale sous « Photos lourdes » les photos plus larges que
+  `images.maxWidth` ou de plus de 500 Ko, en JPEG, PNG ou WebP et pas encore
+  traitées, avec leur nombre et leur poids, et offre « Optimiser les photos
+  lourdes » et, sous chacune, « Optimiser ». La règle existe deux fois, en
+  TypeScript pour la grille (`isOptimizable()`) et en SQL pour les comptes
+  (`OPTIMIZABLE_SQL`, `src/features/media/optimize.ts`). Un GIF, une
+  « Ancienne image » sans type ni poids et une clé hors de `media/` ne sont
+  jamais proposés ;
+- une photo passe par la transformation du dépôt, une seule fonction pour les
+  deux (`transformForStorage()`, `src/features/media/transform.ts`) : largeur
+  ramenée à `maxWidth`, WebP en qualité 82. Un résultat qui ne gagne pas un
+  cinquième du poids est écarté : la photo est marquée (`optimized_at`) et
+  gardée telle quelle ;
+- jamais par-dessus l'ancien objet : `/images/*` est servi immuable un an, les
+  transformations à la demande sont indexées par l'adresse de la source et la
+  réserve des sauvegardes scelle un objet par clé (ADR 0019). Le fichier
+  allégé prend une nouvelle clé ; la ligne `media` (même id, même identifiant
+  public) et chaque référence (galerie et photo principale d'un produit,
+  catégorie, logo, corps et zones d'une page, par leur adresse) y passent dans
+  un seul lot, chaque écriture gardée sur la ligne déjà déplacée, et l'ancien
+  objet est effacé en dernier. Une variante garde sa photo, qui désigne la
+  ligne de galerie et non la clé ; `page_media` ne bouge pas ;
+- la première clé reste dans `media.source_key` (index unique partiel) :
+  `shopctl catalog` y retrouve la clé qu'il tire des octets du fichier, si
+  bien qu'un nouvel import n'envoie rien et qu'une galerie reconstruite nomme
+  le fichier allégé ;
+- un passage sur toutes les photos lourdes est une suite de formulaires
+  (`POST /api/admin/media/optimize`), cinq photos par requête (six
+  instructions D1 chacune, sous les cinquante par invocation du plan Workers
+  gratuit), avec un curseur qui l'achève même quand une photo échoue. La page
+  enchaîne seule avec un script, par « Continuer » sans. Puis le cache de la
+  vitrine est purgé et, en diffusion « Cloudflare à la demande », les tailles
+  de chaque nouvelle clé sont préchauffées, comme au dépôt ;
+- sans liaison IMAGES, Médias ne propose rien.
+
+Choix de Damien le 2026-11-17 (carte de décision) : le bouton dans Médias, le
+seuil « plus large que `images.maxWidth` ou de plus de 500 Ko », l'original
+effacé une fois remplacé.
+
+Tenu par `src/features/media/optimize.test.ts` (la règle, le décompte d'un
+passage, l'adresse du compte rendu), par `test/integration/media-optimize.mjs`
+(D1 réel et liaison Images hors ligne de miniflare : chaque référence
+déplacée, variante comprise ; photo gardée ; photos écartées sans lecture du
+bucket ; échecs sans effet ; ligne changée entre-temps ; règle SQL égale à la
+règle TypeScript ; un passage qui atteint chaque photo une fois) et par
+`test/scripts/catalog.test.mjs` (réimport sans envoi après une optimisation,
+galerie reconstruite sur le fichier allégé).

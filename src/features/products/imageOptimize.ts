@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getConfig } from '../../config';
+import { OPTIMIZED_TYPE, transformForStorage } from '../media/transform';
 import { getSetting } from '../settings/db';
 
 /**
@@ -17,6 +18,9 @@ import { getSetting } from '../settings/db';
  * The fallback (and the try/catch) mean enabling it can never break an upload —
  * if the binding is missing, errors or is past its quota, you just store the
  * original.
+ *
+ * The transformation itself is `transformForStorage()`, shared with « Optimiser »
+ * in Médias (ticket #255): this function only decides whether an upload gets it.
  */
 export async function optimizeUpload(file: File): Promise<File> {
   const cfg = getConfig().images;
@@ -28,12 +32,9 @@ export async function optimizeUpload(file: File): Promise<File> {
   if (!optimize || !env.IMAGES) return file;
 
   try {
-    const out = await env.IMAGES.input(file.stream())
-      .transform({ width: cfg.maxWidth })
-      .output({ format: 'image/webp', quality: 82 });
-    const buf = await out.response().arrayBuffer();
-    if (buf.byteLength === 0) return file;
-    return new File([buf], 'optimized.webp', { type: 'image/webp' });
+    const buf = await transformForStorage(env.IMAGES, file.stream(), cfg.maxWidth);
+    if (!buf) return file;
+    return new File([buf], 'optimized.webp', { type: OPTIMIZED_TYPE });
   } catch {
     return file; // transformation unavailable (e.g. local dev) — keep the original
   }

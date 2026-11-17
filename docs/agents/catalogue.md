@@ -24,6 +24,10 @@ Four properties hold, and each one is a test:
   Image keys are `media/<20 hex of sha256>.<ext>` — content-addressed, so a
   shared photo is one object and a re-run uploads nothing. (The admin's own
   uploads stay randomly keyed; see `mediaKeyFor()` for the 20-character budget.)
+  A photo « Optimiser » made lighter in Médias (ticket #255) lives under a new
+  key and keeps this one in `media.source_key` (migration 0063): the plan
+  resolves a file's key through it, so a re-run still sends nothing and a
+  rebuilt gallery names the lighter file.
 - **nothing is written until everything is judged**, and **nothing is deleted**.
   A variant leaving the catalogue is deactivated (`order_items.variant_id`
   points at it); products absent from the file are untouched. Losses ask:

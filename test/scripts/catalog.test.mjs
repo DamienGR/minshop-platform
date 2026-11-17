@@ -15,6 +15,7 @@ import { planImport } from '../../shopctl/src/catalog/plan.mjs';
 import { integer, text } from '../../shopctl/src/catalog/sql.mjs';
 import { assertWranglerNamesShop, extractJson, imagesBucket } from '../../shopctl/src/catalog/store.mjs';
 import { importsReadme } from '../../shopctl/src/commands/new.mjs';
+import { MEDIA_MOVE_SQL, REFERENCE_MOVE_SQL } from '../../src/features/media/optimize.ts';
 import { slugify as storeSlugify } from '../../src/features/products/slug.ts';
 import { normalizeTags as storeNormalizeTags } from '../../src/features/products/tags.ts';
 import { seoText as storeSeoText } from '../../src/features/seo/fields.ts';
@@ -443,6 +444,77 @@ describe('un import réel, contre les migrations du dépôt', () => {
       .toEqual(complete.catalogue.map((product) => [product.sku, product.price_cents, product.stock, product.images.length]));
     expect(resumed.state.media).toHaveLength(complete.state.media.length);
     expect(resumed.state.products).toHaveLength(20);
+  });
+
+  // Ticket #255: « Optimiser » in Médias moves a photo to a new key and keeps
+  // in `media.source_key` the one this file derives from the original's bytes.
+  // Without that, a re-import would send the heavy original again and rebuild
+  // the gallery, clearing the photo of every variant that pointed at it.
+  it('reconnaît une photo allégée dans Médias, et ne la renvoie pas (ticket #255)', () => {
+    const { products } = read(WITNESS);
+    const keyOf = (sku) => products.find((product) => product.sku === sku).media[0].key;
+    const cabas = keyOf('CAB-LIN');
+    const tee = keyOf('TEE');
+    const lighter = { cabas: 'media/0123456789abcdef0123.webp', tee: 'media/fedcba98765432100123.webp' };
+    // What optimizeStoredMedia() writes, statement for statement.
+    const optimize = (oldKey, newKey) => [
+      { sql: MEDIA_MOVE_SQL, params: [oldKey, newKey, 'image/webp', 41_250, 1000, 667] },
+      ...REFERENCE_MOVE_SQL.map((sql) => ({ sql, params: [oldKey, newKey] })),
+    ];
+    // The same catalogue, the linen tote given a second photo: its gallery is
+    // rebuilt, and must name the lighter file, whose original is gone.
+    const edited = join(dirname(WITNESS), 'catalog.optimized.csv');
+    writeFileSync(
+      edited,
+      readFileSync(WITNESS, 'utf8').replace('maison|textile;photos/cabas-lin.png', 'maison|textile;photos/cabas-lin.png|photos/mug-gres.png'),
+    );
+    try {
+      const result = scenario({
+        imports: [
+          { csv: WITNESS, options: { createCategories: true } },
+          {
+            csv: WITNESS,
+            options: { createCategories: true },
+            before: [
+              // A size of the T-shirt shows its photo, as the admin sets it.
+              {
+                sql: `UPDATE product_variants SET image_id = (SELECT id FROM product_images WHERE image_key = ?1) WHERE sku = 'TEE-M'`,
+                params: [tee],
+              },
+              ...optimize(cabas, lighter.cabas),
+              ...optimize(tee, lighter.tee),
+            ],
+          },
+          { csv: edited, options: { createCategories: true } },
+        ],
+      });
+
+      // The store already holds every photo: nothing to send, nothing to write.
+      expect(result.runs[1].uploads).toHaveLength(0);
+      expect(result.runs[1].statements).toBe(0);
+      expect(result.runs[1].summary).toMatchObject({ productsUnchanged: 20, mediaUploaded: 0, mediaReused: 8 });
+
+      // The third run rebuilds one gallery, from the photos the store holds.
+      expect(result.runs[2].uploads).toHaveLength(0);
+      expect(result.runs[2].summary).toMatchObject({ productsUnchanged: 19, mediaUploaded: 0 });
+      const mug = keyOf('MUG-GRE');
+      expect(result.catalogue.find((product) => product.sku === 'CAB-LIN')).toMatchObject({
+        image_key: lighter.cabas,
+        images: [lighter.cabas, mug],
+      });
+      expect(result.catalogue.find((product) => product.sku === 'NAP-LIN').images).toEqual([lighter.cabas]);
+
+      const shirt = result.catalogue.find((product) => product.sku === 'TEE');
+      expect(shirt.images).toEqual([lighter.tee]);
+      const medium = shirt.variants.find((variant) => variant.sku === 'TEE-M');
+      expect(result.state.productImages.find((image) => image.id === medium.image_id)?.image_key).toBe(lighter.tee);
+
+      expect(result.state.media).toHaveLength(8);
+      expect(result.state.media.find((media) => media.image_key === lighter.cabas)).toMatchObject({ source_key: cabas });
+      expect(result.state.media.some((media) => media.image_key === cabas || media.image_key === tee)).toBe(false);
+    } finally {
+      rmSync(edited, { force: true });
+    }
   });
 
   // Ticket #228: the rule of the admin, written a second time in the CLI's

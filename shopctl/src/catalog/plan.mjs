@@ -86,6 +86,13 @@ export function planImport(desired, store, options) {
   const variantsBySku = index(store.variants, 'sku');
   const categoriesBySlug = index(store.categories, 'slug');
   const mediaByKey = index(store.media, 'image_key');
+  // A photo that « Optimiser » made lighter in Médias (ticket #255, migration
+  // 0063) lives under a new key and keeps, in `source_key`, the one this file
+  // derives from its bytes. Resolving through it keeps a re-import a no-op:
+  // without it the import would send the heavy original again and rebuild the
+  // gallery, clearing the photo of every variant that pointed at it.
+  const mediaBySource = index(store.media, 'source_key');
+  const storedKey = (key) => (mediaByKey.has(key) ? key : (mediaBySource.get(key)?.[0]?.image_key ?? key));
   const variantsByProduct = new Map();
   for (const variant of store.variants) {
     const bucket = variantsByProduct.get(variant.product_id) ?? [];
@@ -113,7 +120,7 @@ export function planImport(desired, store, options) {
   const reusedMedia = new Set();
   for (const product of desired) {
     for (const media of product.media) {
-      if (mediaByKey.has(media.key)) {
+      if (mediaByKey.has(media.key) || mediaBySource.has(media.key)) {
         if (!reusedMedia.has(media.key)) {
           reusedMedia.add(media.key);
           summary.mediaReused += 1;
@@ -131,7 +138,7 @@ export function planImport(desired, store, options) {
         `INSERT INTO media (image_key, original_name, mime_type, size_bytes, width, height, public_id)\n` +
           `  SELECT ${text(media.key)}, ${text(media.original_name)}, ${text(media.mime_type)}, ${integer(media.size_bytes)}, ` +
           `${integerOrNull(media.dimensions?.width ?? null)}, ${integerOrNull(media.dimensions?.height ?? null)}, ${newPublicId('med')}\n` +
-          `   WHERE NOT EXISTS (SELECT 1 FROM media WHERE image_key = ${text(media.key)});`,
+          `   WHERE NOT EXISTS (SELECT 1 FROM media WHERE image_key = ${text(media.key)} OR source_key = ${text(media.key)});`,
       );
     }
   }
@@ -336,7 +343,7 @@ export function planImport(desired, store, options) {
     const currentImages = (existing ? (imagesByProduct.get(existing.id) ?? []) : [])
       .slice()
       .sort((a, b) => a.position - b.position || a.id - b.id);
-    const wantedKeys = product.media.map((media) => media.key);
+    const wantedKeys = product.media.map((media) => storedKey(media.key));
     const galleryMatches =
       currentImages.length === wantedKeys.length && currentImages.every((image, position) => image.image_key === wantedKeys[position]);
     if (!galleryMatches) {
