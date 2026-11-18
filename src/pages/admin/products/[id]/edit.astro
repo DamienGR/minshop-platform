@@ -42,6 +42,8 @@ const variants = await listVariants(env.DB, product.id, true);
 const extras = await listExtras(env.DB, product.id, true);
 // Personalisation fields (ticket #125): the free text the buyer types.
 const customFields = await listCustomFields(env.DB, product.id);
+// The extras a field may go with (migration 0064): those already saved.
+const savedExtras = extras.filter((ex): ex is typeof ex & { public_id: string } => ex.public_id !== null);
 // The product's main photo — a variant with no specific image falls back to this
 // (so new variants default to showing it rather than an empty box).
 const imgBase = getConfig().images.baseUrl;
@@ -523,6 +525,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
         adds one field per save), "+ Add" clones it. Every row posts every
         field, so the arrays stay aligned — hence a select, not a checkbox. */}
     <h3 class="mb-3 text-sm font-medium">{t('admin.products.customization.heading')}</h3>
+    {savedExtras.length > 0 && <p class="mb-3 max-w-2xl text-xs text-gray-500">{t('admin.products.customization.extraHint')}</p>}
     <div data-custom-rows data-default-max="30" class="space-y-3">
       {
         [...customFields, null].map((field) => (
@@ -580,6 +583,31 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
                 </option>
               </select>
             </label>
+            {/* The extra the field goes with (migration 0064): it shows on the
+                product page only once that box is ticked. Saved extras only —
+                a new one has no public ID until the save. Without any extra
+                the row still posts one empty entry, so the arrays stay aligned. */}
+            {savedExtras.length > 0 ? (
+              <label class="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-gray-400">
+                {t('admin.products.customization.extra')}
+                <select
+                  form="product-form"
+                  name="c_extra"
+                  class="max-w-[14rem] rounded-md border border-line bg-transparent px-3 py-1.5 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+                >
+                  <option value="" selected={!field?.extra_public_id}>
+                    {t('admin.products.customization.extra.always')}
+                  </option>
+                  {savedExtras.map((ex) => (
+                    <option value={ex.public_id} selected={field?.extra_public_id === ex.public_id}>
+                      {t('admin.products.customization.extra.with', { option: ex.label })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <input form="product-form" type="hidden" name="c_extra" value="" />
+            )}
             {field && (
               <input form="product-form" type="checkbox" name="c_remove" value={field.public_id} class="hidden" data-remove-mark />
             )}

@@ -220,7 +220,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     // The personalisation text, posted from /express (never a query string:
     // a URL ends up in the platform's request logs, the buyer's text must not).
     const fields = await listCustomFields(env.DB, product.id);
-    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)));
+    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)), extras);
     if (!custom.ok) {
       return redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
     }
@@ -554,7 +554,8 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
  * accepted as a documented convenience selector. `variant_id` (`var_…`) is
  * required for products that have a variant group; `extra_ids` (`xtra_…`) are
  * optional add-ons — all from the catalog (GET /api/products/:slug), whose
- * `customization_fields` say what `customization` must answer. Numeric
+ * `customization_fields` say what `customization` must answer (a field with an
+ * `extra_id` is asked only when that extra is in `extra_ids`). Numeric
  * row IDs and the legacy numeric `extras` array are rejected with 400.
  * Resolves selectors → priced lines (variant/extra-aware), validates stock,
  * creates a hosted checkout session, and returns { checkout_url } as JSON — the
@@ -758,7 +759,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       return cjson({ error: '"customization" must be an object of "cfld_…": string.' }, 400);
     }
     const fields = await listCustomFields(env.DB, product.id);
-    const custom = checkCustomization(fields, (r.customization as CustomValues | undefined) ?? {});
+    const custom = checkCustomization(fields, (r.customization as CustomValues | undefined) ?? {}, extras);
     if (!custom.ok) {
       return cjson(
         {
@@ -771,6 +772,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
             help: f.help_text,
             max_length: f.max_length,
             required: f.required === 1,
+            extra_id: f.extra_public_id,
           })),
         },
         400,

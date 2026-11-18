@@ -33,7 +33,11 @@ export interface CatalogCustomizationField {
   help: string | null;
   /** In characters. */
   max_length: number;
+  /** Whether it must be answered — when it is asked at all (`extra_id`). */
   required: boolean;
+  /** The extra (`xtra_…`) the field goes with: asked only when that extra is
+   *  in the line's `extra_ids`. null = always asked. */
+  extra_id: string | null;
 }
 
 /**
@@ -126,13 +130,18 @@ export function toCatalogProduct(
     }));
   }
   if (options?.customFields) {
-    out.customization_fields = options.customFields.map((f) => ({
-      id: requirePublicId(f.public_id, f.id, 'custom field'),
-      label: f.label,
-      help: f.help_text,
-      max_length: f.max_length,
-      required: f.required === 1,
-    }));
+    // A field that goes with an extra the product no longer offers is never
+    // asked (customization.ts): it is not described either.
+    out.customization_fields = options.customFields
+      .filter((f) => f.extra_id == null || (extras ?? []).some((e) => e.id === f.extra_id))
+      .map((f) => ({
+        id: requirePublicId(f.public_id, f.id, 'custom field'),
+        label: f.label,
+        help: f.help_text,
+        max_length: f.max_length,
+        required: f.required === 1,
+        extra_id: f.extra_id == null ? null : requirePublicId(f.extra_public_id, f.extra_id, 'extra'),
+      }));
   }
   return out;
 }

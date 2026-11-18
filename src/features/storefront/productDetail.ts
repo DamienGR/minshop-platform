@@ -118,6 +118,12 @@ export async function loadProductDetail(
   }
 
   const hasVariants = variants.length > 0;
+  // The extras the page offers, by row id: a personalisation field that goes
+  // with one is asked under it, and one whose extra is gone is not asked at
+  // all — no box to tick, as the cart and the checkout judge it
+  // (customization.ts, migration 0064).
+  const extraIds = new Map(extras.map((extra) => [extra.id, requirePublicId(extra.public_id, extra.id, 'extra')]));
+  const askedFields = customFields.filter((field) => field.extra_id == null || extraIds.has(field.extra_id));
   const state = stockState(product.stock);
   // With variants the inventory unit is the variant, so availability comes from
   // them; otherwise from the product's own stock.
@@ -247,7 +253,7 @@ export async function loadProductDetail(
       productId: requirePublicId(product.public_id, product.id, 'product'),
       cartAction: '/api/cart',
       expressAction: '/express',
-      hasOptions: hasVariants || extras.length > 0 || customFields.length > 0,
+      hasOptions: hasVariants || extras.length > 0 || askedFields.length > 0,
       soldOut,
       showAddToCart: cartEnabled,
       // Buy now is express (it skips the cart), so it survives the cart being
@@ -269,7 +275,7 @@ export async function loadProductDetail(
         formattedPriceDelta: formatMoney(extra.price_delta_cents, options.currency),
         priceDeltaCents: extra.price_delta_cents,
       })),
-      customFields: customFields.map((field) => {
+      customFields: askedFields.map((field) => {
         const id = requirePublicId(field.public_id, field.id, 'custom field');
         return {
           name: customFieldName(id),
@@ -278,6 +284,7 @@ export async function loadProductDetail(
           help: field.help_text,
           maxLength: field.max_length,
           required: field.required === 1,
+          extraId: field.extra_id == null ? null : (extraIds.get(field.extra_id) ?? null),
         };
       }),
     },

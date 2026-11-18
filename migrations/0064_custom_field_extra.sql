@@ -1,0 +1,14 @@
+-- Migration 0064: a personalisation field asked only with an extra (plan §13.31,
+-- amending ADR 0022).
+--
+-- `product_custom_fields.extra_id` names the extra (`product_extras.id`, an
+-- option ticked on the product page) the field goes with: the field shows
+-- under that box once it is ticked, is required then if it is required, and
+-- is neither shown nor read without it. NULL, every field until now, is a
+-- field always asked, as before.
+--
+-- No REFERENCES clause, as for `product_variants.image_id` (0018): the admin
+-- refuses to delete an extra a field still names (customFields.ts), and a
+-- name left dangling all the same reads as an extra nobody can tick, so the
+-- field is never asked rather than asked of everyone.
+ALTER TABLE product_custom_fields ADD COLUMN extra_id INTEGER; -- → product_extras.id, or NULL

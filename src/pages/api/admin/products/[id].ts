@@ -48,7 +48,8 @@ export const prerender = false;
 
 /**
  * The variants/extras editor submits public IDs (var_/xtra_ rows, pimg_ photo
- * choices, cfld_ personalisation fields) in its positionally-aligned arrays.
+ * choices, cfld_ personalisation fields and the xtra_ each one goes with) in
+ * its positionally-aligned arrays.
  * applyVariantForm and applyCustomFieldForm work on the product's integer row
  * ids, so translate IN PLACE here at the boundary —
  * internal writes stay integer. Returns an error for a reference that does not
@@ -99,7 +100,13 @@ async function resolveVariantFormIds(
   if (!translate('v_id', variants, 'variant') || !translate('v_remove', variants, 'variant')) {
     return t('admin.products.error.variantGone');
   }
-  if (!translate('e_id', extras, 'extra') || !translate('e_remove', extras, 'extra')) {
+  // `c_extra` names the extra a personalisation field goes with (migration
+  // 0064), '' for none: one of this product's, like `e_id`.
+  if (
+    !translate('e_id', extras, 'extra') ||
+    !translate('e_remove', extras, 'extra') ||
+    !translate('c_extra', extras, 'extra')
+  ) {
     return t('admin.products.error.extraGone');
   }
   if (!translate('v_image', images, 'productImage')) {

@@ -4214,3 +4214,47 @@ bucket ; échecs sans effet ; ligne changée entre-temps ; règle SQL égale à 
 règle TypeScript ; un passage qui atteint chaque photo une fois) et par
 `test/scripts/catalog.test.mjs` (réimport sans envoi après une optimisation,
 galerie reconstruite sur le fichier allégé).
+
+### 13.31 Un champ de personnalisation demandé avec une option
+
+Noté le 2026-11-18, pendant la mise en place de la première boutique réelle :
+sa chaussette de Noël vend le prénom floqué par une option « Personnalisation »
+à 3 €, et le champ « Prénom ou mot de noël » était demandé, et obligatoire, à
+tout acheteur, option cochée ou non. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-18, migration 0064, en amendement de
+l'[ADR 0022](architecture/decisions/0022-produits-personnalisables.md),
+pour le socle v0.12.0 :
+
+- `product_custom_fields.extra_id`, réglé sous « Afficher » dans la section
+  « Personnalisation » de la fiche d'administration : « Toujours », ou
+  « Avec … » l'une des options déjà enregistrées du produit ;
+- un tel champ n'est demandé qu'à une ligne qui porte l'option, obligatoire
+  alors s'il l'est ; sans elle, son texte est écarté, jamais vendu sans
+  l'option. Une seule règle, `checkCustomization(fields, values, extras)`,
+  qui reçoit les options résolues de la ligne : ajout au panier, panier relu,
+  `/express`, `/checkout` et `/api/checkout` (formulaire et JSON) ;
+- sur la fiche, le champ est sous la case de l'option, montré par `base.css`
+  quand elle est cochée (`:has()`, sans script), désactivé par le script de
+  la fiche tant qu'il est caché, rendu obligatoire quand il paraît ; sans
+  script, le serveur refuse le champ vide ;
+- l'éditeur refuse de supprimer une option dont dépend un champ, et d'en
+  nommer une d'un autre produit ; un champ dont l'option a disparu n'est
+  demandé à personne ;
+- l'API JSON donne `extra_id` (`xtra_…` ou `null`) sur chaque champ de
+  `customization_fields`, et `llms.txt` le dit ;
+- le chapitre Produits du guide a sa section « Un champ demandé seulement
+  avec une option ».
+
+Choix faits sans attendre Damien, à revoir s'il le conteste : une option
+seulement par champ, pas de variante ; le texte d'un champ dont l'option
+n'est pas prise écarté plutôt que refusé.
+
+Tenu par `src/features/products/customization.test.ts` et
+`customFields.test.ts` (la règle, le refus de l'éditeur avant et après la
+traduction des identifiants), `test/storefront/productDetail.test.ts` et
+`productDetailLoader.test.ts` (le champ sous sa case, jamais `required` dans
+le balisage, un champ orphelin tu), `test/integration/customization.mjs`
+(fiche, panier, ligne qui perd son option, achat immédiat, API JSON,
+éditeur) et `test/browser/product-customization.spec.mjs` (avec et sans
+script, sur bureau et téléphone).

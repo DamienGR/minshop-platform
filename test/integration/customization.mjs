@@ -12,6 +12,11 @@
  * And that the admin editor writes the fields, while an order keeps the label
  * it was sold under.
  *
+ * A field that goes with an extra (migration 0064, the stocking whose first
+ * name is flocked only with the « Personnalisation » box): drawn under its
+ * box, asked and required only with it, its text dropped without it, on every
+ * way in, and the editor that sets it.
+ *
  * Run: node --experimental-strip-types test/integration/customization.mjs
  * (after a build — `npm run verify` builds first.)
  */
@@ -44,7 +49,7 @@ const ADDRESS = {
   country: 'FR',
 };
 /** The texts buyers type here: none may reach a URL or a log line. */
-const TYPED = ['Léa', 'Tom', 'Zoé', 'Inès', 'Joyeux anniversaire'];
+const TYPED = ['Léa', 'Tom', 'Zoé', 'Inès', 'Joyeux anniversaire', 'Gaspard', 'Noëlle', 'Lutin'];
 const line = (value) => customizationText({ label: 'Nom à broder', value });
 
 /** Every Checkout Session the Worker asked Stripe for, as posted. */
@@ -259,8 +264,8 @@ try {
   await check('the JSON checkout reads `customization`, and says what it needs', async () => {
     const detail = await (await fetch('/api/products/sac-brode')).json();
     assert.deepEqual(detail.customization_fields, [
-      { id: NAME_FIELD, label: 'Nom à broder', help: 'En lettres capitales ou minuscules', max_length: 15, required: true },
-      { id: MESSAGE_FIELD, label: 'Message', help: null, max_length: 40, required: false },
+      { id: NAME_FIELD, label: 'Nom à broder', help: 'En lettres capitales ou minuscules', max_length: 15, required: true, extra_id: null },
+      { id: MESSAGE_FIELD, label: 'Message', help: null, max_length: 40, required: false, extra_id: null },
     ]);
 
     const missing = await postJson({ items: [{ slug: 'sac-brode', quantity: 1 }], method: 'demo', ship_to: ADDRESS });
@@ -329,6 +334,161 @@ try {
     assert.equal(released.status, 'released');
     assert.equal(released.customization, null);
   });
+
+  console.log('Un champ demandé avec une option');
+
+  const STOCKING = 'prod_chs0000001';
+  const FLOCKING = 'xtra_prs0000030';
+  const GIFT = 'xtra_cdx0000031';
+  const FIRST_NAME_FIELD = 'cfld_prn0000001';
+  const FIRST_NAME = `custom:${FIRST_NAME_FIELD}`;
+  const FIRST_NAME_LABEL = 'Prénom ou mot de noël';
+  await db
+    .prepare(
+      `INSERT INTO products (public_id, name, slug, description, price_cents, currency, stock, active)
+       VALUES (?, 'Chaussette de noël', 'chaussette-de-noel', '', 1200, 'eur', 50, 1)`,
+    )
+    .bind(STOCKING)
+    .run();
+  const stockingId = (await db.prepare('SELECT id FROM products WHERE public_id = ?').bind(STOCKING).first()).id;
+  await db
+    .prepare(
+      `INSERT INTO product_extras (public_id, product_id, label, price_delta_cents, position)
+       VALUES (?, ?, 'Personnalisation', 300, 0), (?, ?, 'Emballage cadeau', 200, 1)`,
+    )
+    .bind(FLOCKING, stockingId, GIFT, stockingId)
+    .run();
+  const flockingId = (await db.prepare('SELECT id FROM product_extras WHERE public_id = ?').bind(FLOCKING).first()).id;
+  await db
+    .prepare(
+      `INSERT INTO product_custom_fields (public_id, product_id, label, help_text, max_length, required, position, extra_id)
+       VALUES (?, ?, ?, NULL, 30, 1, 0, ?)`,
+    )
+    .bind(FIRST_NAME_FIELD, stockingId, FIRST_NAME_LABEL, flockingId)
+    .run();
+  const addStocking = (fields, headers) =>
+    post('/api/cart', { _action: 'add', product_id: STOCKING, ...fields }, headers);
+  /** The cart's lines for the stocking, by key, as the cookie holds them. */
+  const stockingLines = () =>
+    Object.fromEntries(
+      Object.entries(JSON.parse(decodeURIComponent(jar.get('cart') ?? '%7B%22items%22%3A%7B%7D%7D')).items ?? {}).filter(
+        ([key]) => key.startsWith(STOCKING),
+      ),
+    );
+  const firstNameLine = (value) => customizationText({ label: FIRST_NAME_LABEL, value });
+  /** Form fields with the extras listed, as the product page posts them. */
+  const withExtras = (extras, fields = {}) => {
+    const body = new URLSearchParams(fields);
+    for (const extra of extras) body.append('extra', extra);
+    return body;
+  };
+
+  await check('the field stands under its box, and is not required in the markup', async () => {
+    const html = await (await get('/products/chaussette-de-noel')).text();
+    const group = html.match(/<div[^>]*data-extra-choice[^>]*>[\s\S]*?data-extra-fields[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/);
+    assert.ok(group, 'no group around the box and its field');
+    assert.ok(group[0].includes(`value="${FLOCKING}"`), 'the group is not the « Personnalisation » box');
+    assert.ok(!group[0].includes(`value="${GIFT}"`), 'another box is in the group');
+    const input = group[0].match(new RegExp(`<input[^>]*name="${FIRST_NAME}"[^>]*>`));
+    assert.ok(input, 'the field is not under its box');
+    assert.ok(!/\srequired/.test(input[0]), 'a hidden required field would stop the form');
+    assert.ok(input[0].includes('data-required'), 'the script cannot tell it is required');
+    assert.ok(!html.includes(`>${t('product.customization')}</legend>`), 'an empty « Personnalisation » fieldset');
+  });
+
+  await check('without the box, nothing is asked and a typed text is dropped', async () => {
+    jar.delete('cart');
+    assert.equal((await addStocking({})).status, 303);
+    assert.equal((await addStocking({ [FIRST_NAME]: 'Lutin' })).status, 303);
+    // Gift-wrapped but not flocked: still no first name.
+    const gift = await post('/api/cart', withExtras([GIFT], { _action: 'add', product_id: STOCKING, [FIRST_NAME]: 'Lutin' }));
+    assert.equal(gift.status, 303);
+    assert.deepEqual(stockingLines(), { [STOCKING]: 2, [`${STOCKING}#${GIFT}`]: 1 });
+  });
+
+  await check('with the box, the field is required, then carried on its line', async () => {
+    const blank = await post('/api/cart', withExtras([FLOCKING], { _action: 'add', product_id: STOCKING, [FIRST_NAME]: '  ' }));
+    assert.equal(blank.status, 303);
+    const to = new URL(blank.headers.get('location'), ORIGIN);
+    assert.equal(to.pathname, '/products/chaussette-de-noel');
+    assert.equal(to.searchParams.get('error'), t('product.error.customRequired', { champ: FIRST_NAME_LABEL }));
+    assert.equal(
+      (await post('/api/cart', withExtras([FLOCKING], { _action: 'add', product_id: STOCKING }), { 'x-partial': '1' })).status,
+      422,
+    );
+
+    const flocked = await post('/api/cart', withExtras([FLOCKING], { _action: 'add', product_id: STOCKING, [FIRST_NAME]: 'Gaspard' }));
+    assert.equal(flocked.status, 303);
+    const keys = Object.keys(stockingLines());
+    assert.equal(keys.length, 3, keys.join(' '));
+    assert.ok(keys.some((key) => key.startsWith(`${STOCKING}#${FLOCKING}~`)), 'the flocked line carries no text');
+    const html = await (await get('/cart')).text();
+    assert.ok(html.includes(firstNameLine('Gaspard')), 'the cart does not read the first name back');
+    assert.ok(!html.includes('Lutin'), 'a text typed without the box reached the cart');
+  });
+
+  await check('a line that lost its box loses the text, never sold without it', async () => {
+    const [flockedKey] = Object.keys(stockingLines()).filter((key) => key.includes('~'));
+    // The same line as the cookie could carry it without the extra: the text
+    // rides in the key, the box does not.
+    const strayKey = `${STOCKING}~${flockedKey.split('~')[1]}`;
+    const items = JSON.parse(decodeURIComponent(jar.get('cart'))).items;
+    jar.set('cart', encodeURIComponent(JSON.stringify({ v: 2, items: { [strayKey]: 1 } })));
+    try {
+      const html = await (await get('/cart')).text();
+      assert.ok(html.includes('Chaussette de noël'), 'the line went missing');
+      assert.ok(!html.includes(firstNameLine('Gaspard')), 'the text was kept without its box');
+    } finally {
+      jar.set('cart', encodeURIComponent(JSON.stringify({ v: 2, items })));
+    }
+  });
+
+  await check('Buy now asks it with the box only, through /express and /checkout', async () => {
+    const refused = await post('/express', withExtras([FLOCKING], { product_id: STOCKING }));
+    assert.equal(refused.status, 303);
+    assert.equal(
+      new URL(refused.headers.get('location'), ORIGIN).searchParams.get('error'),
+      t('product.error.customRequired', { champ: FIRST_NAME_LABEL }),
+    );
+
+    const plain = await post('/express', { product_id: STOCKING, [FIRST_NAME]: 'Lutin' });
+    assert.equal(plain.status, 200, `/express answered ${plain.status}`);
+    assert.ok(!(await plain.text()).includes('Lutin'), '/express carried a text without its box');
+
+    const express = await post('/express', withExtras([FLOCKING], { product_id: STOCKING, [FIRST_NAME]: 'Noëlle' }));
+    assert.equal(express.status, 200, `/express answered ${express.status}`);
+    assert.ok((await express.text()).includes(firstNameLine('Noëlle')), '/express does not read the text back');
+
+    const body = withExtras([FLOCKING], { method: 'demo', product_id: STOCKING, [FIRST_NAME]: 'Noëlle' });
+    const start = await post('/api/checkout', body);
+    assert.equal(start.status, 307, `expected the body to be posted on, got ${start.status}`);
+    const placed = await post(start.headers.get('location'), body);
+    await approve(placed);
+    const [item] = await lastOrderItems();
+    assert.ok(item.name.includes('Personnalisation'), item.name);
+    assert.deepEqual(JSON.parse(item.customization), [{ label: FIRST_NAME_LABEL, value: 'Noëlle' }]);
+  });
+
+  await check('the JSON catalogue says which extra the field goes with, and the checkout holds to it', async () => {
+    const detail = await (await fetch('/api/products/chaussette-de-noel')).json();
+    assert.deepEqual(detail.customization_fields, [
+      { id: FIRST_NAME_FIELD, label: FIRST_NAME_LABEL, help: null, max_length: 30, required: true, extra_id: FLOCKING },
+    ]);
+
+    const plain = await postJson({ items: [{ slug: 'chaussette-de-noel', quantity: 1 }], method: 'demo', ship_to: ADDRESS });
+    assert.equal(plain.status, 200, await plain.clone().text());
+    assert.deepEqual((await plain.json()).items[0].customization ?? [], []);
+
+    const missing = await postJson({
+      items: [{ slug: 'chaussette-de-noel', quantity: 1, extra_ids: [FLOCKING] }],
+      method: 'demo',
+      ship_to: ADDRESS,
+    });
+    assert.equal(missing.status, 400);
+    assert.equal((await missing.json()).customization_fields[0].extra_id, FLOCKING);
+  });
+
+  console.log('Le paiement par carte');
 
   await check('Stripe’s page shows the text under the item, and its metadata never carries it', async () => {
     // A real rail closes the demo one: Stripe last.
@@ -465,6 +625,98 @@ try {
       }),
     );
     assert.equal((await storedFields())[0].label, 'Prénom à broder');
+  });
+
+  console.log('Un champ demandé avec une option, dans l’administration');
+
+  /** The stocking's editor form: the product, its two extras, its field rows. */
+  const stockingForm = (rows, { removeExtras = [] } = {}) => {
+    const form = new URLSearchParams({
+      name: 'Chaussette de noël',
+      slug: 'chaussette-de-noel',
+      price: '12',
+      stock: '50',
+      currency: 'eur',
+      active: 'on',
+      requires_shipping: 'on',
+    });
+    for (const [id, label, price] of [
+      [FLOCKING, 'Personnalisation', '3'],
+      [GIFT, 'Emballage cadeau', '2'],
+    ]) {
+      form.append('e_id', id);
+      form.append('e_label', label);
+      form.append('e_price', price);
+    }
+    for (const id of removeExtras) form.append('e_remove', id);
+    for (const row of rows) {
+      form.append('c_id', row.id ?? '');
+      form.append('c_label', row.label);
+      form.append('c_help', '');
+      form.append('c_max', '30');
+      form.append('c_required', '1');
+      form.append('c_extra', row.extra ?? '');
+    }
+    return form;
+  };
+  const stockingField = () =>
+    db
+      .prepare(
+        `SELECT f.extra_id, x.public_id AS extra FROM product_custom_fields f
+           LEFT JOIN product_extras x ON x.id = f.extra_id WHERE f.public_id = ?`,
+      )
+      .bind(FIRST_NAME_FIELD)
+      .first();
+
+  await check('the editor offers the product’s extras for each field, and saves the choice', async () => {
+    const editor = await (await adminGet(`/admin/products/${STOCKING}/edit`)).text();
+    const select = editor.match(/<select[^>]*name="c_extra"[^>]*>[\s\S]*?<\/select>/g) ?? [];
+    // The field's row and the spare one.
+    assert.equal(select.length, 2, 'not one choice per row');
+    assert.match(select[0], new RegExp(`<option value="${FLOCKING}" selected`));
+    assert.ok(select[0].includes(`value="${GIFT}"`), 'the other extra is not offered');
+    assert.ok(select[1].includes(t('admin.products.customization.extra.always')));
+
+    const always = await adminPost(
+      `/api/admin/products/${STOCKING}`,
+      stockingForm([{ id: FIRST_NAME_FIELD, label: FIRST_NAME_LABEL, extra: '' }]),
+    );
+    assert.equal(new URL(always.headers.get('location'), ORIGIN).pathname, '/admin/products', always.headers.get('location'));
+    assert.equal((await stockingField()).extra_id, null);
+    const back = await adminPost(
+      `/api/admin/products/${STOCKING}`,
+      stockingForm([{ id: FIRST_NAME_FIELD, label: FIRST_NAME_LABEL, extra: FLOCKING }]),
+    );
+    assert.equal(new URL(back.headers.get('location'), ORIGIN).pathname, '/admin/products', back.headers.get('location'));
+    assert.equal((await stockingField()).extra, FLOCKING);
+  });
+
+  await check('the editor refuses another product’s extra, and deleting the one a field goes with', async () => {
+    const foreign = await adminPost(
+      `/api/admin/products/${STOCKING}`,
+      stockingForm([{ id: FIRST_NAME_FIELD, label: FIRST_NAME_LABEL, extra: 'xtra_zzzzzzzzzz' }]),
+    );
+    assert.equal(
+      new URL(foreign.headers.get('location'), ORIGIN).searchParams.get('error'),
+      t('admin.products.error.extraGone'),
+    );
+
+    const deleting = await adminPost(
+      `/api/admin/products/${STOCKING}`,
+      stockingForm([{ id: FIRST_NAME_FIELD, label: FIRST_NAME_LABEL, extra: FLOCKING }], { removeExtras: [FLOCKING] }),
+    );
+    assert.equal(
+      new URL(deleting.headers.get('location'), ORIGIN).searchParams.get('error'),
+      t('admin.products.customization.error.row', {
+        numero: 1,
+        erreur: t('admin.products.customization.error.extraRemoved', { option: 'Personnalisation' }),
+      }),
+    );
+    assert.ok(
+      await db.prepare('SELECT 1 FROM product_extras WHERE public_id = ?').bind(FLOCKING).first(),
+      'the extra was deleted all the same',
+    );
+    assert.equal((await stockingField()).extra, FLOCKING);
   });
 
   await check('no text a buyer typed reached a log line', async () => {

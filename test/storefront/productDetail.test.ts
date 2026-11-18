@@ -145,8 +145,8 @@ describe('the purchase form', () => {
       model: purchase({
         hasOptions: true,
         customFields: [
-          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: 'En capitales', maxLength: 15, required: true },
-          { name: 'custom:cfld_gggggggggg', inputId: 'custom-cfld_gggggggggg', label: 'Message', help: null, maxLength: 40, required: false },
+          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: 'En capitales', maxLength: 15, required: true, extraId: null },
+          { name: 'custom:cfld_gggggggggg', inputId: 'custom-cfld_gggggggggg', label: 'Message', help: null, maxLength: 40, required: false, extraId: null },
         ],
       }),
     });
@@ -163,12 +163,47 @@ describe('the purchase form', () => {
     expect(html).toContain('En capitales');
   });
 
+  it('draws a field that goes with an extra under that box, never required in the markup', async () => {
+    const html = await render(ProductPurchaseForm, {
+      model: purchase({
+        hasOptions: true,
+        extras: [
+          { id: 'xtra_aaaaaaaaaa', label: 'Emballage cadeau', formattedPriceDelta: '2,00 €', priceDeltaCents: 200 },
+          { id: 'xtra_bbbbbbbbbb', label: 'Personnalisation', formattedPriceDelta: '3,00 €', priceDeltaCents: 300 },
+        ],
+        customFields: [
+          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Prénom', help: null, maxLength: 30, required: true, extraId: 'xtra_bbbbbbbbbb' },
+          { name: 'custom:cfld_gggggggggg', inputId: 'custom-cfld_gggggggggg', label: 'Date', help: null, maxLength: 10, required: false, extraId: 'xtra_bbbbbbbbbb' },
+        ],
+      }),
+    });
+    // One group, around the box it goes with and its fields: base.css hides
+    // the fields while the box is unticked, the page's script disables them.
+    const groups = html.match(/<div[^>]*data-extra-choice[^>]*>[\s\S]*?<\/fieldset>/g) ?? [];
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toContain('value="xtra_bbbbbbbbbb"');
+    expect(groups[0]).not.toContain('value="xtra_aaaaaaaaaa"');
+    const fields = html.slice(html.indexOf('data-extra-fields'));
+    expect(fields).toContain('name="custom:cfld_ffffffffff"');
+    expect(fields).toContain('name="custom:cfld_gggggggggg"');
+    // Hidden and required, it would stop the form with nothing to show: the
+    // script makes it required while the box is ticked.
+    const inputs = html.match(/<input[^>]*name="custom:[^"]+"[^>]*>/g) ?? [];
+    expect(inputs[0]).not.toMatch(/\srequired/);
+    expect(inputs[0]).toContain('data-required');
+    expect(inputs[0]).toContain('pattern=');
+    expect(inputs[1]).not.toContain('data-required');
+    // No « Personnalisation » fieldset when every field goes with an extra.
+    expect(html.match(/<legend/g)).toHaveLength(1);
+    expect(html).toContain('formmethod="POST"');
+  });
+
   it('posts Buy now when it carries personalisation, so the text is never a URL', async () => {
     const html = await render(ProductPurchaseForm, {
       model: purchase({
         hasOptions: true,
         customFields: [
-          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: null, maxLength: 15, required: true },
+          { name: 'custom:cfld_ffffffffff', inputId: 'custom-cfld_ffffffffff', label: 'Nom à broder', help: null, maxLength: 15, required: true, extraId: null },
         ],
       }),
     });

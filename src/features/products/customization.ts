@@ -28,6 +28,15 @@ export interface ProductCustomField {
   /** 1 = the buyer must fill it in; 0 = they may leave it blank. */
   required: number;
   position: number;
+  /**
+   * The extra (`product_extras.id`) the field goes with (migration 0064): it
+   * is asked only when that box is ticked, required then if `required` says
+   * so. NULL = always asked.
+   */
+  extra_id: number | null;
+  /** That extra's `xtra_` public ID, joined by the reads; null without one,
+   *  or when the extra is gone (customFields.ts). */
+  extra_public_id: string | null;
 }
 
 /** One answer as an order line keeps it: the label as it read then, and the text. */
@@ -80,6 +89,16 @@ export type CustomizationCheck =
   | { ok: false; error: string };
 
 /**
+ * Whether a field is asked of a line with these extras: always, or only with
+ * the one it goes with (migration 0064). `chosenExtras` are the extras the
+ * line really carries — active, this product's — never what a form named.
+ */
+export const fieldApplies = (
+  field: Pick<ProductCustomField, 'extra_id'>,
+  chosenExtras: readonly { id: number }[],
+): boolean => field.extra_id == null || chosenExtras.some((extra) => extra.id === field.extra_id);
+
+/**
  * Judge what a buyer typed against the product's fields, in the fields' order.
  *
  * A required field left blank and a text over the field's maximum are refused,
@@ -87,15 +106,22 @@ export type CustomizationCheck =
  * the product does not have (removed since, or invented) is dropped. The
  * returned `values` are the canonical ones — normalized, blanks left out — so
  * two identical answers make one cart line.
+ *
+ * A field that goes with an extra the line does not carry is not asked: its
+ * value, typed before the box was unticked or posted without a script, is
+ * dropped with it, never sold without the option it belongs to. Every caller
+ * passes the extras it resolved for the line, which is why the parameter is
+ * not optional.
  */
 export function checkCustomization(
   fields: readonly ProductCustomField[],
   submitted: CustomValues,
+  chosenExtras: readonly { id: number }[],
 ): CustomizationCheck {
   const values: CustomValues = {};
   const entries: CustomizationEntry[] = [];
   for (const field of fields) {
-    if (!field.public_id) continue;
+    if (!field.public_id || !fieldApplies(field, chosenExtras)) continue;
     const value = normalizeCustomValue(submitted[field.public_id]);
     if (value === '') {
       if (field.required) {

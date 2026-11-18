@@ -87,6 +87,7 @@ if (isBuyNow && productPublicId) {
   const custom = checkCustomization(
     fields,
     readCustomValues(fields, (name) => (isPost ? form!.get(name) : Astro.url.searchParams.get(name))),
+    extras,
   );
   if (!custom.ok) {
     return Astro.redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
