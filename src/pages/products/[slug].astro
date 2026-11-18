@@ -47,7 +47,8 @@ if (loaded.backfillRelated) {
 
   <script is:inline type="application/ld+json" set:html={seo.jsonLd} />
 
-  {/* Live price + hero image: reflect the chosen variant + checked add-ons. No-JS
+  {/* Live price + hero image: reflect the chosen variant + checked add-ons, and
+      the personalisation fields that go with them. No-JS
       still works — the server computes the real price in cart/checkout. With
       or without JS the gallery opens on its first photo, the merchant's
       (ticket #185): it moves only to a variant the shopper chose. */}
@@ -242,6 +243,34 @@ if (loaded.backfillRelated) {
       window.addEventListener('pageshow', (event) => {
         if (!event.persisted) sync();
       });
+    }
+
+    // A personalisation field that goes with an extra (migration 0064) is
+    // asked only while that box is ticked. base.css shows and hides it; here
+    // it is also disabled while hidden, so that it is neither sent nor
+    // validated, and required while shown when the merchant made it so.
+    // Without this script the server judges alone: it drops the text of an
+    // unticked extra and refuses a required one left blank.
+    if (form instanceof HTMLFormElement) {
+      const groups = [...form.querySelectorAll('[data-extra-choice]')];
+      const follow = () => {
+        for (const group of groups) {
+          const box = group.querySelector('input[name="extra"]');
+          const fields = group.querySelector('[data-extra-fields]');
+          if (!(box instanceof HTMLInputElement) || !(fields instanceof HTMLElement)) continue;
+          fields.hidden = !box.checked;
+          for (const input of fields.querySelectorAll('input')) {
+            input.disabled = !box.checked;
+            input.required = box.checked && input.hasAttribute('data-required');
+          }
+        }
+      };
+      if (groups.length > 0) {
+        follow();
+        form.addEventListener('change', follow);
+        // A box the browser ticks again on Back comes with no change event.
+        window.addEventListener('pageshow', follow);
+      }
     }
   </script>
 

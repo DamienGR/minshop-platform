@@ -93,7 +93,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // request gets a 422, on which the shell's script posts the form again as a
   // page, so the reason is shown rather than an unchanged drawer (Layout.astro).
   const fields = await listCustomFields(env.DB, product.id);
-  const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)));
+  const custom = checkCustomization(fields, readCustomValues(fields, (name) => form.get(name)), extras);
   const backToProduct = (message: string) =>
     partial
       ? new Response(null, { status: 422 })

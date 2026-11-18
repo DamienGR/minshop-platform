@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkCustomization,
   customizationText,
+  fieldApplies,
   decodeCustomValues,
   encodeCustomValues,
   normalizeCustomValue,
@@ -20,6 +21,8 @@ const field = (overrides: Partial<ProductCustomField>): ProductCustomField => ({
   max_length: 15,
   required: 1,
   position: 0,
+  extra_id: null,
+  extra_public_id: null,
   ...overrides,
 });
 
@@ -44,10 +47,14 @@ describe('normalizeCustomValue', () => {
 
 describe('checkCustomization', () => {
   it('returns the answers in the fields’ order, as an order line keeps them', () => {
-    const check = checkCustomization([NAME, MESSAGE], {
-      [MESSAGE.public_id!]: ' Joyeux anniversaire ',
-      [NAME.public_id!]: 'Léa',
-    });
+    const check = checkCustomization(
+      [NAME, MESSAGE],
+      {
+        [MESSAGE.public_id!]: ' Joyeux anniversaire ',
+        [NAME.public_id!]: 'Léa',
+      },
+      [],
+    );
     expect(check).toEqual({
       ok: true,
       values: { [NAME.public_id!]: 'Léa', [MESSAGE.public_id!]: 'Joyeux anniversaire' },
@@ -59,29 +66,81 @@ describe('checkCustomization', () => {
   });
 
   it('refuses a required field left blank, naming it', () => {
-    const check = checkCustomization([NAME], { [NAME.public_id!]: '   ' });
+    const check = checkCustomization([NAME], { [NAME.public_id!]: '   ' }, []);
     expect(check.ok).toBe(false);
     expect(!check.ok && check.error).toContain('Nom à broder');
   });
 
   it('lets an optional field stay blank, and keeps nothing for it', () => {
-    expect(checkCustomization([MESSAGE], {})).toEqual({ ok: true, values: {}, entries: [] });
+    expect(checkCustomization([MESSAGE], {}, [])).toEqual({ ok: true, values: {}, entries: [] });
   });
 
   it('refuses a text past the maximum rather than cutting a name short', () => {
-    const check = checkCustomization([NAME], { [NAME.public_id!]: 'Anne-Charlotte Dupont' });
+    const check = checkCustomization([NAME], { [NAME.public_id!]: 'Anne-Charlotte Dupont' }, []);
     expect(check.ok).toBe(false);
     expect(!check.ok && check.error).toContain('15');
   });
 
   it('counts characters, not UTF-16 units', () => {
     const emoji = '😀'.repeat(15);
-    expect(checkCustomization([NAME], { [NAME.public_id!]: emoji }).ok).toBe(true);
+    expect(checkCustomization([NAME], { [NAME.public_id!]: emoji }, []).ok).toBe(true);
   });
 
   it('drops a value for a field the product does not have', () => {
-    const check = checkCustomization([MESSAGE], { cfld_zzzzzzzzzz: 'x' });
+    const check = checkCustomization([MESSAGE], { cfld_zzzzzzzzzz: 'x' }, []);
     expect(check).toEqual({ ok: true, values: {}, entries: [] });
+  });
+});
+
+describe('a field that goes with an extra (migration 0064)', () => {
+  const EXTRA = { id: 30 };
+  const OTHER = { id: 31 };
+  /** « Prénom ou mot de noël », asked only with the « Personnalisation » box. */
+  const FIRST_NAME = field({ id: 3, public_id: 'cfld_0000000003', label: 'Prénom', extra_id: EXTRA.id, extra_public_id: 'xtra_0000000030' });
+
+  it('applies only to a line that carries its extra', () => {
+    expect(fieldApplies(FIRST_NAME, [EXTRA])).toBe(true);
+    expect(fieldApplies(FIRST_NAME, [OTHER])).toBe(false);
+    expect(fieldApplies(FIRST_NAME, [])).toBe(false);
+    expect(fieldApplies(NAME, [])).toBe(true);
+  });
+
+  it('is required with its extra, like any required field', () => {
+    const check = checkCustomization([FIRST_NAME], {}, [EXTRA]);
+    expect(check.ok).toBe(false);
+    expect(!check.ok && check.error).toContain('Prénom');
+    expect(checkCustomization([FIRST_NAME], { [FIRST_NAME.public_id!]: 'Léa' }, [OTHER, EXTRA])).toEqual({
+      ok: true,
+      values: { [FIRST_NAME.public_id!]: 'Léa' },
+      entries: [{ label: 'Prénom', value: 'Léa' }],
+    });
+  });
+
+  it('is not asked without it, and drops what was typed in it', () => {
+    expect(checkCustomization([FIRST_NAME], {}, [])).toEqual({ ok: true, values: {}, entries: [] });
+    // Typed, then the box unticked (or posted without a script): the text is
+    // not sold without the option it belongs to, and the cart key stays the
+    // one of a line without it.
+    expect(checkCustomization([FIRST_NAME], { [FIRST_NAME.public_id!]: 'Léa' }, [OTHER])).toEqual({
+      ok: true,
+      values: {},
+      entries: [],
+    });
+  });
+
+  it('is judged beside the fields always asked, in the fields’ order', () => {
+    const check = checkCustomization(
+      [NAME, FIRST_NAME, MESSAGE],
+      { [NAME.public_id!]: 'Tom', [FIRST_NAME.public_id!]: 'Léa' },
+      [EXTRA],
+    );
+    expect(check.ok && check.entries.map((entry) => entry.label)).toEqual(['Nom à broder', 'Prénom']);
+    expect(checkCustomization([NAME, FIRST_NAME], { [FIRST_NAME.public_id!]: 'Léa' }, []).ok).toBe(false);
+  });
+
+  it('is never asked when its extra is gone: nobody can tick it', () => {
+    const orphan = { ...FIRST_NAME, extra_public_id: null };
+    expect(checkCustomization([orphan], {}, [OTHER])).toEqual({ ok: true, values: {}, entries: [] });
   });
 });
 

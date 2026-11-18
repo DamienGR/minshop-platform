@@ -146,11 +146,16 @@ export const products = {
   'admin.products.customization.required': 'Saisie',
   'admin.products.customization.required.yes': 'Obligatoire',
   'admin.products.customization.required.no': 'Facultative',
+  'admin.products.customization.extra': 'Afficher',
+  'admin.products.customization.extra.always': 'Toujours',
+  'admin.products.customization.extra.with': 'Avec « {option} »',
+  'admin.products.customization.extraHint': 'Réglé sur « Avec … », un champ n’apparaît sur la fiche, et sa saisie n’est demandée, que si l’acheteur coche cette option. Une nouvelle option se choisit ici une fois le produit enregistré.',
   'admin.products.customization.add': 'Ajouter un champ',
   'admin.products.customization.error.row': 'Champ de personnalisation {numero} : {erreur}',
   'admin.products.customization.error.labelTooLong': 'le libellé dépasse {max} caractères.',
   'admin.products.customization.error.helpTooLong': 'le texte d’aide dépasse {max} caractères.',
   'admin.products.customization.error.maxLength': 'le nombre de caractères doit être un entier de 1 à {max}.',
+  'admin.products.customization.error.extraRemoved': 'il dépend de l’option « {option} », que vous supprimez. Choisissez « Toujours » ou retirez aussi le champ.',
   'admin.products.customization.error.tooMany': 'Un produit demande au plus {max} champs de personnalisation.',
 
   // ─── Raccourci de la vitrine (ticket #178) ──────────────────────────────────────

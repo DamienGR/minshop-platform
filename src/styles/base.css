@@ -308,6 +308,17 @@
   display: block;
 }
 
+/* A personalisation field that goes with an extra (migration 0064) stands
+   under that extra's box, shown once it is ticked: :has() and :checked, so it
+   follows the box without a script. Written as a hiding rule, so that a
+   browser without :has() shows the field rather than losing it; the product
+   page's script hides it there too, and disables it while hidden, so that it
+   is neither sent nor required. Its input carries no `required` in the markup
+   for the same reason as the pickers above. */
+[data-extra-choice]:not(:has(> label input[name='extra']:checked)) > [data-extra-fields] {
+  display: none;
+}
+
 /* Dragged row in the Navigation menus — same treatment as the product gallery,
    so the two reorderable lists in admin behave and look alike. */
 [data-menu-list] > li.dragging {

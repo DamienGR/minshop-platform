@@ -1,0 +1,48 @@
+---
+import type { StorefrontCustomField } from '../models';
+import { t } from '../../i18n';
+
+/**
+ * One personalisation field (ticket #125), as ProductPurchaseForm draws it:
+ * in its « Personnalisation » fieldset, or under the extra it goes with
+ * (migration 0064). Part of the purchase controls, not a template's to redo.
+ *
+ * Both buttons submit it: the cart through /api/cart, Buy now through
+ * /express, which carries it on to the order. A required field needs one
+ * character that is not a space, as the server does.
+ *
+ * A field that goes with an extra is never `required` in the markup: hidden
+ * while its box is unticked, it would stop the form with nothing to show. It
+ * carries `data-required` instead, which the product page's script turns into
+ * `required` while the box is ticked; without a script the server says so.
+ */
+interface Props {
+  field: StorefrontCustomField;
+}
+
+const { field } = Astro.props;
+const conditional = field.extraId !== null;
+---
+
+<div class="flex flex-col gap-1">
+  <label for={field.inputId} class="text-sm">
+    {field.label}
+    {!field.required && <span class="text-muted"> {t('product.customization.optional')}</span>}
+  </label>
+  <input
+    type="text"
+    id={field.inputId}
+    name={field.name}
+    maxlength={field.maxLength}
+    required={field.required && !conditional}
+    data-required={field.required && conditional ? '' : undefined}
+    pattern={field.required ? '.*\\S.*' : undefined}
+    autocomplete="off"
+    aria-describedby={`${field.inputId}-help`}
+    class="rounded-md border border-line bg-transparent px-3 py-2 text-sm focus:border-brand focus:outline-none"
+  />
+  <span id={`${field.inputId}-help`} class="text-xs text-muted">
+    {field.help && <span class="block">{field.help}</span>}
+    <span class="block">{t('product.customization.maxLength', { max: field.maxLength })}</span>
+  </span>
+</div>

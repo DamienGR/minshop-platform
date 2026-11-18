@@ -1,6 +1,7 @@
 # ADR 0022 — Des produits personnalisables par un texte libre
 
-- **Statut** : Accepté (fusion de la PR #149 par Damien, le 2026-11-02)
+- **Statut** : Accepté (fusion de la PR #149 par Damien, le 2026-11-02) ;
+  amendé le 2026-11-18 (un champ demandé avec une option)
 - **Date** : 2026-11-02
 - **Jalon** : après le pilote (plan §13.4) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), qui range la
@@ -161,3 +162,47 @@ première boutique réelle qui en vend un vérifie le parcours à sa recette
 - `test/scripts/privacy.test.mjs` : la carte des données personnelles
   classe toute colonne dont le nom le laisse soupçonner (`customization`,
   `text`).
+
+## Amendement (2026-11-18) — un champ demandé avec une option
+
+La première boutique réelle vend une chaussette de Noël dont le prénom floqué
+est payant : une option « Personnalisation » à 3 €, à côté d'un champ
+« Prénom ou mot de noël ». La décision ci-dessus le permettait déjà (« une
+broderie payante se vend par une option à côté du champ »), mais le champ
+restait demandé, et obligatoire, à l'acheteur qui ne prenait pas l'option.
+
+**Un champ peut aller avec une option du produit** (`product_extras`) :
+`product_custom_fields.extra_id`, migration 0064, réglé sous « Afficher »
+dans l'éditeur (« Toujours », ou « Avec « … » » pour chaque option
+enregistrée). Un tel champ n'est demandé qu'à une ligne qui porte l'option ;
+« Obligatoire » s'entend alors avec elle. Sans elle, il n'est ni demandé ni
+gardé : un texte tapé puis décoché, ou posté sans script, est écarté avec
+l'option, jamais vendu sans elle, et la clé de la ligne reste celle d'une
+ligne sans texte. La règle reste une seule fonction,
+`checkCustomization(fields, values, extras)`, à qui chaque chemin passe les
+options qu'il a résolues pour la ligne (actives, du produit), jamais celles
+que le formulaire nomme ; le panier relu la rejuge de même.
+
+**Sur la fiche, le champ est sous la case de son option.** Une règle de
+`base.css` (`:has()` et `:checked`) ne le montre que la case cochée, sans
+script ; le script de la fiche le désactive tant qu'il est caché (ni envoyé
+ni validé) et le rend obligatoire quand il paraît. Le balisage ne porte
+jamais `required` sur un tel champ, qui bloquerait le formulaire caché :
+sans script, c'est le serveur qui refuse le champ vide.
+
+**Une option dont dépend un champ ne se supprime pas** dans le même
+enregistrement : l'éditeur le refuse en nommant l'option, et le commerçant
+remet le champ sur « Toujours » ou le retire. Un champ dont l'option a
+disparu malgré tout (deux onglets) n'est demandé à personne : aucune case
+à cocher, plutôt qu'un champ soudain exigé de tous. Pas de clé étrangère,
+comme pour `product_variants.image_id`.
+
+L'API JSON décrit l'option de chaque champ (`extra_id` dans
+`customization_fields`, `xtra_…` ou `null`) et la tient à `/api/checkout` ;
+`llms.txt` le dit. Un champ ne dépend que d'une option, pas d'une variante
+ni de plusieurs options : le cas d'Artisagna, sans plus.
+
+Tenu par `customization.test.ts`, `customFields.test.ts`,
+`test/storefront/productDetail*.test.ts`, la section « Un champ demandé avec
+une option » de `test/integration/customization.mjs` et
+`test/browser/product-customization.spec.mjs`, avec et sans script.

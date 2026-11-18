@@ -287,7 +287,15 @@ export interface StorefrontCustomField {
   label: string;
   help: string | null;
   maxLength: number;
+  /** Whether it must be filled in — when it is asked at all (`extraId`). */
   required: boolean;
+  /**
+   * The extra (`xtra_…`, one of `extras`) the field goes with (migration
+   * 0064): the controls draw it under that box, shown once it is ticked and
+   * only then sent or required. null = always asked. A field whose extra the
+   * product no longer offers never reaches the model.
+   */
+  extraId: string | null;
 }
 
 /**

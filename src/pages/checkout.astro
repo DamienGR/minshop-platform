@@ -151,7 +151,7 @@ if (productPublicId) {
       ? await getExtrasByPublicIds(env.DB, product.id, buyNowExtraIds)
       : [];
     const fields = await listCustomFields(env.DB, product.id);
-    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form?.get(name)));
+    const custom = checkCustomization(fields, readCustomValues(fields, (name) => form?.get(name)), extras);
     if (!custom.ok) {
       return Astro.redirect(`/products/${product.slug}?error=${encodeURIComponent(custom.error)}`, 303);
     }

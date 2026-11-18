@@ -37,6 +37,17 @@ Puis cliquez sur **Enregistrer les modifications**.
 
 Un champ que l’acheteur remplit sur la fiche du produit, par exemple un prénom à broder. Cliquez sur **Ajouter un champ**, donnez-lui un **Libellé**, puis dites si la saisie est **Obligatoire** ou **Facultative**. Le texte saisi apparaît sur la commande.
 
+### Un champ demandé seulement avec une option
+
+Quand la personnalisation est payante, par exemple un prénom floqué pour 3 € de plus :
+
+1. Créez l’option dans **Variantes et options**, avec son supplément, et cliquez sur **Enregistrer les modifications**.
+2. Sous **Afficher**, choisissez « Avec » cette option à la place de **Toujours**, puis enregistrez.
+
+Le champ apparaît alors sous la case de l’option, dès que l’acheteur la coche, et n’est obligatoire qu’à ce moment-là. Sans l’option, rien n’est demandé, et un texte tapé puis décoché n’est pas gardé.
+
+Pour supprimer une option dont dépend un champ, remettez d’abord ce champ sur **Toujours**, ou retirez-le en même temps.
+
 ### Stock et livraison
 
 - Le stock baisse à chaque commande. À 0, le produit ne peut plus être commandé.

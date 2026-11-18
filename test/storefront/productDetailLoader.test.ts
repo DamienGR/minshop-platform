@@ -107,6 +107,8 @@ const customField = (overrides: Record<string, unknown> = {}) => ({
   max_length: 15,
   required: 1,
   position: 0,
+  extra_id: null,
+  extra_public_id: null,
   ...overrides,
 });
 
@@ -211,6 +213,7 @@ describe('loadProductDetail public-ID policy', () => {
         help: 'En capitales',
         maxLength: 15,
         required: true,
+        extraId: null,
       },
       {
         name: 'custom:cfld_gggggggggg',
@@ -219,8 +222,37 @@ describe('loadProductDetail public-ID policy', () => {
         help: null,
         maxLength: 15,
         required: false,
+        extraId: null,
       },
     ]);
+  });
+
+  it('names the extra a field goes with, and leaves out one whose extra is gone (migration 0064)', async () => {
+    rows.extras = [extra()];
+    rows.customFields = [
+      customField({ extra_id: 9, extra_public_id: 'xtra_cccccccccc' }),
+      // Its extra deleted, or another product's: no box to tick, never asked.
+      customField({ id: 14, public_id: 'cfld_gggggggggg', extra_id: 99, extra_public_id: null }),
+    ];
+
+    const loaded = await load();
+
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    expect(loaded.purchase.customFields.map((field) => [field.name, field.extraId])).toEqual([
+      ['custom:cfld_ffffffffff', 'xtra_cccccccccc'],
+    ]);
+  });
+
+  it('is not an option when its only field goes with an extra that is gone', async () => {
+    rows.customFields = [customField({ extra_id: 99, extra_public_id: null })];
+
+    const loaded = await load();
+
+    expect(loaded.status).toBe('ok');
+    if (loaded.status !== 'ok') return;
+    expect(loaded.purchase.customFields).toEqual([]);
+    expect(loaded.purchase.hasOptions).toBe(false);
   });
 
   it('refuses a personalisation field without a public ID', async () => {

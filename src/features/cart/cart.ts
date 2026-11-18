@@ -203,8 +203,9 @@ export async function resolveCart(
 
     // Personalisation: judged against the fields as they are NOW. A line whose
     // text no longer fits — a field made required, a maximum lowered — drops,
-    // as a line whose variant was removed does; it is never cut to fit.
-    const custom = checkCustomization(fieldsByProduct.get(product.id) ?? [], parsed.customValues);
+    // as a line whose variant was removed does; it is never cut to fit. A field
+    // that goes with an extra is asked only of a line that still carries it.
+    const custom = checkCustomization(fieldsByProduct.get(product.id) ?? [], parsed.customValues, lineExtras);
     if (!custom.ok) continue;
 
     const unitPriceCents = lineUnitPriceCents(product.price_cents, variant, lineExtras);
