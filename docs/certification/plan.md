@@ -118,6 +118,16 @@ s'abonne à cinq événements, ceux que l'adaptateur lit :
 contourne Access ([guide, §5](comptes-et-acces.md#5-zero-trust-et-access-compte-a)) :
 la signature que le Worker vérifie est ce qui le protège.
 
+L'endpoint émet dans la version d'API qu'épingle le SDK du socle (`ApiVersion`
+dans `node_modules/stripe/cjs/apiVersion.js`, `2026-10-28.endive` au socle
+v0.13.0), choisie à sa création. Pas dans la version par défaut du compte, qui
+date de son ouverture : avant `2022-08-01`, l'événement porte le tarif choisi
+sous `shipping_rate`, et l'adaptateur ne lit que `shipping_cost.shipping_rate`.
+Chaque commande par carte s'enregistre alors sans mode de livraison ni libellé
+de tarif : pas de point relais sur sa fiche, pas d'étiquette à acheter, et
+aucune erreur nulle part. Le JSON d'un événement donne sa version en tête
+(`api_version`).
+
 ### 2.4 Où tournent les commandes
 
 `shopctl provision`, `deploy`, `backup` et `restore` demandent une session

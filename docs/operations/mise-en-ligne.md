@@ -178,7 +178,8 @@ voient les clients. Ensuite, dans Admin → Réglages :
 - [ ] **Paiements** : Stripe, quand le commerçant ouvre — une clé **live**
   restreinte (droits : [guide des comptes, §1](../certification/comptes-et-acces.md#1-stripe)),
   l'endpoint de webhook du mode live sur `https://<domaine>/api/webhook` avec
-  ses cinq événements ([plan, §2.3](../certification/plan.md)), et la carte
+  ses cinq événements et la version d'API qu'épingle le socle, pas celle du
+  compte ([plan, §2.3](../certification/plan.md)), et la carte
   de Réglages qui dit « mode live ». La production refuse une clé de test
   depuis `v0.3.22` : avec elle, une carte de test passait commande. Stripe
   configuré, le panier s'ouvre et la vitrine devient indexable, sans
