@@ -16,6 +16,11 @@ import { enabledMethods, isMethodAvailable } from '../features/payments';
 import { paymentMethodCopy } from '../features/payments/labels';
 import { t, tn } from '../features/i18n';
 import { catalogPath } from '../features/settings/home';
+import { discountLabel } from '../features/discounts/code';
+import { readAppliedCode } from '../features/discounts/cookie';
+import { checkDiscountCode } from '../features/discounts/db';
+import { discountFieldShown, discountsOn } from '../features/discounts/enabled';
+import DiscountCodeField from '../features/discounts/DiscountCodeField.astro';
 
 // Cart switched off in Réglages → Général (browse-only catalog), no cart page.
 if (!(Astro.locals.settings?.cartEnabled ?? true)) return Astro.redirect('/', 302);
@@ -80,6 +85,19 @@ const terms = await readTermsGate(env.DB, getConfig().legal);
 // button (certification, étape 9). The update buttons post the same fields to
 // /api/cart through `formaction`.
 const linesForm = 'cart-lines';
+// The code the buyer applied (ADR 0033), judged again on this basket: an item
+// removed since can put it under its minimum, and the field then says so.
+const appliedCode = discountsOn(settings) ? readAppliedCode(Astro.cookies) : '';
+const codeOn = await discountFieldShown(env.DB, settings, appliedCode);
+const codeJudged = appliedCode && lines.length > 0
+  ? await checkDiscountCode(env.DB, appliedCode, {
+      subtotalCents,
+      currency: getConfig().currency,
+      timeZone: settings?.timeZone ?? getConfig().timeZone,
+    })
+  : null;
+const discount = codeJudged?.ok ? codeJudged.discount : null;
+const codeError = codeJudged && !codeJudged.ok ? codeJudged.message : null;
 ---
 
 <Layout title={t('cart.title')}>
@@ -198,6 +216,12 @@ const linesForm = 'cart-lines';
               <span class="text-xs uppercase tracking-widest text-muted">{t('cart.subtotal')}</span>
               <span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span>
             </div>
+            {discount && (
+              <div class="mt-1 flex items-center justify-between text-sm" data-discount-line>
+                <span class="text-muted">{discountLabel(discount.code)}</span>
+                <span class="tabular-nums">{t('discount.amount', { montant: formatPrice(discount.amountCents) })}</span>
+              </div>
+            )}
             {destination.showSelect
               ? [...shippingLines.estimates].map(([zone, estimate]) => (
                   <ShippingEstimate estimate={estimate} zone={zone} class="mt-2" />
@@ -215,6 +239,25 @@ const linesForm = 'cart-lines';
             ) : (
             <form id={linesForm} method="POST" action="/api/checkout" class="mt-4 space-y-2">
               <input type="hidden" name="source" value="cart" />
+              {/* Posted with the payment button too: a code typed and never
+                  applied still applies, an emptied field removes it. */}
+              {codeOn && (
+                <div class="mb-3">
+                  <DiscountCodeField value={appliedCode} applyAction="/api/discount" error={codeError} />
+                  {appliedCode && (
+                    <button
+                      type="submit"
+                      formaction="/api/discount"
+                      formnovalidate
+                      name="_action"
+                      value="remove"
+                      class="mt-1 text-xs uppercase tracking-widest text-faint hover:text-accent"
+                    >
+                      {t('discount.remove')}
+                    </button>
+                  )}
+                </div>
+              )}
               {destination.showSelect && (
                 <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">
                   {t('cart.shipTo')}

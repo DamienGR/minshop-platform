@@ -25,6 +25,8 @@ export interface MintLightningOrderInput {
   accessToken?: string | null;
   currency: string;
   subtotalCents: number;
+  /** A discount code's amount (ADR 0033), off the items; never the delivery. */
+  discountCents?: number;
   shippingCents?: number;
   shippingLabel?: string | null;
   /** The chosen rate's instructions for the buyer (ticket #237). */
@@ -53,7 +55,8 @@ export async function mintLightningOrder(
   const cfg = getConfig();
   const ln = cfg.payments.lightning;
   const shippingCents = input.shippingCents ?? 0;
-  const totalCents = input.subtotalCents + shippingCents;
+  const discountCents = Math.min(input.discountCents ?? 0, input.subtotalCents);
+  const totalCents = input.subtotalCents - discountCents + shippingCents;
 
   const [fiatPerBtc, storeName] = await Promise.all([
     getBtcRate(input.currency, ln.rateUrl),
@@ -86,6 +89,7 @@ export async function mintLightningOrder(
     currency: input.currency,
     email: input.email ?? null,
     itemsJson: input.itemsJson ?? null,
+    discountCents,
     shippingCents,
     shippingLabel: input.shippingLabel ?? null,
     shippingInstructions: input.shippingInstructions ?? null,
@@ -131,6 +135,7 @@ export function createLightningProvider(
         accessToken: params.accessToken ?? null,
         currency,
         subtotalCents,
+        discountCents: params.discount?.amountCents ?? 0,
         itemsJson: params.orderItemsJson ?? null,
         reservationId: params.metadata?.reservation_id ?? null,
       });

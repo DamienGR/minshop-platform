@@ -44,6 +44,7 @@ export const CORE_CHAPTERS = [
   'products',
   'orders',
   'customers',
+  'discounts',
   'categories',
   'pages',
   'navigation',

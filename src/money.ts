@@ -62,11 +62,20 @@ const priceFormatters = new Map<string, Intl.NumberFormat>();
  * currency from their caller instead, so they stay pure and unit-testable.
  */
 export function formatMoney(cents: number, currency: string): string {
+  return priceFormatter(currency).format(toMajorUnits(cents, currency));
+}
+
+/** The currency's sign as a price prints it (`€`), for a field typed in major units. */
+export function currencySymbol(currency: string): string {
+  return priceFormatter(currency).formatToParts(0).find((p) => p.type === 'currency')?.value ?? currency.toUpperCase();
+}
+
+function priceFormatter(currency: string): Intl.NumberFormat {
   const code = currency.toUpperCase();
   let formatter = priceFormatters.get(code);
   if (!formatter) {
     formatter = new Intl.NumberFormat(LOCALE, { style: 'currency', currency: code });
     priceFormatters.set(code, formatter);
   }
-  return formatter.format(toMajorUnits(cents, currency));
+  return formatter;
 }

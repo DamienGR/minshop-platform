@@ -1,0 +1,154 @@
+---
+import { currencyDecimals, currencySymbol, toMajorUnits } from '../../money';
+import { formatNumber } from '../i18n/format';
+import { t } from '../i18n';
+import { DISCOUNT_CODE_MAX_LENGTH, type DiscountCode } from './code';
+
+/**
+ * The promo form of Admin → Codes promo (ADR 0033), for a new code and an
+ * existing one. `parseDiscountForm()` (./form.ts) reads what it posts.
+ *
+ * `preset="gift"` opens a gift card: a fixed amount, one use, a year to
+ * spend it — values the merchant may change, never rules.
+ */
+interface Props {
+  action: string;
+  submitLabel: string;
+  code?: DiscountCode | null;
+  currency: string;
+  preset?: 'gift' | null;
+  /** Today in the shop's calendar, for the gift card's last day. */
+  today: string;
+  error?: string | null;
+}
+
+const { action, submitLabel, code = null, currency, preset = null, today, error = null } = Astro.props;
+const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
+const gift = !code && preset === 'gift';
+
+/** Minor units back to what the merchant typed: « 12,50 », no grouping. */
+const major = (cents: number) =>
+  formatNumber(toMajorUnits(cents, currency), {
+    minimumFractionDigits: currencyDecimals(currency),
+    maximumFractionDigits: currencyDecimals(currency),
+    useGrouping: false,
+  });
+
+const kind = code?.kind ?? (gift ? 'amount' : 'percent');
+const value = code ? (code.kind === 'amount' ? major(code.value) : String(code.value)) : '';
+const minimum = code && code.min_subtotal_cents > 0 ? major(code.min_subtotal_cents) : '';
+// A year to the day, as the calendar counts it: 29 February gives 1 March.
+const yearOut = (() => {
+  const d = new Date(`${today}T12:00:00Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+})();
+const endsOn = code?.ends_on ?? (gift ? yearOut : '');
+const maxUses = code?.max_uses != null ? String(code.max_uses) : gift ? '1' : '';
+const symbol = currencySymbol(currency);
+---
+
+<form method="POST" action={action} class="max-w-lg space-y-5" data-discount-form>
+  {/* So a refusal reopens the gift card's form, not the plain one. */}
+  {gift && <input type="hidden" name="preset" value="gift" />}
+  {
+    error && (
+      <p class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {error}
+      </p>
+    )
+  }
+
+  <div>
+    <label class="block text-sm font-medium" for="code">{t('admin.discounts.field.code')}</label>
+    <input
+      id="code"
+      name="code"
+      type="text"
+      value={code?.code ?? ''}
+      maxlength={DISCOUNT_CODE_MAX_LENGTH + 8}
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      class={`${inputClass} font-mono uppercase`}
+    />
+    <p class="mt-1 text-xs text-faint">{t('admin.discounts.field.codeHint')}</p>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium" for="value">{t('admin.discounts.field.value')}</label>
+    <div class="flex gap-2">
+      <input
+        id="value"
+        name="value"
+        type="text"
+        inputmode="decimal"
+        required
+        value={value}
+        class={`${inputClass} max-w-[10rem] tabular-nums`}
+      />
+      <select name="kind" aria-label={t('admin.discounts.field.kind')} class={`${inputClass} w-auto`}>
+        <option value="percent" selected={kind === 'percent'}>{t('admin.discounts.field.kind.percent')}</option>
+        <option value="amount" selected={kind === 'amount'}>{t('admin.discounts.field.kind.amount', { devise: symbol })}</option>
+      </select>
+    </div>
+    <p class="mt-1 text-xs text-faint">{t('admin.discounts.field.valueHint')}</p>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium" for="min_subtotal">
+      {t('admin.discounts.field.minimum')} <span class="text-faint">({symbol})</span>
+    </label>
+    <input
+      id="min_subtotal"
+      name="min_subtotal"
+      type="text"
+      inputmode="decimal"
+      value={minimum}
+      class={`${inputClass} max-w-[10rem] tabular-nums`}
+    />
+    <p class="mt-1 text-xs text-faint">{t('admin.discounts.field.minimumHint')}</p>
+  </div>
+
+  <fieldset>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="block text-sm font-medium" for="starts_on">{t('admin.discounts.field.startsOn')}</label>
+        <input id="starts_on" name="starts_on" type="date" value={code?.starts_on ?? ''} class={inputClass} />
+      </div>
+      <div>
+        <label class="block text-sm font-medium" for="ends_on">{t('admin.discounts.field.endsOn')}</label>
+        <input id="ends_on" name="ends_on" type="date" value={endsOn} class={inputClass} />
+      </div>
+    </div>
+    <p class="mt-1 text-xs text-faint">{t('admin.discounts.field.datesHint')}</p>
+  </fieldset>
+
+  <div>
+    <label class="block text-sm font-medium" for="max_uses">{t('admin.discounts.field.maxUses')}</label>
+    <input
+      id="max_uses"
+      name="max_uses"
+      type="number"
+      min="1"
+      step="1"
+      value={maxUses}
+      class={`${inputClass} max-w-[10rem] tabular-nums`}
+    />
+    <p class="mt-1 text-xs text-faint">{t('admin.discounts.field.maxUsesHint')}</p>
+  </div>
+
+  <div>
+    <label class="flex items-center gap-2 text-sm font-medium">
+      <input name="active" type="checkbox" checked={code ? code.active === 1 : true} class="h-4 w-4" />
+      {t('admin.discounts.field.active')}
+    </label>
+  </div>
+
+  <div class="flex gap-3 pt-2">
+    <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
+      {submitLabel}
+    </button>
+    <a href="/admin/discounts" class="rounded-md border border-line px-5 py-2 hover:bg-surface">{t('admin.common.cancel')}</a>
+  </div>
+</form>

@@ -9,6 +9,7 @@ export const shell = {
   'admin.shell.nav.products': 'Produits',
   'admin.shell.nav.orders': 'Commandes',
   'admin.shell.nav.customers': 'Clients',
+  'admin.shell.nav.discounts': 'Codes promo',
   'admin.shell.nav.categories': 'Catégories',
   'admin.shell.nav.pages': 'Pages',
   'admin.shell.nav.navigation': 'Navigation',

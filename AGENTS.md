@@ -242,6 +242,7 @@ src/
     adminGuide/  guide (chapters → HTML, anchors, order; pure) · content (the build's chapters) · GuidePanel
                chapters/<section>.md (the core's; a shop's own in client/guide/*.md)
     adminShell/  footer (core version, support link)
+    discounts/  code (the rule, pure) · db (rows, uses counted) · form · cookie · DiscountCodeField
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/

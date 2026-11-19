@@ -21,6 +21,7 @@ type Section =
   | 'products'
   | 'orders'
   | 'customers'
+  | 'discounts'
   | 'categories'
   | 'media'
   | 'pages'
@@ -71,6 +72,7 @@ const nav: { key: Section; label: string; href: string }[] = [
   { key: 'products', label: t('admin.shell.nav.products'), href: '/admin/products' },
   { key: 'orders', label: t('admin.shell.nav.orders'), href: '/admin/orders' },
   { key: 'customers', label: t('admin.shell.nav.customers'), href: '/admin/customers' },
+  { key: 'discounts', label: t('admin.shell.nav.discounts'), href: '/admin/discounts' },
   { key: 'categories', label: t('admin.shell.nav.categories'), href: '/admin/categories' },
   { key: 'pages', label: t('admin.shell.nav.pages'), href: '/admin/pages' },
   { key: 'navigation', label: t('admin.shell.nav.navigation'), href: '/admin/navigation' },

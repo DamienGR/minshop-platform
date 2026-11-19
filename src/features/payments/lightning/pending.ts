@@ -21,6 +21,9 @@ export interface PendingPayment {
   currency: string;
   email: string | null;
   items: string | null; // JSON: [{ id, q, n, p }]
+  /** Taken off the items by a discount code (ADR 0033), already out of
+   *  amount_total_cents; 0 for none and for a row older than 0065. */
+  discount_cents: number;
   shipping_cents: number;
   /** Which service was chosen, and what the shipment weighed when it was priced.
    *  Under weight bands the amount alone no longer explains itself. */
@@ -49,6 +52,8 @@ export interface NewPendingPayment {
   email: string | null;
   /** Pre-serialized JSON cart snapshot persisted server-side. */
   itemsJson: string | null;
+  /** A discount code's amount, already taken out of amountTotalCents. */
+  discountCents?: number;
   shippingCents?: number;
   shippingLabel?: string | null;
   shippingInstructions?: string | null;
@@ -65,8 +70,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
   await db
     .prepare(
       `INSERT INTO pending_payments
-         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id, discount_cents)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       p.publicId,
@@ -86,6 +91,7 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
       p.shipAddressJson ?? null,
       p.expiresAt,
       p.reservationId ?? null,
+      p.discountCents ?? 0,
     )
     .run();
 }
@@ -160,6 +166,8 @@ export function pendingToPaidOrder(p: PendingPayment): PaidOrderInput {
     reservationId: p.reservation_id ?? undefined,
     email: p.email,
     amountTotalCents: p.amount_total_cents,
+    // `?? 0`: a row read before 0065 ran has no such column at all.
+    discountCents: p.discount_cents ?? 0,
     shippingCents: p.shipping_cents,
     shippingLabel: p.shipping_label,
     // `?? null`: a row read before 0061 ran has no such column at all.

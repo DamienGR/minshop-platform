@@ -280,7 +280,11 @@ const willEmailCustomer =
       order.discount_cents > 0 && (
         <div>
           <dt class="text-xs uppercase tracking-widest text-gray-400">{t('admin.orders.detail.discount')}</dt>
-          <dd>&minus;{formatPrice(order.discount_cents, order.currency)}</dd>
+          <dd>
+            &minus;{formatPrice(order.discount_cents, order.currency)}
+            {/* The code that took it off (ADR 0033), as the buyer applied it. */}
+            {order.discount_code && <span class="text-gray-500"> · {order.discount_code}</span>}
+          </dd>
         </div>
       )
     }

@@ -20,7 +20,15 @@ export function rateLimitBucket(
   if (pathname === '/admin/login' || pathname === '/admin/token' || pathname === '/account/login') {
     return 'auth';
   }
-  if (pathname === '/api/checkout' || pathname === '/checkout' || pathname.startsWith('/pay/')) {
+  // `/api/discount` judges a discount code, `/express` too when it is asked
+  // to show one (ADR 0033): guesses at a gift card go through the same door.
+  if (
+    pathname === '/api/checkout' ||
+    pathname === '/checkout' ||
+    pathname === '/api/discount' ||
+    pathname === '/express' ||
+    pathname.startsWith('/pay/')
+  ) {
     return 'checkout';
   }
   // The contact form posts to the page it sits under (ADR 0025), and no other

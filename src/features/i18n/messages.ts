@@ -234,6 +234,22 @@ export const fr = {
   'email.order.comment': 'Votre commentaire',
   'email.notification.comment': 'Commentaire de l’acheteur',
 
+  // ─── Codes promo (ADR 0033) ────────────────────────────────────────────────────
+  // Typed in the cart or on Buy now, carried to every rail; the refusals never
+  // say more about a code than its own text.
+  'discount.field.label': 'Code promo ou carte cadeau',
+  'discount.apply': 'Appliquer',
+  'discount.remove': 'Retirer le code',
+  'discount.label': 'Remise',
+  'discount.label.withCode': 'Remise ({code})',
+  'discount.amount': '−{montant}',
+  'discount.summary': '{libelle} : −{montant}',
+  'discount.error.unknown': 'Ce code n’est pas valable.',
+  'discount.error.expired': 'Ce code n’est plus valable.',
+  'discount.error.minimum': 'Ce code s’applique dès {montant} d’articles.',
+  'discount.error.gone': 'Ce code vient d’être utilisé : retirez-le pour commander.',
+  'discount.error.nothingToPay': 'Avec ce code, il ne reste rien à payer, ce que ce moyen de paiement ne sait pas régler : choisissez-en un autre.',
+
   // ─── Conditions générales de vente ─────────────────────────────────────────────
   'terms.accept': 'J’ai lu et j’accepte les',
   'terms.linkLabel': 'conditions générales de vente',
@@ -421,7 +437,6 @@ export const fr = {
   'email.delivery.heading': 'Livraison',
   'email.relay.code': 'Code du point : {code}',
   'email.total.shipping': 'Livraison',
-  'email.total.discount': 'Remise',
   'email.total.tax': 'dont TVA',
   'email.total.vatIncluded': 'dont TVA ({taux} %)',
   'email.total.total': 'Total',

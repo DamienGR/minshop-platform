@@ -27,6 +27,8 @@ export function createDemoProvider(db: D1Database): PaymentProvider {
       // selection there is nothing to charge — never fall back to options[0], which
       // silently billed whichever rate happened to sort first.
       const shippingCents = params.selectedShipping?.amountCents ?? 0;
+      // A discount code comes off the items, never the delivery (ADR 0033).
+      const discountCents = Math.min(params.discount?.amountCents ?? 0, subtotal);
       const publicId = params.metadata?.public_id ?? crypto.randomUUID();
       await createPendingPayment(db, {
         publicId,
@@ -34,10 +36,11 @@ export function createDemoProvider(db: D1Database): PaymentProvider {
         backend: 'demo',
         bolt11: null,
         amountSat: null,
-        amountTotalCents: subtotal + shippingCents,
+        amountTotalCents: subtotal - discountCents + shippingCents,
         currency: params.lineItems[0]?.currency ?? 'usd',
         email: params.selectedShipping?.email ?? null,
         itemsJson: params.orderItemsJson ?? null,
+        discountCents,
         shippingCents,
         shippingLabel: params.selectedShipping?.label ?? null,
         shippingInstructions: params.selectedShipping?.instructions ?? null,

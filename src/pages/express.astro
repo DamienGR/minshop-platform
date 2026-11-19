@@ -25,6 +25,11 @@ import ProductImage from '../features/products/ProductImage.astro';
 import OrderCommentField from '../features/orders/OrderCommentField.astro';
 import { paymentMethodCopy } from '../features/payments/labels';
 import { t } from '../features/i18n';
+import { DISCOUNT_CODE_FIELD, discountLabel } from '../features/discounts/code';
+import { readAppliedCode } from '../features/discounts/cookie';
+import { checkDiscountCode } from '../features/discounts/db';
+import { discountFieldShown, discountsOn } from '../features/discounts/enabled';
+import DiscountCodeField from '../features/discounts/DiscountCodeField.astro';
 
 // Express checkout — a single payment-method-picker step (first listed = the
 // store's default). Two sources: "Buy now" (a single product_id [+ variant/extras])
@@ -152,6 +157,27 @@ if (isBuyNow && productPublicId) {
 
 const totalCents = lines.reduce((s, l) => s + l.unitPriceCents * l.qty, 0);
 
+// The discount code (ADR 0033): the one the buyer applied in the cart, or the
+// one typed here, which « Appliquer » posts back to this page to show what it
+// takes off. Judged again by /api/checkout when the button is pressed.
+const codeTaken = discountsOn(Astro.locals.settings);
+const typedCode =
+  codeTaken && form?.has(DISCOUNT_CODE_FIELD)
+    ? String(form.get(DISCOUNT_CODE_FIELD) ?? '')
+    : codeTaken
+      ? readAppliedCode(Astro.cookies)
+      : '';
+const codeOn = await discountFieldShown(env.DB, Astro.locals.settings, typedCode);
+const codeJudged = typedCode
+  ? await checkDiscountCode(env.DB, typedCode, {
+      subtotalCents: totalCents,
+      currency: getConfig().currency,
+      timeZone: Astro.locals.settings?.timeZone ?? getConfig().timeZone,
+    })
+  : null;
+const discount = codeJudged?.ok ? codeJudged.discount : null;
+const codeError = codeJudged && !codeJudged.ok ? codeJudged.message : null;
+
 // Only the actually-usable rails, default first. None → no checkout (cart-style).
 const methods = Astro.locals.settings ? enabledMethods(Astro.locals.settings) : [];
 if (methods.length === 0) return Astro.redirect(backHref, 303);
@@ -201,9 +227,17 @@ const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMe
       }
     </ul>
 
+    {
+      discount && (
+        <div class="mt-4 flex items-center justify-between text-sm" data-discount-line>
+          <span class="text-muted">{discountLabel(discount.code)}</span>
+          <span class="tabular-nums">{t('discount.amount', { montant: formatPrice(discount.amountCents) })}</span>
+        </div>
+      )
+    }
     <div class="mt-4 flex items-center justify-between">
       <span class="text-xs uppercase tracking-widest text-muted">{t('checkout.express.total')}</span>
-      <span class="text-lg tabular-nums">{formatPrice(totalCents)}</span>
+      <span class="text-lg tabular-nums">{formatPrice(totalCents - (discount?.amountCents ?? 0))}</span>
     </div>
 
     {/* One form, one terms checkbox, one submit per enabled method (first = the
@@ -234,6 +268,13 @@ const methodRows = methods.map((m, i) => ({ m, primary: i === 0, copy: paymentMe
       )}
       {destination.hiddenOnly && (
         <input type="hidden" name="country" value={destination.countries[0]} />
+      )}
+      {/* The discount code, posted with the payment button; « Appliquer »
+          posts the same form back here, the buyer's choices with it. */}
+      {codeOn && (
+        <div class="mb-2">
+          <DiscountCodeField value={typedCode} applyAction="/express" error={codeError} />
+        </div>
       )}
       {/* The buyer's comment (ADR 0028), posted with the payment button. */}
       {Astro.locals.settings?.orderCommentEnabled && (

@@ -158,7 +158,9 @@ if (Astro.request.method === 'POST') {
       feature === 'order_comment_enabled'
     ) {
       let prerequisiteError = '';
-      if (on && (feature === 'discounts_enabled' || feature === 'tax_enabled')) {
+      // Codes are the shop's own (ADR 0033) and work on every rail: only
+      // Stripe Tax still needs Stripe.
+      if (on && feature === 'tax_enabled') {
         const stripeSecret = await getSecret(env.DB, 'stripe_secret_key');
         const stripeWebhook = await getSecret(env.DB, 'stripe_webhook_secret');
         if (!stripeSecret || !stripeWebhook) {

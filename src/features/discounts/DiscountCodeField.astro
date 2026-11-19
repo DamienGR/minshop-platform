@@ -1,0 +1,61 @@
+---
+import { t } from '../i18n';
+import { DISCOUNT_CODE_FIELD, DISCOUNT_CODE_MAX_LENGTH } from './code';
+
+/**
+ * The discount code field (ADR 0033), on the forms that lead to the payment:
+ * the cart, Buy now and the address step of /checkout. Posted with the
+ * payment button, so a code typed and never « applied » still applies; the
+ * server judges it again whatever the browser sent (features/discounts/code.ts).
+ *
+ * `applyAction`, when given, adds an « Appliquer » button that posts the same
+ * form there, to see the code's amount before paying: no script needed.
+ */
+interface Props {
+  /** The code already applied or typed, brought back. */
+  value?: string | null;
+  /** The form the field belongs to, when it sits outside it (the cart). */
+  form?: string;
+  /** Where « Appliquer » posts the form; no button without one. */
+  applyAction?: string;
+  /** What the refusal said, shown under the field. */
+  error?: string | null;
+}
+
+const { value, form, applyAction, error } = Astro.props;
+---
+
+<div class="text-left text-sm" data-discount-field>
+  <label for="discount-code" class="mb-1 block font-medium">{t('discount.field.label')}</label>
+  <div class="flex gap-2">
+    <input
+      id="discount-code"
+      type="text"
+      name={DISCOUNT_CODE_FIELD}
+      form={form}
+      value={value ?? ''}
+      maxlength={DISCOUNT_CODE_MAX_LENGTH + 8}
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      aria-describedby={error ? 'discount-code-error' : undefined}
+      class="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2 uppercase text-ink"
+    />
+    {
+      applyAction && (
+        <button
+          type="submit"
+          form={form}
+          formaction={applyAction}
+          formnovalidate
+          name="_action"
+          value="apply"
+          class="shrink-0 rounded-md border border-line px-3 py-2 text-xs uppercase tracking-widest text-muted hover:border-brand hover:text-ink"
+        >
+          {t('discount.apply')}
+        </button>
+      )
+    }
+  </div>
+  {error && <p id="discount-code-error" class="mt-1 text-xs text-red-700">{error}</p>}
+</div>

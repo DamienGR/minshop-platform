@@ -1,0 +1,35 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import DiscountForm from '../../../../features/discounts/DiscountForm.astro';
+import { getDiscountCodeByPublicId } from '../../../../features/discounts/db';
+import { parsePublicId } from '../../../../features/ids/publicId';
+import { getConfig } from '../../../../config';
+import { calendarDate } from '../../../../features/i18n/format';
+import { t } from '../../../../features/i18n';
+
+// The route param is the dsc_ public ID; numeric row ids are not accepted.
+const publicId = parsePublicId(Astro.params.id, 'discountCode');
+const code = publicId ? await getDiscountCodeByPublicId(env.DB, publicId) : null;
+if (!code) {
+  return new Response(t('admin.discounts.notFound'), { status: 404 });
+}
+
+const config = getConfig();
+const today = calendarDate(new Date(), Astro.locals.settings?.timeZone ?? config.timeZone);
+const error = Astro.url.searchParams.get('error');
+const title = t('admin.discounts.edit.title', { code: code.code });
+---
+
+<AdminLayout title={title} active="discounts">
+  <a href="/admin/discounts" class="text-sm text-gray-500 hover:text-brand">&larr; {t('admin.discounts.back')}</a>
+  <h1 class="mt-4 mb-6 text-2xl font-bold">{title}</h1>
+  <DiscountForm
+    action={`/api/admin/discounts/${code.public_id}`}
+    submitLabel={t('admin.common.save')}
+    code={code}
+    currency={config.currency}
+    today={today}
+    error={error}
+  />
+</AdminLayout>

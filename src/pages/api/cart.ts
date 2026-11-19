@@ -9,6 +9,8 @@ import { checkCustomization, readCustomValues } from '../../features/products/cu
 import { parsePublicId } from '../../features/ids/publicId.ts';
 import { getStoreSettings } from '../../features/settings/db';
 import { t } from '../../features/i18n/index.ts';
+import { DISCOUNT_CODE_FIELD, normalizeDiscountCode } from '../../features/discounts/code.ts';
+import { readAppliedCode } from '../../features/discounts/cookie.ts';
 
 export const prerender = false;
 
@@ -34,6 +36,13 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // is not lost by pressing a button on another. The drawer's "Commander" posts
   // here with then=express; `then` names a page, never a URL.
   if (action === 'update_all') {
+    // A discount code typed in the cart and sent by Enter lands here, the
+    // form's first button being « Mettre à jour ». Changed, it goes on to
+    // /api/discount with this same body (a 307), which keeps the quantities
+    // too and judges the code where codes are judged (ADR 0033).
+    if (form.has(DISCOUNT_CODE_FIELD) && normalizeDiscountCode(form.get(DISCOUNT_CODE_FIELD)) !== readAppliedCode(cookies)) {
+      return new Response(null, { status: 307, headers: { location: '/api/discount' } });
+    }
     if (applySubmittedQuantities(cart, form)) writeCart(cookies, cart, url.protocol === 'https:');
     if (!partial && form.get('then') === 'express') return redirect('/express', 303);
     return done();

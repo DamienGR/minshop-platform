@@ -76,4 +76,4 @@ export function tn(
 
 export type { RichMark, RichSegment } from './rich.ts';
 export { LOCALE, LANG, DEFAULT_TIME_ZONE, DEFAULT_CURRENCY } from './locale.ts';
-export { formatNumber, formatDateTime, NARROW_NBSP } from './format.ts';
+export { formatNumber, formatDateTime, calendarDate, NARROW_NBSP } from './format.ts';

@@ -4258,3 +4258,51 @@ le balisage, un champ orphelin tu), `test/integration/customization.mjs`
 (fiche, panier, ligne qui perd son option, achat immédiat, API JSON,
 éditeur) et `test/browser/product-customization.spec.mjs` (avec et sans
 script, sur bureau et téléphone).
+
+### 13.32 Des codes promo saisis dans la boutique
+
+Demandé par Damien le 2026-11-19 : que l'acheteur saisisse son code de
+réduction ou sa carte cadeau dans le panier ou à la commande, et que le code
+s'applique ensuite au paiement, au lieu de le taper sur la page de Stripe,
+hors du site. Aucun des jalons 0 à 10 n'avance.
+
+Choix de Damien, le même jour : les codes se créent dans l'administration et
+valent pour tous les moyens de paiement ; une carte cadeau est un code à
+montant fixe, utilisable une fois ; une carte à solde sera un ticket à part.
+
+Fait le 2026-11-19, migration 0065, par
+l'[ADR 0033](architecture/decisions/0033-codes-promo.md), pour le socle
+v0.13.0 :
+
+- l'écran Admin → Codes promo : la liste avec l'état et les utilisations de
+  chaque code, « Nouveau code », « Nouvelle carte cadeau » (montant fixe, une
+  utilisation, un an), la modification, « Désactiver » et « Supprimer » (un
+  code utilisé se désactive) ; un chapitre du guide ;
+- la règle, pure (`src/features/discounts/code.ts`) : pourcentage ou montant
+  des articles, jamais de la livraison, plafonné ; minimum, dates dans le
+  fuseau de la boutique, nombre d'utilisations ; un code tiré au hasard
+  (60 bits) quand le champ est vide ;
+- le champ « Code promo ou carte cadeau » dans le panier (« Appliquer »,
+  « Retirer le code », cookie `discount`), l'achat immédiat et l'étape
+  d'adresse de `/checkout`, affiché dès qu'un code est actif ; le code est
+  rejugé à chaque étape et par `/api/checkout` ;
+- les utilisations comptées sur les commandes et les réservations qui tiennent
+  le code, la réservation gardée par le code dans la même instruction que le
+  stock ; deux index partiels ;
+- Stripe reçoit un coupon du montant exact, à usage unique, nommé d'après le
+  code, et n'ouvre plus son propre champ ; le virement, Lightning, OpenNode et
+  la démonstration demandent le total net (`pending_payments.discount_cents`) ;
+  un panier entièrement payé par le code est refusé là où rien ne peut se
+  régler ;
+- l'API JSON prend `discount_code` et rend `discount` ; le code paraît dans
+  les récapitulatifs, la page de commande, l'e-mail de confirmation et la
+  fiche commande.
+
+Choix faits sans attendre Damien, à revoir s'il le conteste : un seul code
+par commande ; le champ caché tant qu'aucun code n'est actif ; le refus d'un
+code inconnu, désactivé, pas encore ouvert ou épuisé dit la même phrase.
+
+Tenu par `src/features/discounts/code.test.ts` et `form.test.ts`,
+`test/integration/history-reads.mjs` (le compte des utilisations) et
+`test/integration/discount-codes.mjs` (écran, panier, démonstration, carte
+cadeau, Stripe, virement, API JSON).

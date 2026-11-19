@@ -59,7 +59,8 @@ export function featureAvailability(
   settings: StoreSettings,
   caps: RuntimeCapabilities,
 ): SettingAvailability {
-  if (key === 'discounts_enabled' || key === 'tax_enabled') {
+  // Discount codes are the shop's own (ADR 0033), whatever the payment.
+  if (key === 'tax_enabled') {
     return stripeConfigured(settings, caps)
       ? { available: true }
       : { available: false, reason: t('admin.settings.availability.stripe') };

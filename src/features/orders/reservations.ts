@@ -9,6 +9,8 @@ import type { TermsConsent } from '../legal/terms';
 import type { VatTerms } from '../legal/vat.ts';
 import type { RelayPoint } from '../shipping/relay.ts';
 import { customizationColumn, withCustomization } from '../products/customization.ts';
+import type { AppliedDiscount } from '../discounts/code.ts';
+import { USES_SQL as DISCOUNT_USES_SQL } from '../discounts/db.ts';
 import {
   DIGITAL_DELIVERY_RELEASE,
   lifecycleActive,
@@ -347,6 +349,15 @@ export async function reserveInventory(
    * personalisation text, and let go with it.
    */
   buyerComment: string | null = null,
+  /**
+   * The discount code the buyer applied (ADR 0033), already judged against
+   * this basket by `checkDiscountCode()`. Its limit is judged AGAIN here, in
+   * the statement that takes the stock: two buyers of a single-use gift card
+   * may both pass the first judgement, only one hold gets the code. A false
+   * return then means the code, not the stock — `discountStillHolds()` tells
+   * the caller which.
+   */
+  discount: AppliedDiscount | null = null,
 ): Promise<boolean> {
   if (items.length === 0 || !Number.isInteger(ttlSeconds) || ttlSeconds < 60) return false;
   await releaseExpiredReservations(db, 50, purger);
@@ -384,11 +395,19 @@ export async function reserveInventory(
       continue;
     }
 
+    // The code's limit, counted where its uses are (features/discounts/db.ts):
+    // a code switched off since the cart judged it is refused here too.
+    const discountGuard = discount
+      ? [
+          `EXISTS (SELECT 1 FROM discount_codes d WHERE d.id = ? AND d.active = 1
+             AND (d.max_uses IS NULL OR ${DISCOUNT_USES_SQL} < d.max_uses))`,
+        ]
+      : [];
     const insert = db
       .prepare(
-        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization, buyer_comment)
-         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?, ?, ?, ?
-          WHERE ${checks.join(' AND ')}
+        `INSERT INTO checkout_reservations (public_id, items, payment_method, expires_at, terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization, buyer_comment, discount_code_id, discount_code)
+         SELECT ?, ?, ?, datetime('now', ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE ${[...checks, ...discountGuard].join(' AND ')}
          ON CONFLICT(public_id) DO NOTHING
          RETURNING public_id`,
       )
@@ -405,7 +424,10 @@ export async function reserveInventory(
         shipAddress ? JSON.stringify(shipAddress) : null,
         customizationColumn(claimedItems),
         buyerComment,
+        discount?.id ?? null,
+        discount?.code ?? null,
         ...checkValues,
+        ...(discount ? [discount.id, discount.id, discount.id] : []),
       );
     // Release 1 writes no claims, so the decrement results sit at a different
     // offset there. Index off the statements actually batched, never off the

@@ -142,9 +142,11 @@ export interface SiteConfig {
    */
   shipping: ShippingConfig;
   /**
-   * Discount codes. When enabled, hosted checkout shows a promo-code field. The
-   * codes themselves are created + managed in the Stripe Dashboard
-   * (Products → Coupons → Promotion codes); the applied discount lands on the order.
+   * Discount codes (ADR 0033): the default of Admin → Réglages → « Codes
+   * promo ». When enabled, the cart, Buy now and /checkout show a code field
+   * as soon as one code is switched on in Admin → Codes promo; the code
+   * applies whatever the payment method (Stripe receives its amount as a
+   * one-off coupon) and lands on the order.
    */
   discounts: {
     enabled: boolean;
@@ -326,7 +328,7 @@ function defaultConfig(): SiteConfig {
       ],
     },
     discounts: {
-      enabled: true, // show the promo-code field; create codes in the Stripe Dashboard
+      enabled: true, // show the code field once a code exists in Admin → Codes promo
     },
     tax: {
       enabled: false, // true ONLY after activating Stripe Tax in the Dashboard
