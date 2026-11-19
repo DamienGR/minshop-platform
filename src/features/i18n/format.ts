@@ -61,3 +61,25 @@ export function formatDateTime(
     return build('UTC').format(date);
   }
 }
+
+/**
+ * The day `date` falls on in `timeZone`, as 'YYYY-MM-DD': what a discount
+ * code's first and last days are compared with (features/discounts/code.ts).
+ * Read off the formatter's parts, never its text, so the locale's own order
+ * of day and month cannot leak in. A bad zone reads as UTC, as above.
+ */
+export function calendarDate(date: Date, timeZone: string = DEFAULT_TIME_ZONE): string {
+  const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  const build = (zone: string) =>
+    cached(dateFormatters, `${zone}|parts|${JSON.stringify(opts)}`, () =>
+      new Intl.DateTimeFormat(LOCALE, { timeZone: zone, ...opts }),
+    );
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = build(timeZone).formatToParts(date);
+  } catch {
+    parts = build('UTC').formatToParts(date);
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}

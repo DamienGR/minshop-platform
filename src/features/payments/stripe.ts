@@ -96,6 +96,23 @@ export function createStripeProvider(
       // nothing again — the order's address rides the reservation instead.
       const chosen = params.selectedShipping;
       const weightGrams = chosen ? chosen.weightGrams : params.shipping?.shipmentWeightGrams;
+      const currency = params.lineItems[0]?.currency ?? DEFAULT_CURRENCY;
+      // A code the shop judged (ADR 0033) reaches Stripe as its amount, not as
+      // a code: a coupon of exactly what it takes off, good for this one
+      // session, named after the code — which is what Stripe's page and
+      // receipt print. Stripe applies a coupon to the items only, as the
+      // socle computes it; the webhook records what it actually took off.
+      const coupon =
+        params.discount && params.discount.amountCents > 0
+          ? await stripe.coupons.create({
+              amount_off: params.discount.amountCents,
+              currency,
+              duration: 'once',
+              max_redemptions: 1,
+              name: params.discount.code,
+              ...(params.metadata?.public_id && { metadata: { public_id: params.metadata.public_id } }),
+            })
+          : null;
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         // The hosted page is the ONE screen of the purchase the store does not
@@ -132,7 +149,9 @@ export function createStripeProvider(
             ...(weightGrams != null && { shipping_weight_grams: String(weightGrams) }),
           },
         }),
-        ...(params.allowPromotionCodes && { allow_promotion_codes: true }),
+        // Stripe's own code field stays closed: the codes are the shop's, and
+        // `discounts` and `allow_promotion_codes` cannot go together anyway.
+        ...(coupon && { discounts: [{ coupon: coupon.id }] }),
         ...(params.automaticTax && { automatic_tax: { enabled: true } }),
         // Stripe keeps the phone apart from the address, in customer_details:
         // settlement folds it back into the snapshot the order page reads.
@@ -147,7 +166,7 @@ export function createStripeProvider(
                 display_name: chosen.label,
                 fixed_amount: {
                   amount: chosen.amountCents,
-                  currency: params.lineItems[0]?.currency ?? DEFAULT_CURRENCY,
+                  currency,
                 },
                 metadata: rateMetadata(chosen.deliveryMethod, chosen.instructions),
                 ...(params.automaticTax && { tax_behavior: 'exclusive' as const }),
@@ -168,7 +187,7 @@ export function createStripeProvider(
               display_name: o.label,
               fixed_amount: {
                 amount: o.amountCents,
-                currency: params.lineItems[0]?.currency ?? DEFAULT_CURRENCY,
+                currency,
               },
               // The mode travels as rate metadata because the label is merchant
               // prose: settlement reads this back to record delivery_method
@@ -299,7 +318,7 @@ export function createStripeProvider(
           weightRaw != null && weightRaw !== '' && Number.isSafeInteger(Number(weightRaw))
             ? Number(weightRaw)
             : null;
-        // Discount applied via a promotion code (0 when none).
+        // What the shop's code took off, as Stripe applied it (0 when none).
         const discountCents = session.total_details?.amount_discount ?? 0;
         // Sales tax / VAT computed by Stripe Tax (0 when off/none).
         const taxCents = session.total_details?.amount_tax ?? 0;

@@ -36,10 +36,14 @@ describe('settings availability', () => {
     });
     expect(stripeConfigured(configured, caps({ vault: false }))).toBe(false);
     expect(stripeConfigured(configured, caps({ vault: true }))).toBe(true);
-    expect(featureAvailability('discounts_enabled', configured, caps({ vault: false }))).toEqual({
+    expect(featureAvailability('tax_enabled', configured, caps({ vault: false }))).toEqual({
       available: false,
       reason: 'Indisponible tant que Stripe n’est pas configuré',
     });
+  });
+
+  it('offers discount codes whatever the payment (ADR 0033)', () => {
+    expect(featureAvailability('discounts_enabled', settings({}), caps({ vault: false }))).toEqual({ available: true });
   });
 
   it('requires a usable email provider for customer accounts', () => {

@@ -14,6 +14,7 @@ const order = (overrides: Partial<Order> = {}): Order =>
     shipping_instructions: null,
     shipping_weight_grams: null,
     discount_cents: 0,
+    discount_code: null,
     tax_cents: 0,
     currency: 'usd',
     status: 'paid',

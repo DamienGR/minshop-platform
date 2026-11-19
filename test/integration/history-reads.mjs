@@ -6,6 +6,12 @@ import { listOrderItems, listOrderItemsWithImages } from '../../src/features/ord
 import { listAllProducts } from '../../src/features/products/db.ts';
 import { listLabelsNeedingAttention } from '../../src/features/shipping/labelStore.ts';
 import { listAwaitedTransfers } from '../../src/features/payments/bankTransferStore.ts';
+import {
+  checkDiscountCode,
+  countDiscountUses,
+  discountStillHolds,
+  listDiscountCodes,
+} from '../../src/features/discounts/db.ts';
 import { parseCsvRecords } from '../../shopctl/src/catalog/csv.mjs';
 import { buildCatalogue } from '../../shopctl/src/catalog/contract.mjs';
 import { resolveCatalogueImages } from '../../shopctl/src/catalog/media.mjs';
@@ -172,6 +178,34 @@ try {
   assert.equal(page.reduce((n, p) => n + p.sold, 0), 25 * (ORDERS / PRODUCTS), 'sold counts are unchanged');
   assert.ok(listed < (PRODUCTS * ORDERS) / 10, `the admin list reads ${listed} rows, not products × lines`);
   console.log(`  ✓ admin product list: ${listed} rows (was ${PRODUCTS * ORDERS})`);
+
+  // ── A discount code's uses (ADR 0033): its own orders and holds, not the history ──
+  await raw
+    .prepare(
+      `INSERT INTO discount_codes (public_id, code, kind, value, max_uses)
+       VALUES ('dsc_hcode1', 'FIDELE', 'percent', 10, 5), ('dsc_hcode2', 'CADEAU', 'amount', 2000, 1)`,
+    )
+    .run();
+  const fidele = await raw.prepare("SELECT id FROM discount_codes WHERE code = 'FIDELE'").first('id');
+  await raw.prepare(`UPDATE orders SET discount_code_id = ?, discount_code = 'FIDELE' WHERE id IN (3, 30, 300)`).bind(fidele).run();
+  await raw
+    .prepare(`UPDATE checkout_reservations SET discount_code_id = ?, discount_code = 'FIDELE', status = 'active' WHERE public_id = 'ord_h000000007'`)
+    .bind(fidele)
+    .run();
+  assert.equal(await countDiscountUses(db, fidele), 4);
+  const counted = take();
+  assert.equal(await discountStillHolds(db, fidele), true);
+  const held = take();
+  const judged = await checkDiscountCode(db, 'fidele', { subtotalCents: 5000, currency: 'eur', timeZone: 'Europe/Paris' });
+  assert.equal(judged?.ok, true);
+  const checked = take();
+  const codes = await listDiscountCodes(db);
+  const codesListed = take();
+  assert.deepEqual(codes.map((c) => [c.code, c.used, c.held]), [['CADEAU', 0, 0], ['FIDELE', 3, 1]]);
+  for (const [what, n] of [['count', counted], ['still holds', held], ['check', checked], ['admin list', codesListed]]) {
+    assert.ok(n < 20, `a code's ${what} reads ${n} rows, not every order and reservation (${2 * ORDERS})`);
+  }
+  console.log(`  ✓ discount uses: ${counted} / ${held} / ${checked} / ${codesListed} rows (a scan would be ${2 * ORDERS})`);
 
   // ── A catalogue import matching variants by SKU ──
   const csv = [

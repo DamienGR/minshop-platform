@@ -51,8 +51,10 @@ export function createOpenNodeProvider(
       // Shipping is charged only when the in-app step already priced it against a
       // submitted address; the hosted OpenNode page cannot collect one.
       const shippingCents = params.selectedShipping?.amountCents ?? 0;
-      const totalCents =
-        params.lineItems.reduce((s, l) => s + l.amountCents * l.quantity, 0) + shippingCents;
+      const subtotalCents = params.lineItems.reduce((s, l) => s + l.amountCents * l.quantity, 0);
+      // A discount code comes off the items, never the delivery (ADR 0033).
+      const discountCents = Math.min(params.discount?.amountCents ?? 0, subtotalCents);
+      const totalCents = subtotalCents - discountCents + shippingCents;
       const origin = new URL(params.successUrl).origin;
       const publicId = params.metadata?.public_id ?? crypto.randomUUID();
       const storeName = await readStoreName(db);
@@ -97,6 +99,7 @@ export function createOpenNodeProvider(
         currency,
         email: params.selectedShipping?.email ?? null,
         itemsJson: params.orderItemsJson ?? null,
+        discountCents,
         shippingCents,
         shippingLabel: params.selectedShipping?.label ?? null,
         shippingInstructions: params.selectedShipping?.instructions ?? null,

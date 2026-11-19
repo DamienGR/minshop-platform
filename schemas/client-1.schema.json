@@ -157,7 +157,7 @@
           "type": "boolean"
         },
         "promoCodes": {
-          "description": "Stripe promotion codes at checkout.",
+          "description": "Discount codes and gift cards typed in the cart (Admin → Codes promo).",
           "type": "boolean"
         },
         "shipping": {

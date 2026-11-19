@@ -25,6 +25,7 @@ export const PUBLIC_ID_PREFIXES = {
   orderItem: 'itm',
   inventoryException: 'iexc',
   customField: 'cfld',
+  discountCode: 'dsc',
 } as const;
 
 export type PublicIdKind = keyof typeof PUBLIC_ID_PREFIXES;

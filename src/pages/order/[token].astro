@@ -16,6 +16,7 @@ import { shippingInstructionsHtml } from '../../features/shipping/instructions.t
 import { formatNumber, t } from '../../features/i18n';
 import { orderVatExemption } from '../../features/legal/vat';
 import { customizationText, parseCustomization } from '../../features/products/customization';
+import { discountLabel } from '../../features/discounts/code';
 
 // Guest access: new orders are addressed ONLY by their otk_ access token
 // (resolved through the registry); legacy orders keep their pre-cutover
@@ -118,7 +119,17 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
           </table>
         </div>
 
-        <p class="mt-4 text-lg font-semibold">
+        {
+          order.discount_cents > 0 && (
+            <p class="mt-4 text-sm text-muted" data-discount-line>
+              {t('discount.summary', {
+                libelle: discountLabel(order.discount_code),
+                montant: formatPrice(order.discount_cents, order.currency),
+              })}
+            </p>
+          )
+        }
+        <p class={`${order.discount_cents > 0 ? 'mt-1' : 'mt-4'} text-lg font-semibold`}>
           {t('order.total', { montant: formatPrice(order.amount_total_cents, order.currency) })}
         </p>
         {

@@ -3,6 +3,7 @@ import { categories } from './categories.ts';
 import { common } from './common.ts';
 import { customers } from './customers.ts';
 import { dashboard } from './dashboard.ts';
+import { discounts } from './discounts.ts';
 import { guide } from './guide.ts';
 import { media } from './media.ts';
 import { navigation } from './navigation.ts';
@@ -38,6 +39,7 @@ export const ADMIN_FRAGMENTS = {
   media,
   orders,
   customers,
+  discounts,
   pages,
   navigation,
   shipping,
@@ -57,6 +59,7 @@ export const frAdmin = {
   ...media,
   ...orders,
   ...customers,
+  ...discounts,
   ...pages,
   ...navigation,
   ...shipping,

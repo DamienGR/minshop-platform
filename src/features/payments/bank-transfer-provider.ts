@@ -37,6 +37,9 @@ export function createBankTransferProvider(db: D1Database, settings: StoreSettin
       if (!details) throw new Error('Bank transfer is not configured.');
       const subtotal = params.lineItems.reduce((s, li) => s + li.amountCents * li.quantity, 0);
       const shippingCents = params.selectedShipping?.amountCents ?? 0;
+      // A discount code comes off the items, never the delivery (ADR 0033).
+      const discountCents = Math.min(params.discount?.amountCents ?? 0, subtotal);
+      const totalCents = subtotal - discountCents + shippingCents;
       const publicId = params.metadata?.public_id;
       if (!publicId) throw new Error('A bank transfer needs the order identity claimed at checkout.');
       const reservationId = params.metadata?.reservation_id ?? null;
@@ -55,10 +58,11 @@ export function createBankTransferProvider(db: D1Database, settings: StoreSettin
         backend: 'bank_transfer',
         bolt11: null,
         amountSat: null,
-        amountTotalCents: subtotal + shippingCents,
+        amountTotalCents: totalCents,
         currency: params.lineItems[0]?.currency ?? 'eur',
         email: params.selectedShipping?.email ?? null,
         itemsJson: params.orderItemsJson ?? null,
+        discountCents,
         shippingCents,
         shippingLabel: params.selectedShipping?.label ?? null,
         shippingInstructions: params.selectedShipping?.instructions ?? null,
@@ -84,7 +88,7 @@ export function createBankTransferProvider(db: D1Database, settings: StoreSettin
           iban: details.iban,
           bic: details.bic,
           reference: transferReference(publicId),
-          amountCents: subtotal + shippingCents,
+          amountCents: totalCents,
           expiresAt: new Date(due).toISOString(),
         },
       };

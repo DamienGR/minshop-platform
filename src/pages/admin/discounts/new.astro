@@ -1,0 +1,28 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import DiscountForm from '../../../features/discounts/DiscountForm.astro';
+import { getConfig } from '../../../config';
+import { calendarDate } from '../../../features/i18n/format';
+import { t } from '../../../features/i18n';
+
+// « Nouveau code », or « Nouvelle carte cadeau » (`?preset=gift`): the same
+// form, opened on a fixed amount and a single use (ADR 0033).
+const config = getConfig();
+const preset = Astro.url.searchParams.get('preset') === 'gift' ? 'gift' : null;
+const today = calendarDate(new Date(), Astro.locals.settings?.timeZone ?? config.timeZone);
+const error = Astro.url.searchParams.get('error');
+const title = preset ? t('admin.discounts.newGift') : t('admin.discounts.new');
+---
+
+<AdminLayout title={title} active="discounts">
+  <a href="/admin/discounts" class="text-sm text-gray-500 hover:text-brand">&larr; {t('admin.discounts.back')}</a>
+  <h1 class="mt-4 mb-6 text-2xl font-bold">{title}</h1>
+  <DiscountForm
+    action="/api/admin/discounts"
+    submitLabel={t('admin.discounts.create')}
+    currency={config.currency}
+    preset={preset}
+    today={today}
+    error={error}
+  />
+</AdminLayout>

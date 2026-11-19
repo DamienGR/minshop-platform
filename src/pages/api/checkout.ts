@@ -70,6 +70,14 @@ import {
   checkOrderComment,
 } from '../../features/orders/comment.ts';
 import type { StoreSettings } from '../../features/settings/db';
+import {
+  DISCOUNT_CODE_FIELD,
+  settlesNothingDue,
+  type AppliedDiscount,
+} from '../../features/discounts/code.ts';
+import { checkDiscountCode, discountStillHolds } from '../../features/discounts/db.ts';
+import { writeAppliedCode } from '../../features/discounts/cookie.ts';
+import { discountsOn } from '../../features/discounts/enabled';
 
 export const prerender = false;
 
@@ -160,6 +168,8 @@ export const GET: APIRoute = async () => {
     default: methods[0],
     // Whether `comment` is read below, and its ceiling (ADR 0028).
     comment: settings.orderCommentEnabled ? { max_length: ORDER_COMMENT_MAX_LENGTH } : null,
+    // Whether `discount_code` is read below (ADR 0033).
+    discount_codes: discountsOn(settings),
   });
 };
 
@@ -299,6 +309,22 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // the limit and never the text: the redirect is a URL, and URLs are logged.
   const comment = checkOrderComment(form.get(ORDER_COMMENT_FIELD), settings.orderCommentEnabled);
   if (!comment.ok) return redirect(`${errorPath}?error=${encodeURIComponent(comment.error)}`, 303);
+
+  // The discount code (ADR 0033), judged on this basket before anything is
+  // held. The field is the cart's and Buy now's, prefilled with the code the
+  // buyer applied: what it holds when the button is pressed is what applies,
+  // an emptied one included. A refusal comes back like a stock refusal.
+  let discount: AppliedDiscount | null = null;
+  if (discountsOn(settings) && form.has(DISCOUNT_CODE_FIELD)) {
+    const judged = await checkDiscountCode(env.DB, form.get(DISCOUNT_CODE_FIELD), {
+      subtotalCents: lines.reduce((s, l) => s + l.unitPriceCents * l.qty, 0),
+      currency: getConfig().currency,
+      timeZone: settings.timeZone ?? getConfig().timeZone,
+    });
+    if (judged && !judged.ok) return redirect(`${errorPath}?error=${encodeURIComponent(judged.message)}`, 303);
+    discount = judged?.discount ?? null;
+    if (!productPublicId) writeAppliedCode(cookies, discount?.code ?? '', url.protocol === 'https:');
+  }
   // Cart checkout passes an explicit method (the picker buttons). Express buy-now
   // passes none → use the store's default (available[0] — the default rail first).
   const selected: PaymentMethod =
@@ -360,7 +386,8 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     // body to /checkout, `custom:` fields and the comment included; `hop=start`
     // tells /checkout it is the first view of the address step, not an address
     // being submitted.
-    if (Object.keys(buyNowCustomValues).length > 0 || comment.value) {
+    // A discount code rides the same way: a gift card's code is money.
+    if (Object.keys(buyNowCustomValues).length > 0 || comment.value || discount) {
       params.set('hop', 'start');
       return new Response(null, { status: 307, headers: { location: `/checkout?${params}` } });
     }
@@ -477,6 +504,12 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if (terms.required && !accepted) {
     return redirect(`${errorPath}?error=${encodeURIComponent(TERMS_REFUSAL)}`, 303);
   }
+  // A basket a code pays in full, on a rail that cannot take nothing (no
+  // invoice of 0 sat, no transfer of 0 €). Only an unshipped basket gets
+  // here on those rails; a shipped one is judged on /checkout, with its rate.
+  if (discount && !settlesNothingDue(selected) && subtotalCents - discount.amountCents <= 0) {
+    return redirect(`${errorPath}?error=${encodeURIComponent(t('discount.error.nothingToPay'))}`, 303);
+  }
 
   const { publicId, accessToken } = await claimOrderIdentity(env.DB);
   const items = reservationItems(lines);
@@ -493,11 +526,13 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     null,
     null,
     comment.value,
+    discount,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
+    const codeGone = discount != null && !(await discountStillHolds(env.DB, discount.id));
     return redirect(
-      `${errorPath}?error=${encodeURIComponent(t('checkout.error.stockGone'))}`,
+      `${errorPath}?error=${encodeURIComponent(t(codeGone ? 'discount.error.gone' : 'checkout.error.stockGone'))}`,
       303,
     );
   }
@@ -520,7 +555,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
       // so inventory remains held until its verified expiry/failure webhook.
       cancelUrl,
       shipping,
-      allowPromotionCodes: settings.discountsEnabled ?? cfg.discounts.enabled,
+      ...(discount && { discount: { code: discount.code, amountCents: discount.amountCents } }),
       automaticTax: settings.taxEnabled ?? cfg.tax.enabled,
       orderItemsJson: JSON.stringify(
         lines.map((l) => ({ id: l.product.id, q: l.qty, n: l.name, p: l.unitPriceCents, v: l.variantId })),
@@ -547,9 +582,12 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 /**
  * Programmatic checkout for agents/tools. Body:
  *   { items: [{ product_id, quantity, variant_id?, extra_ids?: string[],
- *               customization?: { "cfld_…": string } }], method?, comment? }
+ *               customization?: { "cfld_…": string } }], method?, comment?,
+ *     discount_code? }
  * `comment` is the buyer's message on the order (ADR 0028), read only where
  * the shop takes one (GET says so, with its ceiling) and refused elsewhere.
+ * `discount_code` is a code from Admin → Codes promo (ADR 0033), judged on the
+ * lines like the cart's and refused (400) where the shop takes none.
  * `product_id` is the prefixed public ID (`prod_…`) from the catalog; `slug` is
  * accepted as a documented convenience selector. `variant_id` (`var_…`) is
  * required for products that have a variant group; `extra_ids` (`xtra_…`) are
@@ -811,6 +849,32 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
 
   const storeCurrency = cfg.currency;
   const subtotalCents = lines.reduce((s, l) => s + l.unitPriceCents * l.qty, 0);
+
+  // The discount code (ADR 0033), judged on these lines like the cart's.
+  // Sent to a shop that takes none, it is refused rather than dropped: the
+  // agent would report a price the shop never agreed to.
+  const rawCode = (body as { discount_code?: unknown }).discount_code;
+  if (rawCode !== undefined && rawCode !== null && typeof rawCode !== 'string') {
+    return cjson({ error: '"discount_code" must be a string.' }, 400);
+  }
+  let discount: AppliedDiscount | null = null;
+  if (typeof rawCode === 'string' && rawCode.trim() !== '') {
+    if (!discountsOn(jsonSettings)) {
+      return cjson({ error: 'This store does not take discount codes.', reason: 'discount_code' }, 400);
+    }
+    const judged = await checkDiscountCode(env.DB, rawCode, {
+      subtotalCents,
+      currency: storeCurrency,
+      timeZone: jsonSettings.timeZone ?? cfg.timeZone,
+    });
+    if (judged && !judged.ok) return cjson({ error: judged.message, reason: 'discount_code' }, 400);
+    discount = judged?.discount ?? null;
+  }
+  const discountCents = discount?.amountCents ?? 0;
+  const codeRefused = async (): Promise<boolean> =>
+    discount != null && !(await discountStillHolds(env.DB, discount.id));
+  const discountEcho = discount ? { discount: { code: discount.code, amount_cents: discount.amountCents } } : {};
+
   const shipCalc = createConfigRatesCalculator(effectiveShipping);
   const stripeFallbackCountry =
     stripeAllowedCountries(shipCalc.allowedCountries(), shipCalc.hasCatchAll())[0] ?? null;
@@ -970,6 +1034,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     }
   }
 
+  // A basket the code pays in full, on a rail that cannot take nothing.
+  if (discount && !settlesNothingDue(method) && subtotalCents - discountCents + (chosen?.amountCents ?? 0) <= 0) {
+    return cjson({ error: t('discount.error.nothingToPay'), reason: 'discount_code', available_methods: available }, 400);
+  }
+
   if (method === 'lightning' && shippingOn && shipTo && chosen && inAppQuote) {
     const { publicId: lnPublicId, accessToken: lnAccessToken } = await claimOrderIdentity(env.DB);
     const lnReserved = await reserveInventory(
@@ -985,9 +1054,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       null,
       null,
       jsonComment.value,
+      discount,
     );
     if (!lnReserved) {
       await deleteGuestAccessIfUnsettled(env.DB, lnPublicId);
+      if (await codeRefused()) return cjson({ error: t('discount.error.gone'), reason: 'discount_code' }, 409);
       return cjson({ error: 'Some inventory just sold out. Refresh the catalog and retry.' }, 409);
     }
     try {
@@ -997,6 +1068,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         accessToken: lnAccessToken,
         currency: storeCurrency,
         subtotalCents,
+        discountCents,
         shippingCents: chosen.amountCents,
         shippingLabel: chosen.label,
         shippingInstructions: chosen.instructions ?? null,
@@ -1035,10 +1107,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         order_public_id: lnPublicId,
         currency: storeCurrency.toUpperCase(),
         subtotal_cents: subtotalCents,
+        ...discountEcho,
         shipping_cents: chosen.amountCents,
         shipping_label: chosen.label,
         ...(chosen.instructions && { shipping_instructions: chosen.instructions }),
-        total_cents: subtotalCents + chosen.amountCents,
+        total_cents: subtotalCents - discountCents + chosen.amountCents,
         ship_to: shipTo,
         ...(jsonComment.value && { comment: jsonComment.value }),
         items: lines.map((l) => ({
@@ -1088,9 +1161,11 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     null,
     null,
     jsonComment.value,
+    discount,
   );
   if (!reserved) {
     await deleteGuestAccessIfUnsettled(env.DB, publicId);
+    if (await codeRefused()) return cjson({ error: t('discount.error.gone'), reason: 'discount_code' }, 409);
     return cjson({ error: 'Some inventory just sold out. Refresh the catalog and retry.' }, 409);
   }
 
@@ -1129,7 +1204,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
             email: shipTo.email,
           },
         }),
-      allowPromotionCodes: jsonSettings.discountsEnabled ?? cfg.discounts.enabled,
+      ...(discount && { discount: { code: discount.code, amountCents: discount.amountCents } }),
       automaticTax: jsonSettings.taxEnabled ?? cfg.tax.enabled,
       orderItemsJson: JSON.stringify(
         lines.map((l) => ({ id: l.product.id, q: l.qty, n: l.name, p: l.unitPriceCents, v: l.variantId })),
@@ -1180,13 +1255,15 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     order_public_id: publicId,
     currency: storeCurrency.toUpperCase(),
     subtotal_cents: subtotalCents,
+    // What the code takes off the items (ADR 0033), whatever the rail.
+    ...discountEcho,
     // The rate this order was priced with, when the in-app step chose one —
     // the Lightning branch has always echoed it; demo/OpenNode should too.
     ...(chosen && {
       shipping_cents: chosen.amountCents,
       shipping_label: chosen.label,
       ...(chosen.instructions && { shipping_instructions: chosen.instructions }),
-      total_cents: subtotalCents + chosen.amountCents,
+      total_cents: subtotalCents - discountCents + chosen.amountCents,
     }),
     ...(jsonComment.value && { comment: jsonComment.value }),
     items: lines.map((l) => ({
@@ -1203,6 +1280,6 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       ? 'Pay the BOLT11 `lightning.invoice` from any Lightning wallet — no human needed; the order is recorded once settlement is confirmed. Or open checkout_url for the QR page.'
       : transfer
         ? 'Transfer `bank_transfer.amount_cents` to the account in `bank_transfer`, with `bank_transfer.reference` as the label, before `bank_transfer.expires_at`. The order is recorded once the merchant receives the transfer; the stock is held until then.'
-        : 'Open checkout_url to complete payment. Shipping, tax, and discounts (if enabled) are applied on the hosted checkout page.',
+        : 'Open checkout_url to complete payment. Shipping and tax (if enabled) are applied on the hosted checkout page; a discount_code is already applied.',
   });
 }

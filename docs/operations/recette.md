@@ -23,8 +23,8 @@ L'agence prépare, et le note en tête du procès-verbal :
   cite (`purchase` des attestations) ; Stripe en mode test sur une preview ne
   le remplace pas. Les frais d'un vrai paiement ne sont pas rendus ;
 - [ ] un produit de recette (prix bas, stock 2, une photo), à désactiver à la
-  fin, et un code promotionnel créé dans Stripe si la boutique en accepte
-  (`features.promoCodes`) ;
+  fin, et un code créé dans Admin → Codes promo si la boutique en accepte
+  (`features.promoCodes`), saisi dans le panier ;
 - [ ] l'accès à l'administration : le commerçant se connecte lui-même devant
   la personne, ou lui confie le mot de passe pour la séance et le change
   ensuite (`npm run shopctl -- admin password --env <env>`) ;

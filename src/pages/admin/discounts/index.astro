@@ -1,0 +1,168 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getConfig, formatPrice } from '../../../config';
+import { discountStatus, type DiscountCode, type DiscountStatus } from '../../../features/discounts/code';
+import { listDiscountCodes } from '../../../features/discounts/db';
+import { discountsOn } from '../../../features/discounts/enabled';
+import { calendarDate, formatDateTime } from '../../../features/i18n/format';
+import Rich from '../../../features/i18n/Rich.astro';
+import { t, type MessageKey } from '../../../features/i18n';
+
+// Admin → Codes promo (ADR 0033): every code, the switched-on first, newest
+// first. Its uses are the orders that carry it and the checkouts holding it,
+// counted from those rows (features/discounts/db.ts).
+const config = getConfig();
+const timeZone = Astro.locals.settings?.timeZone ?? config.timeZone;
+const today = calendarDate(new Date(), timeZone);
+const rows = await listDiscountCodes(env.DB);
+const fieldShown = discountsOn(Astro.locals.settings);
+
+const saved = Astro.url.searchParams.has('saved');
+const deleted = Astro.url.searchParams.has('deleted');
+const kept = Astro.url.searchParams.has('kept');
+const error = Astro.url.searchParams.get('error');
+
+/** A stored calendar day, read in words: « 31 décembre 2026 ». Noon UTC, so no zone moves it. */
+const day = (d: string) => formatDateTime(new Date(`${d}T12:00:00Z`), { dateStyle: 'long' }, 'UTC');
+
+const discountText = (c: DiscountCode) =>
+  c.kind === 'percent'
+    ? t('admin.discounts.percent', { taux: c.value })
+    : t('admin.discounts.amount', { montant: formatPrice(c.value, config.currency) });
+
+const conditions = (c: DiscountCode): string[] => {
+  const out: string[] = [];
+  if (c.min_subtotal_cents > 0) out.push(t('admin.discounts.minimum', { montant: formatPrice(c.min_subtotal_cents, config.currency) }));
+  if (c.starts_on && c.ends_on) out.push(t('admin.discounts.between', { debut: day(c.starts_on), fin: day(c.ends_on) }));
+  else if (c.starts_on) out.push(t('admin.discounts.from', { date: day(c.starts_on) }));
+  else if (c.ends_on) out.push(t('admin.discounts.until', { date: day(c.ends_on) }));
+  return out;
+};
+
+const STATUS: Record<DiscountStatus, { key: MessageKey; class: string }> = {
+  active: { key: 'admin.discounts.status.active', class: 'bg-green-50 text-green-700' },
+  off: { key: 'admin.discounts.status.off', class: 'bg-surface text-gray-500' },
+  upcoming: { key: 'admin.discounts.status.upcoming', class: 'bg-blue-50 text-blue-700' },
+  expired: { key: 'admin.discounts.status.expired', class: 'bg-surface text-gray-500' },
+  exhausted: { key: 'admin.discounts.status.exhausted', class: 'bg-surface text-gray-500' },
+};
+---
+
+<AdminLayout title={t('admin.discounts.title')} active="discounts">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-serif text-3xl tracking-tight">{t('admin.discounts.title')}</h1>
+    <div class="flex flex-wrap gap-2">
+      <a
+        href="/admin/discounts/new?preset=gift"
+        class="rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted hover:border-brand hover:text-brand"
+      >
+        {t('admin.discounts.newGift')}
+      </a>
+      <a
+        href="/admin/discounts/new"
+        class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+      >
+        {t('admin.discounts.new')}
+      </a>
+    </div>
+  </div>
+  <p class="mb-6 max-w-prose text-sm text-gray-500">{t('admin.discounts.intro')}</p>
+
+  {
+    !fieldShown && (
+      <p data-discounts-off class="mb-6 max-w-prose rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <Rich message="admin.discounts.off" href="/admin/settings#general" linkClass="font-medium underline" />
+      </p>
+    )
+  }
+  {
+    error && (
+      <p class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+    )
+  }
+  {
+    (saved || deleted || kept) && !error && (
+      <p role="status" class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        {kept ? t('admin.discounts.usedKeep') : deleted ? t('admin.discounts.deleted') : t('admin.discounts.saved')}
+      </p>
+    )
+  }
+
+  <div class="sm:overflow-x-auto">
+    <table class="admin-table w-full text-left text-sm sm:min-w-[44rem]">
+      <thead>
+        <tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
+          <th class="py-3 pr-4 font-normal">{t('admin.discounts.column.code')}</th>
+          <th class="py-3 pr-4 font-normal">{t('admin.discounts.column.discount')}</th>
+          <th class="py-3 pr-4 font-normal">{t('admin.discounts.column.conditions')}</th>
+          <th class="py-3 pr-4 font-normal">{t('admin.discounts.column.uses')}</th>
+          <th class="py-3 text-right font-normal">{t('admin.common.actions')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((c) => {
+            const uses = c.used + c.held;
+            const status = STATUS[discountStatus(c, today, uses)];
+            const terms = conditions(c);
+            return (
+              <tr id={c.public_id} class="border-b border-line" data-discount-row={c.code}>
+                <td class="py-3 pr-4">
+                  <a href={`/admin/discounts/${c.public_id}/edit`} class="font-mono font-medium hover:text-brand">
+                    {c.code}
+                  </a>
+                  <span class={`ml-2 rounded px-1.5 py-0.5 text-xs ${status.class}`}>{t(status.key)}</span>
+                </td>
+                <td data-label={t('admin.discounts.column.discount')} class="py-3 pr-4 tabular-nums">
+                  {discountText(c)}
+                </td>
+                <td data-label={t('admin.discounts.column.conditions')} class="py-3 pr-4 text-gray-500">
+                  {terms.length > 0 ? terms.join(' · ') : t('admin.discounts.noCondition')}
+                </td>
+                <td data-label={t('admin.discounts.column.uses')} class="py-3 pr-4 tabular-nums text-gray-500">
+                  {c.max_uses != null
+                    ? t('admin.discounts.usesOf', { count: uses, max: c.max_uses })
+                    : t('admin.discounts.uses', { count: uses })}
+                  {c.held > 0 && <span class="block text-xs text-faint">{t('admin.discounts.held', { count: c.held })}</span>}
+                </td>
+                <td data-label="" class="py-3 text-right">
+                  <div class="flex items-center justify-end gap-4 text-xs uppercase tracking-widest">
+                    <form method="POST" action={`/api/admin/discounts/${c.public_id}`}>
+                      <input type="hidden" name="_action" value="toggle" />
+                      <button type="submit" class="text-gray-500 hover:text-brand">
+                        {c.active === 1 ? t('admin.discounts.switchOff') : t('admin.discounts.switchOn')}
+                      </button>
+                    </form>
+                    <a href={`/admin/discounts/${c.public_id}/edit`} class="text-accent hover:underline">
+                      {t('admin.common.edit')}
+                    </a>
+                    <form
+                      method="POST"
+                      action={`/api/admin/discounts/${c.public_id}`}
+                      onsubmit={`return confirm('${t('admin.discounts.confirmDelete')}')`}
+                    >
+                      <input type="hidden" name="_action" value="delete" />
+                      <button type="submit" class="text-red-600 hover:underline">
+                        {t('admin.common.delete')}
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            );
+          })
+        }
+        {
+          rows.length === 0 && (
+            <tr>
+              <td colspan="5" class="py-8 text-center text-gray-400">
+                {t('admin.discounts.empty')}
+              </td>
+            </tr>
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

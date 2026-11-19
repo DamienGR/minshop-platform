@@ -49,8 +49,14 @@ export interface CreateCheckoutParams {
   accessToken?: string;
   /** Server-side cart snapshot for adapters that persist pending payment state. */
   orderItemsJson?: string;
-  /** Show the "add promotion code" field on hosted checkout (codes live in Stripe). */
-  allowPromotionCodes?: boolean;
+  /**
+   * A discount code the shop accepted (ADR 0033): what it takes off the
+   * items, computed by the socle, never by the provider. Every adapter charges
+   * the items net of it — Stripe as a one-off coupon named after the code, so
+   * its page reads « NOEL10 −5,00 € »; the others in the total they ask for.
+   * The delivery is never discounted.
+   */
+  discount?: { code: string; amountCents: number };
   /** Compute sales tax / VAT via Stripe Tax (requires Stripe Tax activated). */
   automaticTax?: boolean;
   /** When set, collect a shipping address (allowed countries) + offer these rates. */

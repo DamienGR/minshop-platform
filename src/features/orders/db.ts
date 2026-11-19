@@ -34,6 +34,9 @@ export interface Order {
   shipping_instructions: string | null;
   shipping_weight_grams: number | null;
   discount_cents: number;
+  /** The code that took it off (ADR 0033), as the buyer had it applied; null
+   *  for none and for an order older than migration 0065. */
+  discount_code: string | null;
   tax_cents: number;
   currency: string;
   status: string; // payment status (e.g. 'paid' | 'refunded')
@@ -519,11 +522,13 @@ export async function recordPaidOrder(
   // payment that went through it: Stripe then collects no address). And so
   // does what the buyer typed on a personalised product: the Lightning page
   // settles from the pending row's own item list, which never carries it. And
-  // so does the comment they left on the order (ADR 0028), for every rail.
+  // so does the comment they left on the order (ADR 0028), for every rail,
+  // and the discount code they applied (ADR 0033), whose uses the order then
+  // counts in place of the reservation.
   const carried = o.reservationId
     ? await db
         .prepare(
-          'SELECT terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization, buyer_comment FROM checkout_reservations WHERE public_id = ?',
+          'SELECT terms_version, terms_accepted_at, vat_rate_bps, vat_exemption, relay_point, ship_address, customization, buyer_comment, discount_code_id, discount_code FROM checkout_reservations WHERE public_id = ?',
         )
         .bind(o.reservationId)
         .first<{
@@ -535,6 +540,8 @@ export async function recordPaidOrder(
           ship_address: string | null;
           customization: string | null;
           buyer_comment: string | null;
+          discount_code_id: number | null;
+          discount_code: string | null;
         }>()
     : null;
   const orderValues = [
@@ -570,14 +577,16 @@ export async function recordPaidOrder(
     vat?.exemption ?? null,
     carried?.relay_point ?? null,
     carried?.buyer_comment ?? null,
+    carried?.discount_code_id ?? null,
+    carried?.discount_code ?? null,
   ] as const;
   const orderColumns =
-    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point, buyer_comment';
+    'provider_session_id, public_id, email, amount_total_cents, shipping_cents, shipping_label, shipping_instructions, shipping_weight_grams, delivery_method, discount_cents, tax_cents, currency, ship_address, status, payment_method, settlement_token, provider_payment_id, terms_version, terms_accepted_at, vat_rate_bps, vat_amount_cents, vat_exemption, relay_point, buyer_comment, discount_code_id, discount_code';
   const insertOrder = o.reservationId
     ? db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM checkout_reservations
                WHERE public_id = ? AND status IN ${settlementStatuses}
@@ -589,7 +598,7 @@ export async function recordPaidOrder(
     : db
         .prepare(
           `INSERT INTO orders (${orderColumns})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
            ON CONFLICT(provider_session_id) DO NOTHING
            RETURNING id`,
         )

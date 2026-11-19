@@ -23,6 +23,9 @@ const total = formatPrice(pending.amount_total_cents, pending.currency);
 const shipping = pending.shipping_cents
   ? formatPrice(pending.shipping_cents, pending.currency)
   : null;
+// A discount code's amount (ADR 0033), already out of the total; `?? 0` for
+// a row older than migration 0065.
+const discount = (pending.discount_cents ?? 0) > 0 ? formatPrice(pending.discount_cents, pending.currency) : null;
 
 // Parse the cart snapshot for a line summary (same shape checkout stored).
 type Snap = { id: number; q: number; n: string; p: number };
@@ -57,6 +60,12 @@ try {
         </li>
       ))}
     </ul>
+    {discount && (
+      <div class="flex items-center justify-between border-t border-line pt-2 text-sm text-muted" data-discount-line>
+        <span>{t('discount.label')}</span>
+        <span class="tabular-nums">{t('discount.amount', { montant: discount })}</span>
+      </div>
+    )}
     {shipping && (
       <div class="flex items-center justify-between border-t border-line pt-2 text-sm text-muted">
         <span>{t('pay.demo.shipping')}</span>

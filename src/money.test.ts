@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { currencyDecimals, minorUnitsPerMajor, toMinorUnits, toMajorUnits } from './money';
+import { currencyDecimals, currencySymbol, minorUnitsPerMajor, toMinorUnits, toMajorUnits } from './money';
 
 describe('currency scaling', () => {
   it('knows decimal places per currency (ISO 4217)', () => {
@@ -52,5 +52,12 @@ describe('currency scaling', () => {
 
   it('falls back to 2 decimals for an unknown currency code', () => {
     expect(currencyDecimals('zzz')).toBe(2);
+  });
+});
+
+describe('currencySymbol', () => {
+  it('is the sign a price prints, for a field typed in major units', () => {
+    expect(currencySymbol('eur')).toBe('€');
+    expect(currencySymbol('USD')).toBe('$US');
   });
 });

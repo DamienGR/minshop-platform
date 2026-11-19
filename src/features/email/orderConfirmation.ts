@@ -8,6 +8,7 @@ import {
 import { orderTrackingUrl, shippedCarrierName } from '../orders/tracking';
 import { orderRelayPoint, relayPointLines } from '../shipping/relay.ts';
 import { t, formatNumber } from '../i18n/index.ts';
+import { discountLabel } from '../discounts/code.ts';
 import { customizationText, parseCustomization } from '../products/customization.ts';
 import { orderVatExemption } from '../legal/vat.ts';
 import type { EmailMessage } from './provider';
@@ -46,7 +47,7 @@ function totalRows(order: Order, money: (cents: number) => string): TotalRow[] {
       ? [{ label: t('email.total.shipping'), amount: money(order.shipping_cents) }]
       : []),
     ...(order.discount_cents > 0
-      ? [{ label: t('email.total.discount'), amount: `&minus;${money(order.discount_cents)}` }]
+      ? [{ label: discountLabel(order.discount_code), amount: `&minus;${money(order.discount_cents)}` }]
       : []),
     ...(order.tax_cents > 0
       ? [{ label: t('email.total.tax'), amount: money(order.tax_cents) }]

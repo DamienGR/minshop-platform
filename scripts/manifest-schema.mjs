@@ -158,7 +158,7 @@ export const MANIFEST_SPEC = {
       customerAccounts: { schema: { type: 'boolean' }, description: 'Customer accounts on the storefront.' },
       semanticSearch: { schema: { type: 'boolean' }, description: 'Vector search. Out of scope for the pilot (plan §2.2).' },
       digitalProducts: { schema: { type: 'boolean' }, description: 'Downloadable products served from the private bucket.' },
-      promoCodes: { schema: { type: 'boolean' }, description: 'Stripe promotion codes at checkout.' },
+      promoCodes: { schema: { type: 'boolean' }, description: 'Discount codes and gift cards typed in the cart (Admin → Codes promo).' },
       shipping: { schema: { type: 'boolean' }, description: 'Physical shipping and its rate table.' },
     },
   },
