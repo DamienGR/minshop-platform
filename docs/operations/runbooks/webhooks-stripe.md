@@ -3,7 +3,9 @@
 **Déclencheurs** : des paiements visibles dans Stripe sans commande dans
 l'admin ; un client payé qui n'a reçu ni confirmation ni page de commande ; des
 produits qui restent « épuisés » alors que personne n'a payé ; une alerte
-« webhook endpoint failing » de Stripe.
+« webhook endpoint failing » de Stripe ; des commandes par carte sans mode de
+livraison (une commande en point relais dont la fiche ne montre pas le point,
+une étiquette qu'on ne peut pas acheter).
 
 **Ce qu'il faut savoir** : une commande n'existe qu'une fois payée
 (invariant 2), et elle n'est écrite **que** par un webhook signé
@@ -33,6 +35,10 @@ Développeurs → Webhooks → l'endpoint `https://<domaine>/api/webhook`.
   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
   `checkout.session.async_payment_failed`, `checkout.session.expired`,
   `charge.refunded`.
+- tentatives en **200**, mais des commandes sans mode de livraison ni libellé
+  de tarif : l'endpoint émet dans une version d'API antérieure à `2022-08-01`
+  (en tête du JSON d'un événement, `api_version`), où le tarif choisi n'est
+  pas là où l'adaptateur le lit ([plan, §2.3](../../certification/plan.md)).
 
 ## 2. Réparer
 
@@ -43,6 +49,11 @@ Développeurs → Webhooks → l'endpoint `https://<domaine>/api/webhook`.
   problème tant que la saisie n'a pas suivi ;
 - **endpoint** : le recréer avec l'URL de production et les cinq événements,
   puis saisir son nouveau secret.
+- **version** : recréer l'endpoint de la même façon, en choisissant la version
+  d'API qu'épingle le socle, puis saisir son nouveau secret et supprimer
+  l'ancien endpoint. Seules les commandes suivantes en profitent : une commande
+  déjà écrite garde son mode vide, et renvoyer son événement n'y change rien
+  (le traitement est idempotent).
 
 ## 3. Rattraper
 
