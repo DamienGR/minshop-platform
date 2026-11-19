@@ -1,6 +1,6 @@
 # ADR 0033 — Des codes promo saisis dans la boutique, valables pour tous les paiements
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #258 par Damien, le 2026-11-19)
 - **Date** : 2026-11-19
 - **Jalon** : après le pilote (plan §13.32) ; aucun des jalons 0 à 10
 - **Amende** : l'[ADR 0007](0007-perimetre-fonctionnel.md), dont les codes de

@@ -4271,7 +4271,8 @@ valent pour tous les moyens de paiement ; une carte cadeau est un code à
 montant fixe, utilisable une fois ; une carte à solde sera un ticket à part.
 
 Fait le 2026-11-19, migration 0065, par
-l'[ADR 0033](architecture/decisions/0033-codes-promo.md), pour le socle
+l'[ADR 0033](architecture/decisions/0033-codes-promo.md) (PR #258,
+fusionnée par Damien le 2026-11-19, qui accepte l'ADR), pour le socle
 v0.13.0 :
 
 - l'écran Admin → Codes promo : la liste avec l'état et les utilisations de
