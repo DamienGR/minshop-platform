@@ -9,8 +9,8 @@
 #     one run hours late still leaves every gap below 24 h — to the shop's own
 #     `-backups` bucket, then verified with the key on the runner, never
 #     restored there;
-#   - production's error rate (`shopctl monitor`), with a token that reads
-#     analytics and nothing else;
+#   - production's error rate (`shopctl monitor`), with a token that cannot
+#     deploy or write;
 #   - the account (`shopctl fleet usage`, plan §13.1 lot 7). On Workers Paid:
 #     every volume billed against what the plan includes, the projected bill
 #     against the repository variable MINSHOP_MONTHLY_BUDGET when it is set,
@@ -33,6 +33,12 @@
 # suite on a clean D1, the dependency audit, and the remote gates against a
 # staging when there is one.
 #
+# What this repository publishes, being public: the outcome of each job and the
+# summary `.github/fleet/shops.mjs report` keeps of each report, never the
+# report itself — a backup's report counts every table's rows, `orders`
+# included, twice a night. The account's tokens reach the steps that run
+# shopctl and no other, and `npm ci` runs without the dependencies' scripts.
+#
 # Secrets, placed by `shopctl fleet repo`:
 #
 #   in the `backup` environment, limited to the default branch:
@@ -40,10 +46,12 @@
 #                                   Settings Read, Memberships and User Details
 #                                   Read — nothing that deploys
 #     CLOUDFLARE_ACCOUNT_ID, SHOPCTL_BACKUP_KEY
-#   as repository secrets:
+#   in the `monitor` environment, limited to the default branch too, since its
+#   D1 Read reads every shop's database as the backup token's does:
 #     MONITOR_CLOUDFLARE_API_TOKEN  Account Analytics, D1 and Account Settings
 #                                   Read, Memberships and User Details Read
 #     MONITOR_CLOUDFLARE_ACCOUNT_ID
+#   as a repository secret:
 #     SHOPS_READ_TOKEN              only when the shops' repositories are private
 #   and, set by hand, the repository variables:
 #     MINSHOP_ACCOUNT_PLAN          free or paid; paid when unset
@@ -74,6 +82,8 @@ jobs:
     steps:
       - name: Check out the fleet
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: List the shops
         id: shops
@@ -94,22 +104,19 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.shops.outputs.matrix) }}
 
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
-
     steps:
       - name: Check out the shop
         uses: actions/checkout@v6
         with:
           repository: ${{ matrix.repository }}
           token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          persist-credentials: false
           path: shop
 
       - name: Check out the fleet
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           path: fleet
 
       - name: Check the shop's core
@@ -125,12 +132,17 @@ jobs:
 
       - name: Install dependencies
         working-directory: shop
-        run: npm ci
+        run: npm ci --ignore-scripts
 
+      # The reports stay on the runner, since they count every table's rows:
+      # the log and the artifact get their summaries.
       - name: Back up production
         id: backup
         working-directory: shop
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
           SHOP: ${{ matrix.slug }}
         run: |
           set -euo pipefail
@@ -138,27 +150,34 @@ jobs:
             echo "::error::CLOUDFLARE_API_TOKEN absent de l'environnement backup : la production n'est pas sauvegardée (ADR 0005). Posez CLOUDFLARE_API_TOKEN_BACKUP et relancez shopctl fleet repo."
             exit 1
           fi
-          node shopctl/bin/shopctl.mjs backup --env production --shop "$SHOP" --upload --json | tee backup-production.json
+          status=0
+          node shopctl/bin/shopctl.mjs backup --env production --shop "$SHOP" --upload --json > backup-production.json 2> backup-production.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report backup-production "$status"
           echo "id=$(node -p "JSON.parse(require('node:fs').readFileSync('backup-production.json','utf8')).id")" >> "$GITHUB_OUTPUT"
 
       - name: Verify the archive
         if: ${{ steps.backup.outputs.id != '' }}
         working-directory: shop
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
           ARCHIVE: ${{ steps.backup.outputs.id }}
           SHOP: ${{ matrix.slug }}
         run: |
           set -euo pipefail
-          node shopctl/bin/shopctl.mjs backup verify "$ARCHIVE" --shop "$SHOP" --json | tee verify-production.json
+          status=0
+          node shopctl/bin/shopctl.mjs backup verify "$ARCHIVE" --shop "$SHOP" --json > verify-production.json 2> verify-production.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report verify-production "$status"
 
-      - name: Keep the reports
+      - name: Keep the summaries
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: nightly-${{ matrix.slug }}-production-backup-${{ github.run_id }}
           path: |
-            shop/backup-production.json
-            shop/verify-production.json
+            shop/backup-production.summary.json
+            shop/verify-production.summary.json
           retention-days: 30
           if-no-files-found: ignore
 
@@ -168,6 +187,8 @@ jobs:
     if: ${{ needs.shops.outputs.matrix != '[]' && github.event.schedule != '17 15 * * *' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Its token reads every shop's D1: only a run of the default branch has it.
+    environment: monitor
     strategy:
       max-parallel: 2
       fail-fast: false
@@ -175,8 +196,6 @@ jobs:
         include: ${{ fromJSON(needs.shops.outputs.matrix) }}
 
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
       PLAN: ${{ vars.MINSHOP_ACCOUNT_PLAN || 'paid' }}
 
     steps:
@@ -185,7 +204,14 @@ jobs:
         with:
           repository: ${{ matrix.repository }}
           token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          persist-credentials: false
           path: shop
+
+      - name: Check out the fleet
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: fleet
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -197,26 +223,31 @@ jobs:
 
       - name: Install dependencies
         working-directory: shop
-        run: npm ci
+        run: npm ci --ignore-scripts
 
+      # The report stays on the runner: it measures the shop's traffic.
       - name: Error rate and quotas
         working-directory: shop
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
           SHOP: ${{ matrix.slug }}
         run: |
           set -euo pipefail
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt de flotte : la production n'est pas surveillée."
+            echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent de l'environnement monitor du dépôt de flotte : la production n'est pas surveillée. Relancez shopctl fleet repo."
             exit 1
           fi
-          node shopctl/bin/shopctl.mjs monitor --env production --shop "$SHOP" --plan "$PLAN" --hours 24 --json | tee monitor-production.json
+          status=0
+          node shopctl/bin/shopctl.mjs monitor --env production --shop "$SHOP" --plan "$PLAN" --hours 24 --json > monitor-production.json 2> monitor-production.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report monitor-production "$status"
 
-      - name: Keep the report
+      - name: Keep the summary
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: nightly-${{ matrix.slug }}-production-${{ github.run_id }}
-          path: shop/monitor-production.json
+          path: shop/monitor-production.summary.json
           retention-days: 30
           if-no-files-found: ignore
 
@@ -226,10 +257,9 @@ jobs:
     if: ${{ needs.shops.outputs.matrix != '[]' && github.event.schedule != '17 15 * * *' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: monitor
 
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
       PLAN: ${{ vars.MINSHOP_ACCOUNT_PLAN || 'paid' }}
       BUDGET: ${{ vars.MINSHOP_MONTHLY_BUDGET }}
 
@@ -241,11 +271,13 @@ jobs:
         with:
           repository: ${{ fromJSON(needs.shops.outputs.matrix)[0].repository }}
           token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          persist-credentials: false
           path: shop
 
       - name: Check out the fleet
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           path: fleet
 
       - name: Check the shop's core
@@ -257,25 +289,31 @@ jobs:
           node-version-file: shop/.nvmrc
           check-latest: true
 
+      # The report stays on the runner: it measures every shop's traffic.
       - name: Account usage against its plan
         working-directory: shop
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONITOR_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MONITOR_CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent des secrets du dépôt de flotte : la consommation du compte n'est pas suivie."
+            echo "::error::MONITOR_CLOUDFLARE_API_TOKEN absent de l'environnement monitor du dépôt de flotte : la consommation du compte n'est pas suivie. Relancez shopctl fleet repo."
             exit 1
           fi
           args=(fleet usage --plan "$PLAN" --json)
           if [ -n "$BUDGET" ] && [ "$PLAN" = paid ]; then
             args+=(--budget "$BUDGET")
           fi
-          node shopctl/bin/shopctl.mjs "${args[@]}" | tee usage.json
+          status=0
+          node shopctl/bin/shopctl.mjs "${args[@]}" > usage.json 2> usage.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report usage "$status"
 
-      - name: Keep the report
+      - name: Keep the summary
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: nightly-account-usage-${{ github.run_id }}
-          path: shop/usage.json
+          path: shop/usage.summary.json
           retention-days: 30
           if-no-files-found: ignore

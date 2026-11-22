@@ -127,7 +127,16 @@ API limit) of `backup`, `backup verify` and `monitor` at the account's plan. Bot
 shop below `FLEET_MINIMUM_CORE` (`shopctl/src/fleet.mjs`), the first core that
 marks its database. `fleet repo` is `repo` for that repository: public by
 default (GitHub Free has environment secrets on a public repository only), the
-account read from the managed shops' manifests, which must agree. Its backup
+account read from the managed shops' manifests, which must agree. Its monitor
+token goes to a `monitor` environment limited to the default branch, like
+`backup` (its D1 Read reads every shop); left as a repository secret by an
+older core, it is named with its `gh secret delete`, never deleted. Public
+means anyone reads the runs: each shopctl report stays on the runner, and the
+log and artifact get what `.github/fleet/shops.mjs report` keeps of it, field
+by field (outcome, failed checks, archive, bookmark, `rollbackTo`; on failure
+the error and the non-✓ lines) — a backup's report counts every table's rows.
+Secrets go to the steps that run shopctl only, `npm ci --ignore-scripts`, and
+every checkout has `persist-credentials: false`. Its backup
 key comes from `SHOPCTL_BACKUP_KEY` or the fleet's own `.shopctl/backup.key`,
 which `fleet init` writes into the fleet's `.gitignore`; a key in the fleet's
 git index is refused (exit 4) before anything is created or pushed. `repo --fleet

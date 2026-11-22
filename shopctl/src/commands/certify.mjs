@@ -67,6 +67,7 @@ import { query } from '../backup/store.mjs';
 import { coreState } from './core.mjs';
 import { INTERNAL_SECRETS, runProvision } from './provision.mjs';
 import { BACKUP_ENVIRONMENT } from './repo.mjs';
+import { MONITOR_ENVIRONMENT } from './fleet-repository.mjs';
 import { ATTESTATIONS_FILE, ATTESTATIONS_TEMPLATE, judgeAttestations } from '../certify/attestations.mjs';
 import {
   CERTIFIED_FLOOR,
@@ -416,7 +417,8 @@ function readRepository(nameWithOwner, { cwd, slug, suffix = '' }) {
   const defaultBranch = info.defaultBranchRef?.name ?? 'main';
   const environments = {};
   const secrets = { repository: repositorySecrets(nameWithOwner, { cwd }) };
-  for (const name of ['production', BACKUP_ENVIRONMENT]) {
+  // `monitor` is a fleet's (ADR 0019); a shop's own repository has none.
+  for (const name of ['production', BACKUP_ENVIRONMENT, MONITOR_ENVIRONMENT]) {
     const protection = environmentProtection(nameWithOwner, name, { cwd });
     environments[name] = protection
       ? { ...protection, branches: protection.customBranches ? branchPolicies(nameWithOwner, name, { cwd }) : [] }

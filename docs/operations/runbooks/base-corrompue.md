@@ -27,7 +27,9 @@ Deux filets, du plus fin au plus solide :
 
 Le bookmark pris avant les migrations de chaque mise en production figure dans
 le rapport de `shopctl deploy` (artefact du workflow Deploy). Il est le bon
-point de retour après une migration fautive.
+point de retour après une migration fautive. Pour une boutique du compte
+mutualisé, l'artefact du Deploy du dépôt de flotte n'en garde que le résumé,
+`deploy.summary.json`, que le journal du job imprime aussi : le bookmark y est.
 
 ## 3a. Retour par Time Travel
 

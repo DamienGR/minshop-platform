@@ -28,7 +28,9 @@ npx wrangler deployments list --name minshop-<slug>-production
 
 Si un déploiement a eu lieu dans les dernières heures, c'est le premier
 suspect. Le rapport de `shopctl deploy` (artefact `deploy-<slug>-production-…`
-du workflow Deploy) nomme dans `rollbackTo` la version qui servait avant lui,
+du workflow Deploy ; pour une boutique du compte mutualisé, son résumé
+`deploy.summary.json` dans celui du dépôt de flotte, et le journal du job) nomme
+dans `rollbackTo` la version qui servait avant lui,
 depuis `v0.3.12`. Avant, il nommait une version bien plus ancienne (étape 8 de
 la certification) : ne pas s'y fier, prendre l'avant-dernier déploiement de
 `npx wrangler deployments list --name minshop-<slug>-production`, qui liste du

@@ -7,10 +7,13 @@
 //   node .github/fleet/shops.mjs repository <slug>   repository=<owner/repo>
 //   node .github/fleet/shops.mjs matrix              matrix=[{ slug, repository }]
 //   node .github/fleet/shops.mjs core <dir>          refuses a shop below the floor
+//   node .github/fleet/shops.mjs report <name> <status>
+//                                  the part of a shopctl report a run may publish
 //
-// Every line it prints to stdout is a `key=value` for $GITHUB_OUTPUT; anything
-// else goes to stderr as a workflow command.
-import { readFileSync } from 'node:fs';
+// Every line the first three print to stdout is a `key=value` for
+// $GITHUB_OUTPUT; anything else goes to stderr as a workflow command. `report`
+// writes for the log instead, and exits with the status it was given.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The oldest core that carries the owner marker of ADR 0019. */
@@ -49,7 +52,92 @@ function below(version, floor) {
   return false;
 }
 
-const [command, argument] = process.argv.slice(2);
+// ── report ───────────────────────────────────────────────────────────────────
+//
+// The fleet repository is public (ADR 0019): anyone reads its logs, and any
+// GitHub account downloads its artifacts, for 30 to 90 days. A shopctl report
+// says more than that audience should read: every table's row count, `orders`
+// and `refunds` included, twice a night and per shop; the traffic `monitor`
+// measures; the account's id, which GitHub masks in a log and never in an
+// artifact. So a job writes the JSON and the prose to files on the runner, and
+// this decides what leaves it — field by field, never the document minus a
+// list, because a field shopctl adds tomorrow must stay private by default:
+//
+//   - the outcome, and the names of the checks that did not pass;
+//   - what an incident starts from: the archive, the Time Travel bookmark and
+//     the version to roll back to (docs/operations/runbooks/);
+//   - when the command failed, its own error and every prose line but the ✓
+//     ones: the ✗ and ! lines diagnose it. Their detail may quote a number;
+//     a failure is the one run where it is worth reading.
+//
+// `<name>.summary.json` is what the job uploads; the same lines go to the log.
+
+/** Fields a summary keeps, per shopctl command: [label, path in the report]. */
+const KEPT = {
+  deploy: [['origine', ['origin']], ['archive', ['backup', 'id']], ['bookmark', ['bookmark']], ['rollbackTo', ['rollbackTo']]],
+  backup: [['archive', ['id']]],
+  'backup verify': [['archive', ['id']]],
+};
+
+const at = (document, path) => path.reduce((value, key) => (value && typeof value === 'object' ? value[key] : undefined), document);
+const scalar = (value) => (typeof value === 'string' || typeof value === 'number' ? value : null);
+
+function report(name, given) {
+  if (!/^[a-z0-9-]+$/.test(String(name ?? ''))) stop(`nom de rapport invalide : ${name ?? '(aucun)'}.`);
+  const status = Number.parseInt(given ?? '', 10);
+  if (!Number.isInteger(status) || status < 0) stop(`statut de sortie invalide : ${given ?? '(aucun)'}.`);
+
+  let document = null;
+  try {
+    document = JSON.parse(readFileSync(`${name}.json`, 'utf8'));
+  } catch {
+    // A command that died before its report: the status and the prose say why.
+  }
+  const summary = { report: name, status, ok: status === 0 && document?.ok !== false };
+  for (const key of ['command', 'shop', 'env']) {
+    const value = scalar(document?.[key]);
+    if (value !== null) summary[key] = value;
+  }
+  for (const [label, path] of KEPT[summary.command] ?? []) {
+    const value = scalar(at(document, path));
+    if (value !== null) summary[label] = value;
+  }
+  const failed = (Array.isArray(document?.checks) ? document.checks : [])
+    .filter((check) => check && check.ok === false)
+    .map((check) => scalar(check.name))
+    .filter(Boolean);
+  if (failed.length > 0) summary.failed = failed;
+  const error = document?.error;
+  if (error && typeof error === 'object') {
+    summary.error = {};
+    for (const key of ['kind', 'code', 'message', 'hint']) {
+      const value = scalar(error[key]);
+      if (value !== null) summary.error[key] = value;
+    }
+  }
+  writeFileSync(`${name}.summary.json`, `${JSON.stringify(summary, null, 2)}\n`);
+
+  const lines = [`${summary.command ?? name}${summary.shop ? ` ${summary.shop}` : ''}${summary.env ? ` (${summary.env})` : ''} : ${summary.ok ? 'réussi' : `en échec, statut ${status}`}`];
+  for (const [label] of KEPT[summary.command] ?? []) if (summary[label]) lines.push(`  ${label} : ${summary[label]}`);
+  if (summary.failed) lines.push(`  contrôles en échec : ${summary.failed.join(', ')}`);
+  if (!summary.ok) {
+    if (summary.error?.message) lines.push(`  ${summary.error.message}`);
+    if (summary.error?.hint) lines.push(`  ${summary.error.hint}`);
+    const prose = existsSync(`${name}.log`) ? readFileSync(`${name}.log`, 'utf8').split('\n') : [];
+    let shown = true;
+    const kept = prose.filter((line) => {
+      // A ✓ line and its indented hint stay on the runner, even on failure.
+      if (line.startsWith('✓')) shown = false;
+      else if (!line.startsWith('    ')) shown = true;
+      return shown && line.trim() !== '';
+    });
+    if (kept.length > 0) lines.push('', ...kept);
+  }
+  process.stdout.write(`${lines.join('\n')}\n`);
+  process.exit(status);
+}
+
+const [command, argument, extra] = process.argv.slice(2);
 
 if (command === 'repository') {
   const shop = registry().find((entry) => entry?.slug === argument);
@@ -74,6 +162,8 @@ if (command === 'repository') {
     stop(`la boutique est sur le socle ${version} ; le compte mutualisé demande ${MINIMUM_CORE} au moins, qui marque chaque base à sa boutique (ADR 0019). Montez-la (shopctl core upgrade) avant de la déployer ou de la sauvegarder d'ici.`);
   }
   process.stdout.write(`core=${version}\n`);
+} else if (command === 'report') {
+  report(argument, extra);
 } else {
-  stop(`commande inconnue : ${command ?? '(aucune)'}. Attendu : repository, matrix ou core.`);
+  stop(`commande inconnue : ${command ?? '(aucune)'}. Attendu : repository, matrix, core ou report.`);
 }
