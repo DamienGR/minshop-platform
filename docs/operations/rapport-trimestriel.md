@@ -20,8 +20,9 @@ Trois règles valent pour tous :
 
 ## 1. Mettre en place la flotte (une fois)
 
-Prérequis : un socle v0.13.3 ou plus récent dans l'espace de travail de la
-flotte.
+Prérequis : un socle v0.13.4 ou plus récent dans l'espace de travail de la
+flotte (en v0.13.3, le workflow prend aussi les boutiques sans `reportSince`).
+Les boutiques, elles, peuvent être en v0.13.3.
 
 1. **Le jeton de publication.** GitHub → Settings → Developer settings →
    Fine-grained tokens → Generate new token : propriétaire des dépôts de
@@ -35,8 +36,9 @@ flotte.
    propriété (§ 2) ;
 3. **La clé Umami** (facultative, pour la fréquentation) : Umami Cloud →
    Settings → API keys, ou, sur un serveur de l'agence, un compte sans double
-   authentification (`UMAMI_USERNAME`, `UMAMI_PASSWORD`). Le compte doit voir
-   les sites des boutiques ;
+   authentification (`UMAMI_USERNAME`, `UMAMI_PASSWORD`) : de préférence un
+   compte à part, en lecture seule, membre d'une équipe qui détient les sites
+   des boutiques. Le compte doit voir ces sites ;
 4. **Les workflows et les secrets**, depuis le dépôt de flotte :
 
    ```sh

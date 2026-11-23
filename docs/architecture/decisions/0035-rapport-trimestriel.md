@@ -76,7 +76,7 @@ retard. Lancé à la main, il peut produire un aperçu du trimestre en cours
 est `reportSince` dans `fleet.json` : rien d'antérieur n'est rapporté, et le
 trimestre de lancement n'est pas comparé à un trimestre sans boutique. **Seule
 une boutique qui a un `reportSince` reçoit un rapport** (précisé le
-2026-11-23, avant la publication de v0.13.3) : une boutique de certification
+2026-11-23, socle v0.13.4 ; en v0.13.3, toutes les boutiques) : une boutique de certification
 ou de démonstration n'a pas de commerçant à qui l'envoyer, et son job serait
 rouge chaque trimestre.
 

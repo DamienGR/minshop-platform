@@ -4359,14 +4359,14 @@ publié dans une issue du dépôt de la boutique, ventes comprises.
 - le workflow « Quarterly report » du dépôt de flotte (`fleet init`), le 5
   janvier, avril, juillet et octobre, depuis l'environnement `report` que pose
   `fleet repo` ; le journal public n'en garde que le résumé ; seules les
-  boutiques qui ont un `reportSince` dans `fleet.json` (PR #270, avant la
-  publication) ; boutiques sous v0.13.3 écartées ;
+  boutiques qui ont un `reportSince` dans `fleet.json` (PR #270, socle
+  v0.13.4) ; boutiques sous v0.13.3 écartées ;
 - la procédure : `docs/operations/rapport-trimestriel.md`.
 
 Tenu par `test/scripts/report.test.mjs` et
 `test/scripts/fleet-repository.test.mjs`.
 
-Reste à faire par l'agence, après la publication de v0.13.3 : le jeton de
+Reste à faire par l'agence, après la publication de v0.13.4 : le jeton de
 publication, le compte de service Google et la clé Umami, `fleet init` et
 `fleet repo` dans le dépôt de flotte, puis, par boutique, la montée du socle,
 un dépôt privé avec ses issues, la propriété Search Console partagée et
