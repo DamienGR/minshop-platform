@@ -47,8 +47,7 @@ comme pour un serveur de l'agence : seule l'adresse change.
 **Le navigateur charge le script directement depuis le serveur d'Umami**, en
 `defer`, dans le `<head>` de la vitrine : la page ne l'attend jamais, et une
 page dont le script est bloqué fonctionne pareil. Pas de relais par le Worker
-(voir les alternatives) : choix recommandé à Damien le 2026-11-23, en attente
-de sa réponse.
+(voir les alternatives) : choix de Damien, le 2026-11-23.
 
 **Ce qu'Umami reçoit est décidé par le socle, pas par le marchand**
 (`src/features/audience/umami.ts`, `beforeSend.ts`, `UmamiTracker.astro`) :
@@ -103,7 +102,7 @@ de confidentialité, parmi les destinataires, pour la mesure d'audience.
   Worker de plus, sur un plan gratuit plafonné à 100 000 par jour, et Umami a
   besoin de l'adresse du visiteur pour compter les visites : le relais devrait
   la lui transmettre dans un en-tête, ce qui garde la donnée et ajoute un
-  maillon à maintenir. À reprendre si Damien le préfère.
+  maillon à maintenir. Écarté par Damien le 2026-11-23.
 - **Le réglage dans le manifeste ou `store.config.ts`** : demanderait un
   déploiement pour allumer, changer ou couper la mesure, et le réglage n'est
   pas un secret. L'admin est la surface des réglages d'exécution, comme la clé

@@ -4321,8 +4321,8 @@ socle v0.13.2 :
   **Identifiant du site**, les deux ou aucun, le code de suivi collé entier
   accepté ; éteint par défaut ;
 - le traceur dans le `<head>` de la vitrine, différé, chargé directement
-  depuis le serveur d'Umami (choix recommandé à Damien, en attente de sa
-  réponse ; le relais par le Worker est l'alternative écartée de l'ADR) ;
+  depuis le serveur d'Umami (choix de Damien, le 2026-11-23 ; le relais par
+  le Worker est l'alternative écartée de l'ADR) ;
 - jamais sur `/admin`, ni sur une page qui pose `no-referrer` (commande,
   paiement), ni pour un navigateur qui porte `admin_hint` ; le chemin sans
   paramètres, sauf ceux de campagne `utm_*` ; `data-do-not-track` ; seul
