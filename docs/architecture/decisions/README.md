@@ -54,4 +54,4 @@ Utiliser [`0000-template.md`](0000-template.md) pour un nouvel ADR.
 | [0031](0031-modeles-de-page-du-theme.md) | Des modèles de page déclarés par le thème | Accepté |
 | [0032](0032-jeton-d-acces-a-usage-unique.md) | Un jeton à usage unique pour l'accès de l'agence à l'administration | Accepté |
 | [0033](0033-codes-promo.md) | Des codes promo saisis dans la boutique, valables pour tous les paiements | Accepté |
-| [0034](0034-mesure-d-audience-umami.md) | La mesure d'audience par Umami, réglée dans l'administration | Proposé |
+| [0034](0034-mesure-d-audience-umami.md) | La mesure d'audience par Umami, réglée dans l'administration | Accepté |
