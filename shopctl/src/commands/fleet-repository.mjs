@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { CLIENT_MANIFEST, ENVIRONMENTS, environmentAccount, loadManifest } from '../../../scripts/manifest.mjs';
 import { ShopctlError, inputError, preconditionError } from '../errors.mjs';
-import { FLEET_MINIMUM_CORE, findRegistry, readRegistry } from '../fleet.mjs';
+import { FLEET_MINIMUM_CORE, REPORT_MINIMUM_CORE, findRegistry, readRegistry } from '../fleet.mjs';
 import { DEFAULT_KEY_FILE, KEY_ENV, keyId, loadKey } from '../backup/crypto.mjs';
 import { CORE_ROOT, corePackage } from '../paths.mjs';
 import { capture } from '../process.mjs';
@@ -53,6 +53,7 @@ import { BACKUP_ENVIRONMENT, backupTokenFor, tokenFor } from './repo.mjs';
 export const FLEET_FILES = {
   '.github/workflows/deploy.yml': 'deploy.yml',
   '.github/workflows/nightly.yml': 'nightly.yml',
+  '.github/workflows/report.yml': 'report.yml',
   '.github/fleet/shops.mjs': 'shops.mjs',
 };
 
@@ -81,6 +82,18 @@ export const MONITOR_ENVIRONMENT = 'monitor';
  *  deletes. */
 export const MONITOR_SECRETS = ['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'];
 
+/**
+ * The environment of the quarterly report (ADR 0035), limited to the default
+ * branch like `monitor`: the same read-only Cloudflare token, the token that
+ * writes the shops' issues, and the keys of the two outside sources.
+ */
+export const REPORT_ENVIRONMENT = 'report';
+
+/** What `fleet repo` places in it, from the variable of the same name, besides
+ *  the Cloudflare pair taken from the monitor token. Each is optional: the
+ *  report says, section by section, which source is not connected. */
+export const REPORT_SECRETS = ['REPORT_ISSUES_TOKEN', 'GSC_SERVICE_ACCOUNT_JSON', 'UMAMI_API_KEY', 'UMAMI_USERNAME', 'UMAMI_PASSWORD'];
+
 /** One template, with the version that wrote it and the floor it enforces. */
 export function renderFleetFile(template, { version = corePackage().version } = {}) {
   const text = readFileSync(resolve(TEMPLATES, template), 'utf8');
@@ -89,6 +102,8 @@ export function renderFleetFile(template, { version = corePackage().version } = 
       '__GENERATED__',
       `Généré par \`shopctl fleet init\` depuis le socle v${version}. Relancez-le pour le mettre à jour : une modification à la main est perdue au passage suivant.`,
     )
+    .split('__REPORT_MINIMUM_CORE__')
+    .join(REPORT_MINIMUM_CORE)
     .split('__MINIMUM_CORE__')
     .join(FLEET_MINIMUM_CORE);
 }
@@ -313,7 +328,7 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
   }
   const backupBranch = existing?.defaultBranchRef?.name ?? head;
   const environmentReport = [];
-  for (const name of [...ENVIRONMENTS, BACKUP_ENVIRONMENT, MONITOR_ENVIRONMENT]) {
+  for (const name of [...ENVIRONMENTS, BACKUP_ENVIRONMENT, MONITOR_ENVIRONMENT, REPORT_ENVIRONMENT]) {
     const action = present.includes(name) ? 'keep' : 'create';
     const wanted = name === 'production' ? reviewers : [];
     if (dryRun) {
@@ -321,8 +336,8 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
       environmentReport.push({ env: name, action, protected: false, refusal: null });
       continue;
     }
-    // The two the Nightly reads unattended: limited to the default branch.
-    const limited = name === BACKUP_ENVIRONMENT || name === MONITOR_ENVIRONMENT;
+    // The three the schedules read unattended: limited to the default branch.
+    const limited = name === BACKUP_ENVIRONMENT || name === MONITOR_ENVIRONMENT || name === REPORT_ENVIRONMENT;
     const outcome = putEnvironment(target.nameWithOwner, name, { cwd: root, reviewers: wanted, branchPolicy: limited });
     if (limited) restrictEnvironment(target.nameWithOwner, name, [backupBranch], { cwd: root });
     environmentReport.push({ env: name, action, protected: outcome.protected, refusal: outcome.refusal ?? null, ...(limited ? { branches: [backupBranch] } : {}) });
@@ -390,6 +405,35 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
     secretReport.push({ env: MONITOR_ENVIRONMENT, set: [...MONITOR_SECRETS], from: monitorToken.from });
     reporter.ok(`${MONITOR_ENVIRONMENT} — MONITOR_CLOUDFLARE_API_TOKEN (depuis ${MONITOR_FROM}) et MONITOR_CLOUDFLARE_ACCOUNT_ID posés`);
   }
+  // The quarterly report's: the monitor's read-only token again — it reads
+  // the sales — and what the variables of the same name hold.
+  const reportSet = [];
+  if (monitorToken) {
+    if (!dryRun) {
+      setEnvironmentSecret(target.nameWithOwner, REPORT_ENVIRONMENT, 'CLOUDFLARE_API_TOKEN', monitorToken.value, { cwd: root });
+      setEnvironmentSecret(target.nameWithOwner, REPORT_ENVIRONMENT, 'CLOUDFLARE_ACCOUNT_ID', account, { cwd: root });
+    }
+    reportSet.push('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID');
+  }
+  for (const name of REPORT_SECRETS.filter((secret) => env[secret])) {
+    if (!dryRun) setEnvironmentSecret(target.nameWithOwner, REPORT_ENVIRONMENT, name, env[name], { cwd: root });
+    reportSet.push(name);
+  }
+  if (dryRun) {
+    if (reportSet.length > 0) reporter.todo(`${REPORT_ENVIRONMENT} — ${reportSet.join(', ')} seraient posés`);
+  } else if (reportSet.length > 0) {
+    secretReport.push({ env: REPORT_ENVIRONMENT, set: reportSet, from: monitorToken ? monitorToken.from : null });
+    reporter.ok(`${REPORT_ENVIRONMENT} — ${reportSet.join(', ')} posé${reportSet.length > 1 ? 's' : ''}`);
+  }
+  if (!env.REPORT_ISSUES_TOKEN) {
+    reporter.warn(
+      `aucun jeton de publication du rapport trimestriel (REPORT_ISSUES_TOKEN) : le workflow Quarterly report s'arrêtera sans publier.`,
+      'Un jeton qui écrit les issues des dépôts de boutique et rien d\'autre (fin : Issues en lecture et écriture, sur ces dépôts seuls ; un jeton fin ne vaut que pour un propriétaire).',
+    );
+  }
+  if (!env.GSC_SERVICE_ACCOUNT_JSON) reporter.todo('report — sans GSC_SERVICE_ACCOUNT_JSON, le rapport trimestriel dit le référencement non raccordé.');
+  if (!env.UMAMI_API_KEY && !(env.UMAMI_USERNAME && env.UMAMI_PASSWORD)) reporter.todo('report — sans UMAMI_API_KEY, le rapport trimestriel dit la fréquentation non raccordée.');
+
   // Where an older core put them. Still there, they reach any branch and the
   // environment above protects nothing: named, never deleted, as `repo
   // --fleet` does with a shop's leftovers.

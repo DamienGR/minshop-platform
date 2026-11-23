@@ -29,6 +29,7 @@ Et les procédures qui ne sont pas des incidents :
 | La faire recevoir et livrer | [recette](recette.md), modèle de recette et procès-verbal |
 | Rembourser une commande | [remboursement](remboursement.md) |
 | Rendre une boutique à un client qui part | [sortie-client](sortie-client.md) |
+| Envoyer au commerçant son rapport trimestriel | [rapport-trimestriel](rapport-trimestriel.md) |
 
 Deux références à remettre au commerçant avec le procès-verbal : la
 [matrice des responsabilités](responsabilites.md) de l'agence et du

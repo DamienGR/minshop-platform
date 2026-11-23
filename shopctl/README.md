@@ -70,6 +70,7 @@ recours, pas la source. Une bifurcation, un miroir ou un chemin local passé à
 | `shopctl fleet init \| repo` | après le pilote | Le dépôt de flotte du compte mutualisé (ADR 0019) : ses workflows, puis le dépôt GitHub et ses secrets. |
 | `shopctl fleet usage` | après le pilote | La consommation du compte mutualisé : la facture projetée en Workers Paid, les quotas du jour en Workers Free. |
 | `shopctl certify --env production` | après le pilote | Juge, en lecture seule, si la boutique est certifiable ; `--write` écrit le rapport. |
+| `shopctl report --env production` | après le pilote | Le rapport trimestriel au commerçant : ventes, évolutions, Google, audience, dans une issue du dépôt de la boutique. |
 
 ## `shopctl new`
 
@@ -562,14 +563,15 @@ Aucun jeton Cloudflare ne se limite à la base d'une boutique ; les jetons viven
 donc là, et nulle part ailleurs :
 
 ```sh
-npm run shopctl -- fleet init                         # workflows Deploy et Nightly du parc
+npm run shopctl -- fleet init                         # workflows Deploy, Nightly et Quarterly report
 git add -A && git commit -m "Flotte"
 npm run shopctl -- fleet repo --reviewer <login>      # dépôt public, environnements, secrets
 npm run shopctl -- repo --fleet agence/minshop-fleet  # depuis chaque boutique
 ```
 
-`fleet init` écrit `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`
-et `.github/fleet/shops.mjs` depuis les modèles de `shopctl/templates/fleet/` ;
+`fleet init` écrit `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`,
+`.github/workflows/report.yml` et `.github/fleet/shops.mjs` depuis les modèles de
+`shopctl/templates/fleet/` ;
 relancé, il les réécrit. Le Deploy du parc extrait la boutique choisie et y lance
 `shopctl provision` puis `shopctl deploy`, avec le shopctl de **son** socle ; le
 Nightly sauvegarde la production de chaque boutique deux fois par jour, une à la
@@ -633,6 +635,30 @@ base proche de ses 500 Mo, ou à cinq Workers (les cinq crons du plan). Le
 Nightly de la flotte prend le plan dans la variable `MINSHOP_ACCOUNT_PLAN`
 (`paid` si elle est absente) ; `--budget` n'a pas de sens au plan gratuit, et
 la commande le refuse.
+
+**Le rapport trimestriel** (ADR 0035) est le workflow « Quarterly report » du
+dépôt de flotte : le 5 janvier, avril, juillet et octobre, `shopctl report --env
+production --publish` pour chaque boutique de `fleet.json`, avec le shopctl de
+son socle (v0.13.3 au moins), sur le trimestre écoulé. Ventes lues dans la base
+de production (des agrégats seulement), évolutions tirées de l'historique git
+de la boutique et des notes des versions du socle franchies, référencement par
+Google Search Console, fréquentation par Umami ; une source illisible ou non
+raccordée est dite, et le rapport sort avec les autres. Il va dans l'issue
+« Rapport trimestriel — <trimestre> » du dépôt de la boutique, qui doit être
+privé et avoir ses issues : la commande refuse les autres avant de rien lire.
+L'agence relit l'issue et envoie elle-même le message qui la termine. Le début
+du suivi d'une boutique est `"reportSince": "AAAA-MM-JJ"` dans `fleet.json`.
+`fleet repo` pose l'environnement `report` : le jeton de surveillance,
+`REPORT_ISSUES_TOKEN` et, s'ils sont exportés, `GSC_SERVICE_ACCOUNT_JSON` et
+`UMAMI_API_KEY`. La mise en place et chaque trimestre :
+[`docs/operations/rapport-trimestriel.md`](../docs/operations/rapport-trimestriel.md).
+
+En local, sur une boutique :
+
+```sh
+CLOUDFLARE_API_TOKEN=… npm run shopctl -- report --env production --out /tmp/rapport           # trimestre écoulé
+CLOUDFLARE_API_TOKEN=… npm run shopctl -- report --env production --current --out /tmp/rapport # aperçu
+```
 
 **Côté socle**, publier une version passe par une porte :
 
