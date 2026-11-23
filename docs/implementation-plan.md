@@ -4358,8 +4358,9 @@ publié dans une issue du dépôt de la boutique, ventes comprises.
   dont les issues sont coupées ;
 - le workflow « Quarterly report » du dépôt de flotte (`fleet init`), le 5
   janvier, avril, juillet et octobre, depuis l'environnement `report` que pose
-  `fleet repo` ; le journal public n'en garde que le résumé ; `reportSince`
-  dans `fleet.json` ; boutiques sous v0.13.3 écartées ;
+  `fleet repo` ; le journal public n'en garde que le résumé ; seules les
+  boutiques qui ont un `reportSince` dans `fleet.json` (PR #270, avant la
+  publication) ; boutiques sous v0.13.3 écartées ;
 - la procédure : `docs/operations/rapport-trimestriel.md`.
 
 Tenu par `test/scripts/report.test.mjs` et

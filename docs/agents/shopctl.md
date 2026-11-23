@@ -418,7 +418,9 @@ The fleet runs it: `fleet init` renders `report.yml` (« Quarterly report », th
 5th of January, April, July and October) with the shop's own shopctl, from a
 `report` environment limited to the default branch, which `fleet repo` fills
 with the monitor token, `REPORT_ISSUES_TOKEN` and the optional Google and
-Umami keys. Shops below `REPORT_MINIMUM_CORE` (`shopctl/src/fleet.mjs`) are
+Umami keys. Only the shops with a `reportSince` are listed (`shops.mjs matrix
+"" report`): a certification or demo shop has no merchant. Shops below
+`REPORT_MINIMUM_CORE` (`shopctl/src/fleet.mjs`) are
 refused like the Deploy refuses them below `FLEET_MINIMUM_CORE`, and the public
 fleet's log and artifact get what `shops.mjs report` keeps (quarter, issue,
 failed sources), never the figures. `docs/operations/rapport-trimestriel.md` is

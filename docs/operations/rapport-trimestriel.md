@@ -74,9 +74,10 @@ flotte.
 4. **Umami** : la boutique mesure son audience (Admin → Réglages → Mesure
    d'audience) avec un site que la clé de l'agence voit ;
 5. **Début du suivi** : la date de mise en production dans `fleet.json`,
-   `"reportSince": "AAAA-MM-JJ"`, puis commit et push du dépôt de flotte. Rien
-   d'antérieur n'est rapporté, et le trimestre de lancement n'est comparé à
-   rien ;
+   `"reportSince": "AAAA-MM-JJ"`, puis commit et push du dépôt de flotte. Sans
+   cette ligne, la boutique n'a pas de rapport (une boutique de certification
+   ou de démonstration n'en a jamais). Rien d'antérieur n'est rapporté, et le
+   trimestre de lancement n'est comparé à rien ;
 6. **Aperçu** : Actions → Quarterly report → Run workflow, période
    `current-quarter`, la boutique par son slug. L'issue « Rapport trimestriel —
    <trimestre> » s'ouvre dans le dépôt de la boutique ; le rapport final la

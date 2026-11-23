@@ -74,7 +74,11 @@ trimestre écoulé : Google consolide ses données avec deux à trois jours de
 retard. Lancé à la main, il peut produire un aperçu du trimestre en cours
 (`--current`), et se limiter à une boutique. Le début du suivi d'une boutique
 est `reportSince` dans `fleet.json` : rien d'antérieur n'est rapporté, et le
-trimestre de lancement n'est pas comparé à un trimestre sans boutique.
+trimestre de lancement n'est pas comparé à un trimestre sans boutique. **Seule
+une boutique qui a un `reportSince` reçoit un rapport** (précisé le
+2026-11-23, avant la publication de v0.13.3) : une boutique de certification
+ou de démonstration n'a pas de commerçant à qui l'envoyer, et son job serait
+rouge chaque trimestre.
 
 **Le rapport va dans une issue du dépôt de la boutique, et nulle part
 ailleurs**, intitulée « Rapport trimestriel — <trimestre> ». L'aperçu l'ouvre,
@@ -154,5 +158,6 @@ schéma qu'il connaît.
   public ou sans issues ; la commande, source en échec comprise ;
 - `test/scripts/fleet-repository.test.mjs` : le workflow rendu (planification,
   environnement `report`, secrets à la seule étape de shopctl, résumé), la
-  matrice limitée à une boutique et son `since`, le seuil de socle, la
-  validation de `reportSince`, les secrets posés par `fleet repo`.
+  matrice limitée aux boutiques suivies (`reportSince`) ou à une seule, le
+  seuil de socle, la validation de `reportSince`, les secrets posés par
+  `fleet repo`.

@@ -211,6 +211,7 @@ describe('the fleet\'s workflows', () => {
     expect(job).toMatch(/GH_TOKEN: \$\{\{ secrets\.REPORT_ISSUES_TOKEN \}\}/);
     expect(job).toMatch(/args=\(report --env production --shop "\$SHOP" --repository "\$REPOSITORY" --publish --json\)/);
     expect(job).toMatch(/SINCE: \$\{\{ matrix\.since \}\}/);
+    expect(quarterly).toMatch(/node \.github\/fleet\/shops\.mjs matrix "\$ONLY" report >> "\$GITHUB_OUTPUT"/);
     expect(job).not.toMatch(/--out/);
     expect(quarterly).not.toMatch(/issues: write/);
   });
@@ -352,22 +353,32 @@ describe('the fleet\'s helper script', () => {
     expect(helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree, 'autre']).status).toBe(1);
   });
 
-  it('carries the start of the follow-up, and narrows to one shop when asked', () => {
+  // A certification or demonstration shop has no merchant: the report goes
+  // only to the shops whose follow-up has started.
+  it('reports on the shops whose follow-up has started, with its start, and narrows to one shop when asked', () => {
     const shops = [
       { slug: 'boutique-a', path: 'a', repository: 'agence/shop-a', reportSince: '2026-11-09' },
       { slug: 'boutique-b', path: 'b', repository: 'agence/shop-b' },
+      { slug: 'boutique-c', path: 'c', repository: 'agence/shop-c' },
     ];
     // A date shopctl would refuse, written after `fleet init` read the file:
-    // the run warns and covers the whole quarter.
+    // the shop is left out, with a warning.
     const fleet = fleetWorkspace({ shops, git: false });
     fleet.run(['fleet', 'init']);
-    writeFileSync(join(fleet.root, 'fleet.json'), JSON.stringify({ schemaVersion: 1, shops: [shops[0], { ...shops[1], reportSince: 'novembre' }] }));
-    const all = spawnSync('node', [join(fleet.root, '.github/fleet/shops.mjs'), 'matrix'], { cwd: fleet.root, encoding: 'utf8' });
-    expect(all.stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"},{"slug":"boutique-b","repository":"agence/shop-b"}]\n');
-    expect(all.stderr).toMatch(/::warning::boutique-b : reportSince « novembre »/);
-    expect(helper(shops, ['matrix', 'boutique-a']).stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"}]\n');
-    expect(helper(shops, ['matrix', '']).stdout).toContain('boutique-b');
-    expect(helper(shops, ['matrix', 'boutique-z']).status).toBe(1);
+    writeFileSync(join(fleet.root, 'fleet.json'), JSON.stringify({ schemaVersion: 1, shops: [shops[0], { ...shops[1], reportSince: 'novembre' }, shops[2]] }));
+    const reported = spawnSync('node', [join(fleet.root, '.github/fleet/shops.mjs'), 'matrix', '', 'report'], { cwd: fleet.root, encoding: 'utf8' });
+    expect(reported.stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"}]\n');
+    expect(reported.stderr).toMatch(/::warning::boutique-b : reportSince « novembre » n'est pas une date AAAA-MM-JJ ; pas de rapport trimestriel\./);
+    expect(reported.stderr).toMatch(/::notice::boutique-c : pas de rapport trimestriel, son suivi n'a pas commencé/);
+    // Backups and monitoring still cover every shop, with no start.
+    expect(helper(shops, ['matrix']).stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a"},{"slug":"boutique-b","repository":"agence/shop-b"},{"slug":"boutique-c","repository":"agence/shop-c"}]\n');
+    expect(helper(shops, ['matrix', 'boutique-a', 'report']).stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"}]\n');
+    expect(helper(shops, ['matrix', '', 'report']).stdout).not.toContain('boutique-b');
+    const unstarted = helper(shops, ['matrix', 'boutique-c', 'report']);
+    expect(unstarted.status).toBe(1);
+    expect(unstarted.stderr).toMatch(/boutique-c n'a pas de reportSince valable/);
+    expect(helper(shops, ['matrix', 'boutique-z', 'report']).status).toBe(1);
+    expect(helper(shops, ['matrix', '', 'autre']).status).toBe(1);
   });
 });
 
