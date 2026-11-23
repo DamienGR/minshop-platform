@@ -4314,8 +4314,9 @@ Demandé par Damien le 2026-11-23 : pouvoir brancher Umami, l'outil de mesure
 d'audience sans cookie, sur les boutiques. Aucun des jalons 0 à 10 n'avance.
 
 Fait le 2026-11-23, sans migration, par
-l'[ADR 0034](architecture/decisions/0034-mesure-d-audience-umami.md), pour le
-socle v0.13.2 :
+l'[ADR 0034](architecture/decisions/0034-mesure-d-audience-umami.md) (PR #266,
+fusionnée par Damien le 2026-11-23, qui accepte l'ADR), pour le socle
+v0.13.2 :
 
 - Admin → Réglages → Mesure d'audience : **Adresse du script** et
   **Identifiant du site**, les deux ou aucun, le code de suivi collé entier

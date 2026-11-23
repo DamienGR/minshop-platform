@@ -1,6 +1,6 @@
 # ADR 0034 — La mesure d'audience par Umami, réglée dans l'administration
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #266 par Damien, le 2026-11-23)
 - **Date** : 2026-11-23
 - **Jalon** : après le pilote (plan §13.33) ; aucun des jalons 0 à 10
 - **Précise** : l'invariant 1 d'`AGENTS.md` (vitrine presque sans
