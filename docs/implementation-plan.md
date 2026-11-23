@@ -4342,8 +4342,8 @@ sites vitrines de l'agence, pour toutes les boutiques, présentes et à venir.
 Aucun des jalons 0 à 10 n'avance.
 
 Fait le 2026-11-23, sans migration, par
-l'[ADR 0035](architecture/decisions/0035-rapport-trimestriel.md) (proposé),
-pour le socle v0.13.3. Choix de Damien : dans le socle, lancé par la flotte,
+l'[ADR 0035](architecture/decisions/0035-rapport-trimestriel.md) (PR #268,
+fusionnée par Damien le 2026-11-23, qui accepte l'ADR), pour le socle v0.13.3. Choix de Damien : dans le socle, lancé par la flotte,
 publié dans une issue du dépôt de la boutique, ventes comprises.
 
 - `shopctl report --env production` : ventes (agrégats de la base de

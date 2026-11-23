@@ -1,6 +1,6 @@
 # ADR 0035 — Le rapport trimestriel au commerçant, produit par le socle et lancé par la flotte
 
-- **Statut** : Proposé
+- **Statut** : Accepté (fusion de la PR #268 par Damien, le 2026-11-23)
 - **Date** : 2026-11-23
 - **Jalon** : après le pilote (plan §13.34) ; aucun des jalons 0 à 10
 - **S'appuie sur** : l'ADR 0019 (compte Cloudflare mutualisé, dépôt de flotte)
