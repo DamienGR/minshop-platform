@@ -243,6 +243,8 @@ src/
                chapters/<section>.md (the core's; a shop's own in client/guide/*.md)
     adminShell/  footer (core version, support link)
     discounts/  code (the rule, pure) · db (rows, uses counted) · form · cookie · DiscountCodeField
+    audience/  umami (Umami's two settings, the pages it may measure; pure) · beforeSend (its hook, client)
+               UmamiTracker (the tracker tag; ADR 0034)
     cache/ cart/ categories/ customers/ digitalDelivery/ ids/ media/ navigation/
     pages/ refunds/ seed/ storefront/
   pages/
@@ -325,8 +327,8 @@ today's config.
 
 1. **Storefront is near-zero client JS.** Server-render everything; progressive
    enhancement only. A little JS is allowed where it earns it (cart drawer,
-   /pay polling, Turnstile, a page's photo lightbox) — never required for the
-   page to work.
+   /pay polling, Turnstile, a page's photo lightbox, Umami's tracker once the
+   shop sets it up) — never required for the page to work.
 2. **Orders are paid-only.** The `orders` table holds settled orders. In-flight
    Lightning invoices live in `pending_payments` until settled — never write an
    unpaid order.

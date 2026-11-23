@@ -4307,3 +4307,29 @@ Tenu par `src/features/discounts/code.test.ts` et `form.test.ts`,
 `test/integration/history-reads.mjs` (le compte des utilisations) et
 `test/integration/discount-codes.mjs` (écran, panier, démonstration, carte
 cadeau, Stripe, virement, API JSON).
+
+### 13.33 La mesure d'audience par Umami
+
+Demandé par Damien le 2026-11-23 : pouvoir brancher Umami, l'outil de mesure
+d'audience sans cookie, sur les boutiques. Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-23, sans migration, par
+l'[ADR 0034](architecture/decisions/0034-mesure-d-audience-umami.md), pour le
+socle v0.13.2 :
+
+- Admin → Réglages → Mesure d'audience : **Adresse du script** et
+  **Identifiant du site**, les deux ou aucun, le code de suivi collé entier
+  accepté ; éteint par défaut ;
+- le traceur dans le `<head>` de la vitrine, différé, chargé directement
+  depuis le serveur d'Umami (choix de Damien, le 2026-11-23 ; le relais par
+  le Worker est l'alternative écartée de l'ADR) ;
+- jamais sur `/admin`, ni sur une page qui pose `no-referrer` (commande,
+  paiement), ni pour un navigateur qui porte `admin_hint` ; le chemin sans
+  paramètres, sauf ceux de campagne `utm_*` ; `data-do-not-track` ; seul
+  l'hôte de `CANONICAL_ORIGIN` compté ;
+- une section « Mesure d’audience » au chapitre Réglages du guide, qui
+  demande de nommer Umami dans la politique de confidentialité.
+
+Tenu par `src/features/audience/umami.test.ts`, `beforeSend.test.ts` et
+`test/integration/audience.mjs` (réglage, vitrine, admin, commande et
+paiement, arrêt).

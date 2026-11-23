@@ -21,6 +21,7 @@ export const settings = {
   'admin.settings.section.buildTime': 'Fixé au déploiement',
   'admin.settings.section.contact': 'Formulaire de contact',
   'admin.settings.section.agencyAccess': 'Accès de l’agence',
+  'admin.settings.section.audience': 'Mesure d’audience',
   'admin.settings.flash.updated': 'Réglages enregistrés.',
   'admin.settings.inlineSave.saved': 'Enregistré ✓',
   'admin.settings.inlineSave.failed': 'Échec de l’enregistrement — réessayez',
@@ -263,6 +264,18 @@ export const settings = {
   'admin.settings.turnstile.needKeys': 'Ajoutez les deux clés avant d’activer',
   'admin.settings.turnstile.siteKey': 'Clé de site (publique)',
   'admin.settings.turnstile.secretKey': 'Clé secrète',
+
+  // ─── Mesure d’audience (ADR 0034) ──────────────────────────────────────────────
+  'admin.settings.audience.intro': 'Comptez les visites de la boutique avec [Umami], qui ne dépose aucun cookie. Ajoutez la boutique comme site dans Umami, puis recopiez ici l’adresse du script et l’identifiant du site de son code de suivi, ou collez le code de suivi entier dans le premier champ. Videz les deux champs pour arrêter la mesure.',
+  'admin.settings.audience.on': 'Mesure active : les pages de la boutique envoient leurs visites à {hote}.',
+  'admin.settings.audience.off': 'Mesure éteinte : aucune page de la boutique ne charge de script de mesure.',
+  'admin.settings.audience.scriptUrl': 'Adresse du script',
+  'admin.settings.audience.websiteId': 'Identifiant du site',
+  'admin.settings.audience.excluded': 'Jamais mesurés : l’administration, les pages de commande et de paiement, dont l’adresse donne accès à la commande, et ce navigateur tant que vous êtes connecté à l’administration. Umami reçoit l’adresse de la page sans ses paramètres, à part ceux d’une campagne (utm_source, utm_campaign…).',
+  'admin.settings.audience.privacy': 'Nommez Umami dans votre politique de confidentialité, parmi les destinataires, avec la finalité : la mesure d’audience.',
+  'admin.settings.audience.error.incomplete': 'Indiquez l’adresse du script et l’identifiant du site, ou videz les deux champs pour arrêter la mesure.',
+  'admin.settings.audience.error.scriptUrl': 'L’adresse du script doit être une URL en https, comme https://cloud.umami.is/script.js.',
+  'admin.settings.audience.error.websiteId': 'L’identifiant du site est une suite de 36 caractères, comme 94db1cb1-74f4-4a40-ad6c-962362670409.',
 
   // ─── Recherche ─────────────────────────────────────────────────────────────────
   'admin.settings.search.intro': 'La recherche par mots-clés (SQLite FTS5) fonctionne d’emblée. Activez la recherche sémantique pour trouver aussi les produits par le sens, avec Workers AI et Vectorize — appliqué immédiatement, sans redéploiement.',

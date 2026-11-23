@@ -11,6 +11,8 @@ import { storefrontIndexable } from '../features/storefront/indexable';
 import { vaultReady } from '../features/secrets/store';
 import { LANG, LOCALE, t } from '../features/i18n';
 import { documentTitle, META_DESCRIPTION_MAX } from '../features/seo/meta';
+import { umamiTag } from '../features/audience/umami';
+import UmamiTracker from '../features/audience/UmamiTracker.astro';
 import StoreHeader from '#theme/Header.astro';
 import StoreFooter from '#theme/Footer.astro';
 import '../styles/global.css';
@@ -84,6 +86,14 @@ const ogImage = image ? new URL(image, origin).href : undefined;
 // Closed until it can take an order: a production is built in public, and a
 // half-entered catalogue indexed now is the one search results keep showing.
 const indexable = storefrontIndexable(Astro.locals.settings, vaultReady());
+// Umami, when the shop measures its audience (ADR 0034). The page's own
+// frontmatter has run by now, so a token page has already said `no-referrer`
+// on Astro.response — and keeps its URL from Umami as from any other site.
+const audience = umamiTag(Astro.locals.settings?.umami, {
+  pathname: Astro.url.pathname,
+  referrerPolicy: Astro.response.headers.get('referrer-policy'),
+  canonicalHost: env.CANONICAL_ORIGIN ? new URL(origin).hostname : null,
+});
 
 // The header and footer are store-owned, so they receive a model rather than
 // request context. Built from values middleware already loaded — no extra D1
@@ -162,6 +172,7 @@ const shell = buildShellModel({
       document.addEventListener('load', finishImageFade, true);
       document.addEventListener('error', finishImageFade, true);
     </script>
+    {audience && <UmamiTracker tag={audience} />}
   </head>
   <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
     <StoreHeader model={shell} />

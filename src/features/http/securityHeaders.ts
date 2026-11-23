@@ -22,6 +22,8 @@ export const SECURITY_HEADERS: Record<string, string> = {
   // plugins, no <base> rewriting every relative URL, no framing. script-src and
   // style-src are a written derogation for now (docs/certification/plan.md §6):
   // they need Astro's hashed CSP and an audit of every inline script first.
+  // That audit includes Umami's tracker (ADR 0034): its origin, read from the
+  // shop's setting, will have to join script-src and connect-src.
   'content-security-policy': "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
 };
 
