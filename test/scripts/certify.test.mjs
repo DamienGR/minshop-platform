@@ -483,7 +483,7 @@ describe('the repository', () => {
   // secret and a variable naming the fleet; everything else is read there.
   describe('a shop of the fleet', () => {
     const FLEET = 'agence/minshop-fleet';
-    const readFleet = ({ shopPatch = {}, entry = undefined } = {}) => {
+    const readFleet = ({ shopPatch = {}, fleetPatch = {}, entry = undefined } = {}) => {
       const target = shop({ forge: true, slug: 'atelier-forge' });
       const fleet = forgeState(FLEET, target.slug)[FLEET];
       fleet.runs = fleet.runs.map((run) => ({
@@ -492,6 +492,15 @@ describe('the repository', () => {
       }));
       const listed = entry === undefined ? { slug: target.slug, path: 'shop-atelier-forge', repository: target.nameWithOwner } : entry;
       fleet.files = { 'fleet.json': JSON.stringify({ schemaVersion: 1, shops: listed ? [listed] : [{ slug: 'autre', path: 'x' }] }) };
+      // A fleet's monitor token lives in its own environment, limited to main.
+      fleet.secrets = {};
+      fleet.environments.monitor = {
+        secrets: { MONITOR_CLOUDFLARE_API_TOKEN: 'x', MONITOR_CLOUDFLARE_ACCOUNT_ID: 'x' },
+        reviewers: 0,
+        branchPolicy: { protected_branches: false, custom_branch_policies: true },
+        branches: ['main'],
+      };
+      Object.assign(fleet, fleetPatch);
       target.github({
         repos: {
           [target.nameWithOwner]: { visibility: 'public', defaultBranch: 'main', branches: ['main'], variables: { MINSHOP_FLEET: FLEET }, secrets: {}, environments: {}, ...shopPatch },
@@ -515,7 +524,23 @@ describe('the repository', () => {
       expect(findings.map((finding) => finding.message)).toEqual(expect.arrayContaining([
         `déployée par le dépôt de flotte ${FLEET}`,
         'aucun secret Cloudflare dans le dépôt de la boutique',
+        'environnement monitor limité à main, secrets de surveillance posés',
       ]));
+    });
+
+    // Its D1 Read reads every shop's database: a repository secret would hand
+    // it to a workflow on any branch. Left there by an older core, it is said.
+    it('wants the monitor token in an environment limited to the default branch', () => {
+      const legacy = readFleet({ fleetPatch: { secrets: { MONITOR_CLOUDFLARE_API_TOKEN: 'x', MONITOR_CLOUDFLARE_ACCOUNT_ID: 'x' } } });
+      const said = judgeForge(legacy.read, { slug: legacy.target.slug, head: null, now: NOW }).filter((finding) => finding.status !== 'ok');
+      expect(said).toEqual([expect.objectContaining({ status: 'warn', message: expect.stringContaining('encore posés en secret du dépôt de flotte') })]);
+      expect(said[0].hint).toContain(`gh secret delete MONITOR_CLOUDFLARE_API_TOKEN --repo ${FLEET}`);
+
+      const { read: forge, target } = readFleet();
+      const open = { ...forge, environments: { ...forge.environments, monitor: { ...forge.environments.monitor, customBranches: false, branches: [] } } };
+      expect(failing(judgeForge(open, { slug: target.slug, head: null, now: NOW }))).toEqual([expect.stringContaining("l'environnement monitor n'est pas limité à main (toutes les branches)")]);
+      const none = { ...forge, environments: { ...forge.environments, monitor: null }, secrets: { ...forge.secrets, monitor: [] } };
+      expect(failing(judgeForge(none, { slug: target.slug, head: null, now: NOW }))).toEqual([expect.stringContaining("absents : la production n'est pas surveillée")]);
     });
 
     it('refuses a Cloudflare secret left in the shop\'s repository, with the command that removes it', () => {

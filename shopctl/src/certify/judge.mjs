@@ -369,7 +369,7 @@ export function judgeLighthouse(label, document) {
 }
 
 /**
- * The repository: its two environments, its secrets by name, the last
+ * The repository: its environments, its secrets by name, the last
  * production deployment and the nightly's production jobs.
  *
  * @param {object} read what gh answered (see `readForge` in commands/certify.mjs)
@@ -425,10 +425,7 @@ export function judgeForge(read, { slug, head, now }) {
       ? fail(`${name} : ${absent.join(', ')} absent${absent.length > 1 ? 's' : ''}.`, `\`${setup}\` les pose.`)
       : ok(`${name} : ${environmentSecrets.join(', ')} posés`));
   }
-  const monitor = ['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'].filter((secret) => !read.secrets.repository.includes(secret));
-  findings.push(monitor.length > 0
-    ? fail(`secrets du dépôt absents : ${monitor.join(', ')} — la production n'est pas surveillée.`, 'Un jeton « Account Analytics : Read » du compte de production (docs/operations/mise-en-ligne.md).')
-    : ok('secrets de surveillance du dépôt posés'));
+  findings.push(...judgeMonitorSecrets(read, { fleet, setup }));
 
   const deploy = read.deploy;
   if (!deploy) {
@@ -458,6 +455,45 @@ export function judgeForge(read, { slug, head, now }) {
 }
 
 const day = (at) => String(at ?? '').slice(0, 10) || 'date inconnue';
+
+const MONITOR_SECRETS = ['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'];
+
+/**
+ * Where the monitor token is. A shop's own repository holds it as a repository
+ * secret, a token of its own account. A fleet's reads every shop's D1 on the
+ * shared account, so it belongs to the `monitor` environment, limited to the
+ * default branch like `backup`; left behind as a repository secret by an older
+ * core, it still reaches any branch, which is said, not blocking: the nightly
+ * works either way.
+ */
+function judgeMonitorSecrets(read, { fleet, setup }) {
+  const inRepository = MONITOR_SECRETS.filter((secret) => read.secrets.repository.includes(secret));
+  if (!fleet) {
+    const absent = MONITOR_SECRETS.filter((secret) => !inRepository.includes(secret));
+    return [absent.length > 0
+      ? fail(`secrets du dépôt absents : ${absent.join(', ')} — la production n'est pas surveillée.`, 'Un jeton « Account Analytics : Read » du compte de production (docs/operations/mise-en-ligne.md).')
+      : ok('secrets de surveillance du dépôt posés')];
+  }
+  const environment = read.environments.monitor ?? null;
+  const inEnvironment = environment ? MONITOR_SECRETS.filter((secret) => (read.secrets.monitor ?? []).includes(secret)) : [];
+  const absent = MONITOR_SECRETS.filter((secret) => !inEnvironment.includes(secret) && !inRepository.includes(secret));
+  if (absent.length > 0) {
+    return [fail(`${absent.join(', ')} absent${absent.length > 1 ? 's' : ''} : la production n'est pas surveillée.`, `\`${setup}\` avec CLOUDFLARE_API_TOKEN_MONITOR les pose dans l'environnement monitor.`)];
+  }
+  const findings = [];
+  if (inEnvironment.length > 0) {
+    findings.push(!environment.customBranches || environment.branches.length !== 1 || environment.branches[0] !== read.defaultBranch
+      ? fail(`l'environnement monitor n'est pas limité à ${read.defaultBranch} (${environment.customBranches ? environment.branches.join(', ') || 'aucune branche' : 'toutes les branches'}).`, `Son jeton lit les bases de toutes les boutiques : \`${setup}\` le restreint.`)
+      : ok(`environnement monitor limité à ${read.defaultBranch}, secrets de surveillance posés`));
+  }
+  if (inRepository.length > 0) {
+    findings.push(warn(
+      `${inRepository.join(', ')} encore posé${inRepository.length > 1 ? 's' : ''} en secret du dépôt de flotte : lisible${inRepository.length > 1 ? 's' : ''} depuis n'importe quelle branche, alors que le jeton lit les bases de toutes les boutiques.`,
+      `\`${setup}\` pose les secrets dans l'environnement monitor ; puis ${inRepository.map((secret) => `gh secret delete ${secret} --repo ${fleet.repository}`).join(' ; ')}.`,
+    ));
+  }
+  return findings;
+}
 
 /**
  * The verdict over every group: certified only when nothing failed, nothing

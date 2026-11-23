@@ -13,7 +13,7 @@ suffit pas : l'historique, les forks et les caches l'ont gardé.
 | Secret | Où il vit | Qui le révoque | Effet de la rotation |
 |---|---|---|---|
 | Jeton API Cloudflare | secret d'environnement GitHub `CLOUDFLARE_API_TOKEN` | propriétaire du compte Cloudflare | aucun sur la boutique |
-| Jeton API du compte mutualisé | environnements `staging`, `production`, `backup` et secret `MONITOR_CLOUDFLARE_API_TOKEN` du **dépôt de flotte** ; poste d'un opérateur | l'agence, administratrice du compte | aucun sur les boutiques ; **l'exposition porte sur toutes** |
+| Jeton API du compte mutualisé | environnements `staging`, `production`, `backup` et `monitor` du **dépôt de flotte** (le jeton de surveillance était un secret du dépôt avant que `fleet repo` ne le range dans `monitor`) ; poste d'un opérateur | l'agence, administratrice du compte | aucun sur les boutiques ; **l'exposition porte sur toutes** |
 | Clé Stripe (`stripe_secret_key`) | coffre chiffré en D1 | commerçant (tableau de bord Stripe) | aucun si la nouvelle est saisie aussitôt |
 | Secret de webhook Stripe | coffre chiffré | commerçant (endpoint Stripe → « Roll secret ») | les webhooks échouent tant que le nouveau n'est pas saisi |
 | Clé Resend | coffre chiffré | commerçant | les e-mails échouent tant que la nouvelle n'est pas saisie |

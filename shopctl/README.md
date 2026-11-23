@@ -582,7 +582,23 @@ obligatoires. Les jetons viennent de l'environnement — `CLOUDFLARE_API_TOKEN`
 (ou `_STAGING`, `_PRODUCTION`), `CLOUDFLARE_API_TOKEN_BACKUP`,
 `CLOUDFLARE_API_TOKEN_MONITOR`, `SHOPCTL_BACKUP_KEY`, et `SHOPS_READ_TOKEN` quand
 les dépôts de boutique sont privés —, le compte des manifestes des boutiques
-inscrites, qui doivent tous nommer le même.
+inscrites, qui doivent tous nommer le même. Le jeton de surveillance va dans
+l'environnement `monitor`, limité à la branche par défaut comme `backup` : son
+« D1 en lecture » lit les bases de toutes les boutiques. Resté en secret du
+dépôt, posé par un socle plus ancien, il est nommé avec le `gh secret delete`
+qui le retire, jamais supprimé.
+
+Le dépôt étant public, ses journaux se lisent sans compte et ses artefacts se
+téléchargent avec n'importe lequel. Les workflows du parc gardent donc chaque
+rapport de shopctl sur le runner, JSON et texte : le journal et l'artefact
+n'en reçoivent que le résumé que tire `.github/fleet/shops.mjs report` — l'issue,
+les contrôles en échec, l'archive, le bookmark Time Travel et la version de
+retour d'un déploiement, et, quand la commande échoue, son erreur et ses lignes
+✗ et !. Un rapport de sauvegarde compte les lignes de chaque table, `orders`
+comprise, deux fois par nuit et par boutique : il ne sort pas. Les jetons ne
+sont donnés qu'aux étapes qui lancent shopctl, `npm ci` tourne sans les scripts
+d'installation des dépendances et aucun checkout ne garde son jeton dans la
+configuration git.
 
 `repo --fleet` pose la variable `MINSHOP_FLEET` dans le dépôt de la boutique et
 aucun environnement : le Deploy de la boutique refuse alors de tourner, son

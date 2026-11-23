@@ -139,7 +139,7 @@ describe('the fleet\'s workflows', () => {
     for (const [text, job] of [[deploy, '  deploy:'], [nightly, '  production-backup:']]) {
       const body = text.slice(text.indexOf(job));
       expect(body.indexOf("Check the shop's core")).toBeGreaterThan(-1);
-      expect(body.indexOf("Check the shop's core")).toBeLessThan(body.indexOf('npm ci'));
+      expect(body.indexOf("Check the shop's core")).toBeLessThan(body.indexOf('run: npm ci'));
     }
   });
 
@@ -156,7 +156,7 @@ describe('the fleet\'s workflows', () => {
     expect(backup).not.toMatch(/github\.event\.schedule/);
     const watch = nightly.slice(nightly.indexOf('  production-watch:'), nightly.indexOf('  account-usage:'));
     expect(watch).toMatch(/CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.MONITOR_CLOUDFLARE_API_TOKEN \}\}/);
-    expect(watch).not.toMatch(/environment:/);
+    expect(watch).toMatch(/\n {4}environment: monitor\n/);
     expect(watch).toMatch(/PLAN: \$\{\{ vars\.MINSHOP_ACCOUNT_PLAN \|\| 'paid' \}\}/);
     expect(watch).toMatch(/--plan "\$PLAN"/);
     expect(watch).toMatch(/github\.event\.schedule != '17 15 \* \* \*'/);
@@ -170,7 +170,8 @@ describe('the fleet\'s workflows', () => {
     expect(account.length).toBeLessThan(nightly.length);
     expect(account).toMatch(/CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.MONITOR_CLOUDFLARE_API_TOKEN \}\}/);
     expect(account).toMatch(/BUDGET: \$\{\{ vars\.MINSHOP_MONTHLY_BUDGET \}\}/);
-    expect(account).not.toMatch(/environment:|strategy:/);
+    expect(account).toMatch(/\n {4}environment: monitor\n/);
+    expect(account).not.toMatch(/strategy:/);
     expect(account).toMatch(/github\.event\.schedule != '17 15 \* \* \*'/);
     expect(account).toMatch(/PLAN: \$\{\{ vars\.MINSHOP_ACCOUNT_PLAN \|\| 'paid' \}\}/);
     expect(account).toMatch(/args=\(fleet usage --plan "\$PLAN" --json\)/);
@@ -183,7 +184,43 @@ describe('the fleet\'s workflows', () => {
       const bodies = runs(text);
       expect(bodies.length).toBeGreaterThan(2);
       for (const body of bodies) expect(body).not.toMatch(/\$\{\{/);
-      for (const body of bodies.filter((candidate) => candidate.includes('| tee'))) expect(body).toContain('set -euo pipefail');
+      for (const body of bodies.filter((candidate) => candidate.includes('shopctl.mjs'))) expect(body).toContain('set -euo pipefail');
+    }
+  });
+
+  // The fleet repository is public: anyone reads its logs, any GitHub account
+  // downloads its artifacts. A report counts every table's rows and measures
+  // the traffic; it stays on the runner, and only its summary leaves.
+  it('publishes the summary of each report, never the report', () => {
+    for (const text of [deploy, nightly]) {
+      expect(text).not.toMatch(/\| tee/);
+      const calls = [...text.matchAll(/^ +node shopctl\/bin\/shopctl\.mjs (.*)$/gm)].map((match) => match[1]);
+      expect(calls.length).toBeGreaterThan(1);
+      for (const call of calls) {
+        const [, name] = call.match(/ > ([a-z-]+)\.json 2> \1\.log \|\| status=\$\?$/) ?? [];
+        expect(name, call).toBeTruthy();
+        expect(text).toContain(`node ../fleet/.github/fleet/shops.mjs report ${name} "$status"`);
+      }
+      const uploaded = [...text.matchAll(/uses: actions\/upload-artifact@v\d+\n(?: {8}.*\n)*? {10}path: (?:\|\n((?: {12}.*\n)+)|(.*)\n)/g)].flatMap((match) => (match[1] ?? match[2]).trim().split(/\s+/));
+      expect(uploaded.length).toBeGreaterThan(0);
+      for (const path of uploaded) expect(path).toMatch(/\.summary\.json$/);
+    }
+  });
+
+  // `npm ci` runs every dependency's install scripts, and a checkout leaves its
+  // token in the git config: neither meets the account's tokens.
+  it('hands the account\'s tokens to the shopctl steps alone', () => {
+    for (const text of [deploy, nightly]) {
+      // No job-level env holds a secret.
+      for (const block of text.matchAll(/^ {4}env:\n((?: {6}.*\n)+)/gm)) expect(block[1]).not.toMatch(/secrets\./);
+      const steps = text.split(/\n(?= {6}- name: )/).slice(1);
+      for (const step of steps.filter((candidate) => /secrets\.(CLOUDFLARE|MONITOR|SHOPCTL)/.test(candidate.replace(/token: \$\{\{ secrets\.SHOPS_READ_TOKEN[^\n]*/g, '')))) {
+        expect(step).toContain('node shopctl/bin/shopctl.mjs');
+      }
+      for (const install of text.match(/run: npm ci.*/g) ?? []) expect(install).toBe('run: npm ci --ignore-scripts');
+      const checkouts = text.split('uses: actions/checkout@').slice(1);
+      expect(checkouts.length).toBeGreaterThan(1);
+      for (const checkout of checkouts) expect(checkout.split('\n      - ')[0]).toContain('persist-credentials: false');
     }
   });
 
@@ -268,6 +305,95 @@ describe('the fleet\'s helper script', () => {
 
 // ---------------------------------------------------------------------------
 
+// What a run publishes of a shopctl report: the fleet repository is public.
+describe('the fleet\'s report summary', () => {
+  const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
+  const summarise = (files, args) => {
+    const fleet = fleetWorkspace({ shops: [{ slug: 'boutique-a', path: 'a' }], git: false });
+    fleet.run(['fleet', 'init']);
+    const dir = scratchDir('fleet-report-');
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+    const result = spawnSync('node', [join(fleet.root, '.github/fleet/shops.mjs'), 'report', ...args], { cwd: dir, encoding: 'utf8' });
+    return { ...result, summary: (name) => JSON.parse(readFileSync(join(dir, `${name}.summary.json`), 'utf8')) };
+  };
+  const json = (document) => `${JSON.stringify(document, null, 2)}\n`;
+
+  it('keeps the outcome and the archive of a backup, not its tables nor its account', () => {
+    const backup = {
+      command: 'backup', ok: true, dryRun: false, shop: 'boutique-a', env: 'production', id: 'boutique-a-production-20261122T112808Z',
+      account: { id: ACCOUNT_ID }, tables: [{ name: 'orders', rows: 1234, digest: 'f'.repeat(64) }], bytes: 49803,
+    };
+    const result = summarise({ 'backup-production.json': json(backup), 'backup-production.log': '✓ 1234 ligne(s) lues\n' }, ['backup-production', '0']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.summary('backup-production')).toEqual({ report: 'backup-production', status: 0, ok: true, command: 'backup', shop: 'boutique-a', env: 'production', archive: backup.id });
+    expect(result.stdout).toBe(`backup boutique-a (production) : réussi\n  archive : ${backup.id}\n`);
+  });
+
+  // What the runbooks start from after a bad deployment.
+  it('keeps what an incident needs from a deployment', () => {
+    const deploy = {
+      command: 'deploy', ok: true, shop: 'boutique-a', env: 'production', account: { id: ACCOUNT_ID, name: '<email>\'s Account' },
+      databaseId: '3ee7b98d-1cb7-43c3-921d-067c5a5c7e3f', origin: 'https://boutique-a.fr', supportEmail: 'support@agence.fr',
+      backup: { id: 'boutique-a-production-20261122T163229Z', bytes: 49803, uploaded: { objects: { reused: 224 } } },
+      bookmark: '000000f9-00000000-0000512b-9c3fb5c8a65d161e1dca991bceee5e11', rollbackTo: '2d69289a-d34f-4772-8569-577d84b76903',
+    };
+    const result = summarise({ 'deploy.json': json(deploy), 'deploy.log': '' }, ['deploy', '0']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.summary('deploy')).toEqual({
+      report: 'deploy', status: 0, ok: true, command: 'deploy', shop: 'boutique-a', env: 'production',
+      origine: deploy.origin, archive: deploy.backup.id, bookmark: deploy.bookmark, rollbackTo: deploy.rollbackTo,
+    });
+    for (const secretish of [ACCOUNT_ID, deploy.databaseId, 'support@agence.fr', '224']) expect(`${result.stdout}${JSON.stringify(result.summary('deploy'))}`).not.toContain(secretish);
+  });
+
+  // A failure is the one run whose detail is worth reading: its error, and
+  // every line of prose but the ✓ ones and their hints.
+  it('says why a command failed, and exits with its status', () => {
+    const verify = {
+      ok: false,
+      checks: [{ name: 'table orders', ok: false, detail: '3 ligne(s), le manifeste en annonce 4' }, { name: 'table products', ok: true, detail: '34 ligne(s)' }],
+      error: { kind: 'verification', code: 6, message: '1 contrôle(s) en échec.', hint: 'Relancez `shopctl backup verify` en local.', details: { args: ['--secret'] } },
+    };
+    const log = [
+      'Archive boutique-a-production-20261122T112808Z',
+      '✓ table products — 34 ligne(s)',
+      '    indice d\'un contrôle réussi',
+      '✗ table orders — 3 ligne(s), le manifeste en annonce 4',
+      '    L\'archive ne dit pas ce que la base contenait.',
+      '',
+    ].join('\n');
+    const result = summarise({ 'verify-production.json': json(verify), 'verify-production.log': log }, ['verify-production', '6']);
+    expect(result.status).toBe(6);
+    expect(result.summary('verify-production')).toEqual({
+      report: 'verify-production', status: 6, ok: false, failed: ['table orders'],
+      error: { kind: 'verification', code: 6, message: '1 contrôle(s) en échec.', hint: 'Relancez `shopctl backup verify` en local.' },
+    });
+    expect(result.stdout).toContain('contrôles en échec : table orders');
+    expect(result.stdout).toContain('✗ table orders — 3 ligne(s), le manifeste en annonce 4\n    L\'archive ne dit pas');
+    expect(result.stdout).not.toContain('34 ligne(s)');
+    expect(result.stdout).not.toContain('contrôle réussi');
+    expect(result.stdout).not.toContain('--secret');
+  });
+
+  it('still says something of a command that died before its report', () => {
+    const result = summarise({ 'usage.log': 'TypeError: lecture impossible\n    at main (shopctl.mjs:1:1)\n' }, ['usage', '1']);
+    expect(result.status).toBe(1);
+    expect(result.summary('usage')).toEqual({ report: 'usage', status: 1, ok: false });
+    expect(result.stdout).toContain('usage : en échec, statut 1');
+    expect(result.stdout).toContain('TypeError: lecture impossible');
+  });
+
+  it('refuses a report name that is not a file name, and a status that is not one', () => {
+    for (const args of [['../deploy', '0'], ['deploy', 'zéro'], ['deploy']]) {
+      const result = summarise({}, args);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/::error::/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('the fleet\'s account', () => {
   const managed = (accountId, slug) => {
     const target = shop({ accountId, slug });
@@ -318,19 +444,38 @@ describe('shopctl fleet repo', () => {
     return fleet;
   };
 
-  it('creates the fleet repository public, with three environments and the shared account\'s secrets', () => {
+  it('creates the fleet repository public, with four environments and the shared account\'s secrets', () => {
     const fleet = ready();
     const { status, report, stderr } = fleet.json(['fleet', 'repo', '--reviewer', 'damien'], TOKENS);
     expect(status, stderr).toBe(EXIT_CODES.ok);
     expect(report).toMatchObject({ repository: { nameWithOwner: fleet.nameWithOwner, created: true, visibility: 'public' }, account: ACCOUNT.id, missingTokens: [] });
     const repo = fleet.github().repos[fleet.nameWithOwner];
     expect(repo.visibility).toBe('public');
-    expect(Object.keys(repo.environments)).toEqual(['staging', 'production', 'backup']);
+    expect(Object.keys(repo.environments)).toEqual(['staging', 'production', 'backup', 'monitor']);
     expect(repo.environments.production.reviewers).toBe(1);
     expect(repo.environments.backup).toMatchObject({ reviewers: 0, branches: ['main'], branchPolicy: { custom_branch_policies: true } });
     expect(repo.environments.production.secrets).toEqual({ CLOUDFLARE_API_TOKEN: 'cf-deploie', CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id, SHOPCTL_BACKUP_KEY: TOKENS.SHOPCTL_BACKUP_KEY });
     expect(repo.environments.backup.secrets.CLOUDFLARE_API_TOKEN).toBe('cf-sauve');
-    expect(repo.secrets).toEqual({ MONITOR_CLOUDFLARE_API_TOKEN: 'cf-surveille', MONITOR_CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id });
+    // Its D1 Read reads every shop: limited to the default branch, like backup.
+    expect(repo.environments.monitor).toMatchObject({ reviewers: 0, branches: ['main'], branchPolicy: { custom_branch_policies: true } });
+    expect(repo.environments.monitor.secrets).toEqual({ MONITOR_CLOUDFLARE_API_TOKEN: 'cf-surveille', MONITOR_CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id });
+    expect(repo.secrets ?? {}).toEqual({});
+    expect(report.leftovers).toEqual([]);
+  });
+
+  // An older core put the monitor secrets in the repository, where any branch
+  // reads them. Named with the command that removes them, never deleted.
+  it('names the monitor secrets an older core left in the repository', () => {
+    const fleet = ready();
+    fleet.json(['fleet', 'repo', '--reviewer', 'damien'], TOKENS);
+    const state = fleet.github();
+    state.repos[fleet.nameWithOwner].secrets = { MONITOR_CLOUDFLARE_API_TOKEN: 'ancien', MONITOR_CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id };
+    writeFileSync(join(fleet.root, '.gh-state.json'), JSON.stringify(state));
+    const { status, report, stderr } = fleet.json(['fleet', 'repo', '--reviewer', 'damien'], TOKENS);
+    expect(status, stderr).toBe(EXIT_CODES.ok);
+    expect(report.leftovers).toEqual(['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID']);
+    expect(stderr).toContain(`gh secret delete MONITOR_CLOUDFLARE_API_TOKEN --repo ${fleet.nameWithOwner} ; gh secret delete MONITOR_CLOUDFLARE_ACCOUNT_ID --repo ${fleet.nameWithOwner}`);
+    expect(fleet.github().repos[fleet.nameWithOwner].secrets).toEqual({ MONITOR_CLOUDFLARE_API_TOKEN: 'ancien', MONITOR_CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id });
   });
 
   it('never lets a token reach an argument vector or the terminal', () => {

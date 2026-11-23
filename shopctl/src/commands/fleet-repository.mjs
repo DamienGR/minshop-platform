@@ -68,6 +68,19 @@ const KEY_DIRECTORY = `/${dirname(DEFAULT_KEY_FILE)}/`;
 const MONITOR_FROM = 'CLOUDFLARE_API_TOKEN_MONITOR'; // secret-scan:ignore — a variable's name
 const SHOPS_READER = 'SHOPS_READ_TOKEN'; // secret-scan:ignore — a secret's name
 
+/**
+ * The environment of the fleet's monitor token, limited to the default branch
+ * like `backup`. Its D1 Read reads every shop's database on the shared account,
+ * as the backup token's does: a repository secret would hand it to a workflow
+ * pushed on any branch, with no approval.
+ */
+export const MONITOR_ENVIRONMENT = 'monitor';
+
+/** The monitor secrets, in that environment. A fleet set up by an older core
+ *  holds them as repository secrets too, which `fleet repo` names and never
+ *  deletes. */
+export const MONITOR_SECRETS = ['MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID'];
+
 /** One template, with the version that wrote it and the floor it enforces. */
 export function renderFleetFile(template, { version = corePackage().version } = {}) {
   const text = readFileSync(resolve(TEMPLATES, template), 'utf8');
@@ -208,7 +221,7 @@ export function monitorTokenFor(source = process.env) {
   if (same) {
     throw inputError(
       `${MONITOR_FROM} est le jeton de ${same.from}.`,
-      'Le jeton de surveillance est un secret du dépôt, lisible sans approbation depuis n\'importe quelle branche : il ne lit que les métriques (Account Analytics, D1 et Account Settings en lecture, Memberships et User Details en lecture).',
+      'Le jeton de surveillance part sans approbation chaque nuit : il ne fait que lire (Account Analytics, D1 et Account Settings en lecture, Memberships et User Details en lecture).',
     );
   }
   return { value, from: MONITOR_FROM };
@@ -300,7 +313,7 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
   }
   const backupBranch = existing?.defaultBranchRef?.name ?? head;
   const environmentReport = [];
-  for (const name of [...ENVIRONMENTS, BACKUP_ENVIRONMENT]) {
+  for (const name of [...ENVIRONMENTS, BACKUP_ENVIRONMENT, MONITOR_ENVIRONMENT]) {
     const action = present.includes(name) ? 'keep' : 'create';
     const wanted = name === 'production' ? reviewers : [];
     if (dryRun) {
@@ -308,12 +321,13 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
       environmentReport.push({ env: name, action, protected: false, refusal: null });
       continue;
     }
-    const backup = name === BACKUP_ENVIRONMENT;
-    const outcome = putEnvironment(target.nameWithOwner, name, { cwd: root, reviewers: wanted, branchPolicy: backup });
-    if (backup) restrictEnvironment(target.nameWithOwner, name, [backupBranch], { cwd: root });
-    environmentReport.push({ env: name, action, protected: outcome.protected, refusal: outcome.refusal ?? null, ...(backup ? { branches: [backupBranch] } : {}) });
+    // The two the Nightly reads unattended: limited to the default branch.
+    const limited = name === BACKUP_ENVIRONMENT || name === MONITOR_ENVIRONMENT;
+    const outcome = putEnvironment(target.nameWithOwner, name, { cwd: root, reviewers: wanted, branchPolicy: limited });
+    if (limited) restrictEnvironment(target.nameWithOwner, name, [backupBranch], { cwd: root });
+    environmentReport.push({ env: name, action, protected: outcome.protected, refusal: outcome.refusal ?? null, ...(limited ? { branches: [backupBranch] } : {}) });
     reporter.ok(
-      `${name} — ${action === 'keep' ? 'déjà présent' : 'créé'}${outcome.protected ? `, ${wanted.length} relecteur(s) obligatoire(s)` : ''}${backup ? `, limité à la branche ${backupBranch}` : ''}`,
+      `${name} — ${action === 'keep' ? 'déjà présent' : 'créé'}${outcome.protected ? `, ${wanted.length} relecteur(s) obligatoire(s)` : ''}${limited ? `, limité à la branche ${backupBranch}` : ''}`,
     );
     if (outcome.refusal) {
       reporter.warn(`${name} : GitHub a refusé les relecteurs obligatoires.`, 'Sur un dépôt privé, ils demandent un plan payant : le dépôt de flotte est public par défaut pour cette raison.');
@@ -366,17 +380,30 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
     secretReport.push({ env: name, set, from: token.from });
   }
 
-  const repositoryReport = [];
   if (!monitorToken) {
     reporter.warn(`aucun jeton de surveillance (${MONITOR_FROM}) : la production des boutiques n'est pas surveillée la nuit.`, 'Un jeton du compte mutualisé en lecture seule : Account Analytics, D1 et Account Settings, Memberships et User Details.');
   } else if (dryRun) {
-    reporter.todo(`dépôt — MONITOR_CLOUDFLARE_API_TOKEN et MONITOR_CLOUDFLARE_ACCOUNT_ID seraient posés`);
+    reporter.todo(`${MONITOR_ENVIRONMENT} — ${MONITOR_SECRETS.join(' et ')} seraient posés`);
   } else {
-    setRepositorySecret(target.nameWithOwner, 'MONITOR_CLOUDFLARE_API_TOKEN', monitorToken.value, { cwd: root });
-    setRepositorySecret(target.nameWithOwner, 'MONITOR_CLOUDFLARE_ACCOUNT_ID', account, { cwd: root });
-    repositoryReport.push('MONITOR_CLOUDFLARE_API_TOKEN', 'MONITOR_CLOUDFLARE_ACCOUNT_ID');
-    reporter.ok(`dépôt — MONITOR_CLOUDFLARE_API_TOKEN (depuis ${MONITOR_FROM}) et MONITOR_CLOUDFLARE_ACCOUNT_ID posés`);
+    setEnvironmentSecret(target.nameWithOwner, MONITOR_ENVIRONMENT, 'MONITOR_CLOUDFLARE_API_TOKEN', monitorToken.value, { cwd: root });
+    setEnvironmentSecret(target.nameWithOwner, MONITOR_ENVIRONMENT, 'MONITOR_CLOUDFLARE_ACCOUNT_ID', account, { cwd: root });
+    secretReport.push({ env: MONITOR_ENVIRONMENT, set: [...MONITOR_SECRETS], from: monitorToken.from });
+    reporter.ok(`${MONITOR_ENVIRONMENT} — MONITOR_CLOUDFLARE_API_TOKEN (depuis ${MONITOR_FROM}) et MONITOR_CLOUDFLARE_ACCOUNT_ID posés`);
   }
+  // Where an older core put them. Still there, they reach any branch and the
+  // environment above protects nothing: named, never deleted, as `repo
+  // --fleet` does with a shop's leftovers.
+  const leftovers = dryRun || !(existing || created)
+    ? []
+    : repositorySecrets(target.nameWithOwner, { cwd: root }).filter((name) => MONITOR_SECRETS.includes(name));
+  if (leftovers.length > 0) {
+    reporter.warn(
+      `dépôt — ${leftovers.join(', ')} encore posé${leftovers.length > 1 ? 's' : ''} en secret du dépôt : lisible depuis n'importe quelle branche, malgré l'environnement ${MONITOR_ENVIRONMENT}.`,
+      leftovers.map((name) => `gh secret delete ${name} --repo ${target.nameWithOwner}`).join(' ; '),
+    );
+  }
+
+  const repositoryReport = [];
   // Only for private shops' repositories; a public one is read without it.
   if (env[SHOPS_READER]) {
     if (dryRun) reporter.todo(`dépôt — ${SHOPS_READER} serait posé`);
@@ -400,6 +427,7 @@ export function setupFleetRepository(args, reporter, { env = process.env } = {})
     environments: environmentReport,
     secrets: secretReport,
     repositorySecrets: repositoryReport,
+    leftovers,
     missingTokens,
   };
   reporter.result(report);

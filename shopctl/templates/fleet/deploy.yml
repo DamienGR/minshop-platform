@@ -61,6 +61,8 @@ jobs:
     steps:
       - name: Check out the fleet
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Read fleet.json
         id: shop
@@ -87,6 +89,9 @@ jobs:
           # Only when the shops' repositories are private: a token that reads
           # them, and nothing else. A public shop needs none.
           token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          # Not left in the checkout's git config for the shop's own code and
+          # its dependencies to read: nothing after this fetches.
+          persist-credentials: false
 
       # The commit verified is the commit deployed: `--skip-verify` below is
       # only true of this exact tree, and a branch can move during an approval.
@@ -108,19 +113,13 @@ jobs:
       name: ${{ inputs.environment }}
       url: ${{ steps.deploy.outputs.origin }}
 
-    env:
-      # Scoped to the environment above, as in a shop's own Deploy: a staging
-      # run cannot read the production token. The account is the shared one,
-      # and a shop whose manifest names another is refused by shopctl itself:
-      # two sources that disagree stop the run.
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
-      # The admin footer's help address (ticket #186), the same for every shop
-      # of the fleet: a variable of this repository or its organisation. Unset,
-      # the deploy says the link is gone.
-      MINSHOP_SUPPORT_EMAIL: ${{ vars.MINSHOP_SUPPORT_EMAIL }}
-
+    # The account's credentials are scoped to the environment above, as in a
+    # shop's own Deploy: a staging run cannot read the production token. They
+    # are given to the two steps that run shopctl and to no other: `npm ci`
+    # runs the install scripts of every dependency of the shop, and none of
+    # them needs a key to every shop's buyers. The account is the shared one,
+    # and a shop whose manifest names another is refused by shopctl itself:
+    # two sources that disagree stop the run.
     steps:
       - name: Check out the shop
         uses: actions/checkout@v6
@@ -128,11 +127,13 @@ jobs:
           repository: ${{ needs.shop.outputs.repository }}
           ref: ${{ needs.verify.outputs.sha || inputs.ref }}
           token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          persist-credentials: false
           path: shop
 
       - name: Check out the fleet
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           path: fleet
 
       # A shop on a core older than the owner marker would find another shop's
@@ -148,23 +149,42 @@ jobs:
           cache: npm
           cache-dependency-path: shop/package-lock.json
 
+      # Without the dependencies' install scripts: one of them could rewrite
+      # the shop's tree before the steps that hold the account's token run it.
+      # The build and wrangler need none (esbuild and workerd find their
+      # binaries through their optional packages).
       - name: Install dependencies
         working-directory: shop
-        run: npm ci
+        run: npm ci --ignore-scripts
 
+      # Each report stays on the runner, its prose with it; the log and the
+      # artifact get what `shops.mjs report` keeps of it (the fleet repository
+      # is public).
       - name: Provision or confirm the environment
         working-directory: shop
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
           SHOP: ${{ inputs.shop }}
           TARGET: ${{ inputs.environment }}
         run: |
           set -euo pipefail
-          node shopctl/bin/shopctl.mjs provision --env "$TARGET" --shop "$SHOP" --json | tee provision.json
+          status=0
+          node shopctl/bin/shopctl.mjs provision --env "$TARGET" --shop "$SHOP" --json > provision.json 2> provision.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report provision "$status"
 
       - name: Deploy
         id: deploy
         working-directory: shop
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SHOPCTL_BACKUP_KEY: ${{ secrets.SHOPCTL_BACKUP_KEY }}
+          # The admin footer's help address (ticket #186), the same for every
+          # shop of the fleet: a variable of this repository or its
+          # organisation. Unset, the deploy says the link is gone.
+          MINSHOP_SUPPORT_EMAIL: ${{ vars.MINSHOP_SUPPORT_EMAIL }}
           SHOP: ${{ inputs.shop }}
           TARGET: ${{ inputs.environment }}
           VERIFIED_ALREADY: ${{ inputs.run-verify-job }}
@@ -172,17 +192,21 @@ jobs:
           set -euo pipefail
           args=(deploy --env "$TARGET" --shop "$SHOP" --yes --json)
           if [ "$VERIFIED_ALREADY" = "true" ]; then args+=(--skip-verify); fi
-          node shopctl/bin/shopctl.mjs "${args[@]}" | tee deploy.json
+          status=0
+          node shopctl/bin/shopctl.mjs "${args[@]}" > deploy.json 2> deploy.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report deploy "$status"
           origin="$(node -p "JSON.parse(require('node:fs').readFileSync('deploy.json','utf8')).origin || ''")"
           echo "origin=$origin" >> "$GITHUB_OUTPUT"
 
-      - name: Keep the deployment reports
+      # The summaries only: the archive, the Time Travel bookmark and the
+      # version to roll back to, which the runbooks start from.
+      - name: Keep the deployment summaries
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: deploy-${{ inputs.shop }}-${{ inputs.environment }}-${{ github.run_id }}
           path: |
-            shop/provision.json
-            shop/deploy.json
+            shop/provision.summary.json
+            shop/deploy.summary.json
           retention-days: 90
           if-no-files-found: warn
