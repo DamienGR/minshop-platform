@@ -5,8 +5,11 @@
 // `npm ci`, on whatever Node the runner has.
 //
 //   node .github/fleet/shops.mjs repository <slug>   repository=<owner/repo>
-//   node .github/fleet/shops.mjs matrix [slug]       matrix=[{ slug, repository, since? }],
-//                                                    one shop when a slug is given
+//   node .github/fleet/shops.mjs matrix [slug] [report]
+//                                                    matrix=[{ slug, repository }], one shop
+//                                                    when a slug is given ; with `report`,
+//                                                    the shops whose follow-up has started
+//                                                    (reportSince), and { since }
 //   node .github/fleet/shops.mjs core <dir> [report] refuses a shop below the floor —
 //                                                    the quarterly report's, with `report`
 //   node .github/fleet/shops.mjs report <name> <status>
@@ -153,6 +156,7 @@ if (command === 'repository') {
   if (!reachable(shop)) stop(`« ${argument} » n'a pas de dépôt (repository: propriétaire/dépôt) dans fleet.json.`);
   process.stdout.write(`repository=${shop.repository}\n`);
 } else if (command === 'matrix') {
+  if (extra !== undefined && extra !== 'report') stop(`liste inconnue : ${extra}. Attendu : report, ou rien.`);
   let shops = registry();
   if (argument) {
     shops = shops.filter((entry) => entry?.slug === argument);
@@ -161,15 +165,20 @@ if (command === 'repository') {
   for (const entry of shops.filter((candidate) => !reachable(candidate))) {
     process.stderr.write(`::warning::${String(entry?.slug ?? '(sans slug)')} : pas de dépôt dans fleet.json, ni sauvegardée ni surveillée par la flotte.\n`);
   }
-  const matrix = shops.filter(reachable).map((entry) => {
-    // The start of the quarterly report's follow-up (ADR 0035). Checked
-    // again by shopctl, which refuses a date that is not one.
-    const since = entry.reportSince;
-    if (since !== undefined && !DAY.test(String(since))) {
-      process.stderr.write(`::warning::${entry.slug} : reportSince « ${String(since)} » n'est pas une date AAAA-MM-JJ ; le rapport couvre le trimestre entier.\n`);
+  let listed = shops.filter(reachable);
+  if (extra === 'report') {
+    // The quarterly report (ADR 0035) goes to the shops whose follow-up has
+    // started: `reportSince` in fleet.json. A certification or demonstration
+    // shop has none, and no merchant to send a report to.
+    for (const entry of listed) {
+      const since = entry.reportSince;
+      if (since === undefined) process.stderr.write(`::notice::${entry.slug} : pas de rapport trimestriel, son suivi n'a pas commencé (pas de reportSince dans fleet.json).\n`);
+      else if (!DAY.test(String(since))) process.stderr.write(`::warning::${entry.slug} : reportSince « ${String(since)} » n'est pas une date AAAA-MM-JJ ; pas de rapport trimestriel.\n`);
     }
-    return { slug: entry.slug, repository: entry.repository, ...(DAY.test(String(since ?? '')) ? { since } : {}) };
-  });
+    listed = listed.filter((entry) => DAY.test(String(entry.reportSince ?? '')));
+    if (argument && listed.length === 0) stop(`${argument} n'a pas de reportSince valable dans fleet.json : son suivi n'a pas commencé.`);
+  }
+  const matrix = listed.map((entry) => ({ slug: entry.slug, repository: entry.repository, ...(extra === 'report' ? { since: entry.reportSince } : {}) }));
   process.stdout.write(`matrix=${JSON.stringify(matrix)}\n`);
 } else if (command === 'core') {
   let version;

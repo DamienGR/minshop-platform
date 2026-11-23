@@ -33,7 +33,9 @@
 #   UMAMI_API_KEY              optional: the Umami key, or UMAMI_USERNAME and
 #                              UMAMI_PASSWORD
 # and, as a repository secret, SHOPS_READ_TOKEN when the shops' repositories
-# are private. A shop's start of follow-up is `reportSince` in fleet.json.
+# are private. Only the shops with `reportSince` in fleet.json, the start of
+# their follow-up, get a report: a certification or demonstration shop has no
+# merchant to send one to.
 name: Quarterly report
 
 on:
@@ -79,7 +81,7 @@ jobs:
           ONLY: ${{ inputs.shop }}
         run: |
           set -euo pipefail
-          node .github/fleet/shops.mjs matrix "$ONLY" >> "$GITHUB_OUTPUT"
+          node .github/fleet/shops.mjs matrix "$ONLY" report >> "$GITHUB_OUTPUT"
 
   report:
     name: Quarterly report (${{ matrix.slug }})

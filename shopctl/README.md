@@ -638,7 +638,7 @@ la commande le refuse.
 
 **Le rapport trimestriel** (ADR 0035) est le workflow « Quarterly report » du
 dépôt de flotte : le 5 janvier, avril, juillet et octobre, `shopctl report --env
-production --publish` pour chaque boutique de `fleet.json`, avec le shopctl de
+production --publish` pour chaque boutique suivie de `fleet.json`, avec le shopctl de
 son socle (v0.13.3 au moins), sur le trimestre écoulé. Ventes lues dans la base
 de production (des agrégats seulement), évolutions tirées de l'historique git
 de la boutique et des notes des versions du socle franchies, référencement par
@@ -646,8 +646,9 @@ Google Search Console, fréquentation par Umami ; une source illisible ou non
 raccordée est dite, et le rapport sort avec les autres. Il va dans l'issue
 « Rapport trimestriel — <trimestre> » du dépôt de la boutique, qui doit être
 privé et avoir ses issues : la commande refuse les autres avant de rien lire.
-L'agence relit l'issue et envoie elle-même le message qui la termine. Le début
-du suivi d'une boutique est `"reportSince": "AAAA-MM-JJ"` dans `fleet.json`.
+L'agence relit l'issue et envoie elle-même le message qui la termine. Seules
+les boutiques dont `fleet.json` dit le début du suivi, `"reportSince":
+"AAAA-MM-JJ"`, reçoivent un rapport.
 `fleet repo` pose l'environnement `report` : le jeton de surveillance,
 `REPORT_ISSUES_TOKEN` et, s'ils sont exportés, `GSC_SERVICE_ACCOUNT_JSON` et
 `UMAMI_API_KEY`. La mise en place et chaque trimestre :
