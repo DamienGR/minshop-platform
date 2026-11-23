@@ -1,0 +1,45 @@
+---
+/**
+ * Umami's tracker (ADR 0034), drawn by the storefront layout on the pages
+ * `umamiTag()` lets it measure, and nowhere else.
+ *
+ * The script comes from Umami's server, deferred: it never holds up the page,
+ * and a page whose tracker is blocked works the same (invariant 1). Fixed
+ * attributes, none of them a merchant's choice:
+ *
+ *  - `data-exclude-search` and `data-exclude-hash`: the URL Umami receives is
+ *    the path; `beforeSend.ts` adds back the campaign parameters alone;
+ *  - `data-do-not-track`: a browser that asks not to be followed is not;
+ *  - `data-domains`: the shop's public host when there is one, so a preview
+ *    counts nothing.
+ *
+ * The hook script comes first. A module script and a deferred one run in the
+ * order they appear, both once the page is parsed, so the hook is in place
+ * before the tracker reads it.
+ */
+import { BEFORE_SEND_GLOBAL } from './beforeSend';
+import type { UmamiTag } from './umami';
+
+interface Props {
+  tag: UmamiTag;
+}
+
+const { tag } = Astro.props;
+---
+
+<script>
+  import { beforeSend, BEFORE_SEND_GLOBAL } from './beforeSend';
+
+  (window as unknown as Record<string, unknown>)[BEFORE_SEND_GLOBAL] = (_type: string, payload: unknown) =>
+    beforeSend(payload, { cookies: document.cookie, search: location.search });
+</script>
+<script
+  is:inline
+  defer
+  src={tag.scriptUrl}
+  data-website-id={tag.websiteId}
+  data-domains={tag.domain ?? undefined}
+  data-exclude-search="true"
+  data-exclude-hash="true"
+  data-do-not-track="true"
+  data-before-send={BEFORE_SEND_GLOBAL}></script>

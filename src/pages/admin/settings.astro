@@ -84,6 +84,7 @@ import Rich from '../../features/i18n/Rich.astro';
 import SeoFields from '../../features/seo/SeoFields.astro';
 import { parseSeoFields } from '../../features/seo/fields';
 import { ORDER_COMMENT_MAX_LENGTH } from '../../features/orders/comment';
+import { parseUmamiForm, UMAMI_CLOUD_SCRIPT } from '../../features/audience/umami';
 
 const capabilities: RuntimeCapabilities = {
   vault: vaultReady(),
@@ -479,6 +480,19 @@ if (Astro.request.method === 'POST') {
         await setSetting(env.DB, 'contact_page', String(page.id));
       }
     }
+  } else if (action === 'save_audience') {
+    // Umami (ADR 0034): both values or neither. The pasted « Tracking code »
+    // is read for its two values and never stored as markup.
+    const parsed = parseUmamiForm(
+      String(form.get('umami_script_url') ?? ''),
+      String(form.get('umami_website_id') ?? ''),
+    );
+    if (!parsed.ok) {
+      validationError = t(parsed.error);
+    } else {
+      await setSetting(env.DB, 'umami_script_url', parsed.value?.scriptUrl ?? null);
+      await setSetting(env.DB, 'umami_website_id', parsed.value?.websiteId ?? null);
+    }
   } else if (action === 'save_opennode') {
     await setSetting(env.DB, 'opennode_api_url', String(form.get('opennode_api_url') ?? '').trim() || null);
     await applySecrets(['opennode_api_key']);
@@ -771,6 +785,7 @@ const sections = [
   { id: 'contact', label: t('admin.settings.section.contact') },
   { id: 'turnstile', label: t('admin.settings.section.turnstile') },
   { id: 'search', label: t('admin.settings.section.search') },
+  { id: 'audience', label: t('admin.settings.section.audience') },
   { id: 'agency-access', label: t('admin.settings.section.agencyAccess') },
   { id: 'build-time', label: t('admin.settings.section.buildTime') },
 ];
@@ -1846,6 +1861,55 @@ const sections = [
         )
       }
     </div>
+  </section>
+
+  {/* ── Audience measurement: Umami (ADR 0034) ───────────────────────────── */}
+  <section id="audience" class="mt-10 scroll-mt-16">
+    <h2 class="mb-2 text-lg font-bold">{t('admin.settings.section.audience')}</h2>
+    <p class="mb-4 text-sm text-gray-500">
+      <Rich message="admin.settings.audience.intro" href="https://umami.is" linkClass="text-accent underline" />
+    </p>
+
+    <form method="POST" class="mb-10 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+      <input type="hidden" name="_action" value="save_audience" />
+      <p class="text-sm" data-audience-state>
+        {settings.umami
+          ? t('admin.settings.audience.on', { hote: new URL(settings.umami.scriptUrl).host })
+          : t('admin.settings.audience.off')}
+      </p>
+      <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+        {t('admin.settings.audience.scriptUrl')}
+        <input
+          type="text"
+          name="umami_script_url"
+          value={settings.umami?.scriptUrl ?? ''}
+          placeholder={UMAMI_CLOUD_SCRIPT}
+          autocomplete="off"
+          spellcheck="false"
+          class="w-full max-w-xl rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+        {t('admin.settings.audience.websiteId')}
+        <input
+          type="text"
+          name="umami_website_id"
+          value={settings.umami?.websiteId ?? ''}
+          placeholder="94db1cb1-74f4-4a40-ad6c-962362670409"
+          autocomplete="off"
+          spellcheck="false"
+          class="w-96 max-w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+        />
+      </label>
+      <p class="text-xs text-gray-500">{t('admin.settings.audience.excluded')}</p>
+      <p class="text-xs text-amber-700">{t('admin.settings.audience.privacy')}</p>
+      <button
+        type="submit"
+        class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+      >
+        {t('admin.common.save')}
+      </button>
+    </form>
   </section>
 
   {/* ── Agency access: one-time tokens (ticket #227, ADR 0032) ─────────────── */}

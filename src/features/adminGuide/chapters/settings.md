@@ -19,6 +19,20 @@ Choisissez la **Page du formulaire** et le **Destinataire** des messages. Puis a
 
 Le **Destinataire des alertes de commande** reçoit un e-mail à chaque nouvelle commande. **Envoyer le test** vérifie que les e-mails partent bien.
 
+### Mesure d’audience
+
+Pour savoir combien de personnes visitent la boutique, et d’où elles viennent, la boutique peut envoyer ses visites à Umami, un outil de mesure d’audience qui ne dépose aucun cookie : aucun bandeau à faire accepter.
+
+1. Dans Umami, ajoutez la boutique comme site, avec son adresse.
+2. Ouvrez son code de suivi (« Tracking code »).
+3. Dans **Mesure d’audience**, recopiez l’adresse qui suit `src=` dans **Adresse du script**, et la valeur de `data-website-id` dans **Identifiant du site**. Vous pouvez aussi coller le code de suivi entier dans **Adresse du script** : la boutique y lit les deux valeurs.
+4. Cliquez sur **Enregistrer**. Les visites apparaissent dans Umami dès la page suivante.
+5. Dans [Pages](#guide-pages), ajoutez Umami à votre politique de confidentialité, parmi les destinataires, pour la mesure d’audience.
+
+Ne sont jamais comptées : les pages de l’administration, celles d’une commande et de son paiement, et vos propres visites tant que vous êtes connecté à l’administration dans ce navigateur. Les liens d’une campagne gardent leurs paramètres `utm_source`, `utm_campaign`…, qu’Umami range par campagne.
+
+Pour arrêter la mesure, videz les deux champs et enregistrez.
+
 ### Accès de l’agence
 
 La personne qui s’occupe de votre boutique peut entrer dans l’administration sans connaître votre mot de passe : avec un jeton à usage unique, valable un quart d’heure, que seul le compte d’hébergement de la boutique permet de créer. Il ouvre une session de 8 heures. Votre mot de passe ne change pas, et vous restez connecté.

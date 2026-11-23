@@ -6,6 +6,7 @@ import {
 } from '../shipping/settings';
 import { defaultWeightUnit, isWeightUnit, type WeightUnit } from '../shipping/weight';
 import { parseHoldDays } from '../payments/bankTransfer.ts';
+import { parseUmamiSettings, type UmamiSettings } from '../audience/umami.ts';
 
 /**
  * Runtime settings — the small set of values the setup wizard persists to D1 so
@@ -71,6 +72,9 @@ export type SettingKey =
   | 'contact_page' // id of the published page the form sits under; absent = no form
   | 'contact_to' // its recipient; absent = the order alerts' recipient
   | 'contact_reasons' // the reasons offered, one per line; absent = the catalog's defaults
+  // Audience measurement by Umami (ADR 0034): both or neither; absent = off.
+  | 'umami_script_url' // the tracker's https address
+  | 'umami_website_id' // the website ID Umami gave the shop
   | `enc:${string}`; // AES-GCM-encrypted secret (see features/secrets/store.ts), e.g. 'enc:stripe_secret_key'. Never loaded as plaintext into locals.
 
 /** The storefront features that can be flipped at runtime (default on). */
@@ -174,6 +178,10 @@ export interface StoreSettings {
   contactTo: string | null;
   /** The reasons the merchant wrote, in order, or null for the defaults. */
   contactReasons: string[] | null;
+  /** Umami's tracker and the shop's website ID (ADR 0034), or null: no
+   *  measurement. Null too when either stored value is missing or invalid, so
+   *  a half-written configuration never loads a script. */
+  umami: UmamiSettings | null;
 }
 
 /** One setting value, or null if unset. */
@@ -283,6 +291,7 @@ export function parseStoreSettings(
     contactPageId: positiveId(map.get('contact_page')),
     contactTo: map.get('contact_to') ?? null,
     contactReasons: lines(map.get('contact_reasons')),
+    umami: parseUmamiSettings(map.get('umami_script_url'), map.get('umami_website_id')),
   };
 }
 
