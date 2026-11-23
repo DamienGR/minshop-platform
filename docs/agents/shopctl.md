@@ -392,6 +392,38 @@ refusing API as exit 5 — never as a quiet night. The endpoint follows
 `CLOUDFLARE_API_BASE_URL`, the variable wrangler honours, which is how the
 suite points it at its double.
 
+## The quarterly report
+
+`shopctl report --env production` (ADR 0035, `shopctl/src/commands/report.mjs`)
+is the merchant's quarterly report: four READ-ONLY sources in
+`shopctl/src/quarterly/`, each optional, none fatal. `sales.mjs` sends literal
+aggregate SELECTs to the production D1 through `query` (no bind parameters on
+`d1 execute`; the bounds are validated timestamps from `period.mjs`), so no
+address or e-mail leaves the database — distinct buyers are counted in SQL.
+`history.mjs` walks the shop's first-parent merges of the quarter and the core
+versions its `package.json` crossed, described by their `docs/migrations/`
+notes (first sentence, « Guide administrateur » bullets); a `Pour le client :`
+line in a PR's commits is the merchant's sentence, `-` leaves it out.
+`search-console.mjs` signs a service-account JWT with `node:crypto` (no
+dependency) and `umami.mjs` reads the site the shop's settings name (ADR 0034).
+A source that throws a ShopctlError becomes `{ status: 'error' }` and a warning;
+anything else is a bug and keeps its stack. The quarter is civil, in
+`client.timezone`; `--since` (fleet.json's `reportSince`) clamps it.
+`--publish` writes ONE issue per quarter in the shop's repository, found again
+by its exact title (`publish.mjs`, body on stdin), and refuses — before any
+source is read, exit 4 — a repository that is not private or has its issues
+off: `shopctl repo` creates shops without issues, and the report states sales.
+
+The fleet runs it: `fleet init` renders `report.yml` (« Quarterly report », the
+5th of January, April, July and October) with the shop's own shopctl, from a
+`report` environment limited to the default branch, which `fleet repo` fills
+with the monitor token, `REPORT_ISSUES_TOKEN` and the optional Google and
+Umami keys. Shops below `REPORT_MINIMUM_CORE` (`shopctl/src/fleet.mjs`) are
+refused like the Deploy refuses them below `FLEET_MINIMUM_CORE`, and the public
+fleet's log and artifact get what `shops.mjs report` keeps (quarter, issue,
+failed sources), never the figures. `docs/operations/rapport-trimestriel.md` is
+the runbook.
+
 ## Certifying one shop
 
 `shopctl certify --env production` is the short certification

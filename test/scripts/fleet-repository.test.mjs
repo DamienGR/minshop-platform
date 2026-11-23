@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { EXIT_CODES } from '../../shopctl/src/errors.mjs';
-import { FLEET_MINIMUM_CORE, readRegistry } from '../../shopctl/src/fleet.mjs';
+import { FLEET_MINIMUM_CORE, REPORT_MINIMUM_CORE, readRegistry } from '../../shopctl/src/fleet.mjs';
 import { FLEET_FILES, fleetAccount, monitorTokenFor } from '../../shopctl/src/commands/fleet-repository.mjs';
 import { GIT_ENV } from '../helpers/core-repository.mjs';
 import { OPERATOR_ENV } from '../helpers/operator-env.mjs';
@@ -83,6 +83,22 @@ function fleetWorkspace({ shops = [], git = true } = {}) {
 
 // ---------------------------------------------------------------------------
 
+describe('a registry entry\'s start of follow-up', () => {
+  const registry = (shops) => {
+    const root = scratchDir('fleet-registry-');
+    writeFileSync(join(root, 'fleet.json'), JSON.stringify({ schemaVersion: 1, shops }));
+    return () => readRegistry(join(root, 'fleet.json'));
+  };
+
+  it('is optional, and a day that exists', () => {
+    expect(registry([{ slug: 'boutique-a', path: 'a' }])().shops[0].reportSince).toBeNull();
+    expect(registry([{ slug: 'boutique-a', path: 'a', reportSince: '2026-11-09' }])().shops[0].reportSince).toBe('2026-11-09');
+    for (const value of ['2026-02-30', '09/11/2026', 'novembre']) {
+      expect(registry([{ slug: 'boutique-a', path: 'a', reportSince: value }])).toThrow(/reportSince/);
+    }
+  });
+});
+
 describe('a registry entry\'s repository', () => {
   const registry = (shops) => {
     const root = scratchDir('registry-');
@@ -112,6 +128,7 @@ describe('a registry entry\'s repository', () => {
 describe('the fleet\'s workflows', () => {
   const deploy = template('deploy.yml');
   const nightly = template('nightly.yml');
+  const quarterly = template('report.yml');
   const runs = (text) => [...text.matchAll(/run: \|\n((?:\s{10}.*\n)+)/g)].map((match) => match[1]);
 
   // Each shop's own Deploy, from here: the same commands, with the shopctl of
@@ -179,10 +196,29 @@ describe('the fleet\'s workflows', () => {
     expect(account.indexOf("Check the shop's core")).toBeLessThan(account.indexOf('fleet usage'));
   });
 
+  // ADR 0035: once a quarter, every shop, its own shopctl, published in the
+  // shop's repository — never in this public one.
+  it('writes each shop\'s quarterly report on the 5th, from the report environment, into the shop\'s issues', () => {
+    expect([...quarterly.matchAll(/^\s+- cron: '([^']+)'$/gm)].map((match) => match[1])).toEqual(['17 6 5 1,4,7,10 *']);
+    expect(quarterly).toMatch(/workflow_dispatch:/);
+    const job = quarterly.slice(quarterly.indexOf('  report:'));
+    expect(job).toMatch(/\n {4}environment: report\n/);
+    expect(job).toMatch(/fail-fast: false\n/);
+    expect(job).toMatch(/fetch-depth: 0\n/);
+    expect(job).toMatch(/node fleet\/\.github\/fleet\/shops\.mjs core shop report/);
+    expect(job.indexOf("Check the shop's core")).toBeLessThan(job.indexOf('run: npm ci'));
+    expect(job).toMatch(/CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
+    expect(job).toMatch(/GH_TOKEN: \$\{\{ secrets\.REPORT_ISSUES_TOKEN \}\}/);
+    expect(job).toMatch(/args=\(report --env production --shop "\$SHOP" --repository "\$REPOSITORY" --publish --json\)/);
+    expect(job).toMatch(/SINCE: \$\{\{ matrix\.since \}\}/);
+    expect(job).not.toMatch(/--out/);
+    expect(quarterly).not.toMatch(/issues: write/);
+  });
+
   it('never substitutes an expression into a shell script, and reads the command\'s exit status', () => {
-    for (const text of [deploy, nightly]) {
+    for (const text of [deploy, nightly, quarterly]) {
       const bodies = runs(text);
-      expect(bodies.length).toBeGreaterThan(2);
+      expect(bodies.length).toBeGreaterThan(1);
       for (const body of bodies) expect(body).not.toMatch(/\$\{\{/);
       for (const body of bodies.filter((candidate) => candidate.includes('shopctl.mjs'))) expect(body).toContain('set -euo pipefail');
     }
@@ -192,10 +228,10 @@ describe('the fleet\'s workflows', () => {
   // downloads its artifacts. A report counts every table's rows and measures
   // the traffic; it stays on the runner, and only its summary leaves.
   it('publishes the summary of each report, never the report', () => {
-    for (const text of [deploy, nightly]) {
+    for (const text of [deploy, nightly, quarterly]) {
       expect(text).not.toMatch(/\| tee/);
       const calls = [...text.matchAll(/^ +node shopctl\/bin\/shopctl\.mjs (.*)$/gm)].map((match) => match[1]);
-      expect(calls.length).toBeGreaterThan(1);
+      expect(calls.length).toBeGreaterThan(0);
       for (const call of calls) {
         const [, name] = call.match(/ > ([a-z-]+)\.json 2> \1\.log \|\| status=\$\?$/) ?? [];
         expect(name, call).toBeTruthy();
@@ -210,11 +246,11 @@ describe('the fleet\'s workflows', () => {
   // `npm ci` runs every dependency's install scripts, and a checkout leaves its
   // token in the git config: neither meets the account's tokens.
   it('hands the account\'s tokens to the shopctl steps alone', () => {
-    for (const text of [deploy, nightly]) {
+    for (const text of [deploy, nightly, quarterly]) {
       // No job-level env holds a secret.
       for (const block of text.matchAll(/^ {4}env:\n((?: {6}.*\n)+)/gm)) expect(block[1]).not.toMatch(/secrets\./);
       const steps = text.split(/\n(?= {6}- name: )/).slice(1);
-      for (const step of steps.filter((candidate) => /secrets\.(CLOUDFLARE|MONITOR|SHOPCTL)/.test(candidate.replace(/token: \$\{\{ secrets\.SHOPS_READ_TOKEN[^\n]*/g, '')))) {
+      for (const step of steps.filter((candidate) => /secrets\.(CLOUDFLARE|MONITOR|SHOPCTL|REPORT|GSC|UMAMI)/.test(candidate.replace(/token: \$\{\{ secrets\.SHOPS_READ_TOKEN[^\n]*/g, '')))) {
         expect(step).toContain('node shopctl/bin/shopctl.mjs');
       }
       for (const install of text.match(/run: npm ci.*/g) ?? []) expect(install).toBe('run: npm ci --ignore-scripts');
@@ -227,7 +263,7 @@ describe('the fleet\'s workflows', () => {
   it('uses the actions every workflow of the core uses', () => {
     const used = (text) => [...new Set([...text.matchAll(/uses: (actions\/[\w-]+@v\d+)/g)].map((match) => match[1]))];
     const core = used(readFileSync(resolve(CORE, '.github/workflows/deploy.yml'), 'utf8'));
-    for (const action of [...used(deploy), ...used(nightly)]) expect(core).toContain(action);
+    for (const action of [...used(deploy), ...used(nightly), ...used(quarterly)]) expect(core).toContain(action);
   });
 });
 
@@ -241,6 +277,8 @@ describe('shopctl fleet init', () => {
     expect(report.files).toEqual(Object.keys(FLEET_FILES).map((path) => ({ path, action: 'create' })));
     expect(fleet.read('.github/workflows/deploy.yml')).toMatch(new RegExp(`^# Généré par \`shopctl fleet init\` depuis le socle v${VERSION.replaceAll('.', '\\.')}\\.`));
     expect(fleet.read('.github/fleet/shops.mjs')).toContain(`const MINIMUM_CORE = '${FLEET_MINIMUM_CORE}';`);
+    expect(fleet.read('.github/fleet/shops.mjs')).toContain(`const REPORT_MINIMUM_CORE = '${REPORT_MINIMUM_CORE}';`);
+    expect(fleet.read('.github/workflows/report.yml')).toMatch(/^# Généré par `shopctl fleet init`/);
     expect(fleet.read('.github/fleet/shops.mjs')).not.toContain('__');
     // The shops are repositories of their own, inside the fleet's tree; the
     // backup key is read from it, and the fleet repository is public.
@@ -253,7 +291,7 @@ describe('shopctl fleet init', () => {
     fleet.run(['fleet', 'init']);
     writeFileSync(join(fleet.root, '.github/workflows/nightly.yml'), 'édité à la main\n');
     const { report } = fleet.json(['fleet', 'init']);
-    expect(report.files.map((file) => file.action)).toEqual(['keep', 'replace', 'keep']);
+    expect(report.files.map((file) => file.action)).toEqual(['keep', 'replace', 'keep', 'keep']);
     expect(fleet.read('.github/workflows/nightly.yml')).toMatch(/^# Généré par `shopctl fleet init`/);
     expect(fleet.read('.gitignore').match(/\/shop-boutique-a\//g)).toHaveLength(1);
     expect(fleet.read('.gitignore').match(/\/\.shopctl\//g)).toHaveLength(1);
@@ -300,6 +338,36 @@ describe('the fleet\'s helper script', () => {
     expect(below.stderr).toMatch(new RegExp(`socle 0\\.3\\.31 ; le compte mutualisé demande ${FLEET_MINIMUM_CORE.replaceAll('.', '\\.')}`));
     writeFileSync(join(tree, 'package.json'), JSON.stringify({ version: FLEET_MINIMUM_CORE }));
     expect(helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree]).status).toBe(0);
+  });
+
+  // The quarterly report runs each shop's own `shopctl report`.
+  it('refuses a shop whose core does not write the quarterly report', () => {
+    const tree = scratchDir('shop-tree-');
+    writeFileSync(join(tree, 'package.json'), JSON.stringify({ version: FLEET_MINIMUM_CORE }));
+    const below = helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree, 'report']);
+    expect(below.status).toBe(1);
+    expect(below.stderr).toMatch(new RegExp(`le rapport trimestriel demande ${REPORT_MINIMUM_CORE.replaceAll('.', '\\.')}`));
+    writeFileSync(join(tree, 'package.json'), JSON.stringify({ version: REPORT_MINIMUM_CORE }));
+    expect(helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree, 'report']).status).toBe(0);
+    expect(helper([{ slug: 'boutique-a', path: 'a' }], ['core', tree, 'autre']).status).toBe(1);
+  });
+
+  it('carries the start of the follow-up, and narrows to one shop when asked', () => {
+    const shops = [
+      { slug: 'boutique-a', path: 'a', repository: 'agence/shop-a', reportSince: '2026-11-09' },
+      { slug: 'boutique-b', path: 'b', repository: 'agence/shop-b' },
+    ];
+    // A date shopctl would refuse, written after `fleet init` read the file:
+    // the run warns and covers the whole quarter.
+    const fleet = fleetWorkspace({ shops, git: false });
+    fleet.run(['fleet', 'init']);
+    writeFileSync(join(fleet.root, 'fleet.json'), JSON.stringify({ schemaVersion: 1, shops: [shops[0], { ...shops[1], reportSince: 'novembre' }] }));
+    const all = spawnSync('node', [join(fleet.root, '.github/fleet/shops.mjs'), 'matrix'], { cwd: fleet.root, encoding: 'utf8' });
+    expect(all.stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"},{"slug":"boutique-b","repository":"agence/shop-b"}]\n');
+    expect(all.stderr).toMatch(/::warning::boutique-b : reportSince « novembre »/);
+    expect(helper(shops, ['matrix', 'boutique-a']).stdout).toBe('matrix=[{"slug":"boutique-a","repository":"agence/shop-a","since":"2026-11-09"}]\n');
+    expect(helper(shops, ['matrix', '']).stdout).toContain('boutique-b');
+    expect(helper(shops, ['matrix', 'boutique-z']).status).toBe(1);
   });
 });
 
@@ -383,6 +451,27 @@ describe('the fleet\'s report summary', () => {
     expect(result.stdout).toContain('TypeError: lecture impossible');
   });
 
+  // The quarterly report states a shop's sales and audience: the run keeps
+  // the quarter, the issue and the sources that did not answer.
+  it('keeps the quarter and the issue of a quarterly report, never its figures', () => {
+    const report = {
+      command: 'report', ok: true, shop: 'boutique-a', env: 'production',
+      period: { key: '2026-T4', label: '4e trimestre 2026' },
+      store: { name: 'Boutique A', domain: 'boutique-a.fr', currency: 'EUR' },
+      sales: { status: 'ok', orders: 4321, grossCents: 9876543 },
+      audience: { status: 'ok', visitors: 2468 },
+      checks: [{ name: 'ventes', ok: true }, { name: 'référencement', ok: false }],
+      issue: { action: 'created', number: 7, url: 'https://github.com/agence/shop-a/issues/7' },
+    };
+    const result = summarise({ 'report.json': json(report), 'report.log': '✓ 4321 commande(s) payée(s)\n! référencement : Search Console, totaux : 403.\n' }, ['report', '0']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.summary('report')).toEqual({
+      report: 'report', status: 0, ok: true, command: 'report', shop: 'boutique-a', env: 'production',
+      trimestre: '2026-T4', issue: report.issue.url, failed: ['référencement'],
+    });
+    for (const figure of ['4321', '9876543', '2468', 'Boutique A']) expect(`${result.stdout}${JSON.stringify(result.summary('report'))}`).not.toContain(figure);
+  });
+
   it('refuses a report name that is not a file name, and a status that is not one', () => {
     for (const args of [['../deploy', '0'], ['deploy', 'zéro'], ['deploy']]) {
       const result = summarise({}, args);
@@ -444,14 +533,14 @@ describe('shopctl fleet repo', () => {
     return fleet;
   };
 
-  it('creates the fleet repository public, with four environments and the shared account\'s secrets', () => {
+  it('creates the fleet repository public, with five environments and the shared account\'s secrets', () => {
     const fleet = ready();
     const { status, report, stderr } = fleet.json(['fleet', 'repo', '--reviewer', 'damien'], TOKENS);
     expect(status, stderr).toBe(EXIT_CODES.ok);
     expect(report).toMatchObject({ repository: { nameWithOwner: fleet.nameWithOwner, created: true, visibility: 'public' }, account: ACCOUNT.id, missingTokens: [] });
     const repo = fleet.github().repos[fleet.nameWithOwner];
     expect(repo.visibility).toBe('public');
-    expect(Object.keys(repo.environments)).toEqual(['staging', 'production', 'backup', 'monitor']);
+    expect(Object.keys(repo.environments)).toEqual(['staging', 'production', 'backup', 'monitor', 'report']);
     expect(repo.environments.production.reviewers).toBe(1);
     expect(repo.environments.backup).toMatchObject({ reviewers: 0, branches: ['main'], branchPolicy: { custom_branch_policies: true } });
     expect(repo.environments.production.secrets).toEqual({ CLOUDFLARE_API_TOKEN: 'cf-deploie', CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id, SHOPCTL_BACKUP_KEY: TOKENS.SHOPCTL_BACKUP_KEY });
@@ -459,6 +548,11 @@ describe('shopctl fleet repo', () => {
     // Its D1 Read reads every shop: limited to the default branch, like backup.
     expect(repo.environments.monitor).toMatchObject({ reviewers: 0, branches: ['main'], branchPolicy: { custom_branch_policies: true } });
     expect(repo.environments.monitor.secrets).toEqual({ MONITOR_CLOUDFLARE_API_TOKEN: 'cf-surveille', MONITOR_CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id });
+    // The quarterly report reads the sales with the monitor's read-only token,
+    // and only a run of the default branch has it.
+    expect(repo.environments.report).toMatchObject({ reviewers: 0, branches: ['main'], branchPolicy: { custom_branch_policies: true } });
+    expect(repo.environments.report.secrets).toEqual({ CLOUDFLARE_API_TOKEN: 'cf-surveille', CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id });
+    expect(stderr).toMatch(/aucun jeton de publication du rapport trimestriel \(REPORT_ISSUES_TOKEN\)/);
     expect(repo.secrets ?? {}).toEqual({});
     expect(report.leftovers).toEqual([]);
   });
@@ -480,10 +574,14 @@ describe('shopctl fleet repo', () => {
 
   it('never lets a token reach an argument vector or the terminal', () => {
     const fleet = ready();
-    const result = fleet.run(['fleet', 'repo'], TOKENS);
+    const REPORT = { REPORT_ISSUES_TOKEN: 'gh-rapport', GSC_SERVICE_ACCOUNT_JSON: '{"type":"service_account","private_key":"cle-google"}', UMAMI_API_KEY: 'umami-cle' };
+    const result = fleet.run(['fleet', 'repo'], { ...TOKENS, ...REPORT });
     expect(result.status, result.stderr).toBe(EXIT_CODES.ok);
+    expect(fleet.github().repos[fleet.nameWithOwner].environments.report.secrets).toEqual({
+      CLOUDFLARE_API_TOKEN: 'cf-surveille', CLOUDFLARE_ACCOUNT_ID: ACCOUNT.id, ...REPORT,
+    });
     const argv = fleet.github().calls.flatMap((call) => call.argv).join(' ');
-    for (const value of ['cf-deploie', 'cf-sauve', 'cf-surveille', TOKENS.SHOPCTL_BACKUP_KEY]) {
+    for (const value of ['cf-deploie', 'cf-sauve', 'cf-surveille', TOKENS.SHOPCTL_BACKUP_KEY, 'gh-rapport', 'cle-google', 'umami-cle']) {
       expect(argv).not.toContain(value);
       expect(`${result.stdout}${result.stderr}`).not.toContain(value);
     }

@@ -1,0 +1,178 @@
+# __GENERATED__
+#
+# The quarterly report (ADR 0035): on the 5th of January, April, July and
+# October, `shopctl report` for every shop of fleet.json, with the shopctl of
+# the core each shop is on, published as an issue of the SHOP's repository —
+# « Rapport trimestriel — <trimestre> » — for the agency to review and send to
+# the merchant by e-mail. The 5th, because Google consolidates its search data
+# two to three days late.
+#
+# A GitHub schedule, not a Worker cron: the shared account's five crons on
+# Workers Free are not touched (ADR 0019).
+#
+# What this repository publishes, being public: the outcome of each job, the
+# quarter, the issue's address and the sources that did not answer — what
+# `.github/fleet/shops.mjs report` keeps. Never the report: it states the
+# shop's sales and audience. It goes to the shop's repository and nowhere
+# else, and `shopctl report` refuses that repository, before reading anything,
+# unless it is private with its issues on.
+#
+# Run by hand (Actions → Quarterly report → Run workflow): `current-quarter`
+# is a preview of the quarter under way, and opens the issue the final report
+# will update; a slug limits the run to one shop.
+#
+# Secrets, placed by `shopctl fleet repo` in the `report` environment, limited
+# to the default branch:
+#   CLOUDFLARE_API_TOKEN       the monitor's read-only token (D1, Account
+#                              Settings, Memberships and User Details: Read)
+#   CLOUDFLARE_ACCOUNT_ID
+#   REPORT_ISSUES_TOKEN        writes the issues of the shops' repositories
+#                              (fine-grained, on those repositories only:
+#                              Issues read and write; one owner per token)
+#   GSC_SERVICE_ACCOUNT_JSON   optional: the Google service account's key
+#   UMAMI_API_KEY              optional: the Umami key, or UMAMI_USERNAME and
+#                              UMAMI_PASSWORD
+# and, as a repository secret, SHOPS_READ_TOKEN when the shops' repositories
+# are private. A shop's start of follow-up is `reportSince` in fleet.json.
+name: Quarterly report
+
+on:
+  schedule:
+    - cron: '17 6 5 1,4,7,10 *'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: Trimestre écoulé, ou aperçu du trimestre en cours
+        type: choice
+        options:
+          - previous-quarter
+          - current-quarter
+        default: previous-quarter
+      shop:
+        description: Une seule boutique (son slug) ; vide pour toutes
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report
+  cancel-in-progress: false
+
+jobs:
+  shops:
+    name: Read fleet.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.shops.outputs.matrix }}
+    steps:
+      - name: Check out the fleet
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: List the shops
+        id: shops
+        env:
+          ONLY: ${{ inputs.shop }}
+        run: |
+          set -euo pipefail
+          node .github/fleet/shops.mjs matrix "$ONLY" >> "$GITHUB_OUTPUT"
+
+  report:
+    name: Quarterly report (${{ matrix.slug }})
+    needs: shops
+    if: ${{ needs.shops.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Its token reads every shop's D1 and writes the shops' issues: only a run
+    # of the default branch has it.
+    environment: report
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.shops.outputs.matrix) }}
+
+    env:
+      PERIOD: ${{ inputs.period || 'previous-quarter' }}
+
+    steps:
+      # The whole history: the report reads the quarter's merges and the core
+      # versions the shop moved through.
+      - name: Check out the shop
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.repository }}
+          token: ${{ secrets.SHOPS_READ_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 0
+          path: shop
+
+      - name: Check out the fleet
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          path: fleet
+
+      - name: Check the shop's core
+        run: node fleet/.github/fleet/shops.mjs core shop report
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: shop/.nvmrc
+          check-latest: true
+          cache: npm
+          cache-dependency-path: shop/package-lock.json
+
+      - name: Install dependencies
+        working-directory: shop
+        run: npm ci --ignore-scripts
+
+      # The report stays on the runner and in the shop's issue: the log and
+      # the artifact get its summary.
+      - name: Produce and publish the report
+        working-directory: shop
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          UMAMI_API_KEY: ${{ secrets.UMAMI_API_KEY }}
+          UMAMI_USERNAME: ${{ secrets.UMAMI_USERNAME }}
+          UMAMI_PASSWORD: ${{ secrets.UMAMI_PASSWORD }}
+          GH_TOKEN: ${{ secrets.REPORT_ISSUES_TOKEN }}
+          SHOP: ${{ matrix.slug }}
+          SINCE: ${{ matrix.since }}
+          REPOSITORY: ${{ matrix.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN absent de l'environnement report : les ventes ne se lisent pas. Exportez CLOUDFLARE_API_TOKEN_MONITOR et relancez shopctl fleet repo."
+            exit 1
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::REPORT_ISSUES_TOKEN absent de l'environnement report : le rapport ne peut pas être publié. Exportez-le et relancez shopctl fleet repo."
+            exit 1
+          fi
+          args=(report --env production --shop "$SHOP" --repository "$REPOSITORY" --publish --json)
+          if [ "$PERIOD" = current-quarter ]; then
+            args+=(--current)
+          fi
+          if [ -n "$SINCE" ]; then
+            args+=(--since "$SINCE")
+          fi
+          status=0
+          node shopctl/bin/shopctl.mjs "${args[@]}" > report.json 2> report.log || status=$?
+          node ../fleet/.github/fleet/shops.mjs report report "$status"
+
+      - name: Keep the summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: report-${{ matrix.slug }}-${{ github.run_id }}
+          path: shop/report.summary.json
+          retention-days: 30
+          if-no-files-found: ignore

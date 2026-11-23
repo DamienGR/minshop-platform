@@ -4334,3 +4334,39 @@ v0.13.2 :
 Tenu par `src/features/audience/umami.test.ts`, `beforeSend.test.ts` et
 `test/integration/audience.mjs` (réglage, vitrine, admin, commande et
 paiement, arrêt).
+
+### 13.34 Le rapport trimestriel au commerçant
+
+Demandé par Damien le 2026-11-23 : le rapport trimestriel automatique des
+sites vitrines de l'agence, pour toutes les boutiques, présentes et à venir.
+Aucun des jalons 0 à 10 n'avance.
+
+Fait le 2026-11-23, sans migration, par
+l'[ADR 0035](architecture/decisions/0035-rapport-trimestriel.md) (proposé),
+pour le socle v0.13.3. Choix de Damien : dans le socle, lancé par la flotte,
+publié dans une issue du dépôt de la boutique, ventes comprises.
+
+- `shopctl report --env production` : ventes (agrégats de la base de
+  production), évolutions (fusions du trimestre, notes des versions du socle
+  franchies, lignes « Pour le client »), référencement (Google Search Console,
+  compte de service de l'agence) et fréquentation (Umami, le site des
+  réglages), puis un message prêt à envoyer ; `--out`, `--publish`,
+  `--current`, `--quarter`, `--since` ;
+- une source illisible ou non raccordée est dite, et le rapport sort avec les
+  autres ;
+- la publication refuse, avant toute lecture, un dépôt qui n'est pas privé ou
+  dont les issues sont coupées ;
+- le workflow « Quarterly report » du dépôt de flotte (`fleet init`), le 5
+  janvier, avril, juillet et octobre, depuis l'environnement `report` que pose
+  `fleet repo` ; le journal public n'en garde que le résumé ; `reportSince`
+  dans `fleet.json` ; boutiques sous v0.13.3 écartées ;
+- la procédure : `docs/operations/rapport-trimestriel.md`.
+
+Tenu par `test/scripts/report.test.mjs` et
+`test/scripts/fleet-repository.test.mjs`.
+
+Reste à faire par l'agence, après la publication de v0.13.3 : le jeton de
+publication, le compte de service Google et la clé Umami, `fleet init` et
+`fleet repo` dans le dépôt de flotte, puis, par boutique, la montée du socle,
+un dépôt privé avec ses issues, la propriété Search Console partagée et
+`reportSince`.

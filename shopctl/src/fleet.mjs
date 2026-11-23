@@ -40,6 +40,13 @@ export const FLEET_SCHEMA_VERSION = 1;
  */
 export const FLEET_MINIMUM_CORE = '0.3.32';
 
+/**
+ * The oldest core whose shopctl writes the quarterly report (ADR 0035): the
+ * fleet's Quarterly report runs each shop's own `shopctl report`, and refuses
+ * a shop below it with the upgrade to make.
+ */
+export const REPORT_MINIMUM_CORE = '0.13.3';
+
 /** `owner/repo` on GitHub: what the fleet's workflows check a shop out from. */
 const REPOSITORY = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
@@ -62,7 +69,7 @@ export const FLEET_EXAMPLE = `{
   "schemaVersion": ${FLEET_SCHEMA_VERSION},
   "core": { "repository": "git@github.com:agence/socle.git" },
   "shops": [
-    { "slug": "premiere-boutique", "path": "shop-premiere-boutique", "repository": "agence/shop-premiere-boutique" },
+    { "slug": "premiere-boutique", "path": "shop-premiere-boutique", "repository": "agence/shop-premiere-boutique", "reportSince": "2026-11-09" },
     { "slug": "seconde-boutique", "path": "shop-seconde-boutique" }
   ]
 }`;
@@ -110,7 +117,7 @@ export function nearestRegistry(cwd = process.cwd()) {
  * from the workspace or from inside one of its shops.
  *
  * @returns {{ file: string, root: string, schemaVersion: number, core: { repository: string|null },
- *            shops: Array<{ slug: string, path: string, repository: string|null, root: string, exists: boolean, isShop: boolean }> }}
+ *            shops: Array<{ slug: string, path: string, repository: string|null, reportSince: string|null, root: string, exists: boolean, isShop: boolean }> }}
  */
 export function readRegistry(file) {
   let document;
@@ -162,11 +169,18 @@ export function readRegistry(file) {
     const twin = repository && repositories.get(repository.toLowerCase());
     if (twin) throw inputError(`${file}: « ${twin} » et « ${slug} » déclarent le même dépôt, ${repository}.`);
     if (repository) repositories.set(repository.toLowerCase(), slug);
+    // Optional: the first day the quarterly report covers (ADR 0035) — the
+    // start of the maintenance contract, or the opening.
+    const reportSince = entry.reportSince === undefined || entry.reportSince === null ? null : String(entry.reportSince).trim();
+    if (reportSince !== null && !isDay(reportSince)) {
+      throw inputError(`${file}: shops[${index}].reportSince « ${reportSince} » n'est pas une date AAAA-MM-JJ.`);
+    }
     const shopRoot = isAbsolute(path) ? path : resolve(root, path);
     return {
       slug,
       path,
       repository,
+      reportSince,
       root: shopRoot,
       exists: existsSync(shopRoot),
       isShop: existsSync(resolve(shopRoot, 'client/client.yaml')),
@@ -184,6 +198,14 @@ export function readRegistry(file) {
     };
   }
   throw inputError(`${file}: \`core\` doit être un objet { "repository" }.`);
+}
+
+/** A calendar day, `AAAA-MM-JJ`, that exists. */
+function isDay(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
 /** The registry a command operates on. */

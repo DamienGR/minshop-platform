@@ -30,6 +30,7 @@ import { FLEET_FLAGS, FLEET_OPTIONS, fleetUsage, runFleet } from './commands/fle
 import { MONITOR_OPTIONS, monitorUsage, runMonitor } from './commands/monitor.mjs';
 import { ADMIN_FLAGS, ADMIN_OPTIONS, adminUsage, runAdmin } from './commands/admin.mjs';
 import { CERTIFY_FLAGS, CERTIFY_OPTIONS, certifyUsage, runCertify } from './commands/certify.mjs';
+import { REPORT_FLAGS, REPORT_OPTIONS, reportUsage, runReport } from './commands/report.mjs';
 
 export const usage = `shopctl — création et exploitation des boutiques Minshop.
 
@@ -49,6 +50,7 @@ Usage: shopctl <commande> [options]
   privacy             Exporter ou anonymiser les données d'une personne
   monitor             Taux d'erreur et quotas d'un environnement, depuis l'analytique
   certify             Juger si la production est certifiable (lecture seule) et écrire le rapport
+  report              Rapport trimestriel pour le commerçant : ventes, évolutions, Google, audience
   destroy             Supprimer les ressources Cloudflare d'un environnement
   core                Version du socle de cette boutique, et sa mise à niveau
   fleet               État et mise à niveau de la flotte déclarée
@@ -83,6 +85,7 @@ export const COMMANDS = {
   privacy: { run: runPrivacy, usage: privacyUsage, values: PRIVACY_OPTIONS, flags: PRIVACY_FLAGS },
   monitor: { run: runMonitor, usage: monitorUsage, values: MONITOR_OPTIONS, flags: [] },
   certify: { run: runCertify, usage: certifyUsage, values: CERTIFY_OPTIONS, flags: CERTIFY_FLAGS },
+  report: { run: runReport, usage: reportUsage, values: REPORT_OPTIONS, flags: REPORT_FLAGS },
   admin: { run: runAdmin, usage: adminUsage, values: ADMIN_OPTIONS, flags: ADMIN_FLAGS },
   destroy: { run: runDestroy, usage: destroyUsage, values: DESTROY_OPTIONS, flags: ['--dry-run', '--yes'] },
   core: { run: runCore, usage: coreUsage, values: CORE_OPTIONS, flags: CORE_FLAGS },
