@@ -9,10 +9,12 @@
  * `report` environment.
  *
  *   Umami Cloud      tracker on cloud.umami.is, API at api.umami.is/v1,
- *                    `x-umami-api-key`
+ *                    the key in `x-umami-api-key`
  *   its own server   tracker at https://<host>/…, API at https://<host>/api,
- *                    an API key the same way, or a login (UMAMI_USERNAME and
- *                    UMAMI_PASSWORD) exchanged for a bearer token
+ *                    the key as a bearer token (such a server ignores
+ *                    `x-umami-api-key` and answers 401, the key never
+ *                    marked used), or a login (UMAMI_USERNAME and
+ *                    UMAMI_PASSWORD) exchanged for one
  *
  * UMAMI_API_URL and UMAMI_WEBSITE_ID override what the shop says, for a server
  * whose API is not where its tracker is.
@@ -35,8 +37,23 @@ export function umamiApiBase(scriptUrl, override = null) {
     return null;
   }
   if (url.protocol !== 'https:') return null;
-  if (url.hostname === 'umami.is' || url.hostname.endsWith('.umami.is')) return 'https://api.umami.is/v1';
+  if (isUmamiCloud(url.hostname)) return 'https://api.umami.is/v1';
   return `${url.origin}/api`;
+}
+
+function isUmamiCloud(hostname) {
+  return hostname === 'umami.is' || hostname.endsWith('.umami.is');
+}
+
+/** How a key goes to that API: Umami Cloud's header, or a bearer token. */
+export function keyHeaders(base, key) {
+  let hostname = '';
+  try {
+    hostname = new URL(base).hostname;
+  } catch {
+    // An unreadable base is no Umami Cloud.
+  }
+  return isUmamiCloud(hostname) ? { 'x-umami-api-key': key } : { authorization: `Bearer ${key}` };
 }
 
 /** A statistic, whatever the version: a number, or `{ value }`. */
@@ -97,7 +114,7 @@ async function call(fetchImpl, url, init, what) {
 }
 
 async function authenticate(base, credentials, fetchImpl) {
-  if (credentials.kind === 'key') return { 'x-umami-api-key': credentials.key };
+  if (credentials.kind === 'key') return keyHeaders(base, credentials.key);
   const answer = await call(
     fetchImpl,
     `${base}/auth/login`,

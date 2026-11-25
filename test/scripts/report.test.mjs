@@ -21,7 +21,7 @@ import { runReport } from '../../shopctl/src/commands/report.mjs';
 import { frenchDay, parseQuarter, periodSentence, resolvePeriod } from '../../shopctl/src/quarterly/period.mjs';
 import { classify, cleanTitle, clientLine, parseNotes, readHistory } from '../../shopctl/src/quarterly/history.mjs';
 import { SETTINGS_SQL, formatMoney, readSettings, salesStatements, summariseSales, titleIndex, titlesSql, totalsSql, topProductsSql } from '../../shopctl/src/quarterly/sales.mjs';
-import { readAudience, summariseMetrics, summariseStats, umamiApiBase } from '../../shopctl/src/quarterly/umami.mjs';
+import { keyHeaders, readAudience, summariseMetrics, summariseStats, umamiApiBase } from '../../shopctl/src/quarterly/umami.mjs';
 import { chooseProperty, readSearch, signedAssertion, sitemapLocs } from '../../shopctl/src/quarterly/search-console.mjs';
 import { issueTitle, of, renderClientMessage, renderReport } from '../../shopctl/src/quarterly/render.mjs';
 import { checkDestination, publishIssue } from '../../shopctl/src/quarterly/publish.mjs';
@@ -318,6 +318,21 @@ describe('Umami', () => {
     await expect(readAudience(site, period, { env: { UMAMI_API_KEY: 'k' }, fetchImpl: refused.fetchImpl })).rejects.toMatchObject({ code: EXIT_CODES.external, message: expect.stringContaining('401') });
     const unknown = fetchDouble([[/\/websites\/[^/]+$/, { body: {} }], [/./, { status: 404 }]]);
     await expect(readAudience(site, period, { env: { UMAMI_API_KEY: 'k' }, fetchImpl: unknown.fetchImpl })).rejects.toThrow(/ne connaît pas le site/);
+  });
+
+  it('gives a server of its own the key as a bearer token, never Umami Cloud\'s header', async () => {
+    const own = { scriptUrl: 'https://stats.agence.example/script.js', websiteId: site.websiteId };
+    const { fetchImpl, calls } = fetchDouble([
+      [/\/stats\?/, { body: { visitors: 1, visits: 1, pageviews: 1, bounces: 0, totaltime: 0 } }],
+      [/type=/, { body: [] }],
+      [/\/websites\/[^/]+$/, { body: { createdAt: '2025-01-01T00:00:00Z' } }],
+    ]);
+    const audience = await readAudience(own, period, { env: { UMAMI_API_KEY: 'umami_cle' }, fetchImpl });
+    expect(audience).toMatchObject({ status: 'ok' });
+    expect(calls.every((call) => call.url.startsWith(`https://stats.agence.example/api/websites/${site.websiteId}`))).toBe(true);
+    expect(calls.every((call) => call.headers.authorization === 'Bearer umami_cle' && !('x-umami-api-key' in call.headers))).toBe(true);
+    expect(keyHeaders('https://api.umami.is/v1', 'k')).toEqual({ 'x-umami-api-key': 'k' });
+    expect(keyHeaders('https://stats.agence.example/api', 'k')).toEqual({ authorization: 'Bearer k' });
   });
 
   it('logs in to a server of its own with a username and password', async () => {

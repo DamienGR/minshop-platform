@@ -4361,6 +4361,10 @@ publié dans une issue du dépôt de la boutique, ventes comprises.
   `fleet repo` ; le journal public n'en garde que le résumé ; seules les
   boutiques qui ont un `reportSince` dans `fleet.json` (PR #270, socle
   v0.13.4) ; boutiques sous v0.13.3 écartées ;
+- la clé Umami d'un serveur de l'agence part en `Authorization: Bearer`, celle
+  d'Umami Cloud dans `x-umami-api-key` (socle v0.13.5) : le premier rapport
+  de la flotte, le 2026-11-25, a reçu un 401 du serveur Umami de l'agence,
+  qui ignore l'en-tête d'Umami Cloud ;
 - la procédure : `docs/operations/rapport-trimestriel.md`.
 
 Tenu par `test/scripts/report.test.mjs` et
