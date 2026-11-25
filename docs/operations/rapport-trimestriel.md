@@ -35,10 +35,13 @@ Les boutiques, elles, peuvent être en v0.13.3.
    son adresse (`…@….iam.gserviceaccount.com`) : chaque boutique l'ajoute à sa
    propriété (§ 2) ;
 3. **La clé Umami** (facultative, pour la fréquentation) : Umami Cloud →
-   Settings → API keys, ou, sur un serveur de l'agence, un compte sans double
-   authentification (`UMAMI_USERNAME`, `UMAMI_PASSWORD`) : de préférence un
+   Settings → API keys, ou la page des clés d'API d'un serveur de l'agence
+   (`UMAMI_API_KEY` ; le rapport l'envoie à Umami Cloud dans son en-tête
+   `x-umami-api-key`, à un serveur de l'agence en `Authorization: Bearer`,
+   depuis v0.13.5). Sur un serveur sans clés d'API, un compte sans double
+   authentification (`UMAMI_USERNAME`, `UMAMI_PASSWORD`). De préférence un
    compte à part, en lecture seule, membre d'une équipe qui détient les sites
-   des boutiques. Le compte doit voir ces sites ;
+   des boutiques : la clé ou le compte doit voir ces sites ;
 4. **Les workflows et les secrets**, depuis le dépôt de flotte :
 
    ```sh
@@ -136,7 +139,7 @@ les ventes : le supprimer une fois lu.
 | référencement : `Search Console, propriétés : 403` | API non activée dans le projet Google Cloud | l'activer, § 1, étape 2 |
 | référencement : `Google refuse le jeton du compte de service` | clé supprimée ou désactivée | nouvelle clé, puis `fleet repo` |
 | fréquentation : `Umami ne connaît pas le site …` | identifiant faux dans les réglages | Admin → Réglages → Mesure d'audience |
-| fréquentation : `Umami, … : 401` ou `403` | clé révoquée, ou compte qui ne voit pas le site | nouvelle clé, ou partager le site |
+| fréquentation : `Umami, … : 401` ou `403` | clé révoquée, ou compte qui ne voit pas le site ; sur un serveur de l'agence, une boutique sous v0.13.5 (la clé, envoyée comme à Umami Cloud, n'est jamais marquée utilisée) | nouvelle clé, ou partager le site ; ou monter la boutique |
 | `… se termine avant le début du suivi` (code 3) | trimestre antérieur à `reportSince` | rien à rapporter : normal pour une boutique toute neuve |
 | la boutique est refusée avant `npm ci` | socle sous v0.13.3 | monter la boutique |
 
